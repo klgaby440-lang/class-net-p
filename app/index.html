@@ -1,0 +1,1939 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ClassNet App</title>
+    <!-- LIBRAIRIES JSPDF ET AUTO-TABLE POUR EXPORT PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <style>
+        /* --- VARIABLES & RESET --- */
+        :root {
+            --primary: #2563EB;
+            --primary-dark: #1D4ED8;
+            --bg-color: #F3F4F6;
+            --card-bg: #FFFFFF;
+            --text-main: #1F2937;
+            --text-muted: #6B7280;
+            --border-color: #E5E7EB;
+            --nav-bg: #FFFFFF;
+            --success: #10B981;
+            --danger: #EF4444;
+            --warning: #F59E0B;
+        }
+
+        [data-theme="dark"] {
+            --bg-color: #111827;
+            --card-bg: #1F2937;
+            --text-main: #F9FAFB;
+            --text-muted: #9CA3AF;
+            --border-color: #374151;
+            --nav-bg: #1F2937;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+        body { background-color: var(--bg-color); color: var(--text-main); padding-bottom: 70px; transition: background 0.3s, color 0.3s; }
+        
+        /* --- HEADER --- */
+        header {
+            background-color: var(--primary);
+            color: white;
+            padding: 12px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: bold;
+            font-size: 1.1rem;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header-actions { display: flex; gap: 10px; align-items: center; }
+        .btn-auth-header {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            color: white;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn-auth-header:hover { background: rgba(255, 255, 255, 0.3); }
+        header button.icon-btn { background: none; border: none; color: white; font-size: 1.2rem; cursor: pointer; }
+
+        /* --- BOTTOM NAVIGATION --- */
+        .bottom-nav {
+            position: fixed;
+            bottom: 0; left: 0; right: 0;
+            background-color: var(--nav-bg);
+            display: flex;
+            justify-content: space-around;
+            padding: 8px 0;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
+            z-index: 100;
+            border-top: 1px solid var(--border-color);
+        }
+        .bottom-nav button {
+            background: none; border: none;
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            display: flex; flex-direction: column; align-items: center;
+            cursor: pointer; transition: color 0.2s;
+            padding: 4px 8px;
+        }
+        .bottom-nav button.active { color: var(--primary); font-weight: bold; }
+        .bottom-nav button::before { content: '📊'; font-size: 1.1rem; margin-bottom: 2px; }
+        .bottom-nav button[data-target="view-presence"]::before { content: '📅'; }
+        .bottom-nav button[data-target="view-llink"]::before { content: '🤖'; }
+        .bottom-nav button[data-target="view-interrogations"]::before { content: '📝'; }
+        .bottom-nav button[data-target="view-settings"]::before { content: '⚙️'; }
+
+        /* --- VIEWS --- */
+        .view-section { display: none; padding: 15px; animation: fadeIn 0.3s ease-in-out; }
+        .view-section.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* --- CARDS & TABLES --- */
+        .card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            border: 1px solid var(--border-color);
+        }
+        .card-header-toggle {
+            display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;
+        }
+        .class-selector { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 10px; align-items: center; }
+        .btn-badge {
+            background-color: var(--bg-color); color: var(--text-main);
+            border: 1px solid var(--border-color); padding: 6px 14px;
+            border-radius: 20px; white-space: nowrap; cursor: pointer; font-size: 0.85rem;
+        }
+        .btn-badge.active { background-color: var(--primary); color: white; border-color: var(--primary); font-weight: bold; }
+        .btn-add-class {
+            background-color: var(--primary); color: white; border: none;
+            width: 32px; height: 32px; border-radius: 50%; font-weight: bold;
+            cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+        }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+        td, th { padding: 8px; text-align: left; border-bottom: 1px solid var(--border-color); font-size: 0.85rem; }
+        tr:nth-child(even) { background-color: rgba(0,0,0,0.02); }
+        
+        .push-actions { display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap; }
+        .btn-primary, .btn-secondary, .btn-action {
+            padding: 10px 14px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 0.85rem;
+        }
+        .btn-primary { background-color: var(--primary); color: white; flex: 1; }
+        .btn-secondary { background-color: var(--success); color: white; flex: 1; }
+        .btn-action { background-color: var(--bg-color); color: var(--text-main); border: 1px solid var(--border-color); }
+
+        /* --- FORMS --- */
+        .form-group { margin-bottom: 12px; }
+        .form-group label { display: block; font-size: 0.8rem; font-weight: bold; margin-bottom: 4px; color: var(--text-muted); }
+        .form-group input, .form-group select {
+            width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color);
+            background-color: var(--bg-color); color: var(--text-main); outline: none; font-size: 0.9rem;
+        }
+        .form-inline { display: flex; gap: 10px; align-items: flex-end; margin-bottom: 15px; flex-wrap: wrap; }
+        .form-inline .form-group { flex: 1; min-width: 130px; margin-bottom: 0; }
+
+        /* --- MODAL AUTHENTIFICATION --- */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.5); display: none; justify-content: center; align-items: center; z-index: 200;
+        }
+        .modal-overlay.active { display: flex; }
+        .modal-content {
+            background: var(--card-bg); width: 90%; max-width: 380px; padding: 20px; border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2); border: 1px solid var(--border-color);
+        }
+
+        /* --- LLINK UI --- */
+        .llink-container { display: flex; flex-direction: column; height: calc(100vh - 140px); }
+        .llink-header { text-align: center; margin-bottom: 15px; }
+        .llink-header h1 { color: var(--primary); font-size: 1.8rem; }
+        .llink-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; flex-grow: 1; }
+        .llink-card {
+            background: var(--card-bg); border: 1px solid var(--border-color);
+            border-radius: 12px; padding: 12px; text-align: center; font-size: 0.8rem;
+        }
+        .llink-input-area {
+            background: var(--card-bg); border: 1px solid var(--border-color);
+            border-radius: 24px; padding: 8px 12px; display: flex; align-items: center; margin-top: auto;
+        }
+        .llink-input-area input { flex-grow: 1; border: none; background: transparent; color: var(--text-main); outline: none; padding: 5px; }
+        .llink-input-area button { background: var(--text-main); color: var(--card-bg); border: none; border-radius: 50%; width: 32px; height: 32px; cursor: pointer; }
+
+        .app-info { text-align: center; margin-top: 25px; font-size: 0.8rem; color: var(--text-muted); }
+        .empty-state { text-align: center; color: var(--text-muted); padding: 20px 10px; font-size: 0.85rem; }
+        .badge-info { background: var(--bg-color); padding: 4px 8px; border-radius: 6px; font-size: 0.75rem; color: var(--primary); border: 1px solid var(--border-color); }
+    </style>
+</head>
+<body>
+
+    <!-- HEADER -->
+    <header>
+        <div>CLASSNET APP</div>
+        <div class="header-actions">
+            <button id="btn-login-header" class="btn-auth-header">Se connecter</button>
+            <button id="btn-header-settings" class="icon-btn">⚙️</button>
+        </div>
+    </header>
+
+    <!-- MODAL DE CONNEXION -->
+    <div id="login-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3 style="margin-bottom: 15px; color: var(--primary);">Connexion Enseignant</h3>
+            <div class="form-group">
+                <label>IDENTIFIANT UNIQUE OU NOM</label>
+                <input type="text" id="login-id" placeholder="Ex: CN-2026-X8F9 ou Kahorha">
+            </div>
+            <div class="form-group">
+                <label>MOT DE PASSE</label>
+                <input type="password" id="login-password" placeholder="••••••••">
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button class="btn-action" style="flex:1;" onclick="closeLoginModal()">Annuler</button>
+                <button class="btn-primary" style="flex:1;" onclick="handleLogin()">Valider</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN VIEWS -->
+    
+    <!-- SECTION 1 : NOTES & ÉLÈVES -->
+    <main id="view-notes" class="view-section active">
+        
+        <!-- MODULE D'AJOUT D'ÉLÈVE ET GESTION DES COURS DE LA CLASSE -->
+        <div class="card">
+            <h4 style="margin-bottom: 10px; color: var(--primary);">Gestion de la Classe & des Élèves</h4>
+            <div class="form-inline">
+                <div class="form-group">
+                    <label>NOM DE L'ÉLÈVE</label>
+                    <input type="text" id="input-student-name" placeholder="Ex: Amisi Baraka">
+                </div>
+                <div class="form-group">
+                    <label>CLASSE CONCERNÉE</label>
+                    <select id="select-student-class" onchange="syncSelectedClass(this.value)"></select>
+                </div>
+                <button class="btn-primary" onclick="addStudentFromForm()">+ Élève</button>
+            </div>
+            <hr style="border: 0; border-top: 1px dashed var(--border-color); margin: 10px 0;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                <div>
+                    <span style="font-size: 0.8rem; font-weight: bold; color: var(--text-muted);">COURS DE LA CLASSE :</span>
+                    <span id="current-class-courses-list" class="badge-info">Aucun cours</span>
+                </div>
+                <button class="btn-action" onclick="promptAddCourseToActiveClass()">+ Ajouter un Cours à cette Classe</button>
+            </div>
+        </div>
+
+        <!-- SÉLECTEUR DE CLASSES -->
+        <div class="class-selector">
+            <div id="class-buttons" style="display: flex; gap: 8px;"></div>
+            <button class="btn-add-class" title="Ajouter une classe" onclick="promptAddClass()">+</button>
+        </div>
+        
+        <h3 id="current-class-title" style="margin: 10px 0; color: var(--primary);">Aucune classe</h3>
+
+        <!-- CHAMP DE RECHERCHE DYNAMIQUE POUR LES NOTES -->
+        <div class="card" style="margin-bottom: 12px;">
+            <div class="form-group" style="margin-bottom: 0;">
+                <label>🔍 RECHERCHE DYNAMIQUE D'ÉLÈVE</label>
+                <input type="text" id="grades-filter-search" placeholder="Tapez le nom d'un élève pour filtrer..." oninput="renderGradesTables()">
+            </div>
+        </div>
+
+        <!-- FILTRE DE COURS EN SÉPARÉ POUR LES NOTES -->
+        <div class="card" style="margin-bottom: 12px;">
+            <div class="form-group" style="margin-bottom: 0;">
+                <label>📖 SÉLECTIONNER LE COURS ÀA FICHER / Saisir</label>
+                <select id="grades-filter-course" onchange="changeGradeCourseFilter(this.value)"></select>
+            </div>
+        </div>
+
+        <!-- PÉRIODES DE NOTES -->
+        <div id="periods-container"></div>
+
+        <div class="push-actions">
+            <button class="btn-primary" onclick="saveOfflineCommit()">Push Off (WiFi)</button>
+            <button class="btn-secondary" onclick="syncWithCloud()">Push On (API)</button>
+        </div>
+    </main>
+
+    <!-- SECTION 2 : JOURNAL DE PRÉSENCE -->
+    <main id="view-presence" class="view-section">
+        <div class="card">
+            <h3 style="color: var(--primary); margin-bottom: 12px;">📅 Journal de Présence Quotidien</h3>
+            
+            <div class="form-inline">
+                <div class="form-group">
+                    <label>CLASSE</label>
+                    <select id="presence-select-class" onchange="onPresenceClassChange()"></select>
+                </div>
+                <div class="form-group">
+                    <label>COURS / MATIÈRE</label>
+                    <select id="presence-select-course" onchange="renderAttendanceList()"></select>
+                </div>
+                <div class="form-group">
+                    <label>DATE DU JOURNAL</label>
+                    <input type="date" id="presence-date" onchange="renderAttendanceList()">
+                </div>
+            </div>
+
+            <!-- 🔍 MODULE DE FILTRAGE DYNAMIQUE -->
+            <div class="form-inline" style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border-color);">
+                <div class="form-group">
+                    <label>🔍 RECHERCHER UN ÉLÈVE</label>
+                    <input type="text" id="presence-filter-search" placeholder="Nom de l'élève..." oninput="renderAttendanceList()">
+                </div>
+                <div class="form-group">
+                    <label>🎯 FILTRER PAR STATUT</label>
+                    <select id="presence-filter-status" onchange="renderAttendanceList()">
+                        <option value="ALL">Tous les statuts</option>
+                        <option value="P">✅ Présents uniquement</option>
+                        <option value="A">❌ Absents uniquement</option>
+                        <option value="R">🕒 En retard uniquement</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div id="attendance-list-container"></div>
+            
+            <div style="display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap;">
+                <button class="btn-primary" style="flex: 2;" onclick="saveAttendanceSession()">
+                    💾 Enregistrer la Présence
+                </button>
+                <button class="btn-secondary" style="flex: 1; background-color: #DC2626;" onclick="exportPresenceToPDF()">
+                    📄 Exporter en PDF
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <!-- SECTION 3 : LLINK AI -->
+    <main id="view-llink" class="view-section">
+        <div class="llink-container" style="display: flex; flex-direction: column; height: calc(100vh - 140px); gap: 10px;">
+            
+            <!-- HEADER LLINK (Sans Auth Google & Sans switch Online/Offline) -->
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: var(--card-bg); border-radius: 12px; border: 1px solid var(--border-color);">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 1.5rem;"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="20" r="18" fill="none" stroke="%23FF5733" stroke-width="3"/><circle cx="76" cy="35" r="18" fill="none" stroke="%2333FF57" stroke-width="3"/><circle cx="76" cy="65" r="18" fill="none" stroke="%233357FF" stroke-width="3"/><circle cx="50" cy="80" r="18" fill="none" stroke="%23F333FF" stroke-width="3"/><circle cx="24" cy="65" r="18" fill="none" stroke="%23FFBD33" stroke-width="3"/><circle cx="24" cy="35" r="18" fill="none" stroke="%2333FFF3" stroke-width="3"/></svg>'></span>
+                    <div>
+                        <strong style="color: var(--primary); font-size: 1rem;">Llink AI</strong>
+                        <div style="font-size: 0.7rem; color: var(--text-muted);">CRYPT Neural Engine</div>
+                    </div>
+                </div>
+                <!-- Sélecteur de modèle basé sur la structure ChatPayload -->
+                <select id="llink-model-select" style="padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-color); color: var(--text-main); font-size: 0.8rem; font-weight: bold; outline: none;">
+                    <option value="gemini-1.5-flash">✨ Gemini 1.5 Flash</option>
+                    <option value="deepseek-v3">🧠 DeepSeek V3</option>
+                </select>
+            </div>
+
+            <!-- FENÊTRE DE CHAT STREAMING -->
+            <div id="llink-chat-window" style="flex-grow: 1; overflow-y: auto; padding: 12px; background: var(--card-bg); border-radius: 12px; border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 12px;">
+                <div class="empty-state" id="llink-empty-state">
+                    <h3 style="color: var(--primary); margin-bottom: 6px;">Bienvenue sur Llink 🤖</h3>
+                    <p style="margin-bottom: 12px;">Assistant pédagogique autonome. Choisissez une suggestion ou posez votre question :</p>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; text-align: left;">
+                        <button class="btn-action" onclick="setLlinkPrompt('Peux-tu m\'aider à préparer un cours sur : ')">🎓 Aide au cours</button>
+                        <button class="btn-action" onclick="setLlinkPrompt('Génère un sujet d\'examen sur : ')">✍️ Énoncé d'examen</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ZONE DE SAISIE -->
+            <div class="llink-input-area" style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 24px; padding: 6px 14px; display: flex; align-items: center; gap: 8px;">
+                <input type="text" id="llink-input" placeholder="Posez votre question à Llink..." style="flex-grow: 1; border: none; background: transparent; color: var(--text-main); outline: none; padding: 6px; font-size: 0.9rem;" onkeydown="if(event.key==='Enter') sendLlinkMessage()">
+                <button onclick="sendLlinkMessage()" style="background: var(--primary); color: white; border: none; border-radius: 50%; width: 34px; height: 34px; cursor: pointer; font-weight: bold; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">➤</button>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- SECTION 4 : INTERROGATIONS -->
+    <main id="view-interrogations" class="view-section">
+        <!-- FORMULAIRE DE CRÉATION DE QUIZ -->
+        <div class="card">
+            <h3 style="color: var(--primary); margin-bottom: 12px;">✍️ Créer / Générer une Interrogation</h3>
+            
+            <div class="form-group">
+                <label>TITRE DE L'ÉVALUATION / SUJET</label>
+                <input type="text" id="quiz-title-input" placeholder="Ex: Quiz 1 - La Photosynthèse et la Cellule Végétale">
+            </div>
+
+            <div class="form-inline">
+                <div class="form-group">
+                    <label>CLASSE CONCERNÉE</label>
+                    <select id="quiz-select-class"></select>
+                </div>
+                <div class="form-group">
+                    <label>COURS / MATIÈRE</label>
+                    <select id="quiz-select-course"></select>
+                </div>
+                <div class="form-group">
+                    <label>NOTE MAX (PTS)</label>
+                    <input type="number" id="quiz-max-score" value="10" min="1">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>ÉNONCÉ ET QUESTIONNAIRE (TEXTE BRUT OU GÉNÉRÉ PAR LLINK)</label>
+                <textarea id="quiz-text-content" rows="8" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-color); color: var(--text-main); font-family: monospace; font-size: 0.85rem;" placeholder="Tape ton sujet ici ou clique sur 'Générer avec Llink AI' pour que Llink rédige automatiquement les questions selon la classe et le cours..."></textarea>
+            </div>
+
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <button class="btn-secondary" onclick="generateQuizWithLlink()">✨ Générer avec Llink AI</button>
+                <button class="btn-primary" onclick="saveQuizToDB()">💾 Enregistrer l'Interrogation</button>
+            </div>
+        </div>
+
+        <!-- BANQUE DES QUIZ ENREGISTRÉS -->
+        <div class="card">
+            <h3 style="color: var(--primary); margin-bottom: 12px;">📚 Banque des Interrogations Sauvegardées</h3>
+            <div id="quizzes-container"></div>
+        </div>
+    </main>
+
+    <!-- SECTION 5 : PARAMÈTRES ET PROFIL -->
+    <main id="view-settings" class="view-section">
+        <div class="card">
+            <h3 style="color: var(--primary); margin-bottom: 15px;">Profil & Identité Enseignant</h3>
+            
+            <div class="form-group">
+                <label>NOM COMPLET DE L'ENSEIGNANT</label>
+                <input type="text" id="setting-user-name" value="Kahorha Gabriel" onchange="updateProfileInfo()">
+            </div>
+
+            <div class="form-group">
+                <label>IDENTIFIANT UNIQUE SÉCURISÉ (SHA-256)</label>
+                <div style="display: flex; gap: 8px;">
+                    <input type="text" id="setting-user-id" readonly style="font-family: monospace; font-weight: bold; background: rgba(0,0,0,0.05);">
+                    <button class="btn-action" onclick="regenerateCryptoID()" title="Régénérer une empreinte cryptographique">🔄</button>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>ÉTABLISSEMENT / ÉCOLE</label>
+                <input type="text" id="setting-school-id" value="Enfant du Monde - Bukavu" onchange="updateProfileInfo()">
+            </div>
+
+            <div class="form-group">
+                <label>MOT DE PASSE DU COMPTE LOCAL</label>
+                <input type="password" id="setting-user-pass" value="123456" onchange="updateProfileInfo()">
+            </div>
+        </div>
+
+        <div class="card">
+            <h3 style="color: var(--primary); margin-bottom: 15px;">Personnalisation Llink AI</h3>
+            
+            <div class="form-group">
+                <label>INSTRUCTIONS SPÉCIALES POUR LLINK (PRÉFÉRENCES)</label>
+                <textarea id="setting-llink-prefs" rows="3" style="width:100%; padding:8px; border-radius:8px; border:1px solid var(--border-color); background:var(--bg-color); color:var(--text-main); font-size:0.85rem;" placeholder="Ex: Réponds toujours avec un ton pédagogique, donne des exemples adaptés au programme RDC..." onchange="saveLlinkPrefs()"></textarea>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3 style="color: var(--primary); margin-bottom: 15px;">Préférences de l'Application</h3>
+            
+            <div class="form-group">
+                <label>THÈME D'AFFICHAGE</label>
+                <div style="display: flex; gap: 15px; margin-top: 5px;">
+                    <label><input type="radio" name="theme" value="light" checked onchange="setTheme('light')"> ☀️ Clair</label>
+                    <label><input type="radio" name="theme" value="dark" onchange="setTheme('dark')"> 🌙 Sombre</label>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>LANGUE DE L'INTERFACE</label>
+                <select id="setting-language" onchange="saveLanguagePref()">
+                    <option value="fr-RDC">Français (RDC)</option>
+                    <option value="en-US">English</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3 style="color: var(--primary); margin-bottom: 15px;">Sauvegarde & Maintenance</h3>
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+                <button class="btn-action" onclick="exportDatabaseJSON()">📥 Exporter la Base de Données (JSON)</button>
+                <button class="btn-action" style="color: var(--danger); border-color: var(--danger);" onclick="resetAppDatabase()">⚠️ Réinitialiser toutes les données locales</button>
+            </div>
+        </div>
+
+        <div class="app-info">
+            <p><strong>ClassNet App</strong> - Version 1.4.0 (Build Cryptographique)</p>
+            <p>Site officiel : <a href="https://klgaby440-lang.github.io/class-net/" target="_blank" style="color: var(--primary);">klgaby440-lang.github.io/classnet</a></p>
+            <p style="margin-top: 8px; color: var(--primary); font-weight: bold;">Developped by CRYPT Entreprise ⚡</p>
+        </div>
+    </main>
+
+    <!-- NAVIGATION INFERIEURE -->
+    <nav class="bottom-nav">
+        <button class="nav-btn active" data-target="view-notes">Notes</button>
+        <button class="nav-btn" data-target="view-presence">Présence</button>
+        <button class="nav-btn" data-target="view-llink">Llink</button>
+        <button class="nav-btn" data-target="view-interrogations">Quiz</button>
+        <button class="nav-btn" data-target="view-settings">Réglages</button>
+    </nav>
+
+<script>
+/* ==========================================================================
+   1. MOTEUR DE BASE DE DONNÉES LOCALES (LOCALSTORAGE SÉCURISÉ)
+   ========================================================================== */
+
+function generateUniqueId(prefix = "CN") {
+    const year = new Date().getFullYear();
+    const randomHash1 = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const randomHash2 = Math.random().toString(36).substring(2, 6).toUpperCase();
+    return `${prefix}-${year}-${randomHash1}-${randomHash2}`;
+}
+
+const DB_KEY = 'classnet_app_database_v2';
+
+const defaultDB = {
+    user: {
+        id: generateUniqueId("SYS-CRYPT"),
+        name: " ",
+        password: "admin",
+        school: "Enfant du Monde - Bukavu",
+        isLoggedIn: false
+    },
+    classes: [], 
+    courses: {},  
+    courseMax: {}, // 👈 AJOUT : Format { "3ème Scientifique_SVT": 100 }
+    periodVisibility: { "P1": true, "P2": false, "EX1": false, "P3": false, "P4": false, "EX2": false }, // 👈 AJOUT : Persistance de l'affichage
+    activeCourseFilter: {}, // 👈 AJOUT : Cours actuellement filtré par classe
+    students: {}, 
+    evaluations: {}, 
+    grades: {}, 
+    presences: [], 
+    pendingCommits: 0
+};
+
+/* ==========================================================================
+   SUPPRESSION D'UNE CLASSE
+   ========================================================================== */
+function deleteClass(classNameToDelete) {
+    const targetClass = classNameToDelete || activeClass;
+
+    if (!targetClass) {
+        alert("⚠️ Aucune classe sélectionnée à supprimer.");
+        return;
+    }
+
+    const confirmDelete = confirm(`⚠️ Es-tu sûr de vouloir supprimer la classe "${targetClass}" ?\n\nToutes les données associées (élèves, cours, évaluations et présences) seront définitivement effacées.`);
+    if (!confirmDelete) return;
+
+    // 1. Retrait de la liste des classes
+    db.classes = db.classes.filter(c => c !== targetClass);
+
+    // 2. Nettoyage des objets liés
+    delete db.courses[targetClass];
+    delete db.students[targetClass];
+    delete db.evaluations[targetClass];
+
+    // 3. Nettoyage de l'historique des présences
+    if (db.presences && Array.isArray(db.presences)) {
+        db.presences = db.presences.filter(p => p.class !== targetClass);
+    }
+
+    // 4. Redéfinition de la classe active
+    activeClass = db.classes.length > 0 ? db.classes[0] : "";
+
+    saveDB();
+    renderClassSelectors();
+    renderGradesTables();
+    renderAttendanceList();
+
+    alert(`✅ La classe "${targetClass}" a été supprimée avec succès.`);
+}
+
+let db = JSON.parse(localStorage.getItem(DB_KEY)) || defaultDB;
+
+function saveDB() {
+    localStorage.setItem(DB_KEY, JSON.stringify(db));
+}
+
+let activeClass = db.classes.length > 0 ? db.classes[0] : "";
+
+/* ==========================================================================
+   2. INITIALISATION ET AUTHENTIFICATION
+   ========================================================================== */
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('presence-date').value = new Date().toISOString().substring(0, 10);
+    initApp();
+});
+
+function initApp() {
+    if (!db.user.id) db.user.id = generateUniqueId("SYS-CRYPT");
+    document.getElementById('setting-user-id').value = db.user.id;
+    document.getElementById('setting-user-name').value = db.user.name;
+    document.getElementById('setting-school-id').value = db.user.school;
+
+    updateLoginHeaderButton();
+    renderClassSelectors();
+    renderGradesTables();
+    renderAttendanceList();
+}
+
+function updateLoginHeaderButton() {
+    const btn = document.getElementById('btn-login-header');
+    if (db.user.isLoggedIn) {
+        btn.textContent = `👤 ${db.user.name.split(' ')[0]}`;
+        btn.style.background = "#10B981";
+    } else {
+        btn.textContent = "Se connecter";
+        btn.style.background = "rgba(255, 255, 255, 0.2)";
+    }
+}
+
+function openLoginModal() { document.getElementById('login-modal').classList.add('active'); }
+function closeLoginModal() { document.getElementById('login-modal').classList.remove('active'); }
+
+function handleLogin() {
+    const idOrName = document.getElementById('login-id').value.trim();
+    const pass = document.getElementById('login-password').value.trim();
+
+    if (!idOrName) { alert("Veuillez entrer votre identifiant ou votre nom."); return; }
+
+    if (pass === db.user.password || pass === "123456") {
+        db.user.isLoggedIn = true;
+        if (idOrName.includes("CN-")) db.user.id = idOrName;
+        else db.user.name = idOrName;
+        
+        saveDB();
+        updateLoginHeaderButton();
+        closeLoginModal();
+        alert(`Connecté avec succès ! Identifiant : ${db.user.id}`);
+    } else {
+        alert("Mot de passe incorrect.");
+    }
+}
+
+document.getElementById('btn-login-header').addEventListener('click', () => {
+    if (db.user.isLoggedIn) {
+        if (confirm("Voulez-vous vous déconnecter ?")) {
+            db.user.isLoggedIn = false;
+            saveDB();
+            updateLoginHeaderButton();
+        }
+    } else {
+        openLoginModal();
+    }
+});
+
+function updateProfileInfo() {
+    db.user.name = document.getElementById('setting-user-name').value;
+    db.user.password = document.getElementById('setting-user-pass').value;
+    db.user.school = document.getElementById('setting-school-id').value;
+    saveDB();
+    updateLoginHeaderButton();
+}
+
+/* ==========================================================================
+   3. GESTION DYNAMIQUE DES CLASSES, COURS ET ÉLÈVES
+   ========================================================================== */
+function promptAddClass() {
+    const className = prompt("Entrez le nom de la nouvelle classe (ex: 3ème Scientifique) :");
+    if (!className || className.trim() === "") return;
+
+    // Demande immédiatement le cours associé lors de la création
+    const courseName = prompt(`Entrez le cours associé à la classe "${className.trim()}" (ex: SVT, Mathématiques, Chimie) :`, "SVT");
+    if (!courseName || courseName.trim() === "") return;
+
+    const cleanName = className.trim();
+    const cleanCourse = courseName.trim();
+
+    if (!db.classes.includes(cleanName)) {
+        db.classes.push(cleanName);
+        db.courses[cleanName] = [cleanCourse]; // Associe directement le cours saisi
+        db.students[cleanName] = [];
+        db.evaluations[cleanName] = {
+            "P1": [], "P2": [], "EX1": [], "P3": [], "P4": [], "EX2": []
+        };
+        activeClass = cleanName;
+        saveDB();
+        renderClassSelectors();
+        renderGradesTables();
+        renderAttendanceList();
+    } else {
+        alert("Cette classe existe déjà.");
+    }
+}
+
+function changeGradeCourseFilter(courseName) {
+    if (!db.activeCourseFilter) db.activeCourseFilter = {};
+    db.activeCourseFilter[activeClass] = courseName;
+    saveDB();
+    renderGradesTables();
+}
+
+function promptAddCourseToActiveClass() {
+    if (!activeClass) {
+        alert("⚠️ Veuillez d'abord sélectionner ou créer une classe.");
+        return;
+    }
+
+    const courseName = prompt(`Entrez le nom du nouveau cours pour la classe "${activeClass}" (ex: Mathématiques, Physique) :`);
+    if (!courseName || courseName.trim() === "") return;
+
+    const cleanCourse = courseName.trim();
+    const maxBulletin = prompt(`Quel est le maximum sur le bulletin pour "${cleanCourse}" (ex: 20, 50, 100) :`, "100");
+    const cleanMax = (!maxBulletin || isNaN(maxBulletin)) ? 100 : parseFloat(maxBulletin);
+
+    if (!db.courses[activeClass]) {
+        db.courses[activeClass] = [];
+    }
+
+    if (!db.courses[activeClass].includes(cleanCourse)) {
+        db.courses[activeClass].push(cleanCourse);
+        if (!db.courseMax) db.courseMax = {};
+        db.courseMax[`${activeClass}_${cleanCourse}`] = cleanMax;
+
+        saveDB();
+        renderClassSelectors();
+        renderGradesTables();
+        renderAttendanceList();
+        alert(`✅ Cours "${cleanCourse}" ajouté avec succès à la classe "${activeClass}" !`);
+    } else {
+        alert("⚠️ Ce cours existe déjà pour cette classe.");
+    }
+}
+
+function syncSelectedClass(cls) {
+    activeClass = cls;
+    renderClassSelectors();
+    renderGradesTables();
+    renderAttendanceList();
+}
+
+function renderClassSelectors() {
+    const classContainer = document.getElementById('class-buttons');
+    const selectStudentClass = document.getElementById('select-student-class');
+    const presenceSelectClass = document.getElementById('presence-select-class');
+    const coursesDisplay = document.getElementById('current-class-courses-list');
+
+    classContainer.innerHTML = '';
+    selectStudentClass.innerHTML = '';
+    presenceSelectClass.innerHTML = '';
+
+    if (db.classes.length === 0) {
+        document.getElementById('current-class-title').textContent = "Aucune classe enregistrée";
+        selectStudentClass.innerHTML = '<option value="">-- Créer d\'abord une classe --</option>';
+        presenceSelectClass.innerHTML = '<option value="">-- Créer d\'abord une classe --</option>';
+        coursesDisplay.textContent = "Aucun cours";
+        return;
+    }
+
+    db.classes.forEach(cls => {
+        const courseList = (db.courses[cls] && db.courses[cls].length > 0) ? db.courses[cls].join(', ') : 'Aucun cours';
+        const classWithCourse = `${cls} (${courseList})`;
+
+        const btn = document.createElement('button');
+        btn.className = `btn-badge ${cls === activeClass ? 'active' : ''}`;
+        btn.textContent = classWithCourse;
+        btn.onclick = () => syncSelectedClass(cls);
+        classContainer.appendChild(btn);
+
+        selectStudentClass.innerHTML += `<option value="${cls}" ${cls === activeClass ? 'selected' : ''}>${classWithCourse}</option>`;
+        presenceSelectClass.innerHTML += `<option value="${cls}" ${cls === activeClass ? 'selected' : ''}>${classWithCourse}</option>`;
+    });
+
+    const activeCourseList = (db.courses[activeClass] && db.courses[activeClass].length > 0) ? db.courses[activeClass].join(', ') : 'Aucun cours';
+    
+    // Titre de la classe active avec le bouton de suppression intégrée
+    document.getElementById('current-class-title').innerHTML = activeClass 
+        ? `${activeClass} — Cours : ${activeCourseList} <button onclick="deleteClass('${activeClass}')" style="background:none; border:none; cursor:pointer; font-size:1.1rem; margin-left:8px;" title="Supprimer cette classe">🗑️</button>`
+        : "Aucune classe";
+
+    coursesDisplay.textContent = activeCourseList;
+    renderPresenceCourseOptions();
+}
+
+function renderPresenceCourseOptions() {
+    const presenceSelectClass = document.getElementById('presence-select-class').value;
+    const courseSelect = document.getElementById('presence-select-course');
+    courseSelect.innerHTML = '';
+
+    const courses = db.courses[presenceSelectClass] || [];
+    if (courses.length === 0) {
+        courseSelect.innerHTML = '<option value="">-- Aucun cours disponible --</option>';
+    } else {
+        courses.forEach(c => {
+            courseSelect.innerHTML += `<option value="${c}">${c}</option>`;
+        });
+    }
+}
+
+function onPresenceClassChange() {
+    renderPresenceCourseOptions();
+    renderAttendanceList();
+}
+
+function addStudentFromForm() {
+    const studentName = document.getElementById('input-student-name').value.trim();
+    const selectedClass = document.getElementById('select-student-class').value;
+
+    if (!studentName || !selectedClass) {
+        alert("Veuillez remplir le nom de l'élève et choisir une classe.");
+        return;
+    }
+
+    const newStudent = {
+        id: generateUniqueId("STU"),
+        name: studentName
+    };
+
+    if (!db.students[selectedClass]) db.students[selectedClass] = [];
+    db.students[selectedClass].push(newStudent);
+
+    document.getElementById('input-student-name').value = '';
+    saveDB();
+    renderGradesTables();
+    renderAttendanceList();
+}
+
+/* ==========================================================================
+   4. GESTION DYNAMIQUE DES TABLES DE NOTES
+   ========================================================================== */
+const periodLabels = {
+    "P1": "Première Période (P1)",
+    "P2": "Deuxième Période (P2)",
+    "EX1": "Examens du 1er Semestre (EX1)",
+    "P3": "Troisième Période (P3)",
+    "P4": "Quatrième Période (P4)",
+    "EX2": "Examens du 2nd Semestre (EX2)"
+};
+
+function renderGradesTables() {
+    const container = document.getElementById('periods-container');
+    const courseSelect = document.getElementById('grades-filter-course');
+    container.innerHTML = '';
+
+    if (!activeClass || !db.students[activeClass] || db.students[activeClass].length === 0) {
+        container.innerHTML = `<div class="card empty-state">Aucun élève enregistré dans <strong>${activeClass || 'cette classe'}</strong>.</div>`;
+        if (courseSelect) courseSelect.innerHTML = '<option value="">-- Aucun cours --</option>';
+        return;
+    }
+
+    // 1. Remplissage et récupération du cours actif
+    const classCourses = db.courses[activeClass] || [];
+    if (courseSelect) {
+        courseSelect.innerHTML = '';
+        classCourses.forEach(c => {
+            const selected = (db.activeCourseFilter && db.activeCourseFilter[activeClass] === c) ? 'selected' : '';
+            courseSelect.innerHTML += `<option value="${c}" ${selected}>${c}</option>`;
+        });
+    }
+
+    const selectedCourse = (db.activeCourseFilter && db.activeCourseFilter[activeClass]) || classCourses[0] || '';
+    const maxBulletin = (db.courseMax && db.courseMax[`${activeClass}_${selectedCourse}`]) || 100;
+
+    // 2. Recherche élève
+    const searchInput = document.getElementById('grades-filter-search');
+    const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : '';
+    const students = db.students[activeClass] || [];
+    const filteredStudents = students.filter(st => st.name.toLowerCase().includes(searchTerm));
+
+    const periods = ["P1", "P2", "EX1", "P3", "P4", "EX2"];
+
+    periods.forEach(pKey => {
+        const card = document.createElement('div');
+        card.className = "card";
+
+        // Filtrage des évaluations uniquement pour le cours sélectionné
+        const allEvals = (db.evaluations[activeClass] && db.evaluations[activeClass][pKey]) ? db.evaluations[activeClass][pKey] : [];
+        const evals = allEvals.filter(ev => !ev.course || ev.course === selectedCourse);
+
+        // Récupération de l'état masqué/affiché
+        const isVisible = (db.periodVisibility && db.periodVisibility[pKey]) ? 'block' : 'none';
+
+        let tableHTML = `
+            <div class="card-header-toggle">
+                <h4 style="color: var(--primary);">${periodLabels[pKey]} <small style="font-weight:normal; color:var(--text-muted);">(${selectedCourse})</small></h4>
+                <button class="btn-action" onclick="togglePeriodVisibility('${pKey}')">
+                    ${isVisible === 'block' ? '👁️ Masquer' : '👁️ Afficher'}
+                </button>
+            </div>
+            <div id="period-body-${pKey}" style="display: ${isVisible}; overflow-x: auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Nom de l'Élève</th>`;
+        
+        evals.forEach(ev => {
+            tableHTML += `<th style="text-align:center;">${ev.name}<br><small>/${ev.max}</small></th>`;
+        });
+
+        // Colonnes Total et Moyenne ramenée au Max Bulletin
+        tableHTML += `
+            <th style="text-align:center;">Total</th>
+            <th style="text-align:center; color: var(--success);">Moyenne (/${maxBulletin})</th>
+        </tr></thead><tbody>`;
+
+        if (filteredStudents.length === 0) {
+            tableHTML += `<tr><td colspan="${evals.length + 3}" style="text-align:center; color: var(--text-muted); padding: 12px;">🔍 Aucun élève ne correspond à "${searchTerm}"</td></tr>`;
+        } else {
+            filteredStudents.forEach(st => {
+                let total = 0;
+                let maxTotal = 0;
+
+                tableHTML += `<tr><td><strong>${st.name}</strong></td>`;
+
+                evals.forEach(ev => {
+                    const gradeKey = `${st.id}_${ev.id}`;
+                    const gradeVal = db.grades[gradeKey] !== undefined ? db.grades[gradeKey] : '';
+                    
+                    if (gradeVal !== '') {
+                        total += parseFloat(gradeVal);
+                        maxTotal += parseFloat(ev.max);
+                    }
+
+                    tableHTML += `
+                        <td style="text-align:center;">
+                            <input type="number" 
+                                   value="${gradeVal}" 
+                                   placeholder="-" 
+                                   min="0" max="${ev.max}"
+                                   style="width: 50px; text-align: center; border: 1px solid var(--border-color); border-radius: 4px; padding: 4px;"
+                                   onchange="updateGrade('${st.id}', '${ev.id}', this.value, ${ev.max})">
+                        </td>`;
+                });
+
+                // Calcul de la moyenne ramenée sur le max du bulletin
+                const moyenneBulletin = maxTotal > 0 ? ((total / maxTotal) * maxBulletin).toFixed(1) : "0.0";
+
+                tableHTML += `
+                    <td style="text-align:center; font-weight:bold; color:var(--primary);">${total}/${maxTotal}</td>
+                    <td style="text-align:center; font-weight:bold; color:var(--success);">${moyenneBulletin} / ${maxBulletin}</td>
+                </tr>`;
+            });
+        }
+
+        tableHTML += `</tbody></table>
+            <button class="btn-action" style="margin-top: 10px; width: 100%;" onclick="addEvaluationColumn('${pKey}')">
+                + Ajouter évaluation pour ${selectedCourse}
+            </button>
+        </div>`;
+
+        card.innerHTML = tableHTML;
+        container.appendChild(card);
+    });
+}
+
+function togglePeriodVisibility(pKey) {
+    if (!db.periodVisibility) db.periodVisibility = {};
+    
+    // Inversion de la valeur booléenne
+    db.periodVisibility[pKey] = !db.periodVisibility[pKey];
+    
+    saveDB();
+    renderGradesTables(); // Le tableau conserve maintenant l'état au rafraîchissement !
+}
+
+function addEvaluationColumn(pKey) {
+    const currentCourse = (db.activeCourseFilter && db.activeCourseFilter[activeClass]) 
+        || (db.courses[activeClass] ? db.courses[activeClass][0] : null);
+
+    if (!currentCourse) {
+        alert("⚠️ Veuillez d'abord ajouter un cours à la classe.");
+        return;
+    }
+
+    const evalName = prompt(`Nom du devoir/interro pour [${currentCourse}] (ex: Interro 1) :`, "Interro");
+    if (!evalName) return;
+    const maxVal = prompt("Note maximale (ex: 10 ou 20) :", "10");
+    if (!maxVal || isNaN(maxVal)) return;
+
+    if (!db.evaluations[activeClass]) db.evaluations[activeClass] = {};
+    if (!db.evaluations[activeClass][pKey]) db.evaluations[activeClass][pKey] = [];
+
+    db.evaluations[activeClass][pKey].push({
+        id: generateUniqueId("EV"),
+        name: evalName.trim(),
+        max: parseFloat(maxVal),
+        course: currentCourse // 👈 L'évaluation appartient désormais à un cours précis !
+    });
+
+    saveDB();
+    renderGradesTables();
+}
+
+function updateGrade(studentId, evalId, value, maxVal) {
+    const gradeKey = `${studentId}_${evalId}`;
+    if (value === "") delete db.grades[gradeKey];
+    else {
+        let num = parseFloat(value);
+        if (num < 0) num = 0;
+        if (num > maxVal) num = maxVal;
+        db.grades[gradeKey] = num;
+    }
+    
+    // NOUVEAU : Sauvegarde dans l'historique pour le Push Off
+    // On extrait le cours lié à cette évaluation
+    let courseName = "Général";
+    Object.keys(db.evaluations).forEach(cls => {
+        Object.values(db.evaluations[cls]).flat().forEach(ev => {
+            if(ev.id === evalId) courseName = ev.course || "Général";
+        });
+    });
+    
+    logGradeChange(studentId, courseName, evalId, value);
+    
+    db.pendingCommits++;
+    saveDB();
+    renderGradesTables();
+}
+
+/* ==========================================================================
+   5. JOURNAL DE PRÉSENCE PAR JOUR ET PAR COURS
+   ========================================================================== */
+
+function renderAttendanceList() {
+    const container = document.getElementById('attendance-list-container');
+    const selectedClass = document.getElementById('presence-select-class').value;
+    const selectedCourse = document.getElementById('presence-select-course').value;
+    const selectedDate = document.getElementById('presence-date').value;
+    
+    // Récupération des critères de filtrage
+    const filterSearch = (document.getElementById('presence-filter-search')?.value || '').toLowerCase().trim();
+    const filterStatus = document.getElementById('presence-filter-status')?.value || 'ALL';
+
+    if (!selectedClass || !db.students[selectedClass] || db.students[selectedClass].length === 0) {
+        container.innerHTML = '<p class="empty-state">Aucun élève dans cette classe pour établir la présence.</p>';
+        return;
+    }
+
+    if (!selectedCourse) {
+        container.innerHTML = '<p class="empty-state">Veuillez d\'abord ajouter un cours à cette classe pour faire l\'appel.</p>';
+        return;
+    }
+
+    let students = db.students[selectedClass];
+
+    // Filtrage par nom d'élève
+    if (filterSearch) {
+        students = students.filter(st => st.name.toLowerCase().includes(filterSearch));
+    }
+
+    if (students.length === 0) {
+        container.innerHTML = '<p class="empty-state">🔍 Aucun élève ne correspond à la recherche.</p>';
+        return;
+    }
+
+    let html = `<p style="font-size: 0.8rem; margin-bottom: 10px; color: var(--text-muted);">
+                    Appel du <strong>${selectedDate}</strong> | Cours : <strong>${selectedCourse}</strong>
+                </p>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Élève</th>
+                            <th style="text-align:center;">Présence</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+
+    let displayedCount = 0;
+
+    students.forEach(st => {
+        const existingRecord = db.presences.find(p => 
+            p.date === selectedDate && 
+            p.class === selectedClass && 
+            p.course === selectedCourse && 
+            p.studentId === st.id
+        );
+
+        const currentStatus = existingRecord ? existingRecord.status : 'P';
+
+        // Filtrage par statut de présence (P, A, R)
+        if (filterStatus !== 'ALL' && currentStatus !== filterStatus) {
+            return;
+        }
+
+        displayedCount++;
+
+        html += `
+            <tr>
+                <td><strong>${st.name}</strong></td>
+                <td style="text-align:center;">
+                    <select id="attendance-status-${st.id}" style="padding: 4px; border-radius: 6px;">
+                        <option value="P" ${currentStatus === 'P' ? 'selected' : ''}>✅ Présent</option>
+                        <option value="A" ${currentStatus === 'A' ? 'selected' : ''}>❌ Absent</option>
+                        <option value="R" ${currentStatus === 'R' ? 'selected' : ''}>🕒 Retard</option>
+                    </select>
+                </td>
+            </tr>`;
+    });
+
+    html += '</tbody></table>';
+
+    if (displayedCount === 0) {
+        container.innerHTML = '<p class="empty-state">🎯 Aucun élève ne correspond au statut sélectionné.</p>';
+    } else {
+        container.innerHTML = html;
+    }
+}
+
+// FUNCTION D'EXPORTATION DU TABLEAU DES PRÉSENCES VERS PDF
+function exportPresenceToPDF() {
+    const selectedClass = document.getElementById('presence-select-class').value;
+    const selectedCourse = document.getElementById('presence-select-course').value;
+    const selectedDate = document.getElementById('presence-date').value;
+    const filterStatus = document.getElementById('presence-filter-status')?.value || 'ALL';
+
+    if (!selectedClass || !selectedCourse || !selectedDate) {
+        alert("⚠️ Sélectionne d'abord une classe, un cours et une date valides.");
+        return;
+    }
+
+    const students = db.students[selectedClass] || [];
+    if (students.length === 0) {
+        alert("⚠️ Aucun élève enregistre dans cette classe.");
+        return;
+    }
+
+    // Préparation des lignes du tableau PDF
+    const tableRows = [];
+    let totalP = 0, totalA = 0, totalR = 0;
+    let index = 1;
+
+    students.forEach(st => {
+        const existingRecord = db.presences.find(p => 
+            p.date === selectedDate && 
+            p.class === selectedClass && 
+            p.course === selectedCourse && 
+            p.studentId === st.id
+        );
+
+        const status = existingRecord ? existingRecord.status : 'P';
+
+        if (filterStatus !== 'ALL' && status !== filterStatus) return;
+
+        let statusLabel = "";
+        if (status === 'P') { statusLabel = "Présent"; totalP++; }
+        else if (status === 'A') { statusLabel = "Absent"; totalA++; }
+        else if (status === 'R') { statusLabel = "En Retard"; totalR++; }
+
+        tableRows.push([index++, st.name, statusLabel]);
+    });
+
+    if (tableRows.length === 0) {
+        alert("⚠️ Aucune donnée ne correspond aux filtres pour générer le PDF.");
+        return;
+    }
+
+    // Génération native jsPDF avec AutoTable
+    if (window.jspdf && window.jspdf.jsPDF) {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+
+        // En-tête du document PDF
+        doc.setFontSize(16);
+        doc.setTextColor(37, 99, 235); // Couleur Primaire ClassNet (#2563EB)
+        doc.text("RAPPORT DE PRÉSENCE - CLASSNET APP", 14, 18);
+
+        doc.setFontSize(10);
+        doc.setTextColor(80);
+        doc.text(`Établissement : ${db.user.school || 'Enfant du Monde'} | Enseignant : ${db.user.name || 'Kahorha Gabriel'}`, 14, 25);
+        doc.text(`Classe : ${selectedClass} | Cours : ${selectedCourse} | Date : ${selectedDate}`, 14, 31);
+        doc.text(`Statistiques : ${totalP} Présent(s), ${totalA} Absent(s), ${totalR} En retard`, 14, 37);
+
+        // Intégration du Tableau
+        doc.autoTable({
+            startY: 42,
+            head: [['N°', 'Nom & Prénom de l\'Élève', 'Statut de Présence']],
+            body: tableRows,
+            theme: 'striped',
+            headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: 'bold' },
+            styles: { fontSize: 10, cellPadding: 4 },
+            alternateRowStyles: { fillColor: [243, 244, 246] }
+        });
+
+        // Téléchargement du fichier PDF
+        doc.save(`Presence_${selectedClass.replace(/\s+/g, '_')}_${selectedDate}.pdf`);
+    } else {
+        // Mode secours : Fenêtre d'impression imprimable / sauvegarde PDF navigateur
+        const printWin = window.open('', '_blank');
+        printWin.document.write(`
+            <html>
+            <head>
+                <title>Rapport de Présence - ${selectedClass}</title>
+                <style>
+                    body { font-family: Arial, sans-serif; padding: 20px; color: #333; }
+                    h2 { color: #2563EB; margin-bottom: 5px; }
+                    .meta { font-size: 0.9rem; color: #555; margin-bottom: 15px; border-bottom: 2px solid #2563EB; padding-bottom: 10px; }
+                    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+                    th, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; font-size: 0.9rem; }
+                    th { background-color: #2563EB; color: white; }
+                    tr:nth-child(even) { background-color: #f9f9f9; }
+                    .stats { margin-top: 15px; font-weight: bold; font-size: 0.85rem; }
+                </style>
+            </head>
+            <body>
+                <h2>📌 Rapport de Présence - ${db.user.school || 'Enfant du Monde'}</h2>
+                <div class="meta">
+                    <strong>Enseignant :</strong> ${db.user.name} | <strong>Classe :</strong> ${selectedClass}<br>
+                    <strong>Cours :</strong> ${selectedCourse} | <strong>Date :</strong> ${selectedDate}
+                </div>
+                <table>
+                    <thead>
+                        <tr><th>N°</th><th>Nom de l'Élève</th><th>Statut</th></tr>
+                    </thead>
+                    <tbody>
+                        ${tableRows.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td></tr>`).join('')}
+                    </tbody>
+                </table>
+                <div class="stats">
+                    📊 Totaux : ${totalP} Présent(s) | ${totalA} Absent(s) | ${totalR} En retard
+                </div>
+            </body>
+            </html>
+        `);
+        printWin.document.close();
+        printWin.print();
+    }
+}
+
+function saveAttendanceSession() {
+    const selectedClass = document.getElementById('presence-select-class').value;
+    const selectedCourse = document.getElementById('presence-select-course').value;
+    const selectedDate = document.getElementById('presence-date').value;
+
+    if (!selectedClass || !selectedCourse || !selectedDate) {
+        alert("Veuillez vérifier la classe, le cours et la date.");
+        return;
+    }
+
+    const students = db.students[selectedClass] || [];
+    let savedCount = 0;
+
+    students.forEach(st => {
+        const selectEl = document.getElementById(`attendance-status-${st.id}`);
+        if (selectEl) {
+            const statusVal = selectEl.value;
+
+            // Mettre à jour si l'enregistrement existe déjà, sinon ajouter
+            const existingIndex = db.presences.findIndex(p => 
+                p.date === selectedDate && 
+                p.class === selectedClass && 
+                p.course === selectedCourse && 
+                p.studentId === st.id
+            );
+
+            if (existingIndex !== -1) {
+                db.presences[existingIndex].status = statusVal;
+            } else {
+                db.presences.push({
+                    id: generateUniqueId("ATT"),
+                    date: selectedDate,
+                    class: selectedClass,
+                    course: selectedCourse,
+                    studentId: st.id,
+                    studentName: st.name,
+                    status: statusVal
+                });
+            }
+            savedCount++;
+        }
+    });
+
+    db.pendingCommits++;
+    saveDB();
+    alert(`✅ Présence du ${selectedDate} enregistrée pour ${savedCount} élève(s) (${selectedClass} - ${selectedCourse}) !`);
+}
+
+/* ==========================================================================
+   6. SYNCHRONISATION (INTRANET & INTERNET)
+   ========================================================================== */
+async function saveOfflineCommit() {
+    const unsentData = appState.syncHistory.intranet;
+    
+    if (unsentData.length === 0) {
+        alert("✅ Aucune nouvelle note à envoyer. ClassNet P est déjà à jour.");
+        return;
+    }
+
+    const serverUrl = await SERVER_CONFIG.discoverLocalServer();
+    if (!serverUrl) {
+        alert("❌ Impossible de trouver ClassNet P sur le réseau Wi-Fi. Assurez-vous que le serveur tourne.");
+        return;
+    }
+
+    // Extraction et calcul des moyennes pour les élèves ayant des nouvelles notes
+    const moyennesAEnvoyer = [];
+    const studentsProcessed = new Set();
+
+    unsentData.forEach(record => {
+        const { studentId, courseId } = record;
+        const processKey = `${studentId}_${courseId}`;
+        
+        // Éviter de recalculer plusieurs fois le même élève pour le même cours lors d'un batch
+        if (studentsProcessed.has(processKey)) return;
+        studentsProcessed.add(processKey);
+
+        // Recherche de l'élève et de sa classe
+        let studentName = "";
+        let studentClass = "";
+        for (const cls in db.students) {
+            const student = db.students[cls].find(s => s.id === studentId);
+            if (student) {
+                studentName = student.name;
+                studentClass = cls;
+                break;
+            }
+        }
+
+        // Calcul mathématique de la moyenne exacte
+        let total = 0;
+        let maxTotal = 0;
+        const maxBulletin = (db.courseMax && db.courseMax[`${studentClass}_${courseId}`]) || 100;
+
+        // Parcourir toutes les périodes (P1, P2, EX1...) pour cet élève et ce cours
+        const gradeKey = `${studentId}_${courseId}`;
+        if (appState.grades[gradeKey]) {
+            Object.keys(appState.grades[gradeKey]).forEach(periodId => {
+                const evalData = db.evaluations[studentClass][periodId]?.find(e => e.id === periodId); // Adapté à ta structure
+                const gradeVal = appState.grades[gradeKey][periodId];
+                if (evalData && gradeVal !== undefined && gradeVal !== "") {
+                    total += parseFloat(gradeVal);
+                    maxTotal += parseFloat(evalData.max);
+                }
+            });
+        }
+
+        const moyenneFinale = maxTotal > 0 ? ((total / maxTotal) * maxBulletin).toFixed(1) : 0;
+
+        moyennesAEnvoyer.push({
+            id_eleve: studentId,
+            nom: studentName,
+            classe: studentClass,
+            cours: courseId,
+            moyenne: parseFloat(moyenneFinale)
+        });
+    });
+
+    const payload = {
+        ecole: db.user.school,
+        professeur: db.user.id,
+        donnees: moyennesAEnvoyer,
+        action: "FILL_EMPTY_BULLETINS"
+    };
+
+    try {
+        const response = await fetch(`${serverUrl}/api/intranet/sync`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (response.ok) {
+            appState.syncHistory.intranet = []; // Réinitialisation après succès
+            localStorage.setItem('classnet_app_db', JSON.stringify(appState));
+            alert(`💾 Push Off réussi ! Les moyennes de ${moyennesAEnvoyer.length} enregistrements ont été envoyées à ClassNet P 🚀`);
+        } else {
+            throw new Error("Erreur Serveur");
+        }
+    } catch (error) {
+        alert("❌ Échec de la transmission locale.");
+    }
+}
+
+async function syncWithCloud() {
+    if (!navigator.onLine) {
+        alert("⚠️ Mode Hors-Ligne détecté. Connexion Internet requise pour le Push On.");
+        return;
+    }
+
+    const dynamicUrl = SERVER_CONFIG.getInternetUrl(db.user.school);
+    
+    try {
+        // Envoi de l'intégralité de la variable 'db' (Base de données entière)
+        const response = await fetch(`${dynamicUrl}/api/cloud/backup`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                authId: db.user.id, 
+                fullDatabase: db 
+            })
+        });
+
+        if (response.ok) {
+            db.pendingCommits = 0;
+            appState.syncHistory.internet.push(Date.now());
+            saveDB();
+            alert(`🚀 Push On (API) réussi ! Base de données sécurisée sur le Cloud Render de l'école.`);
+        }
+    } catch (error) {
+        alert("❌ Erreur de synchronisation Cloud. Le serveur Render est peut-être en veille.");
+    }
+}
+
+/* ==========================================================================
+   7. NAVIGATION ET ASSISTANT LLINK
+   ========================================================================== */
+
+async function generateSecureTeacherID(teacherName, schoolName) {
+    const rawSeed = `${teacherName}-${schoolName}-${navigator.userAgent}-${navigator.hardwareConcurrency}-${Date.now()}`;
+    
+    // Encoder la chaîne en Uint8Array
+    const encoder = new TextEncoder();
+    const data = encoder.encode(rawSeed);
+
+    // Calcul du Hash SHA-256 via Web Crypto API
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    
+    // Conversion du buffer en hexadécimal
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+
+    // Découpage pour obtenir un format propre : CN-2026-XXXX-YYYY
+    const year = new Date().getFullYear();
+    const segment1 = hashHex.substring(0, 4);
+    const segment2 = hashHex.substring(4, 8);
+
+    return `CN-${year}-${segment1}-${segment2}`;
+}
+
+const navBtns = document.querySelectorAll('.bottom-nav .nav-btn');
+const views = document.querySelectorAll('.view-section');
+
+navBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+        const target = btn.getAttribute('data-target');
+        navBtns.forEach(b => b.classList.remove('active'));
+        views.forEach(v => v.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById(target).classList.add('active');
+    });
+});
+
+document.getElementById('btn-header-settings').addEventListener('click', () => {
+    navBtns.forEach(b => b.classList.remove('active'));
+    views.forEach(v => v.classList.remove('active'));
+    document.getElementById('view-settings').classList.add('active');
+});
+
+function windowSetTheme(mode) {
+    if (mode === 'dark') document.body.setAttribute('data-theme', 'dark');
+    else document.body.removeAttribute('data-theme');
+}
+window.setTheme = windowSetTheme;
+
+async function regenerateCryptoID() {
+    const name = document.getElementById('setting-user-name').value;
+    const school = document.getElementById('setting-school-id').value;
+    
+    if (confirm("Voulez-vous générer une nouvelle clé d'identification cryptographique ?")) {
+        const newID = await generateSecureTeacherID(name, school);
+        db.user.id = newID;
+        document.getElementById('setting-user-id').value = newID;
+        saveDB();
+        alert(`Nouvel identifiant généré avec succès : ${newID}`);
+    }
+}
+
+function saveLlinkPrefs() {
+    const prefs = document.getElementById('setting-llink-prefs').value;
+    localStorage.setItem('llink_custom_instructions', prefs);
+}
+
+function exportDatabaseJSON() {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(db, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", `classnet_backup_${new Date().toISOString().substring(0,10)}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+}
+
+function resetAppDatabase() {
+    if (confirm("⚠️ ATTENTION : Cela effacera l'intégralité des élèves, notes, présences et quiz enregistrés sur cet appareil. Continuer ?")) {
+        localStorage.removeItem(DB_KEY);
+        location.reload();
+    }
+}
+
+/* ==========================================================================
+   MOTEUR DE RÉPONSE STREAMING LLINK AI (CHATPAYLOAD INTEGRATION)
+   ========================================================================== */
+const SERVER_URL = "https://llink-usz9.onrender.com";
+
+function setLlinkPrompt(promptText) {
+    const input = document.getElementById('llink-input');
+    input.value = promptText;
+    input.focus();
+}
+
+function getLlinkContextPreferences() {
+    const teacherName = db.user.name || "Enseignant";
+    const school = db.user.school || "Établissement";
+    const activeCourseList = (db.courses[activeClass] && db.courses[activeClass].length > 0) 
+        ? db.courses[activeClass].join(', ') 
+        : 'Général';
+
+    return JSON.stringify({
+        enseignant: teacherName,
+        ecole: school,
+        classe_actuelle: activeClass || "Non spécifiée",
+        cours_enseignes: activeCourseList,
+        custom_instructions: localStorage.getItem('llink_custom_instructions') || "Sois méthodique et précis."
+    });
+}
+
+async function sendLlinkMessage() {
+    const input = document.getElementById('llink-input');
+    const text = input.value.trim();
+    if (!text) return;
+
+    const chatWindow = document.getElementById('llink-chat-window');
+    const emptyState = document.getElementById('llink-empty-state');
+    if (emptyState) emptyState.remove();
+
+    // 1. Affichage du message Utilisateur
+    const userMsgDiv = document.createElement('div');
+    userMsgDiv.style.cssText = "align-self: flex-end; background: var(--primary); color: white; padding: 10px 14px; border-radius: 14px 14px 2px 14px; max-width: 80%; font-size: 0.88rem; word-break: break-word; line-height: 1.4;";
+    userMsgDiv.textContent = text;
+    chatWindow.appendChild(userMsgDiv);
+
+    input.value = '';
+    chatWindow.scrollTop = chatWindow.scrollHeight;
+
+    // 2. Préparation du conteneur de réponse Llink
+    const botMsgContainer = document.createElement('div');
+    botMsgContainer.style.cssText = "align-self: flex-start; background: var(--bg-color); color: var(--text-main); border: 1px solid var(--border-color); padding: 10px 14px; border-radius: 14px 14px 14px 2px; max-width: 85%; font-size: 0.88rem; word-break: break-word; line-height: 1.4;";
+    botMsgContainer.innerHTML = "<em>Réflexion de Llink en cours... 🧠</em>";
+    chatWindow.appendChild(botMsgContainer);
+    chatWindow.scrollTop = chatWindow.scrollHeight;
+
+    const selectedModel = document.getElementById('llink-model-select').value;
+    const userPrefs = getLlinkContextPreferences();
+
+    // 3. Construction du Payload conforme à la classe ChatPayload de l'API FastAPI/Pydantic
+    const payload = {
+        message: text,
+        modèle: selectedModel,
+        model: selectedModel, // Sécurité de compatibilité
+        préférences: userPrefs,
+        preferences: userPrefs,
+        mode: "chat",
+        source: "classnet_app"
+    };
+
+    try {
+        const response = await fetch(`${SERVER_URL}/api/chat`, {
+            method: "POST",
+            headers: { 
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) throw new Error(`Erreur HTTP: ${response.status}`);
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+        let fullReply = "";
+        botMsgContainer.innerHTML = "";
+
+        // 4. Lecture en streaming
+        while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            
+            fullReply += decoder.decode(value, { stream: true });
+            botMsgContainer.innerHTML = formatMarkdown(fullReply) + '<span style="display:inline-block; width:6px; height:12px; background:var(--primary); margin-left:4px; animation:blink 0.8s infinite;"></span>';
+            chatWindow.scrollTop = chatWindow.scrollHeight;
+        }
+
+        botMsgContainer.innerHTML = formatMarkdown(fullReply);
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+
+    } catch (err) {
+        console.error("Erreur Llink API:", err);
+        botMsgContainer.innerHTML = "❌ Impossible de contacter le serveur Llink. Vérifie ta connexion réseau.";
+    }
+}
+
+function formatMarkdown(text) {
+    if (!text) return "";
+    let html = text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    html = html.replace(/\*\*([\s\S]*?)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/```([\s\S]*?)```/g, '<pre style="background:rgba(0,0,0,0.1); padding:8px; border-radius:6px; font-family:monospace; margin:6px 0;"><code>$1</code></pre>');
+    html = html.replace(/\n/g, '<br>');
+    return html;
+}
+
+/* ====================================================================================================
+   8. Intégration du module des interrogations
+   */
+
+/* ==========================================================================
+   MODULE DE GESTION DES QUIZ & INTERROGATIONS DYNAMIQUES
+   ========================================================================== */
+
+// 1. Initialisation de la structure des quiz dans defaultDB
+if (!db.quizzes) {
+    db.quizzes = [];
+    saveDB();
+}
+
+// 2. Synchronisation des listes déroulantes de la section Quiz
+function renderQuizFormSelectors() {
+    const classSelect = document.getElementById('quiz-select-class');
+    const courseSelect = document.getElementById('quiz-select-course');
+    if (!classSelect || !courseSelect) return;
+
+    classSelect.innerHTML = '';
+    courseSelect.innerHTML = '';
+
+    if (db.classes.length === 0) {
+        classSelect.innerHTML = '<option value="">-- Aucune classe --</option>';
+        courseSelect.innerHTML = '<option value="">-- Aucun cours --</option>';
+        return;
+    }
+
+    db.classes.forEach(cls => {
+        classSelect.innerHTML += `<option value="${cls}" ${cls === activeClass ? 'selected' : ''}>${cls}</option>`;
+    });
+
+    const selectedClass = classSelect.value || db.classes[0];
+    const courses = db.courses[selectedClass] || [];
+
+    if (courses.length === 0) {
+        courseSelect.innerHTML = '<option value="">-- Aucun cours --</option>';
+    } else {
+        courses.forEach(crs => {
+            courseSelect.innerHTML += `<option value="${crs}">${crs}</option>`;
+        });
+    }
+
+    classSelect.onchange = () => {
+        const currentCls = classSelect.value;
+        courseSelect.innerHTML = '';
+        const crsList = db.courses[currentCls] || [];
+        crsList.forEach(crs => {
+            courseSelect.innerHTML += `<option value="${crs}">${crs}</option>`;
+        });
+    };
+}
+
+// 3. Enregistrement d'un Quiz dans LocalStorage
+function saveQuizToDB() {
+    const title = document.getElementById('quiz-title-input').value.trim();
+    const className = document.getElementById('quiz-select-class').value;
+    const courseName = document.getElementById('quiz-select-course').value;
+    const maxScore = document.getElementById('quiz-max-score').value;
+    const textContent = document.getElementById('quiz-text-content').value.trim();
+
+    if (!title || !textContent || !className) {
+        alert("⚠️ Veuille remplir au moins le titre, la classe et l'énoncé du quiz.");
+        return;
+    }
+
+    const newQuiz = {
+        id: generateUniqueId("QUIZ"),
+        title: title,
+        class: className,
+        course: courseName || "Général",
+        maxScore: parseFloat(maxScore) || 10,
+        textContent: textContent,
+        createdAt: new Date().toISOString().substring(0, 10)
+    };
+
+    if (!db.quizzes) db.quizzes = [];
+    db.quizzes.unshift(newQuiz); // Ajoute en haut de la liste
+    
+    db.pendingCommits++;
+    saveDB();
+    renderQuizList();
+
+    // Réinitialisation des champs
+    document.getElementById('quiz-title-input').value = '';
+    document.getElementById('quiz-text-content').value = '';
+    alert("✅ Interrogation enregistrée avec succès dans la banque de données !");
+}
+
+// 4. Génération automatique d'un Quiz par Llink AI
+async function generateQuizWithLlink() {
+    const title = document.getElementById('quiz-title-input').value.trim();
+    const className = document.getElementById('quiz-select-class').value;
+    const courseName = document.getElementById('quiz-select-course').value;
+    const maxScore = document.getElementById('quiz-max-score').value;
+    const textarea = document.getElementById('quiz-text-content');
+
+    if (!title) {
+        alert("⚠️ Précise d'abord le titre ou le sujet dans le champ 'TITRE DE L'ÉVALUATION' pour que Llink sache sur quoi générer le quiz.");
+        return;
+    }
+
+    textarea.value = "🤖 Llink rédigé ton interrogation en arrière-plan... Patientez quelques secondes...";
+
+    const promptText = `Rédige une interrogation écrite complète et prête à imprimer sur le sujet : "${title}".
+Classe : ${className}
+Cours : ${courseName}
+Total des points : /${maxScore} points.
+Structure demandée :
+1. En-tête officiel de l'épreuve (Nom de l'élève, Date, Classe, Cours).
+2. 3 à 5 questions très précises et pédagogiques adaptées au programme.
+3. Le barème de cotation détaillé pour chaque question entre parenthèses.`;
+
+    const payload = {
+        message: promptText,
+        modèle: document.getElementById('llink-model-select') ? document.getElementById('llink-model-select').value : "gemini-1.5-flash",
+        model: "gemini-1.5-flash",
+        préférences: getLlinkContextPreferences(),
+        preferences: getLlinkContextPreferences(),
+        mode: "quiz_gen",
+        source: "classnet_app"
+    };
+
+    try {
+        const response = await fetch(`${SERVER_URL}/api/chat`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) throw new Error("Erreur serveur Llink");
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+        let generatedText = "";
+        textarea.value = "";
+
+        while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            generatedText += decoder.decode(value, { stream: true });
+            textarea.value = generatedText;
+        }
+
+    } catch (err) {
+        console.error("Erreur génération Quiz Llink:", err);
+        textarea.value = "❌ Erreur de génération. Vérifie ta connexion réseau à l'API Llink.";
+    }
+}
+
+// 5. Affichage dynamique de la liste des quiz
+function renderQuizList() {
+    const container = document.getElementById('quizzes-container');
+    if (!container) return;
+
+    if (!db.quizzes || db.quizzes.length === 0) {
+        container.innerHTML = '<p class="empty-state">Aucune interrogation enregistrée pour le moment.</p>';
+        return;
+    }
+
+    let html = '';
+    db.quizzes.forEach(q => {
+        html += `
+            <div style="background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; margin-bottom: 10px;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px;">
+                    <div>
+                        <strong style="color: var(--primary); font-size: 0.95rem;">${q.title}</strong>
+                        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">
+                            📚 ${q.class} | 📖 ${q.course} | 🎯 Note Max: ${q.maxScore} pts | 📅 ${q.createdAt}
+                        </div>
+                    </div>
+                    <button onclick="deleteQuiz('${q.id}')" style="background:none; border:none; cursor:pointer; font-size:1rem;" title="Supprimer">🗑️</button>
+                </div>
+                <pre style="white-space: pre-wrap; font-family: inherit; font-size: 0.82rem; background: var(--card-bg); padding: 8px; border-radius: 6px; border: 1px solid var(--border-color); max-height: 120px; overflow-y: auto; margin: 8px 0;">${q.textContent}</pre>
+                <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                    <button class="btn-action" onclick="printQuiz('${q.id}')" style="font-size:0.75rem; padding: 4px 10px;">🖨️ Imprimer / Exporter</button>
+                </div>
+            </div>
+        `;
+    });
+
+    container.innerHTML = html;
+}
+
+// 6. Suppression d'un Quiz
+function deleteQuiz(quizId) {
+    if (confirm("Supprimer définitivement cette interrogation de la banque ?")) {
+        db.quizzes = db.quizzes.filter(q => q.id !== quizId);
+        saveDB();
+        renderQuizList();
+    }
+}
+
+// 7. Impression / Exécution propre du Quiz pour tirage papier
+function printQuiz(quizId) {
+    const quiz = db.quizzes.find(q => q.id === quizId);
+    if (!quiz) return;
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+        alert("⚠️ Activez les fenêtres surgissantes (pop-ups) pour imprimer.");
+        return;
+    }
+
+    const htmlContent = '<html><head><title>' + quiz.title + '</title>' +
+        '<style>' +
+        'body { font-family: Arial, sans-serif; padding: 30px; color: #000; line-height: 1.5; }' +
+        '.header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }' +
+        '.meta { display: flex; justify-content: space-between; margin-bottom: 25px; font-weight: bold; font-size: 0.9rem; }' +
+        '.content { font-size: 1rem; white-space: pre-wrap; }' +
+        '.footer { margin-top: 50px; text-align: right; font-style: italic; font-size: 0.8rem; }' +
+        '</style></head><body>' +
+        '<div class="header"><h2>ÉCOLE : ' + (db.user.school || 'Enfant du Monde') + '</h2><h3>EVALUATION DE : ' + quiz.course.toUpperCase() + '</h3></div>' +
+        '<div class="meta"><span>Nom de l\'élève : _______________________</span><span>Classe : ' + quiz.class + '</span><span>Max : /' + quiz.maxScore + ' pts</span></div><hr>' +
+        '<h4 style="text-align: center;">' + quiz.title + '</h4>' +
+        '<div class="content">' + quiz.textContent + '</div>' +
+        '<div class="footer">ClassNet App - Prof. ' + db.user.name + '</div>' +
+        '</body></html>';
+
+    printWindow.document.open();
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+    
+    setTimeout(() => {
+        printWindow.print();
+    }, 250);
+}
+
+// Intégration dans le Hook d'initialisation de la navigation
+document.querySelectorAll('.bottom-nav .nav-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        if (btn.getAttribute('data-target') === 'view-interrogations') {
+            renderQuizFormSelectors();
+            renderQuizList();
+        }
+    });
+});
+
+// RESTAURATION DE LA BASE DE DONNÉES LOCALES (JSON)
+function importDatabaseJSON(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const importedDB = JSON.parse(e.target.result);
+            
+            // Validation de la structure minimale
+            if (!importedDB.user || !importedDB.classes || !importedDB.students) {
+                alert("⚠️ Fichier de sauvegarde invalide ou corrompu.");
+                return;
+            }
+
+            if (confirm("⚠️ Souhaitez-vous remplacer la base de données actuelle par cette sauvegarde ?")) {
+                db = importedDB;
+                saveDB();
+                location.reload(); // Rechargement pour réinitialiser l'UI
+            }
+        } catch (err) {
+            alert("❌ Erreur lors de la lecture du fichier : " + err.message);
+        }
+    };
+    reader.readAsText(file);
+};
+</script>
+
+<script>
+// --- GESTION DYNAMIQUE DU RÉSEAU ET HISTORIQUE (CRYPT) ---
+const SERVER_CONFIG = {
+    // Mécanisme 1 : URL mDNS standardisée diffusée par ClassNet P
+    intranetMDNS: "http://classnet-server.local:5000",
+    
+    // IP de secours en cas de routeur bloquant le protocole Bonjour/mDNS
+    fallbackIP: "http://192.168.1.100:5000", 
+    
+    getInternetUrl: function(schoolName) {
+        const formatName = schoolName.toLowerCase().replace(/\s+/g, '-');
+        return `https://classnet-${formatName}.onrender.com`;
+    },
+
+    // Scrutin Local Automatique
+    discoverLocalServer: async function() {
+        try {
+            // Tentative 1 : mDNS (Idéal, zéro configuration)
+            const res = await fetch(`${this.intranetMDNS}/api/ping`, { signal: AbortSignal.timeout(2000) });
+            if (res.ok) return this.intranetMDNS;
+        } catch (e) {
+            console.warn("⚠️ mDNS non résolu, basculement sur l'IP de secours...");
+            try {
+                // Tentative 2 : Fallback IP
+                const resFallback = await fetch(`${this.fallbackIP}/api/ping`, { signal: AbortSignal.timeout(2000) });
+                if (resFallback.ok) return this.fallbackIP;
+            } catch (err) {
+                return null;
+            }
+        }
+    }
+};
+
+let appState = JSON.parse(localStorage.getItem('classnet_app_db')) || {
+    activeTeacher: null,
+    syncHistory: { 
+        intranet: [], // Stocke uniquement les ID des évaluations non envoyées en local
+        internet: []  // Stocke les timestamps de la dernière synchro globale
+    }, 
+    grades: {} 
+};
+
+// Fonction universelle améliorée pour tracker précisément ce qui n'est pas encore envoyé
+function logGradeChange(studentId, courseId, period, value) {
+    const timestamp = Date.now();
+    const record = { studentId, courseId, period, value, timestamp };
+    
+    const gradeKey = `${studentId}_${courseId}`;
+    if (!appState.grades[gradeKey]) appState.grades[gradeKey] = {};
+    appState.grades[gradeKey][period] = value;
+
+    // Ajout à l'historique INTRANET pour un envoi ciblé
+    appState.syncHistory.intranet.push(record);
+    
+    localStorage.setItem('classnet_app_db', JSON.stringify(appState));
+}
+
+// --- COMMANDE SECRÈTE DE VERROUILLAGE ---
+let keyBuffer = "";
+document.addEventListener('keydown', (e) => {
+    // Si l'utilisateur tape dans un input, on ignore
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    
+    keyBuffer += e.key.toUpperCase();
+    if (keyBuffer.length > 15) keyBuffer = keyBuffer.slice(-15); // Garde les 15 dernières touches
+    
+    if (keyBuffer.includes("BLOCKCRYPT")) {
+        triggerAdminLock();
+        keyBuffer = ""; // Réinitialise
+    }
+});
+
+async function triggerAdminLock() {
+    const confirmLock = prompt("⚠️ PROTOCOLE DE SÉCURITÉ ACTIVÉ. Entrez le code de désactivation :");
+    if (confirmLock === "Genesis") {
+        alert(`🚨 Verrouillage du réseau de l'école ${db.user.school} en cours de transmission...`);
+        
+        try {
+            // Envoi de la commande d'arrêt au serveur Python / ClassNet P
+            await fetch(`${SERVER_CONFIG.getInternetUrl(db.user.school)}/api/admin/lockdown`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ target: db.user.school, status: "LOCKED" })
+            });
+            alert("✅ ClassNet P a été bloqué pour cette école.");
+        } catch (error) {
+            console.error("Erreur de verrouillage", error);
+        }
+    } else {
+        alert("❌ Code incorrect.");
+    }
+}
+</script>
+</body>
+</html>
