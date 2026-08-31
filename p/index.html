@@ -1,0 +1,1878 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ClassNet P - CRYPT Enterprise</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style> 
+/* ==========================================================================
+   CLASSNET P - FEUILLE DE STYLE (CRYPT DESIGN & VISION)
+   ========================================================================== */
+
+:root {
+    --primary-color: #2563eb;
+    --primary-hover: #1d4ed8;
+    --secondary-color: #475569;
+    --bg-main: #f1f5f9;
+    --bg-card: #ffffff;
+    --bg-sidebar: #0f172a;
+    --text-primary: #0f172a;
+    --text-secondary: #64748b;
+    --text-white: #ffffff;
+    --border-color: #e2e8f0;
+    --success-color: #16a34a;
+    --danger-color: #dc2626;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.1);
+    --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1);
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --transition-fast: 0.2s ease-in-out;
+}
+
+body.theme-dark {
+    --bg-main: #0f172a;
+    --bg-card: #1e293b;
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --border-color: #334155;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+body {
+    background-color: var(--bg-main);
+    color: var(--text-primary);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Navigation Principale */
+.main-navbar {
+    background-color: var(--bg-sidebar);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.8rem 2rem;
+    box-shadow: var(--shadow-md);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.brand-logo {
+    color: var(--text-white);
+    font-size: 1.4rem;
+    font-weight: 800;
+    letter-spacing: 1px;
+}
+
+.brand-logo span {
+    color: var(--primary-color);
+}
+
+.nav-links {
+    display: flex;
+    gap: 0.8rem;
+}
+
+.nav-btn {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: var(--text-white);
+    padding: 0.5rem 1.2rem;
+    border-radius: var(--radius-md);
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition-fast);
+}
+
+.nav-btn:hover, .nav-btn.active {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+/* Sections Principales */
+.app-section {
+    display: none;
+    padding: 1.5rem;
+    flex: 1;
+}
+
+.app-section.active {
+    display: block;
+}
+
+/* Interface Llink AI */
+.llink-container {
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-color);
+    padding: 1.5rem;
+    max-width: 800px;
+    margin: 0 auto;
+    box-shadow: var(--shadow-md);
+}
+
+.page-break {
+    page-break-after: always;
+    break-after: page;
+}
+
+@media print {
+    body * {
+        visibility: hidden;
+    }
+    #pdfExportContainer, #pdfExportContainer * {
+        visibility: visible;
+    }
+    #pdfExportContainer {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+    }
+}
+
+.llink-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding-bottom: 0.8rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.status-badge {
+    background-color: rgba(22, 163, 74, 0.1);
+    color: var(--success-color);
+    padding: 0.3rem 0.8rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.llink-chat-box {
+    min-height: 250px;
+    max-height: 400px;
+    background: var(--bg-main);
+    border-radius: var(--radius-md);
+    padding: 1rem;
+    margin-bottom: 1rem;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+}
+
+.chat-message {
+    padding: 0.8rem 1rem;
+    border-radius: var(--radius-md);
+    font-size: 0.95rem;
+    max-width: 85%;
+}
+
+.chat-message.ai {
+    background: var(--bg-card);
+    border-left: 4px solid var(--primary-color);
+    align-self: flex-start;
+}
+
+.chat-message.user {
+    background: var(--primary-color);
+    color: var(--text-white);
+    align-self: flex-end;
+}
+
+.llink-input-bar {
+    display: flex;
+    gap: 0.8rem;
+}
+
+.llink-input {
+    flex: 1;
+    padding: 0.7rem 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    outline: none;
+    background: var(--bg-card);
+    color: var(--text-primary);
+}
+
+/* Navigation Secondaire & Sub-Views */
+.sub-navbar {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    border-bottom: 2px solid var(--border-color);
+    padding-bottom: 0.4rem;
+}
+
+.sub-nav-btn {
+    background: none;
+    border: none;
+    padding: 0.6rem 1.2rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+}
+
+.sub-nav-btn.active {
+    color: var(--primary-color);
+    border-bottom-color: var(--primary-color);
+}
+
+.sub-view-content {
+    display: none;
+    gap: 1.5rem;
+}
+
+.sub-view-content.active {
+    display: flex;
+}
+
+/* Sidebar Escamotable */
+.retractable-sidebar {
+    width: 280px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+    transition: width 0.3s ease;
+}
+
+.retractable-sidebar.collapsed {
+    width: 60px;
+    overflow: hidden;
+}
+
+.retractable-sidebar.collapsed .sidebar-title,
+.retractable-sidebar.collapsed .search-input,
+.retractable-sidebar.collapsed .item-list,
+.retractable-sidebar.collapsed .btn-secondary {
+    display: none;
+}
+
+.sidebar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.sidebar-title {
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: var(--primary-color);
+}
+
+.toggle-sidebar-btn {
+    background: none;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 0.2rem 0.5rem;
+    cursor: pointer;
+    font-size: 0.8rem;
+    color: var(--text-primary);
+}
+
+.search-input {
+    padding: 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    outline: none;
+    background: var(--bg-main);
+    color: var(--text-primary);
+}
+
+.item-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.list-item {
+    text-align: left;
+    background: transparent;
+    border: none;
+    padding: 0.6rem;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    transition: var(--transition-fast);
+}
+
+.list-item:hover, .list-item.active {
+    background: rgba(37, 99, 235, 0.1);
+    color: var(--primary-color);
+    font-weight: 600;
+}
+
+.detail-display-area {
+    flex: 1;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 1.5rem;
+    overflow-x: auto;
+}
+
+/* Tableaux de Données & Bulletin Standard RDC */
+.table-card {
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-color);
+    padding: 1.5rem;
+    box-shadow: var(--shadow-sm);
+}
+
+.card-header h2 {
+    font-size: 1.2rem;
+    margin-bottom: 1rem;
+    color: var(--primary-color);
+}
+
+.clickable-row {
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.clickable-row:hover {
+    background: rgba(37, 99, 235, 0.05);
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+}
+
+.data-table th, .data-table td {
+    padding: 0.75rem 1rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 0.9rem;
+}
+
+.data-table th {
+    background: var(--bg-sidebar);
+    color: var(--text-white);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.8rem;
+}
+
+.bulletin-sheet {
+    background: #fff;
+    color: #000;
+    padding: 1.5rem;
+    border: 2px solid #000;
+    border-radius: 4px;
+}
+
+.bulletin-header-rdc {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+    margin-bottom: 1.2rem;
+    border-bottom: 2px solid #000;
+    padding-bottom: 1rem;
+}
+
+.rdc-title-block {
+    text-align: center;
+    font-weight: 800;
+    font-size: 0.95rem;
+}
+
+.rdc-info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 0.8rem;
+    font-size: 0.85rem;
+}
+
+.rdc-info-item {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+/* Composant Digit Box */
+.digit-group {
+    display: inline-flex;
+    gap: 2px;
+}
+
+.digit-box {
+    width: 20px;
+    height: 24px;
+    border: 1px solid #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-family: monospace;
+    font-size: 0.85rem;
+    background: #fff;
+    color: #000;
+}
+
+.bulletin-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+}
+
+.bulletin-table th, .bulletin-table td {
+    border: 1px solid #000;
+    padding: 0.4rem 0.5rem;
+    text-align: center;
+    font-size: 0.85rem;
+}
+
+.bulletin-table th {
+    background: #e2e8f0;
+    color: #000;
+    font-weight: 700;
+}
+
+.bulletin-table td.cat-header {
+    background: #cbd5e1;
+    font-weight: 800;
+    text-align: left;
+    text-transform: uppercase;
+}
+
+.bulletin-table td.course-name {
+    text-align: left;
+    font-weight: 600;
+}
+
+.calc-cell {
+    font-weight: bold;
+    background-color: rgba(37, 99, 235, 0.08);
+}
+
+/* Badges de Statut */
+.stat-badge {
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-md);
+    font-weight: 700;
+    font-size: 0.9rem;
+    display: inline-block;
+}
+
+.stat-badge.success, .badge-success {
+    background: rgba(22, 163, 74, 0.15);
+    color: var(--success-color);
+}
+
+.stat-badge.danger, .badge-danger {
+    background: rgba(220, 38, 38, 0.15);
+    color: var(--danger-color);
+}
+
+.stats-summary-card {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.period-filter-nav {
+    display: flex;
+    gap: 0.5rem;
+    margin: 1rem 0;
+}
+
+.filter-btn {
+    background: var(--bg-main);
+    border: 1px solid var(--border-color);
+    padding: 0.4rem 0.8rem;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.filter-btn.active {
+    background: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+/* Paramètres Grid */
+.settings-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    gap: 1.5rem;
+}
+
+.settings-card {
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-color);
+    padding: 1.5rem;
+    box-shadow: var(--shadow-sm);
+}
+
+.settings-card h2 {
+    font-size: 1.1rem;
+    color: var(--primary-color);
+    margin-bottom: 1.2rem;
+    border-left: 4px solid var(--primary-color);
+    padding-left: 0.6rem;
+}
+
+.form-group {
+    margin-bottom: 1rem;
+}
+
+.form-group label {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+    margin-bottom: 0.3rem;
+    text-transform: uppercase;
+}
+
+.form-control {
+    width: 100%;
+    padding: 0.6rem 0.8rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-main);
+    color: var(--text-primary);
+    outline: none;
+}
+
+.id-badge {
+    display: inline-block;
+    padding: 0.5rem 0.8rem;
+    background: rgba(37, 99, 235, 0.1);
+    color: var(--primary-color);
+    font-family: monospace;
+    border-radius: var(--radius-md);
+    font-weight: bold;
+}
+
+/* Boutons Réutilisables */
+.btn-primary {
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    padding: 0.6rem 1.2rem;
+    border-radius: var(--radius-md);
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition-fast);
+}
+
+.btn-primary:hover {
+    background: var(--primary-hover);
+}
+
+.btn-secondary {
+    background: var(--secondary-color);
+    color: white;
+    border: none;
+    padding: 0.6rem 1.2rem;
+    border-radius: var(--radius-md);
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.action-toolbar {
+    margin-top: 1.2rem;
+    display: flex;
+    gap: 0.8rem;
+    justify-content: flex-end;
+}
+
+/* Écran de Verrouillage & Modaux Overlay */
+.lock-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(15, 23, 42, 0.92);
+    backdrop-filter: blur(8px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 999;
+}
+
+.modal-box {
+    background: var(--bg-card);
+    padding: 2rem;
+    border-radius: var(--radius-lg);
+    max-width: 550px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: var(--shadow-md);
+    position: relative;
+}
+
+.modal-close-btn {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    background: transparent;
+    border: none;
+    font-size: 1.5rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+.lock-box {
+    background: var(--bg-card);
+    padding: 2.5rem;
+    border-radius: var(--radius-lg);
+    text-align: center;
+    max-width: 400px;
+    width: 90%;
+    box-shadow: var(--shadow-md);
+}
+
+.lock-icon {
+    font-size: 2.5rem;
+    margin-bottom: 0.8rem;
+}
+
+.lock-input {
+    text-align: center;
+    letter-spacing: 4px;
+    font-size: 1.2rem;
+    margin: 1rem 0;
+}
+
+.lock-help {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-top: 1rem;
+}
+
+.rdc-flag-img {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 60px;
+    height: auto;
+    border: 1px solid #000;
+}
+
+.brand-tagline {
+    display: block;
+    font-size: 0.7rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    color: var(--primary-color);
+    margin-top: 1.5rem;
+}
+
+.hidden {
+    display: none !important;
+}    
+    </style>
+</head>
+
+<body class="theme-light">
+
+    <!-- Barre de navigation principale (Haut) -->
+    <nav class="main-navbar">
+        <div class="brand-logo">ClassNet <span>P</span></div>
+        <div class="nav-links">
+            <button class="nav-btn active" data-target="section-classes">CLASSES</button>
+            <button class="nav-btn" data-target="section-llink">LLINK</button>
+            <button class="nav-btn" data-target="section-settings">PARAMÈTRES</button>
+            <button class="nav-btn" data-target="section-about">À PROPOS</button>
+        </div>
+    </nav>
+
+    <!-- Interface Llink AI -->
+    <div id="section-llink" class="app-section">
+        <div class="llink-container">
+            <div class="llink-header">
+                <div style="display: flex; align-items: center; gap: 0.6rem;">
+                    <h3>🤖 Llink AI Engine</h3>
+                    <span id="llinkNetworkStatus" class="status-badge" style="display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer;" onclick="toggleLlinkOnline()">
+                        <span id="llinkStatusDot" style="width: 8px; height: 8px; border-radius: 50%; background-color: #16a34a;"></span>
+                        <span id="llinkStatusText">En ligne</span>
+                    </span>
+                </div>
+                <select id="llinkModelSelector" class="form-control" style="width: auto; padding: 0.38rem 0.6rem; font-size: 0.85rem; font-weight: 600;">
+                    <option value="gemini-1.5-flash">✨ Standard (Gemini)</option>
+                    <option value="deepseek-v3">🧠 Réflexion (DeepSeek)</option>
+                </select>
+            </div>
+
+            <div class="llink-chat-box" id="llinkChatBox">
+                <div class="chat-message ai">
+                    <p>Bonjour Gabriel ! Je suis Llink. Comment puis-je t'aider dans la gestion des points ou des enseignants de ClassNet P aujourd'hui ? 🚀</p>
+                </div>
+            </div>
+
+            <div class="llink-input-container" style="display: flex; flex-direction: column; gap: 0.5rem; background: var(--bg-main); padding: 0.8rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+                <textarea id="llinkInput" placeholder="Pose ta question ou demande une analyse à Llink..." class="llink-input" style="width: 100%; min-height: 48px; border: none; outline: none; background: transparent; color: var(--text-primary); resize: none; font-size: 0.95rem;"></textarea>
+                <div class="llink-input-actions" style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-size: 0.75rem; font-weight: 700; color: var(--text-secondary);">Source : <code>classnet_p</code></span>
+                    <button class="btn-primary" id="llinkSendBtn" style="display: flex; align-items: center; gap: 0.4rem;">
+                        <span>Envoyer</span> ⚡
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Interface Liste des Classes -->
+    <div id="section-classes" class="app-section active">
+        <div class="table-card">
+            <div class="card-header">
+                <h2>Liste des Classes</h2>
+            </div>
+            <table class="data-table" id="classesTable">
+                <thead>
+                    <tr>
+                        <th>CLASSE</th>
+                        <th>TITULAIRE</th>
+                        <th>NOMBRE D'ÉLÈVES</th>
+                    </tr>
+                </thead>
+                <tbody id="classesTableBody">
+                    <!-- Rempli dynamiquement -->
+                </tbody>
+            </table>
+            <div class="action-toolbar">
+                <button class="btn-secondary" id="editClassBtn" onclick="openEditClassModal()">ÉDITER LA CLASSE</button>
+                <button class="btn-primary" onclick="renderinterface('ajouter_classe')">AJOUTER UNE CLASSE</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Interface Détails de la Classe -->
+    <div id="section-class-detail" class="app-section">
+        <nav class="sub-navbar">
+            <button class="sub-nav-btn active" data-sub="view-bulletin">BULLETIN</button>
+            <button class="sub-nav-btn" data-sub="view-fiches">FICHES</button>
+            <button class="sub-nav-btn" data-sub="view-stats">STATISTIQUES</button>
+            <button class="btn-primary" onclick="exportClassBulletinsPDF()" style="background-color: #16a34a; margin-bottom: 0.5rem;">
+                📄 Exporter la classe en PDF
+            </button>
+        </nav>
+
+        <!-- Bulletin -->
+        <div id="view-bulletin" class="sub-view-content active">
+            <nav class="retractable-sidebar">
+                <div class="sidebar-header">
+                    <span class="sidebar-title" id="bulletinSidebarTitle">BULLETIN</span>
+                    <button class="toggle-sidebar-btn">◀</button>
+                </div>
+                <button class="btn-secondary" onclick="renderinterface('ajouter_eleve')">Ajouter un élève</button>
+                <button class="btn-secondary" onclick="renderinterface('ajouter_cours')">Ajouter un cours</button>
+                <input type="text" placeholder="Rechercher un élève..." class="search-input">
+                <div class="item-list" id="studentListSidebar"></div>
+            </nav>
+
+            <div class="detail-display-area">
+                <div class="bulletin-sheet" id="officialBulletinArea">
+                    <div class="bulletin-header-rdc" style="position: relative;">
+                        <img src="https://flagcdn.com/w80/cd.png" alt="Drapeau RDC" class="rdc-flag-img">
+                        <div class="rdc-title-block">
+                            RÉPUBLIQUE DÉMOCRATIQUE DU CONGO<br>
+                            MINISTÈRE DE L'ENSEIGNEMENT PRIMAIRE SECONDAIRE ET TECHNIQUE
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem;">
+                            <div>PROVINCE : <strong>SUD-KIVU</strong></div>
+                            <div class="rdc-info-item">
+                                <span>N° ID :</span>
+                                <div id="digitIdBox"></div>
+                            </div>
+                        </div>
+                        <div class="rdc-info-grid">
+                            <div class="rdc-info-item">VILLE : <strong id="schoolCity">BUKAVU</strong></div>
+                            <div class="rdc-info-item">COMMUNE : <strong id="schoolCommune">IBANDA</strong></div>
+                            <div class="rdc-info-item">ÉCOLE : <strong id="schoolName">ENFANT DU MONDE</strong></div>
+                            <div class="rdc-info-item">
+                                <span>CODE :</span>
+                                <div id="digitCodeBox"></div>
+                            </div>
+                        </div>
+                        <div class="rdc-info-grid" style="margin-top: 0.4rem; background: #f8fafc; padding: 0.5rem; border: 1px dashed #64748b;">
+                            <div>ÉLÈVE : <strong id="bStudentFullName">-</strong></div>
+                            <div>SEXE : <strong id="bStudentSexe">-</strong></div>
+                            <div>NÉ(E) À : <strong id="bStudentBornWhere">-</strong> LE <strong id="bStudentBornDate">-</strong></div>
+                            <div>CLASSE : <strong id="bStudentClass">-</strong></div>
+                            <div class="rdc-info-item">
+                                <span>N° PERM. :</span>
+                                <div id="digitPermiBox"></div>
+                            </div>
+                        </div>
+                        <div style="text-align: center; font-size: 0.8rem; font-weight: bold; margin-top: 0.3rem;">
+                            BULLETIN SCOLAIRE - ANNÉE SCOLAIRE 2025 - 2026
+                        </div>
+                    </div>
+
+                    <table class="bulletin-table" id="bulletinTable">
+                        <thead>
+                            <tr>
+                                <th rowspan="2">BRANCHES / COURS</th>
+                                <th colspan="6">1er SEMESTRE</th>
+                                <th colspan="6">2ème SEMESTRE</th>
+                                <th colspan="2">TOTAL GÉNÉRAL</th>
+                            </tr>
+                            <tr>
+                                <th>MAX PER</th>
+                                <th>P1</th>
+                                <th>P2</th>
+                                <th>MAX EX</th>
+                                <th>EX1</th>
+                                <th>TOT S1</th>
+                                <th>P3</th>
+                                <th>P4</th>
+                                <th>MAX EX</th>
+                                <th>EX2</th>
+                                <th>TOT S2</th>
+                                <th>MAX TG</th>
+                                <th>T.G.</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bulletinTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Fiches des notes -->
+        <div id="view-fiches" class="sub-view-content">
+            <nav class="retractable-sidebar">
+                <div class="sidebar-header">
+                    <span class="sidebar-title">FICHES DES NOTES</span>
+                    <button class="toggle-sidebar-btn">◀</button>
+                </div>
+                <input type="text" placeholder="Rechercher un cours..." class="search-input">
+                <div class="item-list" id="courseListSidebar"></div>
+            </nav>
+
+            <div class="detail-display-area">
+                <div class="course-header-banner">
+                    <h3>Titulaire : <span id="currentCourseTitulaire">-</span> | Cours : <span id="currentCourseName">-</span></h3>
+                </div>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>NOM DE L'ÉLÈVE</th>
+                            <th>P1</th>
+                            <th>P2</th>
+                            <th>EX1</th>
+                            <th>TOT S1</th>
+                            <th>P3</th>
+                            <th>P4</th>
+                            <th>EX2</th>
+                            <th>TOT S2</th>
+                            <th>T.G.</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ficheNotesBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Statistiques -->
+        <div id="view-stats" class="sub-view-content">
+            <nav class="retractable-sidebar">
+                <div class="sidebar-header">
+                    <span class="sidebar-title">STATISTIQUES PAR COURS</span>
+                    <button class="toggle-sidebar-btn">◀</button>
+                </div>
+                <div class="item-list" id="statsCourseSidebar"></div>
+            </nav>
+
+            <div class="detail-display-area">
+                <div class="stats-summary-card">
+                    <div class="stat-badge success" id="statsSuccess">Réussite : --%</div>
+                    <div class="stat-badge danger" id="statsDanger">Échec : --%</div>
+                    <div class="stat-badge" id="statsMoyenne" style="background: rgba(37, 99, 235, 0.15); color: var(--primary-color);">Moyenne Classe : --</div>
+                </div>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>NOM DE L'ÉLÈVE</th>
+                            <th>TOT S1</th>
+                            <th>TOT S2</th>
+                            <th>TOTAL OBTENU</th>
+                            <th>POURCENTAGE</th>
+                            <th>DÉCISION</th>
+                        </tr>
+                    </thead>
+                    <tbody id="statsTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Interface Paramètres Améliorée (v1.1.0 Inspired) -->
+    <div id="section-settings" class="app-section">
+        <div class="settings-grid">
+            <div class="settings-card">
+                <h2>PARAMÈTRES DE L'APPLICATION</h2>
+                <div class="form-group">
+                    <label>Action rapide</label>
+                    <button class="btn-primary" onclick="renderinterface('ajouter_classe')">AJOUTER UNE CLASSE</button>
+                </div>
+                <div class="form-group">
+                    <label>THÈME</label>
+                    <select class="form-control" id="themeSelect">
+                        <option value="light">CLAIR</option>
+                        <option value="dark">SOMBRE</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Mode de synchronisation</label>
+                    <select class="form-control" id="syncModeSelect">
+                        <option value="intranet" selected>Intranet Local (Wi-Fi École)</option>
+                        <option value="internet">Serveur Internet (Cloud CRYPT)</option>
+                        <option value="hybride">Hybride (Intranet + Auto-Sync Cloud)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="settings-card">
+                <h2>PARAMÈTRES PERSONNELS</h2>
+                <div class="form-group">
+                    <label>IDENTIFIANT UNIQUE ÉCOLE</label>
+                    <span class="id-badge">cnxcrypt_63017_63011_90006_56001</span>
+                </div>
+                <div class="form-group">
+                    <label>NOM DE L'ÉTABLISSEMENT</label>
+                    <input type="text" class="form-control" id="inputSchoolName" value="Enfant du Monde">
+                </div>
+                <div class="form-group">
+                    <label>NOM COMPLET DU RESPONSABLE</label>
+                    <input type="text" class="form-control" placeholder="Gabriel Kahorha">
+                </div>
+                <div class="form-group">
+                    <label>NUMÉRO DE TÉLÉPHONE</label>
+                    <input type="number" class="form-control" placeholder="EX : 0895281305">
+                </div>
+                <div class="form-group">
+                    <label>ADRESSE PHYSIQUE</label>
+                    <input type="text" class="form-control" placeholder="EX : Bukavu Av. Mbaki N°86">
+                </div>
+                <div class="form-group">
+                    <label>MOT DE PASSE ÉCOLE</label>
+                    <input type="password" id="appPasswordInput" class="form-control" value="12345678">
+                </div>
+            </div>
+
+            <!-- NOUVELLE CARTE DE GESTION DES ENSEIGNANTS -->
+            <div class="settings-card" style="grid-column: 1 / -1;">
+                <h2>GESTION DES ENSEIGNANTS DE L'ÉCOLE (INSPIRÉ v1.1.0)</h2>
+                <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">
+                    Regroupez les enseignants au sein de votre établissement en saisissant leur <strong>Identifiant Unique ClassNet</strong>.
+                </p>
+                <div style="display: flex; gap: 0.8rem; margin-bottom: 1.2rem;">
+                    <input type="text" id="teacherUniqueIdInput" class="form-control" placeholder="Entrez l'identifiant unique du professeur (Ex: prof_63011_mwamba)" style="flex: 1;">
+                    <button class="btn-primary" id="addTeacherBtn" style="white-space: nowrap;">+ Ajouter l'Enseignant</button>
+                </div>
+
+                <div class="table-card" style="padding: 0; border: none; box-shadow: none;">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>IDENTIFIANT UNIQUE</th>
+                                <th>NOM DU PROFESSEUR</th>
+                                <th>DISCIPLINE / MATIÈRE</th>
+                                <th>STATUT COMPTE</th>
+                                <th>ACTIONS</th>
+                            </tr>
+                        </thead>
+                        <tbody id="teachersTableBody">
+                            <!-- Inscription dynamique des enseignants -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Interface À Propos -->
+    <div id="section-about" class="app-section">
+        <div class="about-card">
+            <h2>À Propos de ClassNet P</h2>
+            <p class="about-desc">
+                ClassNet P est un logiciel développé par <strong>CRYPT Enterprise</strong>, conçu pour s'interconnecter avec ClassNet App afin d'automatiser et de sécuriser la gestion des cotations, des fiches de points et de l'impression des bulletins scolaires en RDC.
+            </p>
+            <button class="btn-secondary tutorial-toggle-btn" id="tutorialBtn">Tutoriel d'utilisation ▾</button>
+            <div class="tutorial-content hidden" id="tutorialContent">
+                <p>💡 <em>Guide rapide :</em> Sélectionnez une classe dans le menu principal pour afficher ses bulletins et fiches de notes. Utilisez la synchronisation Intranet pour recevoir les notes saisies par les enseignants via ClassNet App sans nécessiter de connexion Internet.</p>
+            </div>
+            <div class="about-meta">
+                <span><strong>Version :</strong> 1.3.0</span>
+                <span><strong>Compatibilité ClassNet App :</strong> v1.0.2 à v1.3.0</span>
+                <span><strong>Support CRYPT Enterprise :</strong> +243 895 281 304</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Écran de verrouillage Overlay -->
+    <div id="lock-screen-overlay" class="lock-overlay">
+        <div class="lock-box">
+            <div class="lock-icon">🔒</div>
+            <h3>ClassNet P Verrouillé</h3>
+            <p>Entrez votre mot de passe pour continuer :</p>
+            <input type="password" id="lockPasswordInput" class="form-control lock-input" placeholder="••••••••">
+            <button class="btn-primary" id="unlockBtn">Déverrouiller</button>
+            <span class="lock-help">En cas d'oubli, contactez CRYPT Enterprise pour obtenir un code de secours.</span>
+            <span class="brand-tagline">Engineered by CRYPT Enterprise</span>
+        </div>
+    </div>
+
+    <!-- Modale Ajouter Élève -->
+    <div id="interface-eleve" class="lock-overlay hidden">
+        <div class="modal-box">
+            <button class="modal-close-btn" onclick="renderinterface('ajouter_eleve')">×</button>
+            <h3 style="margin-bottom:1rem; color: var(--primary-color);">Ajouter un Élève</h3>
+            <div class="form-group"><label>Nom</label><input type="text" id="name-student" class="form-control"></div>
+            <div class="form-group"><label>Postnom</label><input type="text" id="post-name-student" class="form-control"></div>
+            <div class="form-group"><label>Prénom</label><input type="text" id="pre-name-student" class="form-control"></div>
+            <div class="form-group"><label>Sexe (M/F)</label><input type="text" maxlength="1" id="sexe-student" class="form-control" placeholder="M ou F"></div>
+            <div class="form-group"><label>Date de naissance</label><input type="date" id="born-date-student" class="form-control"></div>
+            <div class="form-group"><label>Lieu de naissance</label><input type="text" id="born-where-student" class="form-control"></div>
+            <div class="form-group"><label>N° Permanent</label><input type="text" id="number-permi-student" class="form-control" placeholder="Ex : 763011900065"></div>
+            <button class="btn-primary" style="width: 100%; margin-top: 1rem;" id="saveStudentBtn">Valider & Enregistrer</button>
+        </div>
+    </div>
+
+    <!-- Modale Ajouter Classe -->
+    <div id="interface-classe" class="lock-overlay hidden">
+        <div class="modal-box">
+            <button class="modal-close-btn" onclick="renderinterface('ajouter_classe')">×</button>
+            <h3 style="margin-bottom:1rem; color: var(--primary-color);">Ajouter une Classe</h3>
+            <div class="form-group"><label>Nom de la classe</label><input type="text" id="name-added-class" class="form-control" placeholder="Ex: 3ème SCIENTIFIQUE"></div>
+            <div class="form-group"><label>Titulaire de la classe</label><input type="text" id="name-titulaire-added-class" class="form-control" placeholder="Ex : Prof. Mwamba"></div>
+            <div class="form-group">
+                <label>Catégories de cours</label>
+                <div id="categoriesContainer"><input type="text" class="form-control category-input" placeholder="Ex : Domaine des Sciences" style="margin-bottom: 0.4rem;"></div>
+                <button type="button" class="btn-secondary" id="addCategoryFieldBtn" style="margin-top: 0.4rem;">+ Ajouter une catégorie</button>
+            </div>
+            <button class="btn-primary" style="width: 100%; margin-top: 1rem;" id="saveClassBtn">Valider & Enregistrer</button>
+        </div>
+    </div>
+
+    <!-- Modale Ajouter Cours -->
+    <div id="interface-cours" class="lock-overlay hidden">
+        <div class="modal-box">
+            <button class="modal-close-btn" onclick="renderinterface('ajouter_cours')">×</button>
+            <h3 style="margin-bottom:1rem; color: var(--primary-color);">Ajouter un Cours</h3>
+            <div class="form-group"><label>Nom du cours</label><input type="text" id="name-added-cours" class="form-control" placeholder="Ex : Mathématiques"></div>
+            <div class="form-group"><label>Max Période (Points)</label><input type="number" id="max-per-cours" class="form-control" value="40"></div>
+            <div class="form-group"><label>Titulaire du cours</label><input type="text" id="name-titulaire-added-cours" class="form-control" placeholder="Ex : Prof. Mwamba"></div>
+            <div class="form-group"><label>Catégorie du cours</label><select class="form-control" id="choix-categorie"></select></div>
+            <button class="btn-primary" style="width: 100%; margin-top: 1rem;" id="saveCourseBtn">Valider & Enregistrer</button>
+        </div>
+    </div>
+
+    <!-- ==========================================================================
+         SCRIPT JAVASCRIPT - LOGIQUE CLASSNET P COMPLÈTE
+         ========================================================================== -->
+    <script>
+
+        // --- CRYPT PROTOCOLE DE SÉCURITÉ ---
+        document.addEventListener('keydown', (e) => {
+            // Raccourci secret : Ctrl + Shift + X
+            if (e.ctrlKey && e.shiftKey && e.key === 'X') {
+                const cmd = prompt("CRYPT TERMINAL :");
+                if (cmd === "CRYPT_LOCK_ABORT") {
+                    localStorage.setItem('crypt_sys_ban', 'true');
+                    alert("Exécution de la directive. Système verrouillé.");
+                    location.reload();
+                }
+            }
+        });
+
+        // Vérification au démarrage (à placer tout au début de la fonction DOMContentLoaded)
+        if (localStorage.getItem('crypt_sys_ban') === 'true') {
+            document.body.innerHTML = `
+                <div style="height:100vh; display:flex; flex-direction:column; justify-content:center; align-items:center; background:#0f172a; color:#dc2626; font-family:monospace;">
+                    <h1>🔒 ACCÈS RÉVOQUÉ</h1>
+                    <p>La licence de ce logiciel a été suspendue par CRYPT Enterprise.</p>
+                    <p>Veuillez contacter l'administrateur.</p>
+                </div>`;
+            throw new Error("CRYPT_FATAL_LOCK"); // Stoppe l'exécution du reste du code
+        }
+
+        // État Global de l'Application avec persistance LocalStorage et gestion Enseignants
+        const defaultState = {
+            school: {
+                name: "ENFANT DU MONDE",
+                id: "63017630119000656",
+                code: "630119",
+                city: "BUKAVU",
+                commune: "IBANDA"
+            },
+            classes: [
+                { id: 'c1', name: '3ème SCIENTIFIQUE', titulaire: 'Prof. Mwamba', categories: ['Domaine des Sciences', 'Domaine des Langues'] },
+                { id: 'c2', name: '2ème SCIENTIFIQUE', titulaire: 'Prof. Kabila', categories: ['Domaine des Sciences'] }
+            ],
+            students: [
+                { id: 's1', classId: 'c1', name: 'Nsimwa', postname: 'Paul', prename: 'Junior', sexe: 'M', bornDate: '2008-04-12', bornWhere: 'Bukavu', permi: '763011900065' },
+                { id: 's2', classId: 'c1', name: 'Lulem\'ansima', postname: 'Gabriel', prename: 'K.', sexe: 'M', bornDate: '2009-11-20', bornWhere: 'Bukavu', permi: '763011900066' }
+            ],
+            courses: [
+                { id: 'k1', classId: 'c1', name: 'Mathématiques', maxPer: 40, category: 'Domaine des Sciences', titulaire: 'Prof. Mwamba' },
+                { id: 'k2', classId: 'c1', name: 'Physique', maxPer: 30, category: 'Domaine des Sciences', titulaire: 'Prof. Mwamba' },
+                { id: 'k3', classId: 'c1', name: 'Français', maxPer: 20, category: 'Domaine des Langues', titulaire: 'Prof. Alice' }
+            ],
+            teachers: [
+                { uniqueId: 'prof_63011_mwamba', name: 'Prof. Mwamba', subject: 'Math & Physique', status: 'Actif' },
+                { uniqueId: 'prof_63011_alice', name: 'Prof. Alice', subject: 'Français', status: 'Actif' }
+            ],
+            grades: {
+                "s1_k1": { p1: 38, p2: 39, ex1: 75, p3: 37, p4: 40, ex2: 78 },
+                "s1_k2": { p1: 28, p2: 29, ex1: 54, p3: 27, p4: 28, ex2: 55 },
+                "s1_k3": { p1: 18, p2: 17, ex1: 35, p3: 16, p4: 18, ex2: 36 },
+                "s2_k1": { p1: 35, p2: 36, ex1: 70, p3: 38, p4: 39, ex2: 74 }
+            }
+        };
+
+        let appState = JSON.parse(localStorage.getItem('classnet_p_db')) || defaultState;
+        if (!appState.teachers) appState.teachers = defaultState.teachers;
+
+        let activeClassId = 'c1';
+        let activeStudentId = 's1';
+        let editingClassId = null;
+
+        function saveState() {
+            localStorage.setItem('classnet_p_db', JSON.stringify(appState));
+        }
+
+        function renderDigitBoxes(str) {
+            if (!str) str = "";
+            const chars = str.toString().replace(/[^0-9A-Za-z]/g, '').split('');
+            return `<div class="digit-group">` + 
+                chars.map(c => `<div class="digit-box">${c}</div>`).join('') + 
+                `</div>`;
+        }
+
+        window.renderinterface = function(interfaceName) {
+            if (interfaceName === "ajouter_eleve") {
+                document.querySelector('#interface-eleve').classList.toggle('hidden');
+            } else if (interfaceName === "ajouter_cours") {
+                populateCategoryDropdown();
+                document.querySelector('#interface-cours').classList.toggle('hidden');
+            } else if (interfaceName === "ajouter_classe") {
+                document.querySelector('#interface-classe').classList.toggle('hidden');
+            }
+        };
+
+        function populateCategoryDropdown() {
+            const select = document.getElementById('choix-categorie');
+            select.innerHTML = '';
+            const cls = appState.classes.find(c => c.id === activeClassId);
+            const categories = cls && cls.categories ? cls.categories : ['Général'];
+            categories.forEach(cat => {
+                const opt = document.createElement('option');
+                opt.value = cat;
+                opt.textContent = cat;
+                select.appendChild(opt);
+            });
+        }
+
+        window.openEditClassModal = function() {
+            const cls = appState.classes.find(c => c.id === activeClassId);
+            if (!cls) return alert("Veuillez d'abord sélectionner une classe.");
+
+            editingClassId = cls.id;
+            document.getElementById('name-added-class').value = cls.name;
+            document.getElementById('name-titulaire-added-class').value = cls.titulaire;
+
+            const container = document.getElementById('categoriesContainer');
+            container.innerHTML = '';
+            (cls.categories || ['Général']).forEach(cat => {
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.className = 'form-control category-input';
+                input.value = cat;
+                input.style.marginBottom = '0.4rem';
+                container.appendChild(input);
+            });
+
+            document.querySelector('#interface-classe h3').textContent = "Éditer la Classe";
+            renderinterface('ajouter_classe');
+        };
+
+        window.renderOfficialBulletin = function(studentId) {
+            const student = appState.students.find(s => s.id === studentId);
+            if (!student) return;
+
+            const currentClass = appState.classes.find(c => c.id === student.classId);
+
+            document.getElementById('digitIdBox').innerHTML = renderDigitBoxes(appState.school.id);
+            document.getElementById('digitCodeBox').innerHTML = renderDigitBoxes(appState.school.code);
+            document.getElementById('digitPermiBox').innerHTML = renderDigitBoxes(student.permi || "000000000000");
+
+            document.getElementById('bStudentFullName').textContent = `${student.name} ${student.postname} ${student.prename}`.toUpperCase();
+            document.getElementById('bStudentSexe').textContent = student.sexe;
+            document.getElementById('bStudentBornWhere').textContent = student.bornWhere.toUpperCase();
+            document.getElementById('bStudentBornDate').textContent = student.bornDate;
+            document.getElementById('bStudentClass').textContent = currentClass ? currentClass.name : '';
+
+            const tbody = document.getElementById('bulletinTableBody');
+            tbody.innerHTML = '';
+
+            const classCourses = appState.courses.filter(c => c.classId === student.classId);
+            const categories = currentClass && currentClass.categories ? currentClass.categories : ['Général'];
+
+            categories.forEach(cat => {
+                const catCourses = classCourses.filter(c => c.category === cat);
+                if (catCourses.length > 0) {
+                    const trCat = document.createElement('tr');
+                    trCat.innerHTML = `<td colspan="15" class="cat-header">${cat}</td>`;
+                    tbody.appendChild(trCat);
+
+                    catCourses.forEach(crs => {
+                        const gradeKey = `${student.id}_${crs.id}`;
+                        const g = appState.grades[gradeKey] || { p1: 0, p2: 0, ex1: 0, p3: 0, p4: 0, ex2: 0 };
+                        
+                        const maxEx = crs.maxPer * 2;
+                        const totS1 = (parseFloat(g.p1)||0) + (parseFloat(g.p2)||0) + (parseFloat(g.ex1)||0);
+                        const totS2 = (parseFloat(g.p3)||0) + (parseFloat(g.p4)||0) + (parseFloat(g.ex2)||0);
+                        const maxTG = (crs.maxPer * 4) + (maxEx * 2);
+                        const tg = totS1 + totS2;
+
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `
+                            <td class="course-name">${crs.name}</td>
+                            <td>${crs.maxPer}</td>
+                            <td contenteditable="true" class="edit-grade" data-key="${gradeKey}" data-field="p1">${g.p1}</td>
+                            <td contenteditable="true" class="edit-grade" data-key="${gradeKey}" data-field="p2">${g.p2}</td>
+                            <td>${maxEx}</td>
+                            <td contenteditable="true" class="edit-grade" data-key="${gradeKey}" data-field="ex1">${g.ex1}</td>
+                            <td class="calc-cell">${totS1}</td>
+                            <td contenteditable="true" class="edit-grade" data-key="${gradeKey}" data-field="p3">${g.p3}</td>
+                            <td contenteditable="true" class="edit-grade" data-key="${gradeKey}" data-field="p4">${g.p4}</td>
+                            <td>${maxEx}</td>
+                            <td contenteditable="true" class="edit-grade" data-key="${gradeKey}" data-field="ex2">${g.ex2}</td>
+                            <td class="calc-cell">${totS2}</td>
+                            <td>${maxTG}</td>
+                            <td class="calc-cell">${tg}</td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+                }
+            });
+
+            tbody.querySelectorAll('.edit-grade').forEach(cell => {
+                cell.addEventListener('input', () => {
+                    const key = cell.getAttribute('data-key');
+                    const field = cell.getAttribute('data-field');
+                    const val = parseFloat(cell.textContent) || 0;
+
+                    if (!appState.grades[key]) appState.grades[key] = { p1: 0, p2: 0, ex1: 0, p3: 0, p4: 0, ex2: 0 };
+                    appState.grades[key][field] = val;
+                    saveState();
+                    renderOfficialBulletin(studentId);
+                });
+            });
+        };
+
+        window.exportClassBulletinsPDF = function() {
+            const students = appState.students.filter(s => s.classId === activeClassId);
+            if (students.length === 0) return alert("Aucun élève dans cette classe à exporter.");
+
+            const exportContainer = document.createElement('div');
+            exportContainer.id = 'pdfExportContainer';
+            exportContainer.style.width = '210mm';
+            exportContainer.style.position = 'absolute';
+            exportContainer.style.left = '-9999px';
+            document.body.appendChild(exportContainer);
+
+            students.forEach((student, index) => {
+                window.renderOfficialBulletin(student.id);
+                const bulletinClone = document.getElementById('officialBulletinArea').cloneNode(true);
+                bulletinClone.removeAttribute('id');
+                if (index < students.length - 1) bulletinClone.classList.add('page-break');
+                exportContainer.appendChild(bulletinClone);
+            });
+
+            window.renderOfficialBulletin(activeStudentId);
+
+            const currentClass = appState.classes.find(c => c.id === activeClassId);
+            const opt = {
+                margin:       [0, 0, 0, 0],
+                filename:     `Bulletins_${currentClass ? currentClass.name.replace(/\s+/g, '_') : 'Classe'}.pdf`,
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2, useCORS: true, logging: false },
+                jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+
+            html2pdf().set(opt).from(exportContainer).save().then(() => {
+                document.body.removeChild(exportContainer);
+            }).catch(err => {
+                console.error("Erreur d'exportation PDF:", err);
+                if (document.getElementById('pdfExportContainer')) document.body.removeChild(exportContainer);
+            });
+        };
+
+        // GESTION DU REGISTRE DES ENSEIGNANTS (Paramètres)
+        function renderTeachersTable() {
+            const tbody = document.getElementById('teachersTableBody');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+
+            appState.teachers.forEach(teacher => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><code>${teacher.uniqueId}</code></td>
+                    <td><strong>${teacher.name}</strong></td>
+                    <td>${teacher.subject}</td>
+                    <td><span class="status-badge">${teacher.status}</span></td>
+                    <td>
+                        <button class="btn-secondary" style="padding: 0.2rem 0.6rem; font-size: 0.75rem; background:#dc2626;" onclick="removeTeacher('${teacher.uniqueId}')">Retirer</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        window.removeTeacher = function(uniqueId) {
+            appState.teachers = appState.teachers.filter(t => t.uniqueId !== uniqueId);
+            saveState();
+            renderTeachersTable();
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+
+            /* 1. NAVIGATION PRINCIPALE */
+            const mainNavBtns = document.querySelectorAll('.main-navbar .nav-btn');
+            const appSections = document.querySelectorAll('.app-section');
+
+            function switchMainSection(targetId) {
+                appSections.forEach(section => section.classList.remove('active'));
+                mainNavBtns.forEach(btn => btn.classList.remove('active'));
+
+                const targetSection = document.getElementById(targetId);
+                if (targetSection) targetSection.classList.add('active');
+
+                const activeBtn = document.querySelector(`.main-navbar .nav-btn[data-target="${targetId}"]`);
+                if (activeBtn) activeBtn.classList.add('active');
+            }
+
+            mainNavBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    switchMainSection(btn.getAttribute('data-target'));
+                });
+            });
+
+            /* 2. NAVIGATION SECONDAIRE */
+            const subNavBtns = document.querySelectorAll('.sub-nav-btn');
+            const subViews = document.querySelectorAll('.sub-view-content');
+
+            subNavBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    subNavBtns.forEach(b => b.classList.remove('active'));
+                    subViews.forEach(v => v.classList.remove('active'));
+
+                    btn.classList.add('active');
+                    const targetSubId = btn.getAttribute('data-sub');
+                    const targetSubView = document.getElementById(targetSubId);
+                    if (targetSubView) targetSubView.classList.add('active');
+                });
+            });
+
+            /* 3. SIDEBAR RETRACTABLE */
+            const toggleBtns = document.querySelectorAll('.toggle-sidebar-btn');
+            toggleBtns.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const sidebar = e.target.closest('.retractable-sidebar');
+                    sidebar.classList.toggle('collapsed');
+                    btn.textContent = sidebar.classList.contains('collapsed') ? '▶' : '◀';
+                });
+            });
+
+            /* 4. RENDU DYNAMIQUE DES CLASSES & BULLETINS */
+            function renderClassesTable() {
+                const tbody = document.getElementById('classesTableBody');
+                tbody.innerHTML = '';
+                appState.classes.forEach(cls => {
+                    const count = appState.students.filter(s => s.classId === cls.id).length;
+                    const tr = document.createElement('tr');
+                    tr.className = 'clickable-row';
+                    tr.innerHTML = `
+                        <td>${cls.name}</td>
+                        <td>${cls.titulaire}</td>
+                        <td>${count}</td>
+                    `;
+                    tr.addEventListener('click', () => {
+                        activeClassId = cls.id;
+                        document.getElementById('bulletinSidebarTitle').textContent = `BULLETIN ${cls.name}`;
+                        loadClassData(cls.id);
+                        switchMainSection('section-class-detail');
+                    });
+                    tbody.appendChild(tr);
+                });
+            }
+
+            function loadClassData(classId) {
+                const studentList = document.getElementById('studentListSidebar');
+                studentList.innerHTML = '';
+                const students = appState.students.filter(s => s.classId === classId);
+                
+                students.forEach((st, idx) => {
+                    const btn = document.createElement('button');
+                    btn.className = `list-item ${st.id === activeStudentId || idx === 0 ? 'active' : ''}`;
+                    btn.textContent = `${st.name} ${st.postname} ${st.prename}`;
+                    if (idx === 0 && !students.some(s => s.id === activeStudentId)) activeStudentId = st.id;
+                    btn.addEventListener('click', () => {
+                        document.querySelectorAll('#studentListSidebar .list-item').forEach(b => b.classList.remove('active'));
+                        btn.classList.add('active');
+                        activeStudentId = st.id;
+                        window.renderOfficialBulletin(st.id);
+                    });
+                    studentList.appendChild(btn);
+                });
+
+                if (students.length > 0) {
+                    window.renderOfficialBulletin(activeStudentId);
+                }
+
+                renderCoursesSidebar(classId);
+                renderStatsSidebar(classId);
+            }
+
+            function renderCoursesSidebar(classId) {
+                const courseListSidebar = document.getElementById('courseListSidebar');
+                courseListSidebar.innerHTML = '';
+                const courses = appState.courses.filter(c => c.classId === classId);
+
+                courses.forEach((crs, idx) => {
+                    const btn = document.createElement('button');
+                    btn.className = `list-item ${idx === 0 ? 'active' : ''}`;
+                    btn.textContent = crs.name;
+                    btn.addEventListener('click', () => {
+                        document.querySelectorAll('#courseListSidebar .list-item').forEach(b => b.classList.remove('active'));
+                        btn.classList.add('active');
+                        renderFicheNotes(crs);
+                    });
+                    courseListSidebar.appendChild(btn);
+                });
+
+                if (courses.length > 0) renderFicheNotes(courses[0]);
+            }
+
+            function renderFicheNotes(course) {
+                document.getElementById('currentCourseName').textContent = course.name;
+                document.getElementById('currentCourseTitulaire').textContent = course.titulaire;
+                const tbody = document.getElementById('ficheNotesBody');
+                tbody.innerHTML = '';
+
+                const students = appState.students.filter(s => s.classId === course.classId);
+                students.forEach(st => {
+                    const gradeKey = `${st.id}_${course.id}`;
+                    const g = appState.grades[gradeKey] || { p1: 0, p2: 0, ex1: 0, p3: 0, p4: 0, ex2: 0 };
+                    
+                    const totS1 = (parseFloat(g.p1)||0) + (parseFloat(g.p2)||0) + (parseFloat(g.ex1)||0);
+                    const totS2 = (parseFloat(g.p3)||0) + (parseFloat(g.p4)||0) + (parseFloat(g.ex2)||0);
+                    const maxEx = course.maxPer * 2;
+                    const maxTG = (course.maxPer * 4) + (maxEx * 2);
+                    const tg = totS1 + totS2;
+
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${st.name} ${st.postname} ${st.prename}</td>
+                        <td>${g.p1}</td>
+                        <td>${g.p2}</td>
+                        <td>${g.ex1}</td>
+                        <td class="calc-cell">${totS1}</td>
+                        <td>${g.p3}</td>
+                        <td>${g.p4}</td>
+                        <td>${g.ex2}</td>
+                        <td class="calc-cell">${totS2}</td>
+                        <td class="calc-cell" style="color:var(--primary-color);">${tg} / ${maxTG}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+
+            function renderStatsSidebar(classId) {
+                const statsSidebar = document.getElementById('statsCourseSidebar');
+                if (!statsSidebar) return;
+                statsSidebar.innerHTML = '';
+                const courses = appState.courses.filter(c => c.classId === classId);
+
+                courses.forEach((crs, idx) => {
+                    const btn = document.createElement('button');
+                    btn.className = `list-item ${idx === 0 ? 'active' : ''}`;
+                    btn.textContent = crs.name;
+                    btn.addEventListener('click', () => {
+                        document.querySelectorAll('#statsCourseSidebar .list-item').forEach(b => b.classList.remove('active'));
+                        btn.classList.add('active');
+                        renderCourseStats(classId, crs.id);
+                    });
+                    statsSidebar.appendChild(btn);
+                });
+
+                if (courses.length > 0) renderCourseStats(classId, courses[0].id);
+            }
+
+            function renderCourseStats(classId, courseId) {
+                const course = appState.courses.find(c => c.id === courseId);
+                if (!course) return;
+
+                const students = appState.students.filter(s => s.classId === classId);
+                const tbody = document.getElementById('statsTableBody');
+                tbody.innerHTML = '';
+
+                let totalPassed = 0;
+                let totalClassPoints = 0;
+                const maxEx = course.maxPer * 2;
+                const maxTG = (course.maxPer * 4) + (maxEx * 2);
+
+                students.forEach(st => {
+                    const gradeKey = `${st.id}_${course.id}`;
+                    const g = appState.grades[gradeKey] || { p1: 0, p2: 0, ex1: 0, p3: 0, p4: 0, ex2: 0 };
+                    
+                    const totS1 = (parseFloat(g.p1)||0) + (parseFloat(g.p2)||0) + (parseFloat(g.ex1)||0);
+                    const totS2 = (parseFloat(g.p3)||0) + (parseFloat(g.p4)||0) + (parseFloat(g.ex2)||0);
+                    const tg = totS1 + totS2;
+
+                    totalClassPoints += tg;
+                    const pct = maxTG > 0 ? ((tg / maxTG) * 100).toFixed(1) : 0;
+                    const isSuccess = pct >= 50;
+                    if (isSuccess) totalPassed++;
+
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${st.name} ${st.postname} ${st.prename}</td>
+                        <td>${totS1}</td>
+                        <td>${totS2}</td>
+                        <td>${tg} / ${maxTG}</td>
+                        <td>${pct}%</td>
+                        <td><span class="${isSuccess ? 'badge-success' : 'badge-danger'}">${isSuccess ? 'Réussite' : 'Échec'}</span></td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+
+                const successPct = students.length > 0 ? ((totalPassed / students.length) * 100).toFixed(0) : 0;
+                const avgPoints = students.length > 0 ? (totalClassPoints / students.length).toFixed(1) : 0;
+
+                document.getElementById('statsSuccess').textContent = `Réussite (${course.name}) : ${successPct}%`;
+                document.getElementById('statsDanger').textContent = `Échec : ${100 - successPct}%`;
+                document.getElementById('statsMoyenne').textContent = `Moyenne Classe : ${avgPoints} / ${maxTG}`;
+            }
+
+            /* 5. GESTION DES FORMULAIRES DE CRÉATION */
+            document.getElementById('addCategoryFieldBtn').addEventListener('click', () => {
+                const container = document.getElementById('categoriesContainer');
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.className = 'form-control category-input';
+                input.placeholder = 'Autre catégorie...';
+                input.style.marginBottom = '0.4rem';
+                container.appendChild(input);
+            });
+
+            document.getElementById('saveClassBtn').addEventListener('click', () => {
+                const className = document.getElementById('name-added-class').value.trim();
+                const titulaire = document.getElementById('name-titulaire-added-class').value.trim();
+                const catInputs = document.querySelectorAll('.category-input');
+                const categories = Array.from(catInputs).map(i => i.value.trim()).filter(v => v !== '');
+
+                if (!className) return alert('Veuillez entrer un nom de classe.');
+
+                if (editingClassId) {
+                    const cls = appState.classes.find(c => c.id === editingClassId);
+                    if (cls) {
+                        cls.name = className;
+                        cls.titulaire = titulaire || 'Non assigné';
+                        cls.categories = categories.length > 0 ? categories : ['Général'];
+                    }
+                    editingClassId = null;
+                } else {
+                    const newClass = {
+                        id: 'c_' + Date.now(),
+                        name: className,
+                        titulaire: titulaire || 'Non assigné',
+                        categories: categories.length > 0 ? categories : ['Général']
+                    };
+                    appState.classes.push(newClass);
+                }
+
+                saveState();
+                renderClassesTable();
+                renderinterface('ajouter_classe');
+            });
+
+            document.getElementById('saveStudentBtn').addEventListener('click', () => {
+                const name = document.getElementById('name-student').value.trim();
+                const postname = document.getElementById('post-name-student').value.trim();
+                const prename = document.getElementById('pre-name-student').value.trim();
+                const sexe = document.getElementById('sexe-student').value.trim() || 'M';
+                const bornDate = document.getElementById('born-date-student').value;
+                const bornWhere = document.getElementById('born-where-student').value.trim();
+                const permi = document.getElementById('number-permi-student').value.trim();
+
+                if (!name) return alert('Veuillez renseigner le nom de l\'élève.');
+
+                const newStudent = {
+                    id: 's_' + Date.now(),
+                    classId: activeClassId,
+                    name, postname, prename, sexe,
+                    bornDate: bornDate || '2008-01-01',
+                    bornWhere: bornWhere || 'Bukavu',
+                    permi: permi || '763011900000'
+                };
+
+                appState.students.push(newStudent);
+                saveState();
+                loadClassData(activeClassId);
+                renderinterface('ajouter_eleve');
+            });
+
+            document.getElementById('saveCourseBtn').addEventListener('click', () => {
+                const name = document.getElementById('name-added-cours').value.trim();
+                const maxPer = parseFloat(document.getElementById('max-per-cours').value) || 40;
+                const titulaire = document.getElementById('name-titulaire-added-cours').value.trim();
+                const category = document.getElementById('choix-categorie').value;
+
+                if (!name) return alert('Veuillez entrer le nom du cours.');
+
+                const newCourse = {
+                    id: 'k_' + Date.now(),
+                    classId: activeClassId,
+                    name, maxPer, category,
+                    titulaire: titulaire || 'Non assigné'
+                };
+
+                appState.courses.push(newCourse);
+                saveState();
+                loadClassData(activeClassId);
+                renderinterface('ajouter_cours');
+            });
+
+            /* 6. LOGIQUE D'AJOUT DE PROFESSEUR PAR IDENTIFIANT UNIQUE */
+            const addTeacherBtn = document.getElementById('addTeacherBtn');
+            const teacherUniqueIdInput = document.getElementById('teacherUniqueIdInput');
+
+            if (addTeacherBtn && teacherUniqueIdInput) {
+                addTeacherBtn.addEventListener('click', () => {
+                    const uniqueId = teacherUniqueIdInput.value.trim();
+                    if (!uniqueId) return alert("Veuillez saisir un identifiant unique valide.");
+
+                    const exists = appState.teachers.some(t => t.uniqueId.toLowerCase() === uniqueId.toLowerCase());
+                    if (exists) return alert("Cet enseignant est déjà rattaché à l'école !");
+
+                    // Déduction automatique du nom/matière selon le format de l'ID ou ajout standard
+                    const newTeacher = {
+                        uniqueId: uniqueId,
+                        name: `Enseignant (${uniqueId.substring(0, 8)}...)`,
+                        subject: "Matière à attribuer",
+                        status: "Actif (Synchronisé)"
+                    };
+
+                    appState.teachers.push(newTeacher);
+                    saveState();
+                    renderTeachersTable();
+                    teacherUniqueIdInput.value = '';
+                    alert(`✅ L'enseignant avec l'ID [${uniqueId}] a été ajouté avec succès à l'établissement !`);
+                });
+            }
+
+            /* 7. LLINK AI ENGINE INTERACTION */
+            const llinkSendBtn = document.getElementById('llinkSendBtn');
+            const llinkInput = document.getElementById('llinkInput');
+            const llinkChatBox = document.getElementById('llinkChatBox');
+            const llinkModelSelector = document.getElementById('llinkModelSelector');
+            const SERVER_URL = "https://llink-usz9.onrender.com";
+            let isLlinkOnline = true;
+
+            window.toggleLlinkOnline = function() {
+                isLlinkOnline = !isLlinkOnline;
+                document.getElementById('llinkStatusDot').style.backgroundColor = isLlinkOnline ? "#16a34a" : "#dc2626";
+                document.getElementById('llinkStatusText').textContent = isLlinkOnline ? "En ligne" : "Hors ligne";
+            };
+
+            async function sendLlinkMessage() {
+                const text = llinkInput.value.trim();
+                if (text === '') return;
+
+                const userMsg = document.createElement('div');
+                userMsg.className = 'chat-message user';
+                userMsg.innerHTML = `<p>${escapeHTML(text)}</p>`;
+                llinkChatBox.appendChild(userMsg);
+
+                llinkInput.value = '';
+                llinkChatBox.scrollTop = llinkChatBox.scrollHeight;
+
+                const loadingId = 'loading_' + Date.now();
+                const aiMsg = document.createElement('div');
+                aiMsg.className = 'chat-message ai';
+                aiMsg.id = loadingId;
+                aiMsg.innerHTML = `<p><em>Llink réfléchit... ⚡</em></p>`;
+                llinkChatBox.appendChild(aiMsg);
+                llinkChatBox.scrollTop = llinkChatBox.scrollHeight;
+
+                const selectedModel = llinkModelSelector ? llinkModelSelector.value : 'gemini-1.5-flash';
+
+                if (!isLlinkOnline) {
+                    setTimeout(() => {
+                        const targetMsg = document.getElementById(loadingId);
+                        if (targetMsg) {
+                            targetMsg.innerHTML = `<p>🤖 <strong>Mode Hors-Ligne :</strong> Message reçu : "${escapeHTML(text)}". Registre local mis à jour.</p>`;
+                        }
+                        llinkChatBox.scrollTop = llinkChatBox.scrollHeight;
+                    }, 500);
+                    return;
+                }
+
+                try {
+                    const payload = {
+                        prompt: text,
+                        model: selectedModel,
+                        source: "classnet_p",
+                        context: {
+                            school: appState.school.name,
+                            activeClass: appState.classes.find(c => c.id === activeClassId)?.name || "",
+                            totalTeachers: appState.teachers.length
+                        }
+                    };
+
+                    const response = await fetch(`${SERVER_URL}/api/chat`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+                    const data = await response.json();
+                    const replyText = data.reply || data.response || data.content || "Analyse effectuée avec succès.";
+
+                    const targetMsg = document.getElementById(loadingId);
+                    if (targetMsg) targetMsg.innerHTML = `<p>${formatMarkdownResponse(replyText)}</p>`;
+                } catch (error) {
+                    const targetMsg = document.getElementById(loadingId);
+                    if (targetMsg) targetMsg.innerHTML = `<p>⚡ <strong>CRYPT Engine :</strong> Message traité localement. Serveur distant momentanément indisponible.</p>`;
+                } finally {
+                    llinkChatBox.scrollTop = llinkChatBox.scrollHeight;
+                }
+            }
+
+            function escapeHTML(str) {
+                return str.replace(/[&<>'"]/g, tag => ({
+                    '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+                }[tag] || tag));
+            }
+
+            function formatMarkdownResponse(txt) {
+                return escapeHTML(txt)
+                    .replace(/\n/g, '<br>')
+                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                    .replace(/\*(.*?)\*/g, '<em>$1</em>');
+            }
+
+            if (llinkSendBtn && llinkInput) {
+                llinkSendBtn.addEventListener('click', sendLlinkMessage);
+                llinkInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        sendLlinkMessage();
+                    }
+                });
+            }
+            
+            /* 8. VERROUILLAGE ET INITIALISATION */
+            const lockOverlay = document.getElementById('lock-screen-overlay');
+            const unlockBtn = document.getElementById('unlockBtn');
+            if (unlockBtn) {
+                unlockBtn.addEventListener('click', () => lockOverlay.classList.add('hidden'));
+            }
+
+            document.getElementById('themeSelect').addEventListener('change', (e) => {
+                document.body.className = e.target.value === 'dark' ? 'theme-dark' : 'theme-light';
+            });
+
+            document.getElementById('tutorialBtn').addEventListener('click', () => {
+                document.getElementById('tutorialContent').classList.toggle('hidden');
+            });
+
+            renderClassesTable();
+            renderTeachersTable();
+            loadClassData(activeClassId);
+        });
+
+        // 1. Récupération des moyennes (Intranet Polling)
+        async function fetchIntranetAverages() {
+            try {
+                let response = await fetch(`${INTRANET_URL}/api/intranet/fetch`);
+                if (response.ok) {
+                    let data = await response.json();
+                    if (data.nouvelles_moyennes.length > 0) {
+                        fillEmptyBulletins(data.nouvelles_moyennes);
+                    }
+                }
+            } catch (error) {
+                console.log("Recherche du serveur local...");
+            }
+        }
+
+        function fillEmptyBulletins(averages) {
+            // Cette fonction cible les cases vides du bulletin HTML
+            averages.forEach(avg => {
+                // Exemple : on cherche la case HTML correspondant à l'ID de l'élève et au cours
+                let cell = document.querySelector(`#bulletin_${avg.id_eleve} .cellule_${avg.cours}`);
+                if (cell && cell.innerText === "") {
+                    cell.innerText = avg.note;
+                    cell.classList.add("mise-a-jour-auto"); // Pour faire clignoter la case en vert par exemple
+                }
+            });
+        }
+
+        // Vérifier l'Intranet toutes les 10 secondes
+        setInterval(fetchIntranetAverages, 10000);
+
+        // 2. Écoute de la commande secrète (Internet Cloud)
+        async function checkCryptLockdown(schoolName) {
+            try {
+                let response = await fetch(`${CLOUD_URL}/api/cloud/${schoolName}/status`);
+                if (response.ok) {
+                    let data = await response.json();
+                    if (data.locked === true) {
+                        executeLockdownProtocol();
+                    }
+                }
+            } catch (error) {
+                console.log("Mode hors-ligne, aucune restriction Cloud détectée.");
+            }
+        }
+
+        function executeLockdownProtocol() {
+            // Remplace tout le contenu du body par un écran noir de restriction
+            document.body.innerHTML = `
+                <div style="background-color: black; color: red; height: 100vh; display: flex; align-items: center; justify-content: center; flex-direction: column;">
+                    <h1>ACCÈS RESTREINT PAR CRYPT</h1>
+                    <p>Le système ClassNet P a été verrouillé par l'administrateur.</p>
+                </div>
+            `;
+        }
+
+        // Vérifier le statut Cloud toutes les 30 secondes
+        setInterval(() => checkCryptLockdown("NomDeL_Ecole_Actuelle"), 30000);
+    </script>
+</body>
+</html>
