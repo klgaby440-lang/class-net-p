@@ -505,7 +505,7 @@ const defaultDB = {
         id: generateUniqueId("SYS-CRYPT"),
         name: " ",
         password: "admin",
-        school: "Enfant du Monde - Bukavu",
+        school: " ",
         isLoggedIn: false
     },
     classes: [], 
@@ -600,23 +600,60 @@ function updateLoginHeaderButton() {
 function openLoginModal() { document.getElementById('login-modal').classList.add('active'); }
 function closeLoginModal() { document.getElementById('login-modal').classList.remove('active'); }
 
-function handleLogin() {
+async function handleLogin() {
     const idOrName = document.getElementById('login-id').value.trim();
     const pass = document.getElementById('login-password').value.trim();
 
-    if (!idOrName) { alert("Veuillez entrer votre identifiant ou votre nom."); return; }
+    if (!idOrName || !pass) {
+        alert("⚠️ Veuillez remplir votre identifiant et votre mot de passe.");
+        return;
+    }
 
-    if (pass === db.user.password || pass === "123456") {
-        db.user.isLoggedIn = true;
-        if (idOrName.includes("CN-")) db.user.id = idOrName;
-        else db.user.name = idOrName;
-        
-        saveDB();
-        updateLoginHeaderButton();
-        closeLoginModal();
-        alert(`Connecté avec succès ! Identifiant : ${db.user.id}`);
-    } else {
-        alert("Mot de passe incorrect.");
+    const serverUrl = await SERVER_CONFIG.discoverLocalServer() || "https://llink-usz9.onrender.com";
+
+    try {
+        // 1. Étape 1 : Envoi du mot de passe pour vérification serveur
+        const response = await fetch(`${serverUrl}/api/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: idOrName, password: pass })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            alert(`❌ Erreur : ${result.detail || "Échec d'authentification"}`);
+            return;
+        }
+
+        // 2. Étape 2 : Demande du code OTP reçu par e-mail
+        const userOTP = prompt(`📧 Mot de passe correct ! Un code à 6 chiffres a été envoyé à klgaby440@gmail.com.\nSaisissez le code OTP :`);
+
+        if (!userOTP) return;
+
+        // 3. Étape 3 : Validation du code OTP auprès du serveur
+        const verifyRes = await fetch(`${serverUrl}/api/auth/verify-otp`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: idOrName, otp_code: userOTP.trim() })
+        });
+
+        const verifyResult = await verifyRes.json();
+
+        if (verifyRes.ok) {
+            db.user.isLoggedIn = true;
+            db.user.id = idOrName;
+            saveDB();
+            updateLoginHeaderButton();
+            closeLoginModal();
+            alert(`🎉 Authentification réussie ! Bienvenue sur ClassNet, ${idOrName}.`);
+        } else {
+            alert(`❌ Code OTP incorrect : ${verifyResult.detail}`);
+        }
+
+    } catch (err) {
+        console.error("Erreur d'authentification:", err);
+        alert("⚠️ Serveur introuvable. Vérifiez que ClassNet P est lancé et accessible sur le réseau.");
     }
 }
 
@@ -1853,7 +1890,7 @@ const SERVER_CONFIG = {
     
     getInternetUrl: function(schoolName) {
         const formatName = schoolName.toLowerCase().replace(/\s+/g, '-');
-        return `https://classnet-${formatName}.onrender.com`;
+        return `https://class-net-p.onrender.com`;
     },
 
     // Scrutin Local Automatique
