@@ -7,7 +7,7 @@ import httpx
 from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, Text, JSON, Float
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, Text, JSON, Float, Date, String
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session, relationship
 
@@ -31,6 +31,33 @@ WHATSAPP_API_KEY = os.getenv("WHATSAPP_API_KEY", "")
 # ---------------------------------------------------------
 # 2. MODÈLES DE BASE DE DONNÉES ENRICHIS (SQLAlchemy)
 # ---------------------------------------------------------
+
+class PresenceSchema(BaseModel):
+    id: str
+    student_id: str
+    student_name: str
+    class_name: str
+    course_name: str
+    date: str
+    status: str
+
+class QuizSchema(BaseModel):
+    id: str
+    title: str
+    class_name: str
+    course_name: str
+    max_score: float
+    content: str
+    created_at: str
+
+class CloudSyncPayload(BaseModel):
+    email: str
+    password: str
+    school_id: str
+    llink_preferences: Optional[str] = None
+    presences: List[PresenceSchema] = []
+    quizzes: List[QuizSchema] = []
+    full_database_json: dict # Pour garder une trace brute si besoin
 
 class SchoolInformation(Base):
     __tablename__ = "school_information"
@@ -104,16 +131,48 @@ class Teacher(Base):
     __tablename__ = "teachers"
 
     id = Column(Integer, primary_key=True, index=True)
-    teacher_code = Column(String(50), unique=True, index=True, nullable=False) # Ex: prof_63011_mwamba
+    teacher_code = Column(String(50), unique=True, index=True, nullable=True) # Gardé pour la rétrocompatibilité locale
+    email = Column(String, unique=True, index=True, nullable=False) # 🟢 NOUVEAU : Identifiant principal
     full_name = Column(String, nullable=False)
     phone_number = Column(String, nullable=True)
-    subject = Column(String, nullable=True) # Ex: 'Math & Physique'
+    subject = Column(String, nullable=True) 
     status = Column(String, default="Actif")
-    password = Column(String, default="1234")
+    password = Column(String, default="123456")
     school_id = Column(String, ForeignKey("school_information.school_id"), nullable=True)
+    llink_preferences = Column(Text, nullable=True) # 🟢 NOUVEAU : Préférences de l'IA
 
     school = relationship("SchoolInformation", back_populates="teachers")
+    attendances = relationship("Attendance", back_populates="teacher", cascade="all, delete-orphan")
+    quizzes = relationship("QuizBank", back_populates="teacher", cascade="all, delete-orphan")
 
+class Attendance(Base):
+    __tablename__ = "attendances"
+
+    id = Column(String, primary_key=True, index=True)
+    teacher_email = Column(String, ForeignKey("teachers.email"), nullable=False)
+    student_id = Column(String, nullable=False)
+    student_name = Column(String, nullable=False)
+    class_name = Column(String, nullable=False)
+    course_name = Column(String, nullable=False)
+    date = Column(String, nullable=False)
+    status = Column(String(1), nullable=False) # P, A, R
+
+    teacher = relationship("Teacher", back_populates="attendances")
+
+class QuizBank(Base):
+    __tablename__ = "quizzes"
+
+    id = Column(String, primary_key=True, index=True)
+    teacher_email = Column(String, ForeignKey("teachers.email"), nullable=False)
+    title = Column(String, nullable=False)
+    class_name = Column(String, nullable=False)
+    course_name = Column(String, nullable=False)
+    max_score = Column(Float, nullable=False)
+    content = Column(Text, nullable=False)
+    created_at = Column(String, nullable=False)
+
+    teacher = relationship("Teacher", back_populates="quizzes")
+    
 class TeacherEvaluation(Base):
     __tablename__ = "teacher_s_evaluations"
 
@@ -447,3 +506,69 @@ def export_classnet_json(teacher_code: str, db: Session = Depends(get_db)):
     }
 
     return classnet_db
+
+@app.post("/api/cloud/sync")
+def sync_cloud_data(payload: CloudSyncPayload, db: Session = Depends(get_db)):
+    """Endpoint pour le Push On - Basé sur l'e-mail"""
+    
+    # 1. Vérification de l'enseignant via l'e-mail
+    teacher = db.query(Teacher).filter(Teacher.email == payload.email).first()
+    
+    if not teacher:
+        # Création automatique si l'enseignant n'existe pas (utile pour le premier déploiement)
+        teacher = Teacher(
+            email=payload.email,
+            full_name=payload.full_database_json.get("user", {}).get("name", "Enseignant Inconnu"),
+            password=payload.password,
+            school_id=payload.school_id,
+            llink_preferences=payload.llink_preferences
+        )
+        db.add(teacher)
+        db.commit()
+        db.refresh(teacher)
+    else:
+        # Vérification du mot de passe
+        if teacher.password != payload.password:
+            raise HTTPException(status_code=401, detail="Mot de passe incorrect pour cet e-mail.")
+        
+        # Mise à jour des préférences Llink
+        teacher.llink_preferences = payload.llink_preferences
+        db.commit()
+
+    # 2. Synchronisation des Présences (Upsert)
+    for p_data in payload.presences:
+        existing_presence = db.query(Attendance).filter(Attendance.id == p_data.id).first()
+        if existing_presence:
+            existing_presence.status = p_data.status
+        else:
+            new_presence = Attendance(
+                id=p_data.id,
+                teacher_email=teacher.email,
+                student_id=p_data.student_id,
+                student_name=p_data.student_name,
+                class_name=p_data.class_name,
+                course_name=p_data.course_name,
+                date=p_data.date,
+                status=p_data.status
+            )
+            db.add(new_presence)
+
+    # 3. Synchronisation des Interrogations (Upsert)
+    for q_data in payload.quizzes:
+        existing_quiz = db.query(QuizBank).filter(QuizBank.id == q_data.id).first()
+        if not existing_quiz:
+            new_quiz = QuizBank(
+                id=q_data.id,
+                teacher_email=teacher.email,
+                title=q_data.title,
+                class_name=q_data.class_name,
+                course_name=q_data.course_name,
+                max_score=q_data.max_score,
+                content=q_data.content,
+                created_at=q_data.created_at
+            )
+            db.add(new_quiz)
+
+    db.commit()
+    return {"status": "success", "message": "Synchronisation Cloud réussie avec succès !"}
+
