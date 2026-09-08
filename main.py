@@ -24,9 +24,16 @@ engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
-# C'est ici que tu peux insérer le drop_all temporairement :
-Base.metadata.drop_all(bind=engine) # ⬅️ Supprime les tables obsolètes
-Base.metadata.create_all(bind=engine) # ⬅️ Recrée tout proprement avec la colonne 'email'
+with engine.begin() as conn:
+    print("Nettoyage forcé des anciennes tables obsolètes...")
+    conn.execute(text("DROP TABLE IF EXISTS attendances CASCADE;"))
+    conn.execute(text("DROP TABLE IF EXISTS quizzes CASCADE;"))
+    conn.execute(text("DROP TABLE IF EXISTS teachers CASCADE;"))
+    conn.execute(text("DROP TABLE IF EXISTS school_information CASCADE;"))
+    print("Tables supprimées avec succès !")
+
+# Recréation propre de toute la structure avec la colonne 'email' intégrée
+Base.metadata.create_all(bind=engine)
 
 # Configuration WhatsApp
 WHATSAPP_PHONE = os.getenv("WHATSAPP_PHONE", "")
