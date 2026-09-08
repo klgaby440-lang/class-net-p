@@ -24,6 +24,10 @@ engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
+# C'est ici que tu peux insérer le drop_all temporairement :
+Base.metadata.drop_all(bind=engine) # ⬅️ Supprime les tables obsolètes
+Base.metadata.create_all(bind=engine) # ⬅️ Recrée tout proprement avec la colonne 'email'
+
 # Configuration WhatsApp
 WHATSAPP_PHONE = os.getenv("WHATSAPP_PHONE", "")
 WHATSAPP_API_KEY = os.getenv("WHATSAPP_API_KEY", "")
