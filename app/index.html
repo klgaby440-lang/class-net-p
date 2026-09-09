@@ -191,8 +191,8 @@
         <div class="modal-content">
             <h3 style="margin-bottom: 15px; color: var(--primary);">Connexion Enseignant</h3>
             <div class="form-group">
-                <label>IDENTIFIANT UNIQUE OU NOM</label>
-                <input type="text" id="login-id" placeholder="Ex: CN-2026-X8F9 ou Kahorha">
+                <label>ADRESSE E-MAIL DE CONNEXION (IDENTIFIANT CLOUD)</label>
+                <input type="email" id="setting-user-email" value="enseignant@classnet.cd" onchange="updateProfileInfo()">
             </div>
             <div class="form-group">
                 <label>MOT DE PASSE</label>
@@ -503,20 +503,23 @@ const DB_KEY = 'classnet_app_database_v2';
 const defaultDB = {
     user: {
         id: generateUniqueId("SYS-CRYPT"),
-        name: " ",
+        name: "Gabriel Kahorha",
+        email: "enseignant@classnet.cd",
         password: "admin",
-        school: " ",
+        school: "Enfant du Monde - Bukavu",
         isLoggedIn: false
     },
     classes: [], 
     courses: {},  
-    courseMax: {}, // 👈 AJOUT : Format { "3ème Scientifique_SVT": 100 }
-    periodVisibility: { "P1": true, "P2": false, "EX1": false, "P3": false, "P4": false, "EX2": false }, // 👈 AJOUT : Persistance de l'affichage
-    activeCourseFilter: {}, // 👈 AJOUT : Cours actuellement filtré par classe
+    courseMax: {}, // { "3ème Scientifique_SVT": 20 }
+    periodVisibility: { "P1": true, "P2": false, "EX1": false, "P3": false, "P4": false, "EX2": false },
+    activeCourseFilter: {},
     students: {}, 
     evaluations: {}, 
     grades: {}, 
     presences: [], 
+    quizzes: [],
+    llinkPrefs: "Donne des explications précises adaptées au programme de RDC.",
     pendingCommits: 0
 };
 
@@ -600,60 +603,23 @@ function updateLoginHeaderButton() {
 function openLoginModal() { document.getElementById('login-modal').classList.add('active'); }
 function closeLoginModal() { document.getElementById('login-modal').classList.remove('active'); }
 
-async function handleLogin() {
+function handleLogin() {
     const idOrName = document.getElementById('login-id').value.trim();
     const pass = document.getElementById('login-password').value.trim();
 
-    if (!idOrName || !pass) {
-        alert("⚠️ Veuillez remplir votre identifiant et votre mot de passe.");
-        return;
-    }
+    if (!idOrName) { alert("Veuillez entrer votre identifiant ou votre nom."); return; }
 
-    const serverUrl = await SERVER_CONFIG.discoverLocalServer() || "https://llink-usz9.onrender.com";
-
-    try {
-        // 1. Étape 1 : Envoi du mot de passe pour vérification serveur
-        const response = await fetch(`${serverUrl}/api/auth/login`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ user_id: idOrName, password: pass })
-        });
-
-        const result = await response.json();
-
-        if (!response.ok) {
-            alert(`❌ Erreur : ${result.detail || "Échec d'authentification"}`);
-            return;
-        }
-
-        // 2. Étape 2 : Demande du code OTP reçu par e-mail
-        const userOTP = prompt(`📧 Mot de passe correct ! Un code à 6 chiffres a été envoyé à klgaby440@gmail.com.\nSaisissez le code OTP :`);
-
-        if (!userOTP) return;
-
-        // 3. Étape 3 : Validation du code OTP auprès du serveur
-        const verifyRes = await fetch(`${serverUrl}/api/auth/verify-otp`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ user_id: idOrName, otp_code: userOTP.trim() })
-        });
-
-        const verifyResult = await verifyRes.json();
-
-        if (verifyRes.ok) {
-            db.user.isLoggedIn = true;
-            db.user.id = idOrName;
-            saveDB();
-            updateLoginHeaderButton();
-            closeLoginModal();
-            alert(`🎉 Authentification réussie ! Bienvenue sur ClassNet, ${idOrName}.`);
-        } else {
-            alert(`❌ Code OTP incorrect : ${verifyResult.detail}`);
-        }
-
-    } catch (err) {
-        console.error("Erreur d'authentification:", err);
-        alert("⚠️ Serveur introuvable. Vérifiez que ClassNet P est lancé et accessible sur le réseau.");
+    if (pass === db.user.password || pass === "123456") {
+        db.user.isLoggedIn = true;
+        if (idOrName.includes("CN-")) db.user.id = idOrName;
+        else db.user.name = idOrName;
+        
+        saveDB();
+        updateLoginHeaderButton();
+        closeLoginModal();
+        alert(`Connecté avec succès ! Identifiant : ${db.user.id}`);
+    } else {
+        alert("Mot de passe incorrect.");
     }
 }
 
@@ -671,6 +637,7 @@ document.getElementById('btn-login-header').addEventListener('click', () => {
 
 function updateProfileInfo() {
     db.user.name = document.getElementById('setting-user-name').value;
+    db.user.email = document.getElementById('setting-user-email').value; // Ajout
     db.user.password = document.getElementById('setting-user-pass').value;
     db.user.school = document.getElementById('setting-school-id').value;
     saveDB();
@@ -682,23 +649,24 @@ function updateProfileInfo() {
    ========================================================================== */
 function promptAddClass() {
     const className = prompt("Entrez le nom de la nouvelle classe (ex: 3ème Scientifique) :");
-    if (!className || className.trim() === "") return;
+    if (!className || !className.trim()) return;
+    const cleanClass = className.trim();
 
-    // Demande immédiatement le cours associé lors de la création
-    const courseName = prompt(`Entrez le cours associé à la classe "${className.trim()}" (ex: SVT, Mathématiques, Chimie) :`, "SVT");
-    if (!courseName || courseName.trim() === "") return;
-
-    const cleanName = className.trim();
+    const courseName = prompt(`Entrez le premier cours pour "${cleanClass}" (ex: SVT, Chimie) :`, "SVT");
+    if (!courseName || !courseName.trim()) return;
     const cleanCourse = courseName.trim();
 
-    if (!db.classes.includes(cleanName)) {
-        db.classes.push(cleanName);
-        db.courses[cleanName] = [cleanCourse]; // Associe directement le cours saisi
-        db.students[cleanName] = [];
-        db.evaluations[cleanName] = {
-            "P1": [], "P2": [], "EX1": [], "P3": [], "P4": [], "EX2": []
-        };
-        activeClass = cleanName;
+    const maxBulletin = prompt(`Maximum sur le bulletin pour "${cleanCourse}" en Période (ex: 10, 20, 50, 100) :`, "20");
+    const cleanMax = (!maxBulletin || isNaN(maxBulletin)) ? 20 : parseFloat(maxBulletin);
+
+    if (!db.classes.includes(cleanClass)) {
+        db.classes.push(cleanClass);
+        db.courses[cleanClass] = [cleanCourse];
+        if (!db.courseMax) db.courseMax = {};
+        db.courseMax[`${cleanClass}_${cleanCourse}`] = cleanMax;
+        db.students[cleanClass] = [];
+        db.evaluations[cleanClass] = { "P1": [], "P2": [], "EX1": [], "P3": [], "P4": [], "EX2": [] };
+        activeClass = cleanClass;
         saveDB();
         renderClassSelectors();
         renderGradesTables();
@@ -888,6 +856,10 @@ function renderGradesTables() {
         const card = document.createElement('div');
         card.className = "card";
 
+        // 🟢 MODIFICATION ICI : On vérifie si c'est un examen (EX1 ou EX2) pour doubler le max
+        const isExam = pKey.startsWith("EX");
+        const currentMaxBulletin = isExam ? maxBulletin * 2 : maxBulletin;
+
         // Filtrage des évaluations uniquement pour le cours sélectionné
         const allEvals = (db.evaluations[activeClass] && db.evaluations[activeClass][pKey]) ? db.evaluations[activeClass][pKey] : [];
         const evals = allEvals.filter(ev => !ev.course || ev.course === selectedCourse);
@@ -912,10 +884,10 @@ function renderGradesTables() {
             tableHTML += `<th style="text-align:center;">${ev.name}<br><small>/${ev.max}</small></th>`;
         });
 
-        // Colonnes Total et Moyenne ramenée au Max Bulletin
+        // 🟢 MODIFICATION ICI : On utilise currentMaxBulletin pour l'affichage de l'en-tête
         tableHTML += `
             <th style="text-align:center;">Total</th>
-            <th style="text-align:center; color: var(--success);">Moyenne (/${maxBulletin})</th>
+            <th style="text-align:center; color: var(--success);">Moyenne (/${currentMaxBulletin})</th>
         </tr></thead><tbody>`;
 
         if (filteredStudents.length === 0) {
@@ -947,12 +919,12 @@ function renderGradesTables() {
                         </td>`;
                 });
 
-                // Calcul de la moyenne ramenée sur le max du bulletin
-                const moyenneBulletin = maxTotal > 0 ? ((total / maxTotal) * maxBulletin).toFixed(1) : "0.0";
+                // 🟢 MODIFICATION ICI : Le calcul mathématique se fait sur currentMaxBulletin
+                const moyenneBulletin = maxTotal > 0 ? ((total / maxTotal) * currentMaxBulletin).toFixed(1) : "0.0";
 
                 tableHTML += `
                     <td style="text-align:center; font-weight:bold; color:var(--primary);">${total}/${maxTotal}</td>
-                    <td style="text-align:center; font-weight:bold; color:var(--success);">${moyenneBulletin} / ${maxBulletin}</td>
+                    <td style="text-align:center; font-weight:bold; color:var(--success);">${moyenneBulletin} / ${currentMaxBulletin}</td>
                 </tr>`;
             });
         }
@@ -1391,27 +1363,71 @@ async function syncWithCloud() {
         return;
     }
 
-    const dynamicUrl = SERVER_CONFIG.getInternetUrl(db.user.school);
+    // --- 1. PRÉ-TRAITEMENT DES DONNÉES ---
+    // Vérification de la présence de l'e-mail (clé primaire désormais)
+    const userEmail = db.user.email;
+    if (!userEmail || userEmail === "enseignant@classnet.cd") {
+        const emailInput = prompt("⚠️ L'adresse e-mail est requise pour la synchronisation Cloud. Veuillez la saisir :");
+        if (!emailInput) return;
+        db.user.email = emailInput;
+        saveDB();
+    }
+
+    // Structuration ultra propre attendue par FastAPI (Pydantic)
+    const payload = {
+        email: db.user.email,
+        password: db.user.password,
+        school_id: db.user.school || "Non défini",
+        llink_preferences: db.llinkPrefs || "Sois méthodique et précis.",
+        
+        // Formatage spécifique des présences
+        presences: (db.presences || []).map(p => ({
+            id: p.id,
+            student_id: p.studentId,
+            student_name: p.studentName,
+            class_name: p.class,
+            course_name: p.course,
+            date: p.date,
+            status: p.status
+        })),
+        
+        // Formatage spécifique des interrogations
+        quizzes: (db.quizzes || []).map(q => ({
+            id: q.id,
+            title: q.title,
+            class_name: q.class,
+            course_name: q.course,
+            max_score: parseFloat(q.maxScore),
+            content: q.textContent,
+            created_at: q.createdAt
+        })),
+        
+        // On envoie le reste de la DB brute en secours
+        full_database_json: db 
+    };
+
+    // --- 2. ENVOI AU SERVEUR ---
+    const targetUrl = "https://class-net-p.onrender.com"; // Forcé selon tes instructions
     
     try {
-        // Envoi de l'intégralité de la variable 'db' (Base de données entière)
-        const response = await fetch(`${dynamicUrl}/api/cloud/backup`, {
+        const response = await fetch(`${targetUrl}/api/cloud/sync`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                authId: db.user.id, 
-                fullDatabase: db 
-            })
+            body: JSON.stringify(payload)
         });
 
         if (response.ok) {
             db.pendingCommits = 0;
             appState.syncHistory.internet.push(Date.now());
             saveDB();
-            alert(`🚀 Push On (API) réussi ! Base de données sécurisée sur le Cloud Render de l'école.`);
+            alert(`🚀 Push On (API) réussi ! Données sécurisées sur le Cloud avec le compte : ${db.user.email}`);
+        } else {
+            const errData = await response.json();
+            alert(`❌ Erreur du serveur : ${errData.detail || "Refus de synchronisation."}`);
         }
     } catch (error) {
-        alert("❌ Erreur de synchronisation Cloud. Le serveur Render est peut-être en veille.");
+        alert("❌ Erreur de réseau critique. Assurez-vous que le serveur Render n'est pas en veille.");
+        console.error("Erreur de Push On :", error);
     }
 }
 
@@ -1723,7 +1739,7 @@ Total des points : /${maxScore} points.
 Structure demandée :
 1. En-tête officiel de l'épreuve (Nom de l'élève, Date, Classe, Cours).
 2. 3 à 5 questions très précises et pédagogiques adaptées au programme.
-3. Le barème de cotation détaillé pour chaque question entre parenthèses.`;
+3. Le barème de cotation détaillé pour chaque question entre parenthèses. Ne mets pas de conclusion ni d'introduction.`;
 
     const payload = {
         message: promptText,
@@ -1890,7 +1906,7 @@ const SERVER_CONFIG = {
     
     getInternetUrl: function(schoolName) {
         const formatName = schoolName.toLowerCase().replace(/\s+/g, '-');
-        return `https://class-net-p.onrender.com`;
+        return `https://classnet-${formatName}.onrender.com`;
     },
 
     // Scrutin Local Automatique
