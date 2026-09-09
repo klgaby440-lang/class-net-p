@@ -518,39 +518,40 @@ def export_classnet_json(teacher_code: str, db: Session = Depends(get_db)):
 
 @app.post("/api/cloud/sync")
 def sync_cloud_data(payload: CloudSyncPayload, db: Session = Depends(get_db)):
-    """Endpoint pour le Push On - Basé sur l'e-mail"""
-    
-    # 1. Vérification de l'enseignant via l'e-mail
+    # 🟢 FIX FK : Vérification de l'existence réelle de l'école dans la base de données
+    valid_school_id = None
+    if payload.school_id:
+        existing_school = db.query(SchoolInformation).filter(SchoolInformation.school_id == payload.school_id).first()
+        if existing_school:
+            valid_school_id = existing_school.school_id
+
     teacher = db.query(Teacher).filter(Teacher.email == payload.email).first()
     
     if not teacher:
-        # Création automatique si l'enseignant n'existe pas (utile pour le premier déploiement)
         teacher = Teacher(
             email=payload.email,
             full_name=payload.full_database_json.get("user", {}).get("name", "Enseignant Inconnu"),
             password=payload.password,
-            school_id=payload.school_id,
+            school_id=valid_school_id,  # Si l'école n'existe pas dans la BD cloud, on met None au lieu de planter
             llink_preferences=payload.llink_preferences
         )
         db.add(teacher)
         db.commit()
         db.refresh(teacher)
     else:
-        # Vérification du mot de passe
         if teacher.password != payload.password:
-            raise HTTPException(status_code=401, detail="Mot de passe incorrect pour cet e-mail.")
-        
-        # Mise à jour des préférences Llink
+            raise HTTPException(status_code=401, detail="Mot de passe incorrect.")
         teacher.llink_preferences = payload.llink_preferences
+        if valid_school_id:
+            teacher.school_id = valid_school_id
         db.commit()
 
-    # 2. Synchronisation des Présences (Upsert)
     for p_data in payload.presences:
         existing_presence = db.query(Attendance).filter(Attendance.id == p_data.id).first()
         if existing_presence:
             existing_presence.status = p_data.status
         else:
-            new_presence = Attendance(
+            db.add(Attendance(
                 id=p_data.id,
                 teacher_email=teacher.email,
                 student_id=p_data.student_id,
@@ -559,14 +560,12 @@ def sync_cloud_data(payload: CloudSyncPayload, db: Session = Depends(get_db)):
                 course_name=p_data.course_name,
                 date=p_data.date,
                 status=p_data.status
-            )
-            db.add(new_presence)
+            ))
 
-    # 3. Synchronisation des Interrogations (Upsert)
     for q_data in payload.quizzes:
         existing_quiz = db.query(QuizBank).filter(QuizBank.id == q_data.id).first()
         if not existing_quiz:
-            new_quiz = QuizBank(
+            db.add(QuizBank(
                 id=q_data.id,
                 teacher_email=teacher.email,
                 title=q_data.title,
@@ -575,9 +574,7 @@ def sync_cloud_data(payload: CloudSyncPayload, db: Session = Depends(get_db)):
                 max_score=q_data.max_score,
                 content=q_data.content,
                 created_at=q_data.created_at
-            )
-            db.add(new_quiz)
+            ))
 
     db.commit()
-    return {"status": "success", "message": "Synchronisation Cloud réussie avec succès !"}
-
+    return {"status": "success", "message": "Synchronisation réussie !"}
