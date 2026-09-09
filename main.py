@@ -24,17 +24,6 @@ engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
-with engine.begin() as conn:
-    print("Nettoyage forcé des anciennes tables obsolètes...")
-    conn.execute(text("DROP TABLE IF EXISTS attendances CASCADE;"))
-    conn.execute(text("DROP TABLE IF EXISTS quizzes CASCADE;"))
-    conn.execute(text("DROP TABLE IF EXISTS teachers CASCADE;"))
-    conn.execute(text("DROP TABLE IF EXISTS school_information CASCADE;"))
-    print("Tables supprimées avec succès !")
-
-# Recréation propre de toute la structure avec la colonne 'email' intégrée
-Base.metadata.create_all(bind=engine)
-
 # Configuration WhatsApp
 WHATSAPP_PHONE = os.getenv("WHATSAPP_PHONE", "")
 WHATSAPP_API_KEY = os.getenv("WHATSAPP_API_KEY", "")
@@ -279,12 +268,21 @@ app = FastAPI(
     description="Backend central unifié : Gestion des écoles, licences, synchronisation PrimeNet et ClassNet App."
 )
 
+# Liste des origines autorisées à interroger l'API
+origins = [
+    "https://class-net-p.vercel.app",  # 🟢 Ton application frontend Vercel
+    "http://localhost",
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://localhost:8000",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=origins,            # Seules ces origines spécifiques sont autorisées
+    allow_credentials=True,           # Permet l'envoi de headers d'authentification / cookies
+    allow_methods=["*"],              # Autorise toutes les méthodes (GET, POST, OPTIONS, PUT, etc.)
+    allow_headers=["*"],              # Autorise tous les en-têtes HTTP
 )
 
 # ---------------------------------------------------------
