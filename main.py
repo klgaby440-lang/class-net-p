@@ -24,6 +24,75 @@ engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
+def init_db():
+    conn = sqlite3.connect()
+    cursor = conn.cursor()
+    
+    # Table Enseignants / Utilisateurs
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS enseignants (
+            id TEXT PRIMARY KEY,
+            nom TEXT NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL,
+            ecole TEXT,
+            preferences_llink TEXT
+        )
+    ''')
+    
+    # Table Bulletins et Notes de synthèse
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS bulletins (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            enseignant_id TEXT,
+            student_id TEXT NOT NULL,
+            student_name TEXT NOT NULL,
+            class_name TEXT NOT NULL,
+            course_name TEXT NOT NULL,
+            periode TEXT NOT NULL,
+            total_obtenu REAL,
+            max_evals REAL,
+            moyenne_bulletin TEXT,
+            max_bulletin REAL,
+            FOREIGN KEY (enseignant_id) REFERENCES enseignants (id)
+        )
+    ''')
+
+    # Table Présences
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS presences (
+            id TEXT PRIMARY KEY,
+            enseignant_id TEXT,
+            date_presence TEXT NOT NULL,
+            class_name TEXT NOT NULL,
+            course_name TEXT NOT NULL,
+            student_id TEXT NOT NULL,
+            status TEXT NOT NULL
+        )
+    ''')
+
+    # Table Quiz / Interrogations
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS quizzes (
+            id TEXT PRIMARY KEY,
+            enseignant_id TEXT,
+            titre TEXT NOT NULL,
+            class_name TEXT NOT NULL,
+            course_name TEXT NOT NULL,
+            max_score REAL NOT NULL,
+            contenu TEXT NOT NULL
+        )
+    ''')
+
+    # Compte enseignant par défaut
+    cursor.execute('''
+        INSERT OR IGNORE INTO enseignants (id, nom, email, password, ecole, preferences_llink)
+        VALUES ('SYS-CRYPT-01', 'Gabriel Kahorha', 'enseignant@classnet.cd', '123456', 'Enfant du Monde', 'Adapté au programme de RDC.')
+    ''')
+
+    conn.commit()
+    conn.close()
+
 # Configuration WhatsApp
 WHATSAPP_PHONE = os.getenv("WHATSAPP_PHONE", "")
 WHATSAPP_API_KEY = os.getenv("WHATSAPP_API_KEY", "")
