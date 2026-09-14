@@ -428,7 +428,20 @@ def send_email_mock(to_email: str, subject: str, body: str):
 # 5. INITIALISATION FASTAPI
 # ---------------------------------------------------------
 app = FastAPI(title="CRYPT Cloud Internet Node", version="3.1.0")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+origins = [
+    "https://class-net-p.vercel.app",  # Ton frontend Vercel en production
+    "http://localhost:3000",            # Pour tes tests locaux
+    "http://localhost:5173",            # Pour Vite / React local
+    "http://localhost:8080"
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,              # Ou ["*"] pour autoriser toutes les sources
+    allow_credentials=True,
+    allow_methods=["*"],                # Autorise toutes les méthodes (POST, GET, OPTIONS, etc.)
+    allow_headers=["*"],                # Autorise tous les en-têtes HTTP
+)
 
 # ---------------------------------------------------------
 # 6. ROUTES D'AUTHENTIFICATION ET COMPTES
