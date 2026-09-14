@@ -428,8 +428,14 @@ def send_email_mock(to_email: str, subject: str, body: str):
 Base.metadata.create_all(bind=engine)
 
 # Ajout automatique de la colonne manquante si elle n'existe pas
+# Ajout automatique des colonnes manquantes si elles n'existent pas sur la DB Render
 with engine.connect() as conn:
     conn.execute(text("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS age INTEGER;"))
+    conn.execute(text("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS school_name VARCHAR;"))
+    conn.execute(text("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS llink_preferences TEXT;"))
+    conn.execute(text("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS subject VARCHAR;"))
+    conn.execute(text("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS status VARCHAR DEFAULT 'Actif';"))
+    conn.execute(text("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS teacher_code VARCHAR(50);"))
     conn.commit()
 
 # ---------------------------------------------------------
