@@ -9,7 +9,7 @@ import httpx
 from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, EmailStr
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, Text, JSON, Float
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, Text, JSON, Float, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session, relationship
 import random
@@ -215,7 +215,15 @@ engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
-ADMIN_EMAIL = "gabriel.kahorha@gmail.com" # Ton adresse pour recevoir les codes
+# Création des tables manquantes
+Base.metadata.create_all(bind=engine)
+
+# Ajout automatique de la colonne manquante si elle n'existe pas
+with engine.connect() as conn:
+    conn.execute(text("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS age INTEGER;"))
+    conn.commit()
+
+ADMIN_EMAIL = "klgaby440@gmail.com" # Ton adresse pour recevoir les codes
 
 # ---------------------------------------------------------
 # 2. MODÈLES DE BASE DE DONNÉES ENRICHIS
