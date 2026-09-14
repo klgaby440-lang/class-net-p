@@ -391,7 +391,7 @@ class SchoolRegisterSchema(BaseModel):
     name_responsable: str
     num_tel: str
     adresse_physique: str
-    email: EmailStr
+    email: str
     pass_word: str
 
 class LoginSchema(BaseModel):
