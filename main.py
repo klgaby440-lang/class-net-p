@@ -377,7 +377,7 @@ class TeacherInitSchema(BaseModel):
     age: int
 
 class OTPVerifySchema(BaseModel):
-    email: EmailStr
+    email: str
     otp_code: str
     teacher_data: TeacherInitSchema
 
