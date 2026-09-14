@@ -370,7 +370,7 @@ init_db()
 # ---------------------------------------------------------
 class TeacherInitSchema(BaseModel):
     full_name: str
-    email: EmailStr
+    email: str 
     school_name: Optional[str] = None
     password: str
     phone_number: str
