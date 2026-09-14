@@ -215,14 +215,6 @@ engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
-# Création des tables manquantes
-Base.metadata.create_all(bind=engine)
-
-# Ajout automatique de la colonne manquante si elle n'existe pas
-with engine.connect() as conn:
-    conn.execute(text("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS age INTEGER;"))
-    conn.commit()
-
 ADMIN_EMAIL = "klgaby440@gmail.com" # Ton adresse pour recevoir les codes
 
 # ---------------------------------------------------------
@@ -431,6 +423,14 @@ def generate_otp() -> str:
 def send_email_mock(to_email: str, subject: str, body: str):
     # Remplacer par configuration SMTP réelle si besoin
     print(f"📧 [EMAIL SENT to {to_email}] | Sujet: {subject} | Corps: {body}")
+
+# Création des tables manquantes
+Base.metadata.create_all(bind=engine)
+
+# Ajout automatique de la colonne manquante si elle n'existe pas
+with engine.connect() as conn:
+    conn.execute(text("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS age INTEGER;"))
+    conn.commit()
 
 # ---------------------------------------------------------
 # 5. INITIALISATION FASTAPI
