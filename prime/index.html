@@ -688,6 +688,257 @@ body {
 .hidden {
     display: none !important;
 }    
+
+/* Styles Spécifiques Interface Tools (CRYPT Design) */
+.tools-nav {
+    display: flex;
+    gap: 1rem;
+    border-bottom: 2px solid var(--border-color);
+    padding-bottom: 0.6rem;
+    margin-bottom: 1.5rem;
+}
+
+.tools-nav-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 1rem;
+    font-weight: 700;
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    border-radius: var(--radius-md);
+    transition: var(--transition-fast);
+}
+
+.tools-nav-btn:hover, .tools-nav-btn.active {
+    background-color: var(--primary-color);
+    color: var(--text-white);
+}
+
+.tools-tab-content {
+    display: none;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.tools-tab-content.active {
+    display: flex;
+}
+
+.tools-sub-toggle {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.tools-sub-toggle button {
+    background: var(--bg-main);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    padding: 0.4rem 1rem;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-weight: 600;
+    transition: var(--transition-fast);
+}
+
+.tools-sub-toggle button:hover, .tools-sub-toggle button.active {
+    background: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+.salle-card, .prof-config-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+.grid-2col {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1rem;
+}
+
+/* Styles Spécifiques Bulletin Officiel RDC */
+.bulletin-table td.subtotal-row {
+    background-color: #f1f5f9;
+    font-weight: bold;
+    border-top: 2px solid #000;
+    border-bottom: 2px solid #000;
+}
+
+.bulletin-table tr.summary-row td {
+    font-weight: bold;
+    font-size: 0.8rem;
+}
+
+.bulletin-table td.black-cell {
+    background-color: #000 !important;
+}
+
+.bulletin-table tr.main-max-row td {
+    background-color: #e2e8f0;
+    font-weight: 800;
+}
+
+.edit-beh {
+    cursor: pointer;
+    background-color: #fef3c7;
+    text-align: center;
+    font-weight: bold;
+}
+
+/* Layout Global Bulletin Officiel RDC (2 Colonnes) */
+.bulletin-official-wrapper {
+    display: flex;
+    gap: 12px;
+    background: #fff;
+    color: #000;
+    padding: 15px;
+    border: 2px solid #000;
+    font-family: Arial, sans-serif;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.bulletin-main-column {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.bulletin-side-column {
+    width: 210px;
+    border-left: 2px solid #000;
+    padding-left: 10px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    font-size: 0.78rem;
+}
+
+/* Header Officiel */
+.rdc-header-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 2px solid #000;
+    padding-bottom: 6px;
+    margin-bottom: 6px;
+}
+
+.rdc-header-title {
+    text-align: center;
+    font-weight: bold;
+    font-size: 0.85rem;
+    line-height: 1.2;
+}
+
+.rdc-id-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border: 1px solid #000;
+    padding: 3px 6px;
+    font-size: 0.78rem;
+    margin-bottom: 6px;
+    font-weight: bold;
+}
+
+.rdc-details-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border: 1px solid #000;
+    padding: 4px;
+    gap: 4px;
+    font-size: 0.75rem;
+    margin-bottom: 6px;
+}
+
+/* Styles Tableau principal */
+.bulletin-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.75rem;
+}
+
+.bulletin-table th, .bulletin-table td {
+    border: 1px solid #000;
+    padding: 3px 4px;
+    text-align: center;
+}
+
+.bulletin-table th {
+    background-color: #e2e8f0;
+    font-weight: bold;
+    text-transform: uppercase;
+    font-size: 0.7rem;
+}
+
+.bulletin-table td.cat-header {
+    background-color: #cbd5e1;
+    font-weight: 800;
+    text-align: left;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+}
+
+.bulletin-table td.subtotal-row {
+    background-color: #f1f5f9;
+    font-weight: bold;
+}
+
+.bulletin-table td.black-cell {
+    background-color: #000 !important;
+}
+
+.bulletin-table tr.main-max-row td {
+    background-color: #e2e8f0;
+    font-weight: bold;
+}
+
+/* Side Column Box Styles */
+.side-box {
+    border: 1px solid #000;
+    padding: 6px;
+    margin-bottom: 10px;
+}
+
+.side-box-title {
+    font-weight: bold;
+    text-align: center;
+    text-transform: uppercase;
+    border-bottom: 1px solid #000;
+    padding-bottom: 3px;
+    margin-bottom: 6px;
+    font-size: 0.8rem;
+}
+
+.side-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 6px;
+}
+
+.side-table th, .side-table td {
+    border: 1px solid #000;
+    padding: 2px;
+    text-align: center;
+    font-size: 0.72rem;
+}
+
+/* Footer Signatures */
+.rdc-footer-signatures {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 15px;
+    font-size: 0.75rem;
+    text-align: center;
+}
+
     </style>
 </head>
 
@@ -698,9 +949,9 @@ body {
         <div class="brand-logo">ClassNet <span>P</span></div>
         <div class="nav-links">
             <button class="nav-btn active" data-target="section-classes">CLASSES</button>
+            <button class="nav-btn" data-target="section-about">TOOLS</button>
             <button class="nav-btn" data-target="section-llink">LLINK</button>
             <button class="nav-btn" data-target="section-settings">PARAMÈTRES</button>
-            <button class="nav-btn" data-target="section-about">À PROPOS</button>
         </div>
     </nav>
 
@@ -777,87 +1028,163 @@ body {
 
         <!-- Bulletin -->
         <div id="view-bulletin" class="sub-view-content active">
+
+            <!-- Sidebar Sélection Élève -->
             <nav class="retractable-sidebar">
                 <div class="sidebar-header">
-                    <span class="sidebar-title" id="bulletinSidebarTitle">BULLETIN</span>
+                    <span class="sidebar-title" id="bulletinSidebarTitle">ÉLÈVES DE LA CLASSE</span>
                     <button class="toggle-sidebar-btn">◀</button>
                 </div>
-                <button class="btn-secondary" onclick="renderinterface('ajouter_eleve')">Ajouter un élève</button>
-                <button class="btn-secondary" onclick="renderinterface('ajouter_cours')">Ajouter un cours</button>
-                <input type="text" placeholder="Rechercher un élève..." class="search-input">
                 <div class="item-list" id="studentListSidebar"></div>
             </nav>
 
-            <div class="detail-display-area">
-                <div class="bulletin-sheet" id="officialBulletinArea">
-                    <div class="bulletin-header-rdc" style="position: relative;">
-                        <img src="https://flagcdn.com/w80/cd.png" alt="Drapeau RDC" class="rdc-flag-img">
-                        <div class="rdc-title-block">
-                            RÉPUBLIQUE DÉMOCRATIQUE DU CONGO<br>
-                            MINISTÈRE DE L'ENSEIGNEMENT PRIMAIRE SECONDAIRE ET TECHNIQUE
-                        </div>
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem;">
-                            <div>PROVINCE : <strong>SUD-KIVU</strong></div>
-                            <div class="rdc-info-item">
+            <div class="detail-display-area" style="padding:0; border:none; background:transparent;"></div>
+                <div class="bulletin-sheet" id="officialBulletinArea" style="padding:0; border:none;">
+                    <div class="bulletin-official-wrapper">
+                        <!-- COLONNE PRINCIPALE (GAUCHE) -->
+                        <div class="bulletin-main-column">
+                            <!-- En-tête officiel avec Drapeau et Armoiries -->
+                            <div class="rdc-header-container">
+                                <img src="https://flagcdn.com/w80/cd.png" alt="Drapeau RDC" style="width: 50px; height: auto; border: 1px solid #000;">
+                                <div class="rdc-header-title">
+                                    RÉPUBLIQUE DÉMOCRATIQUE DU CONGO<br>
+                                    MINISTÈRE DE L'ÉDUCATION NATIONALE ET NOUVELLE CITOYENNETÉ
+                                </div>
+                                <div style="width: 50px; height: 50px; border: 1px solid #000; display:flex; align-items:center; justify-content:center; font-size:0.6rem; text-align:center; font-weight:bold;">
+                                    ARMOIRIES RDC
+                                </div>
+                            </div>
+
+                            <!-- Barre N° ID -->
+                            <div class="rdc-id-bar">
                                 <span>N° ID :</span>
                                 <div id="digitIdBox"></div>
                             </div>
-                        </div>
-                        <div class="rdc-info-grid">
-                            <div class="rdc-info-item">VILLE : <strong id="schoolCity">BUKAVU</strong></div>
-                            <div class="rdc-info-item">COMMUNE : <strong id="schoolCommune">IBANDA</strong></div>
-                            <div class="rdc-info-item">ÉCOLE : <strong id="schoolName">ENFANT DU MONDE</strong></div>
-                            <div class="rdc-info-item">
-                                <span>CODE :</span>
-                                <div id="digitCodeBox"></div>
+
+                            <!-- Grille d'informations Établissement et Élève -->
+                            <div class="rdc-details-grid">
+                                <div>ÉDUCATION PROVINCIALE : <strong id="bProv">-</strong></div>
+                                <div>ÉLÈVE : <strong id="bStudentFullName">-</strong></div>
+                                <div>VILLE : <strong id="schoolCity">BUKAVU</strong></div>
+                                <div>SEXE : <strong id="bStudentSexe">-</strong></div>
+                                <div>COMMUNE/TER : <strong id="schoolCommune">IBANDA</strong></div>
+                                <div>NÉ(E) À : <strong id="bStudentBornWhere">-</strong> LE <strong id="bStudentBornDate">-</strong></div>
+                                <div>ÉCOLE : <strong id="schoolName">ENFANT DU MONDE</strong></div>
+                                <div>CLASSE : <strong id="bStudentClass">-</strong></div>
+                                <div style="display:flex; align-items:center; gap:4px;">CODE : <div id="digitCodeBox"></div></div>
+                                <div style="display:flex; align-items:center; gap:4px;">N° PERM. : <div id="digitPermiBox"></div></div>
+                            </div>
+
+                            <div style="text-align: center; font-size: 0.8rem; font-weight: bold; margin: 4px 0 8px 0; text-transform: uppercase;">
+                                BULLETIN DE LA <span id="bTitleClass">-</span> - ANNÉE SCOLAIRE 2025 – 2026
+                            </div>
+
+                            <!-- Tableau Principal des Notes -->
+                            <table class="bulletin-table" id="bulletinTable">
+                                <thead>
+                                    <tr>
+                                        <th rowspan="2" style="width: 28%;">BRANCHES</th>
+                                        <th colspan="6">PREMIER SEMESTRE</th>
+                                        <th colspan="6">SECOND SEMESTRE</th>
+                                        <th colspan="2">TOTAL GÉNÉRAL</th>
+                                    </tr>
+                                    <tr>
+                                        <th colspan="3">TRAVAUX JOURNAL.</th>
+                                        <th rowspan="2">MAX EX</th>
+                                        <th rowspan="2">EX1</th>
+                                        <th rowspan="2">TOTAL</th>
+                                        <th colspan="3">TRAVAUX JOURNAL.</th>
+                                        <th rowspan="2">MAX EX</th>
+                                        <th rowspan="2">EX2</th>
+                                        <th rowspan="2">TOTAL</th>
+                                        <th rowspan="2">MAX TG</th>
+                                        <th rowspan="2">T.G.</th>
+                                    </tr>
+                                    <tr>
+                                        <th></th>
+                                        <th>MAX</th>
+                                        <th>1<sup>ère</sup>P</th>
+                                        <th>2<sup>ème</sup>P</th>
+                                        <th>MAX</th>
+                                        <th>3<sup>ème</sup>P</th>
+                                        <th>4<sup>ème</sup>P</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="bulletinTableBody"></tbody>
+                            </table>
+
+                            <!-- Signatures Bas de Page -->
+                            <div style="margin-top: 10px; font-size: 0.72rem; text-align: right;">
+                                Fait à <span id="bCityFooter">BUKAVU</span>, le ......../......../20.......
+                            </div>
+                            <div class="rdc-footer-signatures">
+                                <div>Signature de l'élève</div>
+                                <div>Sceau de l'école</div>
+                                <div>Le Chef d'Établissement,<br><br><strong>Nom et Signature</strong></div>
+                            </div>
+                            <div style="margin-top: 8px; font-size: 0.65rem; color: #333; display: flex; justify-content: space-between;">
+                                <span>(1) Biffer la mention inutile</span>
+                                <span>Note importante : Le bulletin est sans valeur s'il est raturé ou surchargé</span>
+                                <span><strong>IGE/PS/010</strong></span>
                             </div>
                         </div>
-                        <div class="rdc-info-grid" style="margin-top: 0.4rem; background: #f8fafc; padding: 0.5rem; border: 1px dashed #64748b;">
-                            <div>ÉLÈVE : <strong id="bStudentFullName">-</strong></div>
-                            <div>SEXE : <strong id="bStudentSexe">-</strong></div>
-                            <div>NÉ(E) À : <strong id="bStudentBornWhere">-</strong> LE <strong id="bStudentBornDate">-</strong></div>
-                            <div>CLASSE : <strong id="bStudentClass">-</strong></div>
-                            <div class="rdc-info-item">
-                                <span>N° PERM. :</span>
-                                <div id="digitPermiBox"></div>
+
+                        <!-- PANNEAU LATÉRAL DROIT (OFFICIEL RDC) -->
+                        <div class="bulletin-side-column">
+                            <!-- Section Examen d'État -->
+                            <div class="side-box">
+                                <div class="side-box-title">EXAMEN D'ÉTAT</div>
+                                <table class="side-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Points Obt.</th>
+                                            <th>MAX</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td style="height:20px;"></td>
+                                            <td></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                                <div style="display:flex; justify-content:space-between; font-size:0.7rem; margin-bottom:4px;">
+                                    <span>MEC : ......</span>
+                                    <span>% : ......</span>
+                                </div>
+                                <div style="font-size:0.68rem; margin-top:6px;">
+                                    Pour le contrôle le......................<br><br>
+                                    <strong>Nom et signature du Chef de centre</strong><br>
+                                    ....................................................
+                                </div>
+                                <div style="margin-top:8px; font-size:0.68rem;">
+                                    Code du Centre :
+                                    <div style="display:flex; gap:2px; margin-top:2px;">
+                                        <div class="digit-box"></div><div class="digit-box"></div><div class="digit-box"></div><div class="digit-box"></div><div class="digit-box"></div>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
-                        <div style="text-align: center; font-size: 0.8rem; font-weight: bold; margin-top: 0.3rem;">
-                            BULLETIN SCOLAIRE - ANNÉE SCOLAIRE 2025 - 2026
+
+                            <!-- Section Résultat Final -->
+                            <div class="side-box" style="flex:1;">
+                                <div class="side-box-title">RÉSULTAT FINAL</div>
+                                <div style="font-size:0.75rem; line-height: 1.6;">
+                                    Diplôme (1)<br>
+                                    Avec : <strong id="sideFinalPct">........ %</strong><br>
+                                    A échoué (1)<br><br>
+                                    Verser le témoignage :<br>
+                                    ................................................<br><br>
+                                    Le ......./......./20.......<br><br>
+                                    <strong>Le Chef d'Établissement</strong><br><br><br>
+                                    Sceau de l'école
+                                </div>
+                            </div>
                         </div>
                     </div>
-
-                    <table class="bulletin-table" id="bulletinTable">
-                        <thead>
-                            <tr>
-                                <th rowspan="2">BRANCHES / COURS</th>
-                                <th colspan="6">1er SEMESTRE</th>
-                                <th colspan="6">2ème SEMESTRE</th>
-                                <th colspan="2">TOTAL GÉNÉRAL</th>
-                            </tr>
-                            <tr>
-                                <th>MAX PER</th>
-                                <th>P1</th>
-                                <th>P2</th>
-                                <th>MAX EX</th>
-                                <th>EX1</th>
-                                <th>TOT S1</th>
-                                <th>P3</th>
-                                <th>P4</th>
-                                <th>MAX EX</th>
-                                <th>EX2</th>
-                                <th>TOT S2</th>
-                                <th>MAX TG</th>
-                                <th>T.G.</th>
-                            </tr>
-                        </thead>
-                        <tbody id="bulletinTableBody"></tbody>
-                    </table>
                 </div>
             </div>
-        </div>
 
-        <!-- Fiches des notes -->
+            <!-- Fiches des notes -->
         <div id="view-fiches" class="sub-view-content">
             <nav class="retractable-sidebar">
                 <div class="sidebar-header">
@@ -891,7 +1218,7 @@ body {
                 </table>
             </div>
         </div>
-
+        
         <!-- Statistiques -->
         <div id="view-stats" class="sub-view-content">
             <nav class="retractable-sidebar">
@@ -923,6 +1250,7 @@ body {
                 </table>
             </div>
         </div>
+        </div>
     </div>
 
     <!-- Interface Paramètres Améliorée (v1.1.0 Inspired) -->
@@ -948,6 +1276,21 @@ body {
                         <option value="internet">Serveur Internet (Cloud CRYPT)</option>
                         <option value="hybride">Hybride (Intranet + Auto-Sync Cloud)</option>
                     </select>
+                </div>
+                <div class="about-card">
+                    <h2>À Propos de ClassNet P</h2>
+                    <p class="about-desc">
+                        ClassNet P est un logiciel développé par <strong>CRYPT Enterprise</strong>, conçu pour s'interconnecter avec ClassNet App afin d'automatiser et de sécuriser la gestion des cotations, des fiches de points et de l'impression des bulletins scolaires en RDC.
+                    </p>
+                    <button class="btn-secondary tutorial-toggle-btn" id="tutorialBtn">Tutoriel d'utilisation ▾</button>
+                    <div class="tutorial-content hidden" id="tutorialContent">
+                        <p>💡 <em>Guide rapide :</em> Sélectionnez une classe dans le menu principal pour afficher ses bulletins et fiches de notes. Utilisez la synchronisation Intranet pour recevoir les notes saisies par les enseignants via ClassNet App sans nécessiter de connexion Internet.</p>
+                    </div>
+                    <div class="about-meta">
+                        <span><strong>Version :</strong> 1.3.0</span>
+                        <span><strong>Compatibilité ClassNet App :</strong> v1.0.2 à v1.3.0</span>
+                        <span><strong>Support CRYPT Enterprise :</strong> +243 895 281 304</span>
+                    </div>
                 </div>
             </div>
 
@@ -1010,21 +1353,318 @@ body {
         </div>
     </div>
 
-    <!-- Interface À Propos -->
+    <!-- Interface Tools (Structure originale de prime_net.html 100% restaurée) -->
     <div id="section-about" class="app-section">
-        <div class="about-card">
-            <h2>À Propos de ClassNet P</h2>
-            <p class="about-desc">
-                ClassNet P est un logiciel développé par <strong>CRYPT Enterprise</strong>, conçu pour s'interconnecter avec ClassNet App afin d'automatiser et de sécuriser la gestion des cotations, des fiches de points et de l'impression des bulletins scolaires en RDC.
-            </p>
-            <button class="btn-secondary tutorial-toggle-btn" id="tutorialBtn">Tutoriel d'utilisation ▾</button>
-            <div class="tutorial-content hidden" id="tutorialContent">
-                <p>💡 <em>Guide rapide :</em> Sélectionnez une classe dans le menu principal pour afficher ses bulletins et fiches de notes. Utilisez la synchronisation Intranet pour recevoir les notes saisies par les enseignants via ClassNet App sans nécessiter de connexion Internet.</p>
+        <!-- Navigation Onglets Outils -->
+        <nav class="tools-nav">
+            <button class="tools-nav-btn active" id="btn-tab-horaire" onclick="switchToolsTab('tab-horaire')">Horaire</button>
+            <button class="tools-nav-btn" id="btn-tab-mixage" onclick="switchToolsTab('tab-mixage')">Mixage</button>
+            <button class="tools-nav-btn" id="btn-tab-presence" onclick="switchToolsTab('tab-presence')">Presence</button>
+        </nav>
+
+        <!-- L'interface pour la presence -->
+        <div id="tab-presence" class="tools-tab-content">
+            <!-- Interface propre avec un petit effet lors du survol -->
+            <div class="tools-sub-toggle">
+                <button id="btnPresProf" onclick="switchPresenceSubView('prof')">Professeur</button>
+                <button class="active" id="btnPresEleve" onclick="switchPresenceSubView('eleve')">Eleve</button>
             </div>
-            <div class="about-meta">
-                <span><strong>Version :</strong> 1.3.0</span>
-                <span><strong>Compatibilité ClassNet App :</strong> v1.0.2 à v1.3.0</span>
-                <span><strong>Support CRYPT Enterprise :</strong> +243 895 281 304</span>
+
+            <!-- Interface des presences pour les élèves -->
+            <div id="pres-sub-eleve">
+                <div class="grid-2col" style="margin-bottom: 1rem;">
+                    <div class="form-group">
+                        <label>DATE</label>
+                        <input type="date" id="presEleveDate" class="form-control">
+                    </div>
+
+                    <div class="form-group">
+                        <label>CLASSE</label>
+                        <select id="presEleveClassSelect" class="form-control" onchange="renderPresencesEleveTable()">
+                            <!-- Insère ici toutes les classes -->
+                        </select>
+                    </div>
+                </div>
+
+                <div id="presEleveCoursesContainer" style="display: flex; flex-direction: column; gap: 1rem;">
+                    <!-- Les cours de la journée générés dynamiquement -->
+                </div>
+
+                <div style="margin-top: 1.5rem;" class="settings-card">
+                    <h2>Résumé</h2>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Élève</th>
+                                <th>Statut Journée</th>
+                                <th>Détails</th>
+                            </tr>
+                        </thead>
+                        <tbody id="presEleveSummaryBody">
+                            <!-- Tableau résumé journée -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Interface qui prend en charge les presences des enseignants -->
+            <div id="pres-sub-prof" class="hidden">
+                <div class="form-group" style="max-width: 300px; margin-bottom: 1rem;">
+                    <label>Date</label>
+                    <input type="date" id="presProfDate" class="form-control">
+                </div>
+
+                <div class="settings-card">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Enseignant</th>
+                                <th>Heure d'arrivée</th>
+                                <th>Heure de sortie</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="presProfTableBody">
+                            <!-- Présence enseignants -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- L'interface pour le mixage -->
+        <div id="tab-mixage" class="tools-tab-content">
+            <div class="settings-card">
+                <div class="form-group">
+                    <label>Nombre de Exemplaire</label>
+                    <input type="number" id="mixExemplaires" class="form-control" maxlength="1" value="1" min="1" max="5">
+                </div>
+
+                <div class="form-group">
+                    <label>Durée des examens</label>
+                    <input type="number" id="mixDureeSession" class="form-control" maxlength="2" value="120">
+                </div>
+
+                <div class="form-group">
+                    <label>Durée des examens hors-sessions</label>
+                    <input type="number" id="mixDureeHors" class="form-control" maxlength="2" value="90">
+                </div>
+
+                <div class="form-group">
+                    <label>Mode</label>
+                    <select id="mixModelSelector" class="form-control">
+                        <option value="deepseek-v3">Relfexion</option>
+                        <option value="gemini-1">Standard</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Instructions, préférences et règles à suivre</label>
+                    <textarea id="mixInstructions" class="form-control" placeholder="ex: les examens vont durer 14 jours"></textarea>
+                </div>
+
+                <button class="btn-primary" onclick="switchPresenceSubView('prof')">Surveillant</button>
+            </div>
+
+            <div class="settings-card">
+                <span><strong>SELECTIONNEZ TOUS LES ENSEIGNANTS SURVEILLANTS</strong></span>
+                <div style="margin-top: 0.5rem;">
+                    <select id="mixTeacherSelect" class="form-control">
+                        <!-- Noms des enseignants enregistrés -->
+                    </select>
+                </div>
+                <div class="action-toolbar" style="justify-content: flex-start; margin-top:0.8rem;">
+                    <button class="btn-primary" onclick="addSurveillantMixage()">+ Ajouter</button>
+                    <button class="btn-secondary" onclick="removeSurveillantMixage()">- Supprimer</button>
+                    <button class="btn-secondary" onclick="editSurveillantMixage()">| Editer</button>
+                </div>
+                <ul id="mixSurveillantsList" style="margin-top: 1rem; padding-left: 1.2rem; color: var(--text-primary);"></ul>
+            </div>
+
+            <!-- Ajouter des informations sur chaque salle -->
+            <div class="settings-card">
+                <span><strong>>>> Ajouter des informations sur chaque salle</strong></span>
+                <div id="sallesContainer" style="margin-top: 0.8rem;">
+                    <!-- Cartes des salles -->
+                </div>
+
+                <div class="action-toolbar" style="justify-content: flex-start;">
+                    <button class="btn-primary" onclick="addSalleCard()">+ Ajouter</button>
+                    <button class="btn-secondary" onclick="removeSalleCard()">- Supprimer</button>
+                </div>
+            </div>
+
+            <!-- Ajouter des informations sur chaque classe et ses cours -->
+            <div class="settings-card">
+                <span><strong>>>> Ajouter des informations sur chaque classe et ses cours</strong></span>
+                <div id="mixCoursContainer" style="margin-top: 0.8rem;">
+                    <!-- Cours mixage -->
+                </div>
+
+                <div class="action-toolbar" style="justify-content: flex-start;">
+                    <button class="btn-primary" onclick="addMixCourseRow()">+ Ajouter</button>
+                    <button class="btn-secondary" onclick="removeMixCourseRow()">- Supprimer</button>
+                </div>
+            </div>
+
+            <div class="action-toolbar" style="justify-content: flex-start; gap: 0.8rem;">
+                <button class="btn-primary" style="background:#16a34a;" onclick="requestServerMixageGeneration()">Génèrer l'horaire</button>
+                <button class="btn-secondary" onclick="showMixageResultsView()">Regarder l'horaire</button>
+                <button class="btn-secondary" onclick="showMixageEditView()">Ajouter/Editer une information</button>
+            </div>
+
+            <!-- Interface pour regarder l'horaire du Mixage -->
+            <div id="mixResultsArea" class="settings-card hidden">
+                <nav class="sub-navbar">
+                    <button class="sub-nav-btn active" id="btnMixResultClasses" onclick="switchMixResultSubView('classes')">Classes</button>
+                    <button class="sub-nav-btn" id="btnMixResultSalles" onclick="switchMixResultSubView('salles')">Salles</button>
+                    <div style="display:flex; align-items:center; gap:0.5rem; margin-left:auto;">
+                        <span>Exemplaire 1</span>
+                        <div id="mixExemplairesCheckboxes"></div>
+                    </div>
+                    <button class="btn-primary" onclick="window.print()" style="margin-left:0.5rem;">Exporter en PDF</button>
+                </nav>
+
+                <!-- Interface Classes Mixage -->
+                <div id="mix-view-classes" class="sub-view-content active" style="margin-top: 1rem;">
+                    <div class="retractable-sidebar" id="mixClassesListSidebar">
+                        <!-- Liste des classes -->
+                    </div>
+
+                    <div class="detail-display-area" id="mixClassesDetailArea">
+                        <h3>Professeur : <span id="mixSelectedTeacherName">-</span></h3>
+                        <table class="data-table" style="margin-top:1rem;">
+                            <thead>
+                                <tr>
+                                    <th>DATE | Cours</th>
+                                    <th>Date 1</th>
+                                    <th>Date 2</th>
+                                    <th>Date 3</th>
+                                </tr>
+                            </thead>
+                            <tbody id="mixClassTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Interface Salles Mixage -->
+                <div id="mix-view-salles" class="sub-view-content hidden" style="margin-top: 1rem;">
+                    <div class="retractable-sidebar" id="mixSallesListSidebar">
+                        <!-- Liste des salles -->
+                    </div>
+
+                    <div class="detail-display-area" id="mixSallesDetailArea">
+                        <h3>Surveillants & Disposition des Bancs</h3>
+                        <p style="margin-bottom:0.8rem; font-size:0.9rem; color:var(--text-secondary);" id="mixSalleSurveillantText">Surveillant : -</p>
+                        <table class="data-table">
+                            <tbody id="mixSallesBancsBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- L'interface pour l'horaire -->
+        <div id="tab-horaire" class="tools-tab-content active">
+            <div class="settings-card">
+                <div class="form-group">
+                    <label>Nombre de Exemplaire</label>
+                    <input type="number" id="horExemplaires" class="form-control" maxlength="1" value="1">
+                </div>
+
+                <div class="form-group">
+                    <label>Mode</label>
+                    <select id="horModelSelector" class="form-control">
+                        <option value="deepseek-v3">Relfexion</option>
+                        <option value="gemini-1">Standard</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Nombre de Jour de travaille par semaine</label>
+                    <input type="number" id="horJoursSemaine" class="form-control" maxlength="1" placeholder="ex: 6" value="6">
+                </div>
+
+                <div class="form-group">
+                    <label>Nombre d'heure par jour</label>
+                    <input type="number" id="horHeuresJour" class="form-control" maxlength="2" placeholder="ex: 6" value="6">
+                </div>
+            </div>
+
+            <!-- Informations sur chaque professeur -->
+            <div class="settings-card">
+                <span><strong>>>> Ajouter des informations sur chaque professeur</strong></span>
+                <div id="horTeachersContainer" style="margin-top: 0.8rem;">
+                    <!-- Cartes enseignants dynamiques -->
+                </div>
+
+                <div class="action-toolbar" style="justify-content: flex-start;">
+                    <button class="btn-primary" onclick="addTeacherHoraireConfig()">+ Ajouter</button>
+                    <button class="btn-secondary" onclick="removeTeacherHoraireConfig()">- Supprimer</button>
+                </div>
+            </div>
+
+            <div class="action-toolbar" style="justify-content: flex-start; gap: 0.8rem;">
+                <button class="btn-primary" style="background:#16a34a;" onclick="requestServerScheduleGeneration()">Génèrer l'horiaire</button>
+                <button class="btn-secondary" onclick="showScheduleResultsView()">Regarder l'horaire</button>
+                <button class="btn-secondary" onclick="showScheduleEditView()">Ajouter/Editer une information</button>
+            </div>
+
+            <!-- Interface pour regarder l'horaire -->
+            <div id="horResultsArea" class="settings-card hidden">
+                <nav class="sub-navbar">
+                    <button class="sub-nav-btn active" id="btnHorResultClasses" onclick="switchHoraireResultSubView('classes')">Classes</button>
+                    <button class="sub-nav-btn" id="btnHorResultEnseignants" onclick="switchHoraireResultSubView('enseignants')">Enseignants</button>
+                    <div style="display:flex; align-items:center; gap:0.5rem; margin-left:auto;">
+                        <span>Exemplaire 1</span>
+                        <div id="horExemplairesCheckboxes"></div>
+                    </div>
+                    <button class="btn-primary" onclick="window.print()" style="margin-left:0.5rem;">Exporter en PDF</button>
+                </nav>
+
+                <!-- Interface Enseignants Horaire -->
+                <div id="hor-view-enseignants" class="sub-view-content hidden" style="margin-top: 1rem;">
+                    <div class="retractable-sidebar" id="horTeachersListSidebar">
+                        <!-- Liste des professeurs -->
+                    </div>
+
+                    <div class="detail-display-area" id="horTeachersDetailArea">
+                        <h3>Professeur : <span id="horSelectedTeacherName">-</span></h3>
+                        <table class="data-table" style="margin-top:1rem;">
+                            <thead>
+                                <tr id="horTeacherTableHeader">
+                                    <th>Heure | Jour</th>
+                                    <th>1ère Heure</th>
+                                    <th>2ème Heure</th>
+                                    <th>3ème Heure</th>
+                                </tr>
+                            </thead>
+                            <tbody id="horTeacherTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Interface Classes Horaire -->
+                <div id="hor-view-classes" class="sub-view-content active" style="margin-top: 1rem;">
+                    <div class="retractable-sidebar" id="horClassesListSidebar">
+                        <!-- Liste des classes -->
+                    </div>
+
+                    <div class="detail-display-area" id="horClassesDetailArea">
+                        <h3>Classe : <span id="horSelectedClassName">-</span></h3>
+                        <table class="data-table" style="margin-top:1rem;">
+                            <thead>
+                                <tr id="horClassTableHeader">
+                                    <th>Heure | Jour</th>
+                                    <th>1ère Heure</th>
+                                    <th>2ème Heure</th>
+                                    <th>3ème Heure</th>
+                                </tr>
+                            </thead>
+                            <tbody id="horClassTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -1143,15 +1783,34 @@ body {
                 { uniqueId: 'prof_63011_alice', name: 'Prof. Alice', subject: 'Français', status: 'Actif' }
             ],
             grades: {
-                "s1_k1": { p1: 38, p2: 39, ex1: 75, p3: 37, p4: 40, ex2: 78 },
-                "s1_k2": { p1: 28, p2: 29, ex1: 54, p3: 27, p4: 28, ex2: 55 },
-                "s1_k3": { p1: 18, p2: 17, ex1: 35, p3: 16, p4: 18, ex2: 36 },
-                "s2_k1": { p1: 35, p2: 36, ex1: 70, p3: 38, p4: 39, ex2: 74 }
+                "s1_k1": { p1: 38, p2: 39, ex1: 75, p3: 37, p4: 40, ex2: 78 }
+            },
+            // --- NOUVELLES STRUCTURES DE DONNÉES TOOLS ---
+            tools: {
+                presences: {
+                    students: [], // Format: { date: '2026-09-12', classId: 'c1', studentId: 's1', courseId: 'k1', present: true }
+                    teachers: []  // Format: { date: '2026-09-12', teacherUniqueId: 'prof_63011_mwamba', checkIn: '07:30', checkOut: '12:30' }
+                },
+                mixage: {
+                    config: { exemplaires: 1, dureeExamen: 120, dureeHorsSession: 90, mode: 'deepseek-v3', instructions: '' },
+                    surveillants: [],
+                    salles: [{ id: 'sal_1', nom: 'Salle N°1', places: 28, rangees: 3, bancs: 14 }],
+                    coursProgrammes: [],
+                    generatedSchedules: [] // Reçoit les exemplaires générés par le serveur
+                },
+                horaire: {
+                    config: { exemplaires: 1, mode: 'deepseek-v3', joursTravail: 6, heuresParJour: 6 },
+                    profsDispo: [],
+                    generatedSchedules: [] // Reçoit la grille horaire générée par le serveur
+                }
             }
         };
 
         let appState = JSON.parse(localStorage.getItem('classnet_p_db')) || defaultState;
+
+        // Patch de sécurité pour les anciennes versions stockées en local
         if (!appState.teachers) appState.teachers = defaultState.teachers;
+        if (!appState.tools) appState.tools = defaultState.tools;
 
         let activeClassId = 'c1';
         let activeStudentId = 's1';
@@ -1170,113 +1829,306 @@ body {
         }
 
         window.renderinterface = function(interfaceName) {
-            if (interfaceName === "ajouter_eleve") {
-                document.querySelector('#interface-eleve').classList.toggle('hidden');
-            } else if (interfaceName === "ajouter_cours") {
-                populateCategoryDropdown();
-                document.querySelector('#interface-cours').classList.toggle('hidden');
-            } else if (interfaceName === "ajouter_classe") {
-                document.querySelector('#interface-classe').classList.toggle('hidden');
-            }
-        };
+                    if (interfaceName === "ajouter_eleve") {
+                        document.querySelector('#interface-eleve').classList.toggle('hidden');
+                    } else if (interfaceName === "ajouter_cours") {
+                        populateCategoryDropdown();
+                        document.querySelector('#interface-cours').classList.toggle('hidden');
+                    } else if (interfaceName === "ajouter_classe") {
+                        document.querySelector('#interface-classe').classList.toggle('hidden');
+                    }
+                };
 
-        function populateCategoryDropdown() {
-            const select = document.getElementById('choix-categorie');
-            select.innerHTML = '';
-            const cls = appState.classes.find(c => c.id === activeClassId);
-            const categories = cls && cls.categories ? cls.categories : ['Général'];
-            categories.forEach(cat => {
-                const opt = document.createElement('option');
-                opt.value = cat;
-                opt.textContent = cat;
-                select.appendChild(opt);
-            });
-        }
+                function populateCategoryDropdown() {
+                    const select = document.getElementById('choix-categorie');
+                    select.innerHTML = '';
+                    const cls = appState.classes.find(c => c.id === activeClassId);
+                    const categories = cls && cls.categories ? cls.categories : ['Général'];
+                    categories.forEach(cat => {
+                        const opt = document.createElement('option');
+                        opt.value = cat;
+                        opt.textContent = cat;
+                        select.appendChild(opt);
+                    });
+                }
 
-        window.openEditClassModal = function() {
-            const cls = appState.classes.find(c => c.id === activeClassId);
-            if (!cls) return alert("Veuillez d'abord sélectionner une classe.");
+                window.openEditClassModal = function() {
+                    const cls = appState.classes.find(c => c.id === activeClassId);
+                    if (!cls) return alert("Veuillez d'abord sélectionner une classe.");
 
-            editingClassId = cls.id;
-            document.getElementById('name-added-class').value = cls.name;
-            document.getElementById('name-titulaire-added-class').value = cls.titulaire;
+                    editingClassId = cls.id;
+                    document.getElementById('name-added-class').value = cls.name;
+                    document.getElementById('name-titulaire-added-class').value = cls.titulaire;
 
-            const container = document.getElementById('categoriesContainer');
-            container.innerHTML = '';
-            (cls.categories || ['Général']).forEach(cat => {
-                const input = document.createElement('input');
-                input.type = 'text';
-                input.className = 'form-control category-input';
-                input.value = cat;
-                input.style.marginBottom = '0.4rem';
-                container.appendChild(input);
-            });
+                    const container = document.getElementById('categoriesContainer');
+                    container.innerHTML = '';
+                    (cls.categories || ['Général']).forEach(cat => {
+                        const input = document.createElement('input');
+                        input.type = 'text';
+                        input.className = 'form-control category-input';
+                        input.value = cat;
+                        input.style.marginBottom = '0.4rem';
+                        container.appendChild(input);
+                    });
 
-            document.querySelector('#interface-classe h3').textContent = "Éditer la Classe";
-            renderinterface('ajouter_classe');
-        };
+                    document.querySelector('#interface-classe h3').textContent = "Éditer la Classe";
+                    renderinterface('ajouter_classe');
+                };
 
-        window.renderOfficialBulletin = function(studentId) {
+                window.renderOfficialBulletin = function(studentId) {
             const student = appState.students.find(s => s.id === studentId);
             if (!student) return;
 
             const currentClass = appState.classes.find(c => c.id === student.classId);
+            const classStudents = appState.students.filter(s => s.classId === student.classId);
+            const classCourses = appState.courses.filter(c => c.classId === student.classId);
+            const totalStudentsCount = classStudents.length;
 
+            // 1. En-tête administratif
             document.getElementById('digitIdBox').innerHTML = renderDigitBoxes(appState.school.id);
             document.getElementById('digitCodeBox').innerHTML = renderDigitBoxes(appState.school.code);
             document.getElementById('digitPermiBox').innerHTML = renderDigitBoxes(student.permi || "000000000000");
 
+            document.getElementById('bProv').textContent = appState.school.province || 'SUD-KIVU';
             document.getElementById('bStudentFullName').textContent = `${student.name} ${student.postname} ${student.prename}`.toUpperCase();
             document.getElementById('bStudentSexe').textContent = student.sexe;
-            document.getElementById('bStudentBornWhere').textContent = student.bornWhere.toUpperCase();
-            document.getElementById('bStudentBornDate').textContent = student.bornDate;
+            document.getElementById('bStudentBornWhere').textContent = (student.bornWhere || 'BUKAVU').toUpperCase();
+            document.getElementById('bStudentBornDate').textContent = student.bornDate || '-';
             document.getElementById('bStudentClass').textContent = currentClass ? currentClass.name : '';
+            document.getElementById('bTitleClass').textContent = currentClass ? currentClass.name.toUpperCase() : '';
 
+            // 2. Calcul automatique du Rang (Places)
+            function calculateClassRanks() {
+                const studentTotals = classStudents.map(st => {
+                    let p1 = 0, p2 = 0, ex1 = 0, totS1 = 0, p3 = 0, p4 = 0, ex2 = 0, totS2 = 0, tg = 0;
+                    classCourses.forEach(crs => {
+                        const g = appState.grades[`${st.id}_${crs.id}`] || { p1: 0, p2: 0, ex1: 0, p3: 0, p4: 0, ex2: 0 };
+                        const vP1 = parseFloat(g.p1) || 0, vP2 = parseFloat(g.p2) || 0, vEx1 = parseFloat(g.ex1) || 0;
+                        const vP3 = parseFloat(g.p3) || 0, vP4 = parseFloat(g.p4) || 0, vEx2 = parseFloat(g.ex2) || 0;
+                        const s1 = vP1 + vP2 + vEx1;
+                        const s2 = vP3 + vP4 + vEx2;
+                        
+                        p1 += vP1; p2 += vP2; ex1 += vEx1; totS1 += s1;
+                        p3 += vP3; p4 += vP4; ex2 += vEx2; totS2 += s2;
+                        tg += (s1 + s2);
+                    });
+                    return { id: st.id, sexe: st.sexe, p1, p2, ex1, totS1, p3, p4, ex2, totS2, tg };
+                });
+
+                const getRank = (key, sexe) => {
+                    const sorted = [...studentTotals].sort((a, b) => b[key] - a[key]);
+                    const rank = sorted.findIndex(s => s.id === studentId) + 1;
+                    const suffix = (rank === 1) ? (sexe === 'F' ? 'ère' : 'er') : 'ème';
+                    return `${rank}<sup>${suffix}</sup> / ${totalStudentsCount}`;
+                };
+
+                return {
+                    p1: getRank('p1', student.sexe),
+                    p2: getRank('p2', student.sexe),
+                    ex1: getRank('ex1', student.sexe),
+                    totS1: getRank('totS1', student.sexe),
+                    p3: getRank('p3', student.sexe),
+                    p4: getRank('p4', student.sexe),
+                    ex2: getRank('ex2', student.sexe),
+                    totS2: getRank('totS2', student.sexe),
+                    tg: getRank('tg', student.sexe)
+                };
+            }
+
+            const ranks = calculateClassRanks();
+
+            // 3. Comportements (Application / Conduite)
+            if (!appState.behaviour) appState.behaviour = {};
+            if (!appState.behaviour[studentId]) {
+                appState.behaviour[studentId] = {
+                    app: { p1: 'TB', p2: 'TB', ex1: 'TB', totS1: 'TB', p3: 'TB', p4: 'TB', ex2: 'TB', totS2: 'TB', tg: 'TB' },
+                    cond: { p1: 'B', p2: 'B', ex1: 'B', totS1: 'B', p3: 'B', p4: 'B', ex2: 'B', totS2: 'B', tg: 'B' }
+                };
+            }
+            const beh = appState.behaviour[studentId];
+
+            // 4. Traitement des Domaines & Sous-totaux
             const tbody = document.getElementById('bulletinTableBody');
             tbody.innerHTML = '';
 
-            const classCourses = appState.courses.filter(c => c.classId === student.classId);
             const categories = currentClass && currentClass.categories ? currentClass.categories : ['Général'];
+            
+            let grandMaxP1 = 0, grandMaxP2 = 0, grandMaxEx1 = 0, grandMaxS1 = 0;
+            let grandMaxP3 = 0, grandMaxP4 = 0, grandMaxEx2 = 0, grandMaxS2 = 0, grandMaxTG = 0;
+
+            let grandTotP1 = 0, grandTotP2 = 0, grandTotEx1 = 0, grandTotS1 = 0;
+            let grandTotP3 = 0, grandTotP4 = 0, grandTotEx2 = 0, grandTotS2 = 0, grandTotTG = 0;
 
             categories.forEach(cat => {
                 const catCourses = classCourses.filter(c => c.category === cat);
                 if (catCourses.length > 0) {
                     const trCat = document.createElement('tr');
-                    trCat.innerHTML = `<td colspan="15" class="cat-header">${cat}</td>`;
+                    trCat.innerHTML = `<td colspan="15" class="cat-header">${cat.toUpperCase()}</td>`;
                     tbody.appendChild(trCat);
+
+                    let subMaxP1 = 0, subMaxP2 = 0, subMaxEx1 = 0, subMaxS1 = 0;
+                    let subMaxP3 = 0, subMaxP4 = 0, subMaxEx2 = 0, subMaxS2 = 0, subMaxTG = 0;
+
+                    let subTotP1 = 0, subTotP2 = 0, subTotEx1 = 0, subTotS1 = 0;
+                    let subTotP3 = 0, subTotP4 = 0, subTotEx2 = 0, subTotS2 = 0, subTotTG = 0;
 
                     catCourses.forEach(crs => {
                         const gradeKey = `${student.id}_${crs.id}`;
                         const g = appState.grades[gradeKey] || { p1: 0, p2: 0, ex1: 0, p3: 0, p4: 0, ex2: 0 };
                         
-                        const maxEx = crs.maxPer * 2;
-                        const totS1 = (parseFloat(g.p1)||0) + (parseFloat(g.p2)||0) + (parseFloat(g.ex1)||0);
-                        const totS2 = (parseFloat(g.p3)||0) + (parseFloat(g.p4)||0) + (parseFloat(g.ex2)||0);
-                        const maxTG = (crs.maxPer * 4) + (maxEx * 2);
-                        const tg = totS1 + totS2;
+                        const mPer = parseFloat(crs.maxPer) || 0;
+                        const mEx = mPer * 2;
+                        const mS1 = (mPer * 2) + mEx;
+                        const mS2 = mS1;
+                        const mTG = mS1 + mS2;
+
+                        const vP1 = parseFloat(g.p1) || 0, vP2 = parseFloat(g.p2) || 0, vEx1 = parseFloat(g.ex1) || 0;
+                        const vP3 = parseFloat(g.p3) || 0, vP4 = parseFloat(g.p4) || 0, vEx2 = parseFloat(g.ex2) || 0;
+
+                        const tS1 = vP1 + vP2 + vEx1;
+                        const tS2 = vP3 + vP4 + vEx2;
+                        const tg = tS1 + tS2;
+
+                        subMaxP1 += mPer; subMaxP2 += mPer; subMaxEx1 += mEx; subMaxS1 += mS1;
+                        subMaxP3 += mPer; subMaxP4 += mPer; subMaxEx2 += mEx; subMaxS2 += mS2; subMaxTG += mTG;
+
+                        subTotP1 += vP1; subTotP2 += vP2; subTotEx1 += vEx1; subTotS1 += tS1;
+                        subTotP3 += vP3; subTotP4 += vP4; subTotEx2 += vEx2; subTotS2 += tS2; subTotTG += tg;
 
                         const tr = document.createElement('tr');
                         tr.innerHTML = `
-                            <td class="course-name">${crs.name}</td>
-                            <td>${crs.maxPer}</td>
+                            <td class="course-name" style="text-align:left;">${crs.name}</td>
+                            <td>${mPer}</td>
                             <td contenteditable="true" class="edit-grade" data-key="${gradeKey}" data-field="p1">${g.p1}</td>
                             <td contenteditable="true" class="edit-grade" data-key="${gradeKey}" data-field="p2">${g.p2}</td>
-                            <td>${maxEx}</td>
+                            <td>${mEx}</td>
                             <td contenteditable="true" class="edit-grade" data-key="${gradeKey}" data-field="ex1">${g.ex1}</td>
-                            <td class="calc-cell">${totS1}</td>
+                            <td class="calc-cell">${tS1}</td>
+                            <td>${mPer}</td>
                             <td contenteditable="true" class="edit-grade" data-key="${gradeKey}" data-field="p3">${g.p3}</td>
                             <td contenteditable="true" class="edit-grade" data-key="${gradeKey}" data-field="p4">${g.p4}</td>
-                            <td>${maxEx}</td>
+                            <td>${mEx}</td>
                             <td contenteditable="true" class="edit-grade" data-key="${gradeKey}" data-field="ex2">${g.ex2}</td>
-                            <td class="calc-cell">${totS2}</td>
-                            <td>${maxTG}</td>
-                            <td class="calc-cell">${tg}</td>
+                            <td class="calc-cell">${tS2}</td>
+                            <td class="calc-cell">${mTG}</td>
+                            <td class="calc-cell" style="font-weight:bold;">${tg}</td>
                         `;
                         tbody.appendChild(tr);
                     });
+
+                    // Ligne de Sous-Total du Domaine
+                    const trSub = document.createElement('tr');
+                    trSub.className = "subtotal-row";
+                    trSub.innerHTML = `
+                        <td class="course-name" style="text-align:left;"><strong>Sous-Total</strong></td>
+                        <td><strong>${subMaxP1}</strong></td>
+                        <td><strong>${subTotP1}</strong></td>
+                        <td><strong>${subTotP2}</strong></td>
+                        <td><strong>${subMaxEx1}</strong></td>
+                        <td><strong>${subTotEx1}</strong></td>
+                        <td class="calc-cell"><strong>${subTotS1} / ${subMaxS1}</strong></td>
+                        <td><strong>${subMaxP3}</strong></td>
+                        <td><strong>${subTotP3}</strong></td>
+                        <td><strong>${subTotP4}</strong></td>
+                        <td><strong>${subMaxEx2}</strong></td>
+                        <td><strong>${subTotEx2}</strong></td>
+                        <td class="calc-cell"><strong>${subTotS2} / ${subMaxS2}</strong></td>
+                        <td class="calc-cell"><strong>${subMaxTG}</strong></td>
+                        <td class="calc-cell"><strong>${subTotTG}</strong></td>
+                    `;
+                    tbody.appendChild(trSub);
+
+                    grandMaxP1 += subMaxP1; grandMaxP2 += subMaxP2; grandMaxEx1 += subMaxEx1; grandMaxS1 += subMaxS1;
+                    grandMaxP3 += subMaxP3; grandMaxP4 += subMaxP4; grandMaxEx2 += subMaxEx2; grandMaxS2 += subMaxS2; grandMaxTG += subMaxTG;
+
+                    grandTotP1 += subTotP1; grandTotP2 += subTotP2; grandTotEx1 += subTotEx1; grandTotS1 += subTotS1;
+                    grandTotP3 += subTotP3; grandTotP4 += subTotP4; grandTotEx2 += subTotEx2; grandTotS2 += subTotS2; grandTotTG += subTotTG;
                 }
             });
 
+            // 5. Synthèses et Pourcentages
+            const pctP1 = grandMaxP1 > 0 ? ((grandTotP1 / grandMaxP1) * 100).toFixed(1) : "0.0";
+            const pctP2 = grandMaxP2 > 0 ? ((grandTotP2 / grandMaxP2) * 100).toFixed(1) : "0.0";
+            const pctEx1 = grandMaxEx1 > 0 ? ((grandTotEx1 / grandMaxEx1) * 100).toFixed(1) : "0.0";
+            const pctS1 = grandMaxS1 > 0 ? ((grandTotS1 / grandMaxS1) * 100).toFixed(1) : "0.0";
+
+            const pctP3 = grandMaxP3 > 0 ? ((grandTotP3 / grandMaxP3) * 100).toFixed(1) : "0.0";
+            const pctP4 = grandMaxP4 > 0 ? ((grandTotP4 / grandMaxP4) * 100).toFixed(1) : "0.0";
+            const pctEx2 = grandMaxEx2 > 0 ? ((grandTotEx2 / grandMaxEx2) * 100).toFixed(1) : "0.0";
+            const pctS2 = grandMaxS2 > 0 ? ((grandTotS2 / grandMaxS2) * 100).toFixed(1) : "0.0";
+            const pctTG = grandMaxTG > 0 ? ((grandTotTG / grandMaxTG) * 100).toFixed(1) : "0.0";
+
+            // Mise à jour du panneau latéral droit
+            document.getElementById('sideFinalPct').textContent = `${pctTG} %`;
+
+            const summaryHTML = `
+                <tr class="summary-row main-max-row">
+                    <td class="course-name" style="text-align:left;">MAXIMA GÉNÉRAUX</td>
+                    <td>${grandMaxP1}</td><td>-</td><td>-</td><td>${grandMaxEx1}</td><td>-</td><td class="calc-cell">${grandMaxS1}</td>
+                    <td>${grandMaxP3}</td><td>-</td><td>-</td><td>${grandMaxEx2}</td><td>-</td><td class="calc-cell">${grandMaxS2}</td>
+                    <td class="calc-cell">${grandMaxTG}</td><td>-</td>
+                </tr>
+                <tr class="summary-row">
+                    <td class="course-name" style="text-align:left;">TOTAUX OBTENUS</td>
+                    <td class="black-cell"></td><td>${grandTotP1}</td><td>${grandTotP2}</td><td class="black-cell"></td><td>${grandTotEx1}</td><td class="calc-cell">${grandTotS1}</td>
+                    <td class="black-cell"></td><td>${grandTotP3}</td><td>${grandTotP4}</td><td class="black-cell"></td><td>${grandTotEx2}</td><td class="calc-cell">${grandTotS2}</td>
+                    <td class="black-cell"></td><td class="calc-cell" style="font-weight:800;">${grandTotTG}</td>
+                </tr>
+                <tr class="summary-row">
+                    <td class="course-name" style="text-align:left;">POURCENTAGE</td>
+                    <td class="black-cell"></td><td>${pctP1}%</td><td>${pctP2}%</td><td class="black-cell"></td><td>${pctEx1}%</td><td class="calc-cell">${pctS1}%</td>
+                    <td class="black-cell"></td><td>${pctP3}%</td><td>${pctP4}%</td><td class="black-cell"></td><td>${pctEx2}%</td><td class="calc-cell">${pctS2}%</td>
+                    <td class="black-cell"></td><td class="calc-cell" style="font-weight:800; color:var(--primary-color);">${pctTG}%</td>
+                </tr>
+                <tr class="summary-row">
+                    <td class="course-name" style="text-align:left;">PLACE / NBRE ÉLÈVES</td>
+                    <td class="black-cell"></td><td>${ranks.p1}</td><td>${ranks.p2}</td><td class="black-cell"></td><td>${ranks.ex1}</td><td class="calc-cell">${ranks.totS1}</td>
+                    <td class="black-cell"></td><td>${ranks.p3}</td><td>${ranks.p4}</td><td class="black-cell"></td><td>${ranks.ex2}</td><td class="calc-cell">${ranks.totS2}</td>
+                    <td class="black-cell"></td><td class="calc-cell" style="font-weight:800;">${ranks.tg}</td>
+                </tr>
+                <tr class="summary-row">
+                    <td class="course-name" style="text-align:left;">APPLICATION</td>
+                    <td class="black-cell"></td>
+                    <td contenteditable="true" class="edit-beh" data-type="app" data-field="p1">${beh.app.p1}</td>
+                    <td contenteditable="true" class="edit-beh" data-type="app" data-field="p2">${beh.app.p2}</td>
+                    <td class="black-cell"></td>
+                    <td contenteditable="true" class="edit-beh" data-type="app" data-field="ex1">${beh.app.ex1}</td>
+                    <td class="calc-cell">${beh.app.totS1}</td>
+                    <td class="black-cell"></td>
+                    <td contenteditable="true" class="edit-beh" data-type="app" data-field="p3">${beh.app.p3}</td>
+                    <td contenteditable="true" class="edit-beh" data-type="app" data-field="p4">${beh.app.p4}</td>
+                    <td class="black-cell"></td>
+                    <td contenteditable="true" class="edit-beh" data-type="app" data-field="ex2">${beh.app.ex2}</td>
+                    <td class="calc-cell">${beh.app.totS2}</td>
+                    <td class="black-cell"></td><td class="calc-cell">${beh.app.tg}</td>
+                </tr>
+                <tr class="summary-row">
+                    <td class="course-name" style="text-align:left;">CONDUITE</td>
+                    <td class="black-cell"></td>
+                    <td contenteditable="true" class="edit-beh" data-type="cond" data-field="p1">${beh.cond.p1}</td>
+                    <td contenteditable="true" class="edit-beh" data-type="cond" data-field="p2">${beh.cond.p2}</td>
+                    <td class="black-cell"></td>
+                    <td contenteditable="true" class="edit-beh" data-type="cond" data-field="ex1">${beh.cond.ex1}</td>
+                    <td class="calc-cell">${beh.cond.totS1}</td>
+                    <td class="black-cell"></td>
+                    <td contenteditable="true" class="edit-beh" data-type="cond" data-field="p3">${beh.cond.p3}</td>
+                    <td contenteditable="true" class="edit-beh" data-type="cond" data-field="p4">${beh.cond.p4}</td>
+                    <td class="black-cell"></td>
+                    <td contenteditable="true" class="edit-beh" data-type="cond" data-field="ex2">${beh.cond.ex2}</td>
+                    <td class="calc-cell">${beh.cond.totS2}</td>
+                    <td class="black-cell"></td><td class="calc-cell">${beh.cond.tg}</td>
+                </tr>
+                <tr class="summary-row">
+                    <td class="course-name" style="text-align:left;">SIGNATURES TITULAIRE</td>
+                    <td class="black-cell"></td><td></td><td></td><td class="black-cell"></td><td></td><td class="calc-cell"></td>
+                    <td class="black-cell"></td><td></td><td></td><td class="black-cell"></td><td></td><td class="calc-cell"></td>
+                    <td class="black-cell"></td><td class="calc-cell"></td>
+                </tr>
+            `;
+
+            tbody.insertAdjacentHTML('beforeend', summaryHTML);
+
+            // Écouteurs pour l'édition dynamique
             tbody.querySelectorAll('.edit-grade').forEach(cell => {
                 cell.addEventListener('input', () => {
                     const key = cell.getAttribute('data-key');
@@ -1287,6 +2139,17 @@ body {
                     appState.grades[key][field] = val;
                     saveState();
                     renderOfficialBulletin(studentId);
+                });
+            });
+
+            tbody.querySelectorAll('.edit-beh').forEach(cell => {
+                cell.addEventListener('input', () => {
+                    const type = cell.getAttribute('data-type');
+                    const field = cell.getAttribute('data-field');
+                    const val = cell.textContent.trim().toUpperCase();
+
+                    appState.behaviour[studentId][type][field] = val;
+                    saveState();
                 });
             });
         };
@@ -1420,7 +2283,8 @@ body {
                     `;
                     tr.addEventListener('click', () => {
                         activeClassId = cls.id;
-                        document.getElementById('bulletinSidebarTitle').textContent = `BULLETIN ${cls.name}`;
+                        const titleElem = document.getElementById('bulletinSidebarTitle');
+                        if (titleElem) titleElem.textContent = `BULLETIN ${cls.name}`;
                         loadClassData(cls.id);
                         switchMainSection('section-class-detail');
                     });
@@ -1428,10 +2292,13 @@ body {
                 });
             }
 
+                    // Et sécurise le début de loadClassData() :
             function loadClassData(classId) {
                 const studentList = document.getElementById('studentListSidebar');
-                studentList.innerHTML = '';
-                const students = appState.students.filter(s => s.classId === classId);
+                if (!studentList) return; // Bloque la tentative d'écriture si l'élément n'existe pas
+                        studentList.innerHTML = '';
+                        
+                        const students = appState.students.filter(s => s.classId === classId);
                 
                 students.forEach((st, idx) => {
                     const btn = document.createElement('button');
@@ -1873,6 +2740,375 @@ body {
 
         // Vérifier le statut Cloud toutes les 30 secondes
         setInterval(() => checkCryptLockdown("NomDeL_Ecole_Actuelle"), 30000);
+
+        // Navigation spécifique pour l'interface Tools
+        const toolNavBtns = document.querySelectorAll('.main-navbar .nav-btn[data-target="section-about"]');
+        const subToolBtns = document.querySelectorAll('#section-about .sub-nav-btn');
+        const subToolViews = document.querySelectorAll('#section-about .sub-view-content');
+
+        // Correction de la navigation secondaire Tools et fermeture propre du script
+        subToolBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                subToolBtns.forEach(b => b.classList.remove('active'));
+                subToolViews.forEach(v => v.classList.remove('active'));
+                
+                btn.classList.add('active');
+                const targetId = btn.getAttribute('data-tool');
+                const targetView = document.getElementById(targetId);
+                if (targetView) targetView.classList.add('active');
+            });
+        });
+
+        /* ==========================================================================
+           LOGIQUE NATIVE DE L'INTERFACE TOOLS (STRUCTURE PRIME_NET.HTML)
+           ========================================================================== */
+
+        // 1. NAVIGATION DES ONGLETS DE L'INTERFACE TOOLS
+        window.switchToolsTab = function(tabId) {
+            document.querySelectorAll('.tools-nav-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tools-tab-content').forEach(c => c.classList.remove('active'));
+
+            const activeBtn = document.getElementById('btn-' + tabId);
+            if (activeBtn) activeBtn.classList.add('active');
+
+            const targetContent = document.getElementById(tabId);
+            if (targetContent) targetContent.classList.add('active');
+        };
+
+        // 2. PRÉSENCES : BASCULE ÉLÈVES / PROFESSEURS
+        window.switchPresenceSubView = function(type) {
+            const btnEleve = document.getElementById('btnPresEleve');
+            const btnProf = document.getElementById('btnPresProf');
+            const subEleve = document.getElementById('pres-sub-eleve');
+            const subProf = document.getElementById('pres-sub-prof');
+
+            if (type === 'eleve') {
+                if(btnEleve) btnEleve.classList.add('active');
+                if(btnProf) btnProf.classList.remove('active');
+                if(subEleve) subEleve.classList.remove('hidden');
+                if(subProf) subProf.classList.add('hidden');
+            } else {
+                if(btnProf) btnProf.classList.add('active');
+                if(btnEleve) btnEleve.classList.remove('active');
+                if(subProf) subProf.classList.remove('hidden');
+                if(subEleve) subEleve.classList.add('hidden');
+                renderPresencesProfTable();
+            }
+        };
+
+        function initPresenceModule() {
+            const select = document.getElementById('presEleveClassSelect');
+            if(!select) return;
+            select.innerHTML = '';
+            appState.classes.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c.id;
+                opt.textContent = c.name;
+                select.appendChild(opt);
+            });
+
+            const today = new Date().toISOString().split('T')[0];
+            if(document.getElementById('presEleveDate')) document.getElementById('presEleveDate').value = today;
+            if(document.getElementById('presProfDate')) document.getElementById('presProfDate').value = today;
+
+            renderPresencesEleveTable();
+        }
+
+        window.renderPresencesEleveTable = function() {
+            const select = document.getElementById('presEleveClassSelect');
+            if(!select || !select.value) return;
+            const classId = select.value;
+
+            const students = appState.students.filter(s => s.classId === classId);
+            const courses = appState.courses.filter(c => c.classId === classId);
+
+            const container = document.getElementById('presEleveCoursesContainer');
+            if(!container) return;
+            container.innerHTML = '';
+
+            courses.forEach((crs, idx) => {
+                const card = document.createElement('div');
+                card.className = 'settings-card';
+                card.innerHTML = `
+                    <h2>Cours ${idx + 1} : ${crs.name} | Prof. ${crs.titulaire}</h2>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Élève</th>
+                                <th>Présence</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${students.map(s => `
+                                <tr>
+                                    <td><strong>${s.name} ${s.postname}</strong></td>
+                                    <td>
+                                        <input type="checkbox" checked style="width: 18px; height: 18px;"> Présent(e)
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+                container.appendChild(card);
+            });
+
+            const summaryBody = document.getElementById('presEleveSummaryBody');
+            if(summaryBody) {
+                summaryBody.innerHTML = students.map(s => `
+                    <tr>
+                        <td><strong>${s.name} ${s.postname} ${s.prename}</strong></td>
+                        <td><span class="badge-success">Présent</span></td>
+                        <td>Participation à tous les cours de la journée</td>
+                    </tr>
+                `).join('');
+            }
+        };
+
+        function renderPresencesProfTable() {
+            const tbody = document.getElementById('presProfTableBody');
+            if(!tbody) return;
+            tbody.innerHTML = '';
+
+            appState.teachers.forEach(t => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><strong>${t.name}</strong></td>
+                    <td><input type="time" class="form-control" value="07:30" style="width: 120px;"></td>
+                    <td><input type="time" class="form-control" value="12:30" style="width: 120px;"></td>
+                    <td><button class="btn-primary" style="padding:0.3rem 0.6rem; font-size:0.8rem;" onclick="alert('Présence enregistrée !')">Sauvegarder</button></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // 3. GESTION DYNAMIQUE MIXAGE & SALLES
+        function populateMixageTeacherSelect() {
+            const select = document.getElementById('mixTeacherSelect');
+            if(!select) return;
+            select.innerHTML = '';
+            appState.teachers.forEach(t => {
+                const opt = document.createElement('option');
+                opt.value = t.uniqueId;
+                opt.textContent = `${t.name} (${t.subject})`;
+                select.appendChild(opt);
+            });
+        }
+
+        window.addSurveillantMixage = function() {
+            const select = document.getElementById('mixTeacherSelect');
+            if(!select || !select.value) return;
+            const ul = document.getElementById('mixSurveillantsList');
+            const selectedText = select.options[select.selectedIndex].text;
+
+            const li = document.createElement('li');
+            li.textContent = selectedText;
+            ul.appendChild(li);
+        };
+
+        window.removeSurveillantMixage = function() {
+            const ul = document.getElementById('mixSurveillantsList');
+            if(ul && ul.lastElementChild) ul.removeChild(ul.lastElementChild);
+        };
+
+        window.editSurveillantMixage = function() {
+            alert("Sélectionnez à nouveau l'enseignant dans le menu pour ajuster son affectation.");
+        };
+
+        window.addSalleCard = function() {
+            const container = document.getElementById('sallesContainer');
+            if(!container) return;
+            const count = container.children.length + 1;
+            const card = document.createElement('div');
+            card.className = 'salle-card';
+            card.style.marginBottom = '0.8rem';
+            card.innerHTML = `
+                <label><strong>Salle N°${count}</strong></label>
+                <div class="grid-2col" style="margin-top:0.5rem;">
+                    <input type="number" class="form-control" placeholder="Nombre de Place dans la classe (ex: 28)">
+                    <input type="number" class="form-control" placeholder="Nombre de Rangée (ex: 3)">
+                    <input type="number" class="form-control" placeholder="Nombre de Banc (ex: 14)">
+                </div>
+            `;
+            container.appendChild(card);
+        };
+
+        window.removeSalleCard = function() {
+            const container = document.getElementById('sallesContainer');
+            if(container && container.lastElementChild) container.removeChild(container.lastElementChild);
+        };
+
+        window.addMixCourseRow = function() {
+            const container = document.getElementById('mixCoursContainer');
+            if(!container) return;
+            const div = document.createElement('div');
+            div.className = 'grid-2col';
+            div.style.marginBottom = '0.8rem';
+            div.innerHTML = `
+                <select class="form-control">
+                    ${appState.classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
+                </select>
+                <select class="form-control">
+                    ${appState.courses.map(k => `<option value="${k.id}">${k.name}</option>`).join('')}
+                </select>
+                <select class="form-control" style="grid-column: 1 / -1;">
+                    <option>Examen session</option>
+                    <option>Examen hors-sessions</option>
+                </select>
+            `;
+            container.appendChild(div);
+        };
+
+        window.removeMixCourseRow = function() {
+            const container = document.getElementById('mixCoursContainer');
+            if(container && container.lastElementChild) container.removeChild(container.lastElementChild);
+        };
+
+        window.requestServerMixageGeneration = function() {
+            const area = document.getElementById('mixResultsArea');
+            if(area) area.classList.remove('hidden');
+            showMixageResultsView();
+            alert("⚡ Génération du Mixage effectuée par l'IA CRYPT Engine !");
+        };
+
+        window.showMixageResultsView = function() {
+            const area = document.getElementById('mixResultsArea');
+            if(area) area.classList.remove('hidden');
+        };
+
+        window.showMixageEditView = function() {
+            const area = document.getElementById('mixResultsArea');
+            if(area) area.classList.add('hidden');
+        };
+
+        window.switchMixResultSubView = function(view) {
+            const btnClasses = document.getElementById('btnMixResultClasses');
+            const btnSalles = document.getElementById('btnMixResultSalles');
+            const viewClasses = document.getElementById('mix-view-classes');
+            const viewSalles = document.getElementById('mix-view-salles');
+
+            if(view === 'classes') {
+                if(btnClasses) btnClasses.classList.add('active');
+                if(btnSalles) btnSalles.classList.remove('active');
+                if(viewClasses) viewClasses.classList.add('active');
+                if(viewSalles) viewSalles.classList.add('hidden');
+            } else {
+                if(btnSalles) btnSalles.classList.add('active');
+                if(btnClasses) btnClasses.classList.remove('active');
+                if(viewSalles) viewSalles.classList.remove('hidden');
+                if(viewClasses) viewClasses.classList.remove('active');
+            }
+        };
+
+        window.addTeacherHoraireConfig = function() {
+            const container = document.getElementById('horTeachersContainer');
+            if(!container) return;
+            const count = container.children.length + 1;
+            const uniqueContainerId = 'courses_container_' + Date.now();
+
+            const card = document.createElement('div');
+            card.className = 'prof-config-card';
+            card.style.marginBottom = '1rem';
+            card.innerHTML = `
+                <div class="form-group">
+                    <label>Enseignant N°${count}</label>
+                    <select class="form-control">
+                        ${appState.teachers.map(t => `<option value="${t.uniqueId}">${t.name}</option>`).join('')}
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Jours de Travail de l'enseignant</label>
+                    <div style="display:flex; gap:0.8rem; flex-wrap:wrap; margin-top:0.4rem;">
+                        <label><input type="checkbox" checked> Lundi</label>
+                        <label><input type="checkbox" checked> Mardi</label>
+                        <label><input type="checkbox" checked> Mercredi</label>
+                        <label><input type="checkbox" checked> Jeudi</label>
+                        <label><input type="checkbox" checked> Vendredi</label>
+                        <label><input type="checkbox" checked> Samedi</label>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Cours attribué(s)</label>
+                    <div id="${uniqueContainerId}" style="display:flex; flex-direction:column; gap:0.5rem;">
+                        <div class="grid-2col">
+                            <input type="text" class="form-control" placeholder="Nom du cours (ex: Mathématiques)">
+                            <input type="text" class="form-control" placeholder="Classe (ex: 3ème SCIENTIFIQUE)">
+                            <input type="number" class="form-control" placeholder="Heures / semaine">
+                            <input type="text" class="form-control" placeholder="TC (Tronc Commun ex: 3SCI/2SCI)">
+                        </div>
+                    </div>
+                    <button type="button" class="btn-secondary" style="margin-top:0.6rem; font-size:0.8rem;" onclick="addCourseRowToTeacher('${uniqueContainerId}')">+ Ajouter un cours</button>
+                </div>
+            `;
+            container.appendChild(card);
+        };
+
+        window.removeTeacherHoraireConfig = function() {
+            const container = document.getElementById('horTeachersContainer');
+            if(container && container.lastElementChild) container.removeChild(container.lastElementChild);
+        };
+
+        window.requestServerScheduleGeneration = function() {
+            const area = document.getElementById('horResultsArea');
+            if(area) area.classList.remove('hidden');
+            showScheduleResultsView();
+            alert("⚡ Génération de l'Horaire Scolaire réussie !");
+        };
+
+        window.showScheduleResultsView = function() {
+            const area = document.getElementById('horResultsArea');
+            if(area) area.classList.remove('hidden');
+        };
+
+        window.showScheduleEditView = function() {
+            const area = document.getElementById('horResultsArea');
+            if(area) area.classList.add('hidden');
+        };
+
+        window.switchHoraireResultSubView = function(view) {
+            const btnClasses = document.getElementById('btnHorResultClasses');
+            const btnEnseignants = document.getElementById('btnHorResultEnseignants');
+            const viewClasses = document.getElementById('hor-view-classes');
+            const viewEnseignants = document.getElementById('hor-view-enseignants');
+
+            if(view === 'classes') {
+                if(btnClasses) btnClasses.classList.add('active');
+                if(btnEnseignants) btnEnseignants.classList.remove('active');
+                if(viewClasses) viewClasses.classList.add('active');
+                if(viewEnseignants) viewEnseignants.classList.add('hidden');
+            } else {
+                if(btnEnseignants) btnEnseignants.classList.add('active');
+                if(btnClasses) btnClasses.classList.remove('active');
+                if(viewEnseignants) viewEnseignants.classList.remove('hidden');
+                if(viewClasses) viewClasses.classList.remove('active');
+            }
+        };
+
+        // INITIALISATION DES MODULES
+        document.addEventListener('DOMContentLoaded', () => {
+            initPresenceModule();
+            populateMixageTeacherSelect();
+            addSalleCard();
+            addTeacherHoraireConfig();
+        }); 
+
+        // Fonction pour insérer 4 nouveaux champs (Nom cours, Classe, Heures, TC) sous la ligne précédente
+        window.addCourseRowToTeacher = function(containerId) {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+
+            const newRow = document.createElement('div');
+            newRow.className = 'grid-2col';
+            newRow.innerHTML = `
+                <input type="text" class="form-control" placeholder="Nom du cours (ex: Mathématiques)">
+                <input type="text" class="form-control" placeholder="Classe (ex: 3ème SCIENTIFIQUE)">
+                <input type="number" class="form-control" placeholder="Heures / semaine">
+                <input type="text" class="form-control" placeholder="TC (Tronc Commun ex: 3SCI/2SCI)">
+            `;
+            container.appendChild(newRow);
+        };
     </script>
 </body>
 </html>
