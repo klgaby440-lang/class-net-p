@@ -186,22 +186,79 @@
         </div>
     </header>
 
-    <!-- MODAL DE CONNEXION -->
+    <!-- MODAL MULTI-VUES AUTHENTIFICATION (CONNEXION & INSCRIPTION OTP) -->
     <div id="login-modal" class="modal-overlay">
         <div class="modal-content">
-            <h3 style="margin-bottom: 15px; color: var(--primary);">Connexion Enseignant</h3>
-            <div class="form-group">
-                <label>ADRESSE E-MAIL DE CONNEXION (IDENTIFIANT CLOUD)</label>
-                <input type="email" id="setting-user-email" value="enseignant@classnet.cd" onchange="updateProfileInfo()">
+            
+            <!-- VUE 1 : CONNEXION ENSEIGNANT -->
+            <div id="auth-view-login">
+                <h3 style="margin-bottom: 15px; color: var(--primary);">Connexion Enseignant</h3>
+                <div class="form-group">
+                    <label>ADRESSE E-MAIL DE CONNEXION</label>
+                    <input type="email" id="login-email" placeholder="enseignant@classnet.cd">
+                </div>
+                <div class="form-group">
+                    <label>MOT DE PASSE</label>
+                    <input type="password" id="login-password" placeholder="••••••••">
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button class="btn-action" style="flex:1;" onclick="closeLoginModal()">Annuler</button>
+                    <button class="btn-primary" style="flex:1;" onclick="handleLogin()">Valider</button>
+                </div>
+                <div style="text-align: center; margin-top: 15px;">
+                    <a href="#" onclick="switchAuthSubView('register')" style="color: var(--primary); font-size: 0.85rem; text-decoration: underline;">Pas encore de compte ? S'inscrire</a>
+                </div>
             </div>
-            <div class="form-group">
-                <label>MOT DE PASSE</label>
-                <input type="password" id="login-password" placeholder="••••••••">
+
+            <!-- VUE 2 : INSCRIPTION ENSEIGNANT (ÉTAPE 1 - INITIALISATION) -->
+            <div id="auth-view-register" style="display: none;">
+                <h3 style="margin-bottom: 15px; color: var(--primary);">Créer un Compte Enseignant</h3>
+                <div class="form-group">
+                    <label>NOM COMPLET</label>
+                    <input type="text" id="reg-fullname" placeholder="Ex: Gabriel Kahorha">
+                </div>
+                <div class="form-group">
+                    <label>ADRESSE E-MAIL</label>
+                    <input type="email" id="reg-email" placeholder="nom@exemple.com">
+                </div>
+                <div class="form-group">
+                    <label>NUMÉRO DE TÉLÉPHONE</label>
+                    <input type="tel" id="reg-phone" placeholder="0895281304">
+                </div>
+                <div class="form-group">
+                    <label>ÂGE</label>
+                    <input type="number" id="reg-age" placeholder="25" min="18">
+                </div>
+                <div class="form-group">
+                    <label>ÉCOLE / ÉTABLISSEMENT (OPTIONNEL)</label>
+                    <input type="text" id="reg-school" placeholder="Enfant du Monde">
+                </div>
+                <div class="form-group">
+                    <label>MOT DE PASSE</label>
+                    <input type="password" id="reg-password" placeholder="••••••••">
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button class="btn-action" style="flex:1;" onclick="switchAuthSubView('login')">Retour</button>
+                    <button class="btn-primary" style="flex:1;" id="btn-send-otp" onclick="handleRegisterInit()">Recevoir le code OTP ⚡</button>
+                </div>
             </div>
-            <div style="display: flex; gap: 10px; margin-top: 20px;">
-                <button class="btn-action" style="flex:1;" onclick="closeLoginModal()">Annuler</button>
-                <button class="btn-primary" style="flex:1;" onclick="handleLogin()">Valider</button>
+
+            <!-- VUE 3 : VÉRIFICATION CODE OTP (ÉTAPE 2 - VALIDATION) -->
+            <div id="auth-view-otp" style="display: none;">
+                <h3 style="margin-bottom: 10px; color: var(--primary);">Vérification de l'E-mail</h3>
+                <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 15px;">
+                    Un code OTP à 6 chiffres a été envoyé à l'adresse <strong id="otp-target-email"></strong>.
+                </p>
+                <div class="form-group">
+                    <label>CODE OTP DE VÉRIFICATION</label>
+                    <input type="text" id="reg-otp-code" placeholder="123456" maxlength="6" style="text-align: center; letter-spacing: 4px; font-weight: bold; font-size: 1.2rem;">
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button class="btn-action" style="flex:1;" onclick="switchAuthSubView('register')">Modifier infos</button>
+                    <button class="btn-primary" style="flex:1;" id="btn-verify-otp" onclick="handleRegisterVerify()">Valider mon compte</button>
+                </div>
             </div>
+
         </div>
     </div>
 
@@ -334,8 +391,8 @@
                 </div>
                 <!-- Sélecteur de modèle basé sur la structure ChatPayload -->
                 <select id="llink-model-select" style="padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-color); color: var(--text-main); font-size: 0.8rem; font-weight: bold; outline: none;">
-                    <option value="gemini-1.5-flash">✨ Gemini 1.5 Flash</option>
-                    <option value="deepseek-v3">🧠 DeepSeek V3</option>
+                    <option value="gemini-1.5-flash">✨ Standard</option>
+                    <option value="deepseek-v3">🧠 Reflexion</option>
                 </select>
             </div>
 
@@ -603,23 +660,152 @@ function updateLoginHeaderButton() {
 function openLoginModal() { document.getElementById('login-modal').classList.add('active'); }
 function closeLoginModal() { document.getElementById('login-modal').classList.remove('active'); }
 
-function handleLogin() {
-    const idOrName = document.getElementById('login-id').value.trim();
+/* ==========================================================================
+   AUTHENTIFICATION CLOUD & INSCRIPTION OTP (CLASSNET APP)
+   ========================================================================== */
+
+const CLOUD_AUTH_URL = "https://class-net-p.onrender.com";
+let tempTeacherData = null; // Stocke temporairement les infos avant validation OTP
+
+// Bascule d'affichage dans le modal d'authentification
+function switchAuthSubView(viewName) {
+    document.getElementById('auth-view-login').style.display = viewName === 'login' ? 'block' : 'none';
+    document.getElementById('auth-view-register').style.display = viewName === 'register' ? 'block' : 'none';
+    document.getElementById('auth-view-otp').style.display = viewName === 'otp' ? 'block' : 'none';
+}
+
+// 1. CONNEXION AVEC FUSION DE LA BASE DE DONNÉES REÇUE DU SERVEUR
+async function handleLogin() {
+    const email = document.getElementById('login-email').value.trim();
     const pass = document.getElementById('login-password').value.trim();
 
-    if (!idOrName) { alert("Veuillez entrer votre identifiant ou votre nom."); return; }
+    if (!email || !pass) {
+        alert("⚠️ Veuillez saisir votre e-mail et votre mot de passe.");
+        return;
+    }
 
-    if (pass === db.user.password || pass === "123456") {
-        db.user.isLoggedIn = true;
-        if (idOrName.includes("CN-")) db.user.id = idOrName;
-        else db.user.name = idOrName;
-        
-        saveDB();
-        updateLoginHeaderButton();
-        closeLoginModal();
-        alert(`Connecté avec succès ! Identifiant : ${db.user.id}`);
-    } else {
-        alert("Mot de passe incorrect.");
+    try {
+        const response = await fetch(`${CLOUD_AUTH_URL}/api/auth/teacher/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ identifier: email, password: pass })
+        });
+
+        const result = await response.json();
+
+        if (result.status && result.data) {
+            // Fusion de la base reçue avec la base locale
+            db = { ...db, ...result.data };
+            db.user.isLoggedIn = true;
+            saveDB();
+            
+            updateLoginHeaderButton();
+            renderClassSelectors();
+            renderGradesTables();
+            closeLoginModal();
+            alert(`✅ Connexion réussie ! Bienvenue ${db.user.name}`);
+        } else {
+            alert(`❌ Échec de connexion : ${result.message || 'Identifiants incorrects.'}`);
+        }
+    } catch (error) {
+        console.error("Erreur connexion cloud :", error);
+        alert("❌ Impossible de joindre le serveur Cloud. Vérifiez votre connexion Internet.");
+    }
+}
+
+// 2. ÉTAPE 1 : INITIALISATION DE L'INSCRIPTION & ENVOI DU CODE OTP
+async function handleRegisterInit() {
+    const fullName = document.getElementById('reg-fullname').value.trim();
+    const email = document.getElementById('reg-email').value.trim();
+    const phone = document.getElementById('reg-phone').value.trim();
+    const ageVal = parseInt(document.getElementById('reg-age').value);
+    const school = document.getElementById('reg-school').value.trim() || null;
+    const pass = document.getElementById('reg-password').value.trim();
+
+    if (!fullName || !email || !phone || !ageVal || !pass) {
+        alert("⚠️ Veuillez remplir tous les champs obligatoires.");
+        return;
+    }
+
+    tempTeacherData = {
+        full_name: fullName,
+        email: email,
+        school_name: school,
+        password: pass,
+        phone_number: phone,
+        age: ageVal
+    };
+
+    const btn = document.getElementById('btn-send-otp');
+    btn.disabled = true;
+    btn.textContent = "Envoi en cours...";
+
+    try {
+        const response = await fetch(`${CLOUD_AUTH_URL}/api/auth/teacher/init-register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(tempTeacherData)
+        });
+
+        const result = await response.json();
+
+        if (result.status) {
+            document.getElementById('otp-target-email').textContent = email;
+            switchAuthSubView('otp');
+            alert(`📧 ${result.message}`);
+        } else {
+            alert(`❌ ${result.message}`);
+        }
+    } catch (err) {
+        alert("❌ Erreur de réseau lors de la demande du code OTP.");
+    } finally {
+        btn.disabled = false;
+        btn.textContent = "Recevoir le code OTP ⚡";
+    }
+}
+
+// 3. ÉTAPE 2 : VALIDATION DU CODE OTP & CRÉATION DÉFINITIVE DU COMPTE
+async function handleRegisterVerify() {
+    const otpCode = document.getElementById('reg-otp-code').value.trim();
+
+    if (!otpCode || !tempTeacherData) {
+        alert("⚠️ Veuillez entrer le code OTP à 6 chiffres reçu par mail.");
+        return;
+    }
+
+    const payload = {
+        email: tempTeacherData.email,
+        otp_code: otpCode,
+        teacher_data: tempTeacherData
+    };
+
+    const btn = document.getElementById('btn-verify-otp');
+    btn.disabled = true;
+    btn.textContent = "Vérification...";
+
+    try {
+        const response = await fetch(`${CLOUD_AUTH_URL}/api/auth/teacher/verify-register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        const result = await response.json();
+
+        if (result.status) {
+            alert("🎉 " + result.message);
+            // Pré-remplissage des champs de connexion
+            document.getElementById('login-email').value = tempTeacherData.email;
+            document.getElementById('login-password').value = tempTeacherData.password;
+            switchAuthSubView('login');
+        } else {
+            alert(`❌ ${result.message}`);
+        }
+    } catch (err) {
+        alert("❌ Erreur de vérification du code OTP.");
+    } finally {
+        btn.disabled = false;
+        btn.textContent = "Valider mon compte";
     }
 }
 
@@ -844,7 +1030,16 @@ function renderGradesTables() {
     const selectedCourse = (db.activeCourseFilter && db.activeCourseFilter[activeClass]) || classCourses[0] || '';
     const maxBulletin = (db.courseMax && db.courseMax[`${activeClass}_${selectedCourse}`]) || 100;
 
-    // 2. Recherche élève
+    // 2. Boutons d'action rapides (Édition des élèves & Fiche Récapitulative)
+    const toolbarHTML = `
+        <div class="card" style="margin-bottom: 12px; display: flex; gap: 10px; flex-wrap: wrap;">
+            <button class="btn-action" style="flex:1;" onclick="openEditStudentsModal()">✏️ Éditer la liste des élèves</button>
+            <button class="btn-secondary" style="flex:1;" onclick="renderCourseSummarySheet()">📊 Fiche Récapitulative des Moyennes</button>
+        </div>
+    `;
+    container.innerHTML += toolbarHTML;
+
+    // 3. Recherche élève
     const searchInput = document.getElementById('grades-filter-search');
     const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : '';
     const students = db.students[activeClass] || [];
@@ -856,15 +1051,12 @@ function renderGradesTables() {
         const card = document.createElement('div');
         card.className = "card";
 
-        // 🟢 MODIFICATION ICI : On vérifie si c'est un examen (EX1 ou EX2) pour doubler le max
         const isExam = pKey.startsWith("EX");
         const currentMaxBulletin = isExam ? maxBulletin * 2 : maxBulletin;
 
-        // Filtrage des évaluations uniquement pour le cours sélectionné
         const allEvals = (db.evaluations[activeClass] && db.evaluations[activeClass][pKey]) ? db.evaluations[activeClass][pKey] : [];
         const evals = allEvals.filter(ev => !ev.course || ev.course === selectedCourse);
 
-        // Récupération de l'état masqué/affiché
         const isVisible = (db.periodVisibility && db.periodVisibility[pKey]) ? 'block' : 'none';
 
         let tableHTML = `
@@ -880,11 +1072,12 @@ function renderGradesTables() {
                         <tr>
                             <th>Nom de l'Élève</th>`;
         
+        // 📅 Affichage conditionnel de la date sous le titre du devoir
         evals.forEach(ev => {
-            tableHTML += `<th style="text-align:center;">${ev.name}<br><small>/${ev.max}</small></th>`;
+            const dateBadge = ev.date ? `<br><small style="color:var(--text-muted); font-weight:normal; font-size:0.75rem;">📅 ${ev.date}</small>` : '';
+            tableHTML += `<th style="text-align:center;">${ev.name}${dateBadge}<br><small style="color:var(--primary); font-weight:bold;">/${ev.max}</small></th>`;
         });
 
-        // 🟢 MODIFICATION ICI : On utilise currentMaxBulletin pour l'affichage de l'en-tête
         tableHTML += `
             <th style="text-align:center;">Total</th>
             <th style="text-align:center; color: var(--success);">Moyenne (/${currentMaxBulletin})</th>
@@ -903,9 +1096,28 @@ function renderGradesTables() {
                     const gradeKey = `${st.id}_${ev.id}`;
                     const gradeVal = db.grades[gradeKey] !== undefined ? db.grades[gradeKey] : '';
                     
+                    let inputStyle = "width: 50px; text-align: center; border: 1px solid var(--border-color); border-radius: 4px; padding: 4px; font-weight: bold;";
+
                     if (gradeVal !== '') {
-                        total += parseFloat(gradeVal);
-                        maxTotal += parseFloat(ev.max);
+                        const numVal = parseFloat(gradeVal);
+                        const maxVal = parseFloat(ev.max);
+
+                        // 🔴 CAS 1 : Note supérieure au max
+                        if (numVal > maxVal) {
+                            inputStyle += " background-color: #FEE2E2; color: #DC2626; border-color: #EF4444;";
+                        } 
+                        // 🟠 CAS 2 : Note inférieure à la moyenne
+                        else if (numVal < (maxVal / 2)) {
+                            inputStyle += " background-color: #FEF3C7; color: #D97706; border-color: #F59E0B;";
+                            total += numVal;
+                            maxTotal += maxVal;
+                        } 
+                        // 🟢 CAS 3 : Note valide et >= moyenne
+                        else {
+                            inputStyle += " background-color: #DCFCE7; color: #15803D; border-color: #22C55E;";
+                            total += numVal;
+                            maxTotal += maxVal;
+                        }
                     }
 
                     tableHTML += `
@@ -914,12 +1126,11 @@ function renderGradesTables() {
                                    value="${gradeVal}" 
                                    placeholder="-" 
                                    min="0" max="${ev.max}"
-                                   style="width: 50px; text-align: center; border: 1px solid var(--border-color); border-radius: 4px; padding: 4px;"
+                                   style="${inputStyle}"
                                    onchange="updateGrade('${st.id}', '${ev.id}', this.value, ${ev.max})">
                         </td>`;
                 });
 
-                // 🟢 MODIFICATION ICI : Le calcul mathématique se fait sur currentMaxBulletin
                 const moyenneBulletin = maxTotal > 0 ? ((total / maxTotal) * currentMaxBulletin).toFixed(1) : "0.0";
 
                 tableHTML += `
@@ -938,6 +1149,188 @@ function renderGradesTables() {
         card.innerHTML = tableHTML;
         container.appendChild(card);
     });
+
+    // 4. Génération automatique du conteneur de la fiche récapitulative
+    const summaryContainer = document.createElement('div');
+    summaryContainer.id = 'course-summary-sheet-container';
+    container.appendChild(summaryContainer);
+}
+
+/* ==========================================================================
+   MODULE D'ÉDITION DES ÉLÈVES (RECHERCHE & MODIFICATION EN TEMPS RÉEL)
+   ========================================================================== */
+
+function openEditStudentsModal() {
+    let modal = document.getElementById('edit-students-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'edit-students-modal';
+        modal.className = 'modal-overlay';
+        modal.innerHTML = `
+            <div class="modal-content" style="max-width: 500px; width: 95%;">
+                <h3 style="margin-bottom: 12px; color: var(--primary);">✏️ Édition des Élèves de ${activeClass}</h3>
+                <div class="form-group">
+                    <label>🔍 RECHERCHER UN ÉLÈVE DANS LA LISTE</label>
+                    <input type="text" id="edit-student-search" placeholder="Filtrer par nom..." oninput="renderEditStudentsList()">
+                </div>
+                <div id="edit-students-list" style="max-height: 300px; overflow-y: auto; margin-bottom: 15px;"></div>
+                <div style="display: flex; justify-content: flex-end;">
+                    <button class="btn-primary" onclick="closeEditStudentsModal()">Fermer & Actualiser</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+    modal.classList.add('active');
+    renderEditStudentsList();
+}
+
+function closeEditStudentsModal() {
+    const modal = document.getElementById('edit-students-modal');
+    if (modal) modal.classList.remove('active');
+    renderGradesTables();
+    renderAttendanceList();
+}
+
+function renderEditStudentsList() {
+    const container = document.getElementById('edit-students-list');
+    const searchTerm = (document.getElementById('edit-student-search')?.value || '').toLowerCase().trim();
+    const students = db.students[activeClass] || [];
+
+    const filtered = students.filter(st => st.name.toLowerCase().includes(searchTerm));
+
+    if (filtered.length === 0) {
+        container.innerHTML = '<p class="empty-state">Aucun élève trouvé.</p>';
+        return;
+    }
+
+    let html = '<table style="width:100%;"><tbody>';
+    filtered.forEach((st, index) => {
+        html += `
+            <tr>
+                <td style="padding: 4px;">
+                    <input type="text" value="${st.name}" 
+                           style="width: 100%; padding: 6px; border-radius: 6px; border: 1px solid var(--border-color);"
+                           onchange="updateStudentName('${st.id}', this.value)">
+                </td>
+                <td style="width: 40px; text-align: center;">
+                    <button onclick="removeStudent('${st.id}')" style="background:none; border:none; cursor:pointer;" title="Supprimer cet élève">🗑️</button>
+                </td>
+            </tr>
+        `;
+    });
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+function updateStudentName(studentId, newName) {
+    if (!newName.trim()) return;
+    const student = (db.students[activeClass] || []).find(s => s.id === studentId);
+    if (student) {
+        student.name = newName.trim();
+        saveDB();
+    }
+}
+
+function removeStudent(studentId) {
+    if (confirm("⚠️ Voulez-vous vraiment supprimer cet élève de la classe ?")) {
+        db.students[activeClass] = db.students[activeClass].filter(s => s.id !== studentId);
+        saveDB();
+        renderEditStudentsList();
+    }
+}
+
+/* ==========================================================================
+   MODULE FICHE RÉCAPITULATIVE DES MOYENNES DU COURS
+   ========================================================================== */
+
+function renderCourseSummarySheet() {
+    const container = document.getElementById('course-summary-sheet-container');
+    if (!container) return;
+
+    const classCourses = db.courses[activeClass] || [];
+    const selectedCourse = (db.activeCourseFilter && db.activeCourseFilter[activeClass]) || classCourses[0] || '';
+    const maxBulletin = (db.courseMax && db.courseMax[`${activeClass}_${selectedCourse}`]) || 100;
+    const students = db.students[activeClass] || [];
+    const periods = ["P1", "P2", "EX1", "P3", "P4", "EX2"];
+
+    let html = `
+        <div class="card" style="margin-top: 20px; border: 2px solid var(--primary);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                <h3 style="color: var(--primary);">📊 Fiche Récapitulative : ${selectedCourse} (${activeClass})</h3>
+                <button class="btn-action" onclick="document.getElementById('course-summary-sheet-container').innerHTML=''">✖ Masquer</button>
+            </div>
+            <div style="overflow-x: auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>N°</th>
+                            <th>Nom & Prénom</th>
+                            <th style="text-align:center;">P1</th>
+                            <th style="text-align:center;">P2</th>
+                            <th style="text-align:center; color: var(--primary);">EX1</th>
+                            <th style="text-align:center;">P3</th>
+                            <th style="text-align:center;">P4</th>
+                            <th style="text-align:center; color: var(--primary);">EX2</th>
+                            <th style="text-align:center; color: var(--success);">Moyenne Annuelle</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+    `;
+
+    students.forEach((st, index) => {
+        let periodMoyennes = {};
+        let cumulNotes = 0;
+        let cumulMax = 0;
+
+        periods.forEach(pKey => {
+            const isExam = pKey.startsWith("EX");
+            const currentMax = isExam ? maxBulletin * 2 : maxBulletin;
+            const evals = (db.evaluations[activeClass] && db.evaluations[activeClass][pKey]) 
+                ? db.evaluations[activeClass][pKey].filter(ev => !ev.course || ev.course === selectedCourse) 
+                : [];
+
+            let pTotal = 0;
+            let pMaxTotal = 0;
+
+            evals.forEach(ev => {
+                const gradeKey = `${st.id}_${ev.id}`;
+                const gradeVal = db.grades[gradeKey];
+                if (gradeVal !== undefined && gradeVal !== '' && parseFloat(gradeVal) <= parseFloat(ev.max)) {
+                    pTotal += parseFloat(gradeVal);
+                    pMaxTotal += parseFloat(ev.max);
+                }
+            });
+
+            if (pMaxTotal > 0) {
+                const moyP = ((pTotal / pMaxTotal) * currentMax).toFixed(1);
+                periodMoyennes[pKey] = moyP;
+                cumulNotes += parseFloat(moyP);
+                cumulMax += currentMax;
+            } else {
+                periodMoyennes[pKey] = "-";
+            }
+        });
+
+        const moyAnnuelle = cumulMax > 0 ? ((cumulNotes / cumulMax) * maxBulletin).toFixed(1) : "0.0";
+
+        html += `
+            <tr>
+                <td>${index + 1}</td>
+                <td><strong>${st.name}</strong></td>
+                <td style="text-align:center;">${periodMoyennes["P1"]}</td>
+                <td style="text-align:center;">${periodMoyennes["P2"]}</td>
+                <td style="text-align:center; font-weight:bold; color:var(--primary);">${periodMoyennes["EX1"]}</td>
+                <td style="text-align:center;">${periodMoyennes["P3"]}</td>
+                <td style="text-align:center;">${periodMoyennes["P4"]}</td>
+                <td style="text-align:center; font-weight:bold; color:var(--primary);">${periodMoyennes["EX2"]}</td>
+                <td style="text-align:center; font-weight:bold; color:var(--success); font-size:0.95rem;">${moyAnnuelle} / ${maxBulletin}</td>
+            </tr>
+        `;
+    });
+
+    html += `</tbody></table></div></div>`;
+    container.innerHTML = html;
 }
 
 function togglePeriodVisibility(pKey) {
@@ -964,6 +1357,11 @@ function addEvaluationColumn(pKey) {
     const maxVal = prompt("Note maximale (ex: 10 ou 20) :", "10");
     if (!maxVal || isNaN(maxVal)) return;
 
+    // 📅 Récupération de la date avec la date du jour pré-remplie par défaut
+    const defaultToday = new Date().toISOString().substring(0, 10);
+    const evalDate = prompt("Date de l'épreuve (AAAA-MM-JJ) :", defaultToday);
+    if (!evalDate) return;
+
     if (!db.evaluations[activeClass]) db.evaluations[activeClass] = {};
     if (!db.evaluations[activeClass][pKey]) db.evaluations[activeClass][pKey] = [];
 
@@ -971,7 +1369,8 @@ function addEvaluationColumn(pKey) {
         id: generateUniqueId("EV"),
         name: evalName.trim(),
         max: parseFloat(maxVal),
-        course: currentCourse // 👈 L'évaluation appartient désormais à un cours précis !
+        date: evalDate.trim(),
+        course: currentCourse
     });
 
     saveDB();
@@ -1078,7 +1477,7 @@ function renderAttendanceList() {
                     <select id="attendance-status-${st.id}" style="padding: 4px; border-radius: 6px;">
                         <option value="P" ${currentStatus === 'P' ? 'selected' : ''}>✅ Présent</option>
                         <option value="A" ${currentStatus === 'A' ? 'selected' : ''}>❌ Absent</option>
-                        <option value="R" ${currentStatus === 'R' ? 'selected' : ''}>🕒 Retard</option>
+                        <option value="R" ${currentStatus === 'R' ? 'selected' : ''}>⚠️ Retard</option>
                     </select>
                 </td>
             </tr>`;
