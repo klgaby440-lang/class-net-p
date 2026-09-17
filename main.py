@@ -525,26 +525,91 @@ def register_school(data: SchoolRegisterSchema, db: Session = Depends(get_db)):
 
 @app.post("/api/auth/teacher/login")
 def login_teacher(data: LoginSchema, db: Session = Depends(get_db)):
-    """Connexion Prof : Renvoie l'état exact defaultDB pour ClassNet App."""
+    """Connexion Prof : Reconstitue et renvoie l'état exact defaultDB depuis PostgreSQL."""
     teacher = db.query(Teacher).filter(Teacher.email == data.identifier, Teacher.password == data.password).first()
     if not teacher:
         return {"status": False, "message": "Identifiants incorrects."}
     
-    # Construction de la DB ClassNet App
+    # 1. Récupération des notes/évaluations et des quiz enregistrés pour cet enseignant
+    db_grades = db.query(StudentGrade).filter(StudentGrade.teacher_email == teacher.email).all()
+    db_quizzes = db.query(QuizBank).filter(QuizBank.teacher_email == teacher.email).all()
+
+    # 2. Reconstitution dynamique des structures imbriquées
+    classes_set = set()
+    courses_dict = {}
+    students_dict = {}
+    evaluations_dict = {}
+    grades_dict = {}
+
+    for g in db_grades:
+        c_name = g.class_name
+        classes_set.add(c_name)
+
+        # Reconstitution des cours par classe
+        if c_name not in courses_dict:
+            courses_dict[c_name] = []
+        if g.course_name and g.course_name not in courses_dict[c_name]:
+            courses_dict[c_name].append(g.course_name)
+
+        # Reconstitution des élèves par classe
+        if c_name not in students_dict:
+            students_dict[c_name] = []
+        if not any(s["id"] == g.student_id for s in students_dict[c_name]):
+            students_dict[c_name].append({
+                "id": g.student_id,
+                "name": g.student_name
+            })
+
+        # Reconstitution des évaluations par classe et période
+        if c_name not in evaluations_dict:
+            evaluations_dict[c_name] = {"P1": [], "P2": [], "EX1": [], "P3": [], "P4": [], "EX2": []}
+        
+        period_key = g.period if g.period in evaluations_dict[c_name] else "P1"
+        if not any(e["id"] == g.eval_id for e in evaluations_dict[c_name][period_key]):
+            evaluations_dict[c_name][period_key].append({
+                "id": g.eval_id,
+                "name": g.eval_name,
+                "max": g.max_score,
+                "course": g.course_name
+            })
+
+        # Reconstitution de la mappe des notes : "STU-ID_EV-ID": note
+        grade_key = f"{g.student_id}_{g.eval_id}"
+        grades_dict[grade_key] = g.score
+
+    # 3. Formatage de la liste des quiz
+    quizzes_list = [
+        {
+            "id": q.id,
+            "title": q.title,
+            "content": q.content
+        } for q in db_quizzes
+    ]
+
+    # 4. Assemblage complet du JSON DB
     classnet_app_db = {
         "user": {
-            "id": teacher.teacher_code,
+            "id": teacher.teacher_code or f"prof_{teacher.id}",
             "name": teacher.full_name,
             "email": teacher.email,
             "password": teacher.password,
             "school": teacher.school_name or "Indépendant",
             "isLoggedIn": True
         },
-        "classes": [], "courses": {}, "courseMax": {},
+        "classes": list(classes_set),
+        "courses": courses_dict,
+        "courseMax": {},
         "periodVisibility": {"P1": True, "P2": False, "EX1": False, "P3": False, "P4": False, "EX2": False},
-        "activeCourseFilter": {}, "students": {}, "evaluations": {}, "grades": {},
-        "presences": [], "quizzes": [], "llinkPrefs": teacher.llink_preferences or "", "pendingCommits": 0
+        "activeCourseFilter": {},
+        "students": students_dict,
+        "evaluations": evaluations_dict,
+        "grades": grades_dict,
+        "presences": [],
+        "quizzes": quizzes_list,
+        "llinkPrefs": teacher.llink_preferences or "",
+        "pendingCommits": 0
     }
+    
     return {"status": True, "data": classnet_app_db}
 
 @app.post("/api/auth/school/login")
