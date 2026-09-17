@@ -1254,6 +1254,11 @@ function renderCourseSummarySheet() {
     const students = db.students[activeClass] || [];
     const periods = ["P1", "P2", "EX1", "P3", "P4", "EX2"];
 
+    // Constantes pour les maximas conformément aux normes pédagogiques
+    const maxSM1 = maxBulletin * 4;
+    const maxSM2 = maxBulletin * 4;
+    const maxAnnuel = maxSM1 + maxSM2; // Soit 8 * maxBulletin
+
     let html = `
         <div class="card" style="margin-top: 20px; border: 2px solid var(--primary);">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
@@ -1269,10 +1274,12 @@ function renderCourseSummarySheet() {
                             <th style="text-align:center;">P1</th>
                             <th style="text-align:center;">P2</th>
                             <th style="text-align:center; color: var(--primary);">EX1</th>
+                            <th style="text-align:center; font-weight:bold; color: var(--primary); background-color: rgba(0,0,0,0.03);">SM1</th>
                             <th style="text-align:center;">P3</th>
                             <th style="text-align:center;">P4</th>
                             <th style="text-align:center; color: var(--primary);">EX2</th>
-                            <th style="text-align:center; color: var(--success);">Moyenne Annuelle</th>
+                            <th style="text-align:center; font-weight:bold; color: var(--primary); background-color: rgba(0,0,0,0.03);">SM2</th>
+                            <th style="text-align:center; color: var(--success);">Total Annuel</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1280,8 +1287,7 @@ function renderCourseSummarySheet() {
 
     students.forEach((st, index) => {
         let periodMoyennes = {};
-        let cumulNotes = 0;
-        let cumulMax = 0;
+        let periodValuesNum = {};
 
         periods.forEach(pKey => {
             const isExam = pKey.startsWith("EX");
@@ -1303,16 +1309,38 @@ function renderCourseSummarySheet() {
             });
 
             if (pMaxTotal > 0) {
-                const moyP = ((pTotal / pMaxTotal) * currentMax).toFixed(1);
-                periodMoyennes[pKey] = moyP;
-                cumulNotes += parseFloat(moyP);
-                cumulMax += currentMax;
+                const moyP = (pTotal / pMaxTotal) * currentMax;
+                periodMoyennes[pKey] = moyP.toFixed(1);
+                periodValuesNum[pKey] = moyP;
             } else {
                 periodMoyennes[pKey] = "-";
+                periodValuesNum[pKey] = null;
             }
         });
 
-        const moyAnnuelle = cumulMax > 0 ? ((cumulNotes / cumulMax) * maxBulletin).toFixed(1) : "0.0";
+        // --- CALCUL SEMESTRE 1 (P1 + P2 + EX1) ---
+        let sm1Val = 0;
+        let hasSm1 = false;
+        ["P1", "P2", "EX1"].forEach(pKey => {
+            if (periodValuesNum[pKey] !== null) {
+                sm1Val += periodValuesNum[pKey];
+                hasSm1 = true;
+            }
+        });
+
+        // --- CALCUL SEMESTRE 2 (P3 + P4 + EX2) ---
+        let sm2Val = 0;
+        let hasSm2 = false;
+        ["P3", "P4", "EX2"].forEach(pKey => {
+            if (periodValuesNum[pKey] !== null) {
+                sm2Val += periodValuesNum[pKey];
+                hasSm2 = true;
+            }
+        });
+
+        // --- CALCUL TOTAL ANNUEL (SM1 + SM2) ---
+        const totalAnnuelVal = sm1Val + sm2Val;
+        const hasAnnuelData = hasSm1 || hasSm2;
 
         html += `
             <tr>
@@ -1321,10 +1349,12 @@ function renderCourseSummarySheet() {
                 <td style="text-align:center;">${periodMoyennes["P1"]}</td>
                 <td style="text-align:center;">${periodMoyennes["P2"]}</td>
                 <td style="text-align:center; font-weight:bold; color:var(--primary);">${periodMoyennes["EX1"]}</td>
+                <td style="text-align:center; font-weight:bold; background-color: rgba(0,0,0,0.02);">${hasSm1 ? sm1Val.toFixed(1) : "-"} / ${maxSM1}</td>
                 <td style="text-align:center;">${periodMoyennes["P3"]}</td>
                 <td style="text-align:center;">${periodMoyennes["P4"]}</td>
                 <td style="text-align:center; font-weight:bold; color:var(--primary);">${periodMoyennes["EX2"]}</td>
-                <td style="text-align:center; font-weight:bold; color:var(--success); font-size:0.95rem;">${moyAnnuelle} / ${maxBulletin}</td>
+                <td style="text-align:center; font-weight:bold; background-color: rgba(0,0,0,0.02);">${hasSm2 ? sm2Val.toFixed(1) : "-"} / ${maxSM2}</td>
+                <td style="text-align:center; font-weight:bold; color:var(--success); font-size:0.95rem;">${hasAnnuelData ? totalAnnuelVal.toFixed(1) : "0.0"} / ${maxAnnuel}</td>
             </tr>
         `;
     });
@@ -1762,67 +1792,26 @@ async function syncWithCloud() {
         return;
     }
 
-    // --- 1. PRÉ-TRAITEMENT DES DONNÉES ---
-    // Vérification de la présence de l'e-mail (clé primaire désormais)
-    const userEmail = db.user.email;
-    if (!userEmail || userEmail === "enseignant@classnet.cd") {
-        const emailInput = prompt("⚠️ L'adresse e-mail est requise pour la synchronisation Cloud. Veuillez la saisir :");
-        if (!emailInput) return;
-        db.user.email = emailInput;
-        saveDB();
-    }
-
-    // Structuration ultra propre attendue par FastAPI (Pydantic)
-    const payload = {
-        email: db.user.email,
-        password: db.user.password,
-        school_id: db.user.school || "Non défini",
-        llink_preferences: db.llinkPrefs || "Sois méthodique et précis.",
-        
-        // Formatage spécifique des présences
-        presences: (db.presences || []).map(p => ({
-            id: p.id,
-            student_id: p.studentId,
-            student_name: p.studentName,
-            class_name: p.class,
-            course_name: p.course,
-            date: p.date,
-            status: p.status
-        })),
-        
-        // Formatage spécifique des interrogations
-        quizzes: (db.quizzes || []).map(q => ({
-            id: q.id,
-            title: q.title,
-            class_name: q.class,
-            course_name: q.course,
-            max_score: parseFloat(q.maxScore),
-            content: q.textContent,
-            created_at: q.createdAt
-        })),
-        
-        // On envoie le reste de la DB brute en secours
-        full_database_json: db 
-    };
-
-    // --- 2. ENVOI AU SERVEUR ---
-    const targetUrl = "https://class-net-p.onrender.com"; // Forcé selon tes instructions
+    const targetUrl = "https://class-net-p.onrender.com";
     
     try {
-        const response = await fetch(`${targetUrl}/api/cloud/sync`, {
+        const response = await fetch(`${targetUrl}/api/sync/classnet-app`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
+            body: JSON.stringify(db)
         });
 
-        if (response.ok) {
+        const result = await response.json();
+
+        if (response.ok && result.status) {
             db.pendingCommits = 0;
-            appState.syncHistory.internet.push(Date.now());
+            if (typeof appState !== 'undefined' && appState.syncHistory) {
+                appState.syncHistory.internet.push(Date.now());
+            }
             saveDB();
-            alert(`🚀 Push On (API) réussi ! Données sécurisées sur le Cloud avec le compte : ${db.user.email}`);
+            alert(`🚀 ${result.message}`);
         } else {
-            const errData = await response.json();
-            alert(`❌ Erreur du serveur : ${errData.detail || "Refus de synchronisation."}`);
+            alert(`❌ Erreur du serveur : ${result.message || "Refus de synchronisation."}`);
         }
     } catch (error) {
         alert("❌ Erreur de réseau critique. Assurez-vous que le serveur Render n'est pas en veille.");
