@@ -340,6 +340,21 @@ class AccessCode(Base):
     id = Column(Integer, primary_key=True, index=True)
     code = Column(String(20), unique=True, index=True, nullable=False)
 
+class StudentGrade(Base):
+    __tablename__ = "student_grades"
+    id = Column(Integer, primary_key=True, index=True)
+    teacher_email = Column(String, index=True, nullable=False)
+    student_id = Column(String, index=True, nullable=False)
+    student_name = Column(String, nullable=False)
+    class_name = Column(String, nullable=False)
+    course_name = Column(String, nullable=False)
+    eval_id = Column(String, index=True, nullable=False)
+    eval_name = Column(String, nullable=False)
+    period = Column(String, nullable=False)
+    score = Column(Float, nullable=False)
+    max_score = Column(Float, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 Base.metadata.create_all(bind=engine)
 
 # --- FONCTIONS DE GESTION DE LA BASE ---
@@ -589,52 +604,125 @@ def verify_and_cycle_code(data: CodeVerifySchema, background_tasks: BackgroundTa
 # ---------------------------------------------------------
 @app.post("/api/sync/classnet-app")
 def sync_classnet_app(payload: dict, db: Session = Depends(get_db)):
-    """Reçoit la DB ClassNet App. Compare, met à jour et log en 'en_attente'."""
+    """
+    Synchronise la DB ClassNet App avec contrôles complets des données :
+    - Vérification des noms d'élèves et appartenance aux classes
+    - Validation des noms de cours et des maxima (maxScore)
+    - Contrôle des notes (intervalle 0 <= note <= max_score)
+    """
     user_data = payload.get("user", {})
     email = user_data.get("email")
     
     teacher = db.query(Teacher).filter(Teacher.email == email).first()
     if not teacher:
-        return {"status": False, "message": "Utilisateur non trouvé."}
+        return {"status": False, "message": "Enseignant non trouvé."}
 
-    grades_payload = payload.get("grades", {})
+    students_dict = payload.get("students", {})
+    courses_dict = payload.get("courses", {})
+    evaluations_dict = payload.get("evaluations", {})
+    grades_dict = payload.get("grades", {})
+
+    # --- 1. Indexation & Validation des Élèves ---
+    student_lookup = {}  # { student_id: {"name": ..., "class": ...} }
+    for class_name, st_list in students_dict.items():
+        for st in st_list:
+            st_id = st.get("id")
+            st_name = st.get("name", "").strip()
+            if st_id and st_name:
+                student_lookup[st_id] = {"name": st_name, "class": class_name}
+
+    # --- 2. Indexation & Validation des Évaluations ---
+    eval_lookup = {}  # { eval_id: {"name": ..., "max": ..., "course": ..., "period": ..., "class": ...} }
+    for class_name, periods in evaluations_dict.items():
+        for period_key, ev_list in periods.items():
+            for ev in ev_list:
+                ev_id = ev.get("id")
+                ev_course = ev.get("course", "").strip()
+                ev_max = ev.get("max")
+                
+                # Vérification : le cours doit exister dans la classe
+                valid_courses = courses_dict.get(class_name, [])
+                if ev_id and ev_course in valid_courses and isinstance(ev_max, (int, float)) and ev_max > 0:
+                    eval_lookup[ev_id] = {
+                        "name": ev.get("name", "Évaluation"),
+                        "max": float(ev_max),
+                        "course": ev_course,
+                        "period": period_key,
+                        "class": class_name
+                    }
+
+    # --- 3. Traitement & Validation des Notes (Grades) ---
     updates_count = 0
-    
-    for key_id, evals in grades_payload.items():
-        # key_id format attendu: "studentPermCode_courseId"
-        parts = key_id.split("_")
-        if len(parts) < 2: continue
-        student_n, course_id = parts[0], parts[1]
-        
-        record = db.query(TeacherEvaluation).filter_by(student_n_permanent=student_n, course_id=course_id).first()
-        is_new = False
+    errors = []
+
+    for grade_key, score in grades_dict.items():
+        # Parsing de la clé composite (ex: "STU-2026-LEBV-BEKD_EV-2026-3FB5-HSAS")
+        if "_EV-" not in grade_key:
+            errors.append(f"Format de clé invalide : {grade_key}")
+            continue
+
+        parts = grade_key.split("_EV-")
+        student_id = parts[0]
+        eval_id = "EV-" + parts[1]
+
+        # Vérification 1 : L'élève existe-t-il ?
+        student_info = student_lookup.get(student_id)
+        if not student_info:
+            errors.append(f"Élève inconnu pour la note ({student_id})")
+            continue
+
+        # Vérification 2 : L'évaluation existe-t-elle ?
+        eval_info = eval_lookup.get(eval_id)
+        if not eval_info:
+            errors.append(f"Évaluation inconnue ou non valide ({eval_id})")
+            continue
+
+        # Vérification 3 : Note valide (numérique et comprise entre 0 et le max)
+        if not isinstance(score, (int, float)) or score < 0 or score > eval_info["max"]:
+            errors.append(f"Note incohérente ({score}/{eval_info['max']}) pour {student_info['name']} sur {eval_info['name']}")
+            continue
+
+        # Sauvegarde ou mise à jour dans la table StudentGrade
+        record = db.query(StudentGrade).filter_by(
+            teacher_email=teacher.email,
+            student_id=student_id,
+            eval_id=eval_id
+        ).first()
+
         if not record:
-            record = TeacherEvaluation(school_id=teacher.school_id or "NONE", student_n_permanent=student_n, course_id=course_id)
-            db.add(record)
-            is_new = True
-            
-        modified = False
-        diff_tracker = {}
-        for period in ["p1", "p2", "ex1", "p3", "p4", "ex2"]:
-            new_val = evals.get(period)
-            if new_val is not None:
-                old_val = getattr(record, period)
-                if old_val != new_val:
-                    setattr(record, period, new_val)
-                    diff_tracker[period] = new_val
-                    modified = True
-                    
-        if modified or is_new:
-            db.add(SyncHistory(
+            record = StudentGrade(
                 teacher_email=teacher.email,
-                action_type="GRADE_UPDATE",
-                payload_diff={"student": student_n, "course": course_id, "changes": diff_tracker},
-                status="en_attente"
-            ))
-            updates_count += 1
+                student_id=student_id,
+                student_name=student_info["name"],
+                class_name=student_info["class"],
+                course_name=eval_info["course"],
+                eval_id=eval_id,
+                eval_name=eval_info["name"],
+                period=eval_info["period"],
+                score=float(score),
+                max_score=eval_info["max"]
+            )
+            db.add(record)
+        else:
+            record.score = float(score)
+
+        updates_count += 1
+
+    # Historique de synchronisation
+    db.add(SyncHistory(
+        teacher_email=teacher.email,
+        action_type="FULL_APP_SYNC",
+        payload_diff={"processed_grades": updates_count, "rejected_errors": len(errors)},
+        status="en_attente"
+    ))
 
     db.commit()
-    return {"status": True, "message": f"Synchronisation réussie. {updates_count} modifications mises en file d'attente."}
+
+    return {
+        "status": True,
+        "message": f"Synchronisation terminée avec succès. {updates_count} notes validées.",
+        "warnings_or_errors": errors
+    }
 
 @app.post("/api/sync/primenet")
 def sync_primenet(payload: dict, db: Session = Depends(get_db)):
