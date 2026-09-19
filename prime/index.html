@@ -3355,7 +3355,8 @@ body {
         async function fetchServerData() {
             const schoolId = appState.school.id;
             try {
-                const response = await fetch(`${API_BASE_URL}/api/primenet/sync/${schoolId}`);
+                const response = await fetch(`${API_BASE_URL}/api/sync/primenet/${schoolId}`, {
+                    method: 'GET'});
                 if (!response.ok) throw new Error("Erreur de connexion au serveur.");
                 
                 const mergedData = await response.json();
@@ -3437,7 +3438,7 @@ body {
                 const response = await fetch(`${API_BASE_URL}/api/auth/school/login`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ school_id: schoolId, password: password })
+                    body: JSON.stringify({ identifier: str(schoolId), password: str(password) })
                 });
                 
                 const result = await response.json();
