@@ -738,6 +738,7 @@ def login_school(data: LoginSchema, db: Session = Depends(get_db)):
 @app.post("/api/admin/codes/generate")
 def generate_and_send_code(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     new_code = generate_20_char_code()
+    print(new_code)
     db.add(AccessCode(code=new_code))
     db.commit()
     background_tasks.add_task(send_email_mock, ADMIN_EMAIL, "Nouveau Code ClassNet", f"Code généré : {new_code}")
