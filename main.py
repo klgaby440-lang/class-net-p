@@ -13,66 +13,7 @@ from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session, relationship
 import random
-# ==============================================================================================================================================================
-from sqlalchemy.orm import Session
 
-def seed_initial_test_data():
-    """Initialise l'école et l'enseignant de test automatiquement au démarrage du serveur."""
-    # SessionLocal est directement disponible dans le même fichier
-    db: Session = SessionLocal()
-    try:
-        # 1. Vérification et création de l'école fictive
-        test_school_id = "63017630119000999"
-        school = db.query(SchoolInformation).filter(SchoolInformation.school_id == test_school_id).first()
-        
-        if not school:
-            school = SchoolInformation(
-                school_id=test_school_id,
-                bulletin_seq_id="SEQ_TEST_001",
-                code="630119",
-                name_school="ÉCOLE DE TEST CLASSNET",
-                city="BUKAVU",
-                commune="IBANDA",
-                name_responsable="Directeur Gabriel",
-                num_tel="+243900000000",
-                adresse_physique="Avenue du Test N°12",
-                email="ecole.test@classnet.cd",
-                pass_word="123456"
-            )
-            db.add(school)
-            print("🏫 [SEED] École fictive de test créée avec succès !")
-
-        # 2. Vérification et création de l'enseignant fictif
-        test_teacher_email = "prof.kabila@gmail.com"
-        teacher = db.query(Teacher).filter(Teacher.email == test_teacher_email).first()
-        
-        if not teacher:
-            teacher = Teacher(
-                full_name="Prof. Kabila Test",
-                email=test_teacher_email,
-                school_name="ÉCOLE DE TEST CLASSNET",
-                password="profpassword123",  # Champ 'password' du modèle Teacher
-                phone_number="+243810000000",
-                age=32,
-                teacher_code="PROF_TEST_001",
-                school_id=test_school_id,
-                status="Actif"
-            )
-            db.add(teacher)
-            print("👨‍🏫 [SEED] Enseignant fictif de test créé avec succès !")
-
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        print(f"⚠️ [SEED] Erreur lors de la création des données de test : {e}")
-    finally:
-        db.close()
-
-# Événement FastAPI déclenché au lancement du serveur
-@app.on_event("startup")
-def on_startup():
-    seed_initial_test_data()
-# ==============================================================================================================================================================
 class ScheduleEngine:
     """
     Moteur de génération d'horaires scolaires hybride (CSP + Heuristique).
@@ -1265,3 +1206,64 @@ def get_primenet_data(school_id: str, db: Session = Depends(get_db)):
         "message": "Données PrimeNet récupérées avec succès.",
         "data": merged_data
     }
+
+# ==============================================================================================================================================================
+from sqlalchemy.orm import Session
+
+def seed_initial_test_data():
+    """Initialise l'école et l'enseignant de test automatiquement au démarrage du serveur."""
+    # SessionLocal est directement disponible dans le même fichier
+    db: Session = SessionLocal()
+    try:
+        # 1. Vérification et création de l'école fictive
+        test_school_id = "63017630119000999"
+        school = db.query(SchoolInformation).filter(SchoolInformation.school_id == test_school_id).first()
+        
+        if not school:
+            school = SchoolInformation(
+                school_id=test_school_id,
+                bulletin_seq_id="SEQ_TEST_001",
+                code="630119",
+                name_school="ÉCOLE DE TEST CLASSNET",
+                city="BUKAVU",
+                commune="IBANDA",
+                name_responsable="Directeur Gabriel",
+                num_tel="+243900000000",
+                adresse_physique="Avenue du Test N°12",
+                email="ecole.test@classnet.cd",
+                pass_word="123456"
+            )
+            db.add(school)
+            print("🏫 [SEED] École fictive de test créée avec succès !")
+
+        # 2. Vérification et création de l'enseignant fictif
+        test_teacher_email = "prof.kabila@gmail.com"
+        teacher = db.query(Teacher).filter(Teacher.email == test_teacher_email).first()
+        
+        if not teacher:
+            teacher = Teacher(
+                full_name="Prof. Kabila Test",
+                email=test_teacher_email,
+                school_name="ÉCOLE DE TEST CLASSNET",
+                password="profpassword123",  # Champ 'password' du modèle Teacher
+                phone_number="+243810000000",
+                age=32,
+                teacher_code="PROF_TEST_001",
+                school_id=test_school_id,
+                status="Actif"
+            )
+            db.add(teacher)
+            print("👨‍🏫 [SEED] Enseignant fictif de test créé avec succès !")
+
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"⚠️ [SEED] Erreur lors de la création des données de test : {e}")
+    finally:
+        db.close()
+
+# Événement FastAPI déclenché au lancement du serveur
+@app.on_event("startup")
+def on_startup():
+    seed_initial_test_data()
+# ==============================================================================================================================================================
