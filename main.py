@@ -880,7 +880,16 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db)):
         # Construction des listes et dictionnaires de base
         classes_list = list(students_dict.keys())
         presences_dict = payload.get("presences", {})
-        dates_presence = list(presences_dict.keys())
+        if isinstance(presences_dict, dict):
+            dates_presence = list(presences_dict.keys())
+        elif isinstance(presences_dict, list):
+            # Si c'est une liste, on récupère les dates ou on laisse vide si la liste ne contient pas de clés
+            dates_presence = [
+                item.get("date") if isinstance(item, dict) else item 
+                for item in presences_dict
+            ]
+        else:
+            dates_presence = []
         
         # Formatage des élèves : { "classe": ["Nom Post-nom", ...] }
         formatted_students = {}
