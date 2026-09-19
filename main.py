@@ -1190,7 +1190,10 @@ def get_primenet_data(school_id: str, db: Session = Depends(get_db)):
                     merged_data["moyenne_classe"][c_name][course_name][period].update(students_scores)
                     
         # Fusion des présences (très complexe si format imbriqué, on fait un update profond)
-        for date_p, classes_dict in data.get("presences", {}).items():
+        presences_data = data.get("presences")
+        presences_dict = presences_data if isinstance(presences_data, dict) else {}
+        
+        for date_p, classes_dict in presences_dict.items():
             if date_p not in merged_data["presences"]:
                 merged_data["presences"][date_p] = {}
                 
