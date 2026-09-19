@@ -1253,7 +1253,7 @@ def seed_initial_test_data():
         if not school:
             school = SchoolInformation(
                 school_id=test_school_id,
-                bulletin_seq_id="SEQ_TEST_001",
+                bulletin_seq_id="SEQ_TEST_002",
                 code="630119",
                 name_school="ÉCOLE DE TEST CLASSNET",
                 city="BUKAVU",
