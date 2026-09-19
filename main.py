@@ -15,10 +15,10 @@ from sqlalchemy.orm import sessionmaker, Session, relationship
 import random
 # ==============================================================================================================================================================
 from sqlalchemy.orm import Session
-from database import SessionLocal  # Importe ton générateur de sessions DB
 
 def seed_initial_test_data():
     """Initialise l'école et l'enseignant de test automatiquement au démarrage du serveur."""
+    # SessionLocal est directement disponible dans le même fichier
     db: Session = SessionLocal()
     try:
         # 1. Vérification et création de l'école fictive
@@ -51,12 +51,12 @@ def seed_initial_test_data():
                 full_name="Prof. Kabila Test",
                 email=test_teacher_email,
                 school_name="ÉCOLE DE TEST CLASSNET",
-                password_hash="profpassword123",  # Utilise le hashage si ton auth l'exige
+                password="profpassword123",  # Champ 'password' du modèle Teacher
                 phone_number="+243810000000",
                 age=32,
                 teacher_code="PROF_TEST_001",
                 school_id=test_school_id,
-                is_active=True
+                status="Actif"
             )
             db.add(teacher)
             print("👨‍🏫 [SEED] Enseignant fictif de test créé avec succès !")
