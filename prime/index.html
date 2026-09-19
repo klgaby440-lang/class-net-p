@@ -3432,6 +3432,7 @@ body {
         async function loadSchoolData() {
             const schoolId = appState.school.id;
             const password = document.getElementById('appPasswordInput')?.value || "";
+            console.log(schoolId)
             
             try {
                 const response = await fetch(`${API_BASE_URL}/api/auth/school/login`, {
