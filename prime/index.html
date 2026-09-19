@@ -1777,7 +1777,7 @@ body {
         const defaultState = {
             school: {
                 name: "ENFANT DU MONDE",
-                id: "63017630119000656",
+                id: "63017630119000999",
                 code: "630119",
                 city: "BUKAVU",
                 commune: "IBANDA"
@@ -3424,7 +3424,7 @@ body {
                     alert("❌ Échec de la synchronisation.");
                 }
             } catch (err) {
-                alert("❌ Erreur lors de l'envoi vers le serveur : " + err.message);
+                alert("❌ Erreur lors de l'envoi vers le serveur : " + err.message + res.message);
             }
         }
 
@@ -3434,7 +3434,7 @@ body {
             const password = document.getElementById('appPasswordInput')?.value || "";
             
             try {
-                const response = await fetch(`${API_BASE_URL}/api/primenet/load`, {
+                const response = await fetch(`${API_BASE_URL}/api/auth/school/login`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ school_id: schoolId, password: password })
