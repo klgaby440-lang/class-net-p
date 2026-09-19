@@ -3355,7 +3355,7 @@ body {
         async function fetchServerData() {
             const schoolId = appState.school.id;
             try {
-                const response = await fetch(`${API_BASE_URL}/api/primenet/sync/${schoolId}`, {
+                const response = await fetch(`${API_BASE_URL}/api/primenet/sync/63017630119000999`, {
                     method: 'GET'});
                 if (!response.ok) throw new Error("Erreur de connexion au serveur.");
                 
@@ -3410,7 +3410,6 @@ body {
             }
         }
 
-        // 2. Fonction pour sauvegarder toute la base de données en ligne
         async function saveDatabaseOnline() {
             try {
                 const response = await fetch(`${API_BASE_URL}/api/sync/primenet`, {
@@ -3422,14 +3421,14 @@ body {
                 if (res.status) {
                     alert("✅ " + res.message);
                 } else {
-                    alert("❌ Échec de la synchronisation.");
+                    alert("❌ Échec de la synchronisation : " + (res.message || "Erreur inconnue"));
                 }
             } catch (err) {
-                alert("❌ Erreur lors de l'envoi vers le serveur : " + err.message + res.message);
+                alert("❌ Erreur lors de l'envoi vers le serveur : " + err.message);
             }
         }
 
-        // 3. Fonction pour charger les données complètes de l'école
+        // 3. Charger les données complètes de l'école (Gestion du champ result.message)
         async function loadSchoolData() {
             const schoolId = appState.school.id;
             const password = document.getElementById('appPasswordInput')?.value || "";
@@ -3446,16 +3445,17 @@ body {
                     appState = result.data;
                     saveState();
                     alert("✅ Base de données de l'école chargée avec succès !");
-                    location.reload(); // Recharge pour appliquer le nouvel état
+                    location.reload();
                 } else {
-                    alert("❌ " + (result.detail || "Impossible de charger les données."));
+                    // Prise en compte de result.message du serveur Python
+                    alert("❌ " + (result.message || result.detail || "Impossible de charger les données."));
                 }
             } catch (err) {
                 alert("❌ Erreur réseau lors du chargement : " + err.message);
             }
         }
-
-        // 4. Fonction pour vérifier et enregistrer le code d'activation CRYPT
+        
+        // 4. Vérifier et enregistrer le code d'activation CRYPT (Correction de la clé identifier)
         async function verifyActivationCode() {
             const code = document.getElementById('activationCodeInput').value.trim();
             if (!code) return alert("Veuillez saisir un code d'activation.");
@@ -3464,7 +3464,8 @@ body {
                 const response = await fetch(`${API_BASE_URL}/api/admin/codes/verify`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ school_id: appState.school.id, code: code })
+                    // Correction ici : remplacer "school_id" par "identifier"
+                    body: JSON.stringify({ identifier: appState.school.id, code: code })
                 });
                 
                 const data = await response.json();
@@ -3474,11 +3475,10 @@ body {
                     alert(`🎉 ${data.message}\nNouvelle date d'expiration : ${data.expiration_date}`);
                     updateExpirationLabel();
                     
-                    // Déverrouiller si l'écran était bloqué
                     const lockOverlay = document.getElementById('lock-screen-overlay');
                     if (lockOverlay) lockOverlay.classList.add('hidden');
                 } else {
-                    alert("❌ Code invalide ou expiré (Code erreur : " + data.code + ")");
+                    alert("❌ Code invalide ou expiré (Code erreur : " + (data.code || "0000") + ")");
                 }
             } catch (err) {
                 alert("❌ Impossible de vérifier le code auprès du serveur CRYPT.");
