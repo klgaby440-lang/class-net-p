@@ -1032,9 +1032,12 @@ body {
             <!-- Sidebar Sélection Élève -->
             <nav class="retractable-sidebar">
                 <div class="sidebar-header">
-                    <span class="sidebar-title" id="bulletinSidebarTitle">ÉLÈVES DE LA CLASSE</span>
+                    <span class="sidebar-title" id="bulletinSidebarTitle">BULLETIN</span>
                     <button class="toggle-sidebar-btn">◀</button>
                 </div>
+                <button class="btn-secondary" onclick="renderinterface('ajouter_eleve')">Ajouter un élève</button>
+                <button class="btn-secondary" onclick="renderinterface('ajouter_cours')">Ajouter un cours</button>
+                <input type="text" placeholder="Rechercher un élève..." class="search-input">
                 <div class="item-list" id="studentListSidebar"></div>
             </nav>
 
@@ -1260,7 +1263,21 @@ body {
                 <h2>PARAMÈTRES DE L'APPLICATION</h2>
                 <div class="form-group">
                     <label>Action rapide</label>
-                    <button class="btn-primary" onclick="renderinterface('ajouter_classe')">AJOUTER UNE CLASSE</button>
+                    <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                        <button class="btn-primary" onclick="renderinterface('ajouter_classe')">AJOUTER UNE CLASSE</button>
+                        <button class="btn-primary" style="background-color: #0284c7;" onclick="fetchServerData()">Récupérer les données sur Internet</button>
+                        <button class="btn-primary" style="background-color: #16a34a;" onclick="saveDatabaseOnline()">Save data base OnLine</button>
+                        <button class="btn-secondary" onclick="loadSchoolData()">Charger les données de l'école</button>
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-top: 1rem; border-top: 1px solid var(--border-color); padding-top: 0.8rem;">
+                    <label>ACTIVATION & LICENCE CRYPT</label>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <input type="text" id="activationCodeInput" class="form-control" placeholder="Entrez le code CRYPT">
+                        <button class="btn-primary" onclick="verifyActivationCode()">Activer</button>
+                    </div>
+                    <small id="expirationStatusLabel" style="display:block; margin-top:0.4rem; color: var(--text-secondary); font-weight:600;"></small>
                 </div>
                 <div class="form-group">
                     <label>THÈME</label>
@@ -3109,6 +3126,413 @@ body {
             `;
             container.appendChild(newRow);
         };
+// REGISTRE DES ENSEIGNANTS (PARAMÈTRES)
+        function renderTeachersTable() {
+            const tbody = document.getElementById('teachersTableBody');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+
+            appState.teachers.forEach(teacher => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><code>${teacher.uniqueId}</code></td>
+                    <td><strong>${teacher.name}</strong></td>
+                    <td>${teacher.subject}</td>
+                    <td><span class="status-badge">${teacher.status}</span></td>
+                    <td>
+                        <button class="btn-secondary" style="padding: 0.2rem 0.6rem; font-size: 0.75rem; background:#dc2626;" onclick="removeTeacher('${teacher.uniqueId}')">Retirer</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        window.removeTeacher = function(uniqueId) {
+            appState.teachers = appState.teachers.filter(t => t.uniqueId !== uniqueId);
+            saveState();
+            renderTeachersTable();
+        };
+
+        // SUPPRESSION DE COURS
+        window.deleteCourse = function(courseId) {
+            if (confirm("Voulez-vous vraiment supprimer ce cours ?")) {
+                appState.courses = appState.courses.filter(c => c.id !== courseId);
+                saveState();
+                renderClassDetails(activeClassId);
+            }
+        };
+
+        // INITIALISATION ET ÉCOUTEURS D'ÉVÉNEMENTS
+        document.addEventListener('DOMContentLoaded', () => {
+
+            // 1. Navigation Principale
+            document.querySelectorAll('.main-navbar .nav-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.main-navbar .nav-btn').forEach(b => b.classList.remove('active'));
+                    document.querySelectorAll('.app-section').forEach(s => s.classList.remove('active'));
+                    btn.classList.add('active');
+                    const target = btn.getAttribute('data-target');
+                    document.getElementById(target).classList.add('active');
+                });
+            });
+
+            // 2. Navigation Sous-Views (Bulletin, Fiches, Stats)
+            document.querySelectorAll('.sub-nav-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const parent = btn.closest('.app-section');
+                    parent.querySelectorAll('.sub-nav-btn').forEach(b => b.classList.remove('active'));
+                    parent.querySelectorAll('.sub-view-content').forEach(v => v.classList.remove('active'));
+                    btn.classList.add('active');
+                    const subId = btn.getAttribute('data-sub');
+                    if (subId && document.getElementById(subId)) {
+                        document.getElementById(subId).classList.add('active');
+                    }
+                });
+            });
+
+            // 3. Sauvegarde d'un Élève
+            document.getElementById('saveStudentBtn').addEventListener('click', () => {
+                const name = document.getElementById('name-student').value.trim();
+                const postname = document.getElementById('post-name-student').value.trim();
+                const prename = document.getElementById('pre-name-student').value.trim();
+                const sexe = document.getElementById('sexe-student').value.trim().toUpperCase();
+                const bornDate = document.getElementById('born-date-student').value;
+                const bornWhere = document.getElementById('born-where-student').value.trim();
+                const permi = document.getElementById('number-permi-student').value.trim();
+
+                if (!name || !sexe) return alert("Le nom et le sexe sont obligatoires.");
+
+                const newStudent = {
+                    id: 's_' + Date.now(),
+                    classId: activeClassId,
+                    name, postname, prename, sexe, bornDate, bornWhere, permi
+                };
+
+                appState.students.push(newStudent);
+                saveState();
+                renderinterface('ajouter_eleve');
+                renderClassDetails(activeClassId);
+            });
+
+            // 4. Sauvegarde d'un Cours
+            document.getElementById('saveCourseBtn').addEventListener('click', () => {
+                const name = document.getElementById('name-added-cours').value.trim();
+                const maxPer = parseFloat(document.getElementById('max-per-cours').value) || 40;
+                const titulaire = document.getElementById('name-titulaire-added-cours').value.trim();
+                const category = document.getElementById('choix-categorie').value;
+
+                if (!name) return alert("Le nom du cours est obligatoire.");
+
+                const newCourse = {
+                    id: 'k_' + Date.now(),
+                    classId: activeClassId,
+                    name, maxPer, category, titulaire
+                };
+
+                appState.courses.push(newCourse);
+                saveState();
+                renderinterface('ajouter_cours');
+                renderClassDetails(activeClassId);
+            });
+
+            // 5. Sauvegarde d'une Classe
+            document.getElementById('saveClassBtn').addEventListener('click', () => {
+                const name = document.getElementById('name-added-class').value.trim();
+                const titulaire = document.getElementById('name-titulaire-added-class').value.trim();
+                const catInputs = document.querySelectorAll('#categoriesContainer .category-input');
+                const categories = Array.from(catInputs).map(i => i.value.trim()).filter(v => v !== '');
+
+                if (!name) return alert("Le nom de la classe est obligatoire.");
+
+                if (editingClassId) {
+                    const cls = appState.classes.find(c => c.id === editingClassId);
+                    if (cls) {
+                        cls.name = name;
+                        cls.titulaire = titulaire;
+                        cls.categories = categories.length ? categories : ['Général'];
+                    }
+                    editingClassId = null;
+                } else {
+                    appState.classes.push({
+                        id: 'c_' + Date.now(),
+                        name, titulaire,
+                        categories: categories.length ? categories : ['Général']
+                    });
+                }
+
+                saveState();
+                renderinterface('ajouter_classe');
+                renderClassesTable();
+            });
+
+            // 6. Filtrage dynamique (Recherche Élèves)
+            document.querySelectorAll('.search-input').forEach(input => {
+                input.addEventListener('input', (e) => {
+                    const query = e.target.value.toLowerCase();
+                    const sidebar = e.target.closest('.retractable-sidebar');
+                    if (!sidebar) return;
+                    
+                    sidebar.querySelectorAll('.item-list .list-item').forEach(item => {
+                        const text = item.textContent.toLowerCase();
+                        item.style.display = text.includes(query) ? 'block' : 'none';
+                    });
+                });
+            });
+
+            // 7. Déverrouillage Écran
+            document.getElementById('unlockBtn').addEventListener('click', () => {
+                const pass = document.getElementById('lockPasswordInput').value;
+                const setPass = document.getElementById('appPasswordInput').value || "12345678";
+                if (pass === setPass) {
+                    document.getElementById('lock-screen-overlay').classList.add('hidden');
+                } else {
+                    alert("Mot de passe incorrect.");
+                }
+            });
+
+            // Chargement initial des vues
+            renderClassesTable();
+            renderTeachersTable();
+        });
+
+        // Affichage dynamique des classes principales
+        function renderClassesTable() {
+            const tbody = document.getElementById('classesTableBody');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+
+            appState.classes.forEach(cls => {
+                const count = appState.students.filter(s => s.classId === cls.id).length;
+                const tr = document.createElement('tr');
+                tr.className = 'clickable-row';
+                tr.innerHTML = `
+                    <td><strong>${cls.name}</strong></td>
+                    <td>${cls.titulaire}</td>
+                    <td><span class="id-badge">${count} élèves</span></td>
+                `;
+                tr.addEventListener('click', () => {
+                    activeClassId = cls.id;
+                    renderClassDetails(cls.id);
+                    document.querySelectorAll('.app-section').forEach(s => s.classList.remove('active'));
+                    document.getElementById('section-class-detail').classList.add('active');
+                });
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Chargement d'une classe dans l'interface détaillée
+        function renderClassDetails(classId) {
+            const classStudents = appState.students.filter(s => s.classId === classId);
+            const sidebar = document.getElementById('studentListSidebar');
+            if (!sidebar) return;
+            sidebar.innerHTML = '';
+
+            classStudents.forEach(st => {
+                const btn = document.createElement('button');
+                btn.className = `list-item ${st.id === activeStudentId ? 'active' : ''}`;
+                btn.textContent = `${st.name} ${st.postname || ''} ${st.prename || ''}`;
+                btn.addEventListener('click', () => {
+                    activeStudentId = st.id;
+                    sidebar.querySelectorAll('.list-item').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    renderOfficialBulletin(st.id);
+                });
+                sidebar.appendChild(btn);
+            });
+
+            if (classStudents.length > 0) {
+                if (!classStudents.some(s => s.id === activeStudentId)) {
+                    activeStudentId = classStudents[0].id;
+                }
+                renderOfficialBulletin(activeStudentId);
+            }
+        }
+
+        // Server API Base URL (à adapter selon le déploiement Cloud / Local)
+        const API_BASE_URL = window.location.origin;
+
+        // 1. Fonction de récupération et fusion des données enseignants
+        async function fetchServerData() {
+            const schoolId = appState.school.id;
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/primenet/sync/${schoolId}`);
+                if (!response.ok) throw new Error("Erreur de connexion au serveur.");
+                
+                const mergedData = await response.json();
+                
+                // Mettre à jour appState avec les données fusionnées
+                if (mergedData.teachers && mergedData.teachers.length > 0) {
+                    mergedData.teachers.forEach(tId => {
+                        if (!appState.teachers.find(t => t.uniqueId === tId)) {
+                            appState.teachers.push({ uniqueId: tId, name: tId, subject: 'Enseignant Sync', status: 'Actif' });
+                        }
+                    });
+                }
+                
+                // Mise à jour des notes et moyennes récupérées
+                if (mergedData.moyenne_classe) {
+                    if (!appState.grades) appState.grades = {};
+                    // Injection des moyennes de classe dans appState.grades
+                    Object.keys(mergedData.moyenne_classe).forEach(className => {
+                        const clsObj = appState.classes.find(c => c.name === className);
+                        if (clsObj) {
+                            const courses = mergedData.moyenne_classe[className];
+                            Object.keys(courses).forEach(courseName => {
+                                const crsObj = appState.courses.find(c => c.name === courseName && c.classId === clsObj.id);
+                                if (crsObj) {
+                                    const periods = courses[courseName];
+                                    Object.keys(periods).forEach(periodKey => {
+                                        const studentGrades = periods[periodKey];
+                                        Object.keys(studentGrades).forEach(studentName => {
+                                            const stObj = appState.students.find(s => `${s.name} ${s.postname}`.trim() === studentName.trim());
+                                            if (stObj) {
+                                                const gradeKey = `${stObj.id}_${crsObj.id}`;
+                                                if (!appState.grades[gradeKey]) appState.grades[gradeKey] = {};
+                                                appState.grades[gradeKey][periodKey.toLowerCase()] = studentGrades[studentName];
+                                            }
+                                        });
+                                    });
+                                }
+                            });
+                        }
+                    });
+                }
+                
+                // Sauvegarde locale et actualisation de l'interface
+                saveState();
+                if (typeof renderOfficialBulletin === "function" && activeStudentId) {
+                    renderOfficialBulletin(activeStudentId);
+                }
+                alert("✅ Données synchronisées et fusionnées avec succès depuis Internet !");
+            } catch (err) {
+                alert("❌ Échec de la récupération des données : " + err.message);
+            }
+        }
+
+        // 2. Fonction pour sauvegarder toute la base de données en ligne
+        async function saveDatabaseOnline() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/sync/primenet`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(appState)
+                });
+                const res = await response.json();
+                if (res.status) {
+                    alert("✅ " + res.message);
+                } else {
+                    alert("❌ Échec de la synchronisation.");
+                }
+            } catch (err) {
+                alert("❌ Erreur lors de l'envoi vers le serveur : " + err.message);
+            }
+        }
+
+        // 3. Fonction pour charger les données complètes de l'école
+        async function loadSchoolData() {
+            const schoolId = appState.school.id;
+            const password = document.getElementById('appPasswordInput')?.value || "";
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/primenet/load`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ school_id: schoolId, password: password })
+                });
+                
+                const result = await response.json();
+                if (result.status && result.data) {
+                    appState = result.data;
+                    saveState();
+                    alert("✅ Base de données de l'école chargée avec succès !");
+                    location.reload(); // Recharge pour appliquer le nouvel état
+                } else {
+                    alert("❌ " + (result.detail || "Impossible de charger les données."));
+                }
+            } catch (err) {
+                alert("❌ Erreur réseau lors du chargement : " + err.message);
+            }
+        }
+
+        // 4. Fonction pour vérifier et enregistrer le code d'activation CRYPT
+        async function verifyActivationCode() {
+            const code = document.getElementById('activationCodeInput').value.trim();
+            if (!code) return alert("Veuillez saisir un code d'activation.");
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/admin/codes/verify`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ school_id: appState.school.id, code: code })
+                });
+                
+                const data = await response.json();
+                if (data.status) {
+                    appState.expiration_date = data.expiration_date;
+                    saveState();
+                    alert(`🎉 ${data.message}\nNouvelle date d'expiration : ${data.expiration_date}`);
+                    updateExpirationLabel();
+                    
+                    // Déverrouiller si l'écran était bloqué
+                    const lockOverlay = document.getElementById('lock-screen-overlay');
+                    if (lockOverlay) lockOverlay.classList.add('hidden');
+                } else {
+                    alert("❌ Code invalide ou expiré (Code erreur : " + data.code + ")");
+                }
+            } catch (err) {
+                alert("❌ Impossible de vérifier le code auprès du serveur CRYPT.");
+            }
+        }
+
+        // 5. Petite fonction au démarrage pour vérifier la date d'expiration
+        function checkProductActivation() {
+            const expLabel = document.getElementById('expirationStatusLabel');
+            if (appState.expiration_date) {
+                const today = new Date().toISOString().split('T')[0];
+                if (expLabel) expLabel.textContent = `Licence valide jusqu'au : ${appState.expiration_date}`;
+                
+                if (today > appState.expiration_date) {
+                    blockSoftwareForActivation("Votre licence ClassNet P / PrimeNet a expiré. Veuillez entrer un nouveau code d'activation CRYPT.");
+                }
+            } else {
+                if (expLabel) expLabel.textContent = "Aucun code d'activation enregistré.";
+            }
+        }
+
+        function blockSoftwareForActivation(message) {
+            const lockOverlay = document.getElementById('lock-screen-overlay');
+            if (lockOverlay) {
+                lockOverlay.classList.remove('hidden');
+                const lockBox = lockOverlay.querySelector('.lock-box');
+                if (lockBox) {
+                    lockBox.innerHTML = `
+                        <div class="lock-icon">⚠️</div>
+                        <h3>Logiciel Verrouillé</h3>
+                        <p style="margin-bottom: 1rem; color: var(--danger-color);">${message}</p>
+                        <div class="form-group">
+                            <input type="text" id="lockActivationInput" class="form-control" placeholder="Entrez le code CRYPT">
+                        </div>
+                        <button class="btn-primary" onclick="verifyActivationFromLock()">Activer ClassNet P</button>
+                        <span class="brand-tagline">Engineered by CRYPT Enterprise</span>
+                    `;
+                }
+            }
+        }
+
+        async function verifyActivationFromLock() {
+            const input = document.getElementById('lockActivationInput');
+            if (input) {
+                document.getElementById('activationCodeInput').value = input.value;
+                await verifyActivationCode();
+            }
+        }
+
+        // Lancement automatique du contrôle au chargement du DOM
+        document.addEventListener('DOMContentLoaded', () => {
+            checkProductActivation();
+        });
+
+        console.log(defaultState)
     </script>
 </body>
 </html>
