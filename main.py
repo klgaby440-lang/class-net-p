@@ -9,11 +9,70 @@ import httpx
 from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, EmailStr
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, Text, JSON, Float, text
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, Text, JSON, Float, text, func
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session, relationship
 import random
+# ==============================================================================================================================================================
+from sqlalchemy.orm import Session
+from database import SessionLocal  # Importe ton générateur de sessions DB
 
+def seed_initial_test_data():
+    """Initialise l'école et l'enseignant de test automatiquement au démarrage du serveur."""
+    db: Session = SessionLocal()
+    try:
+        # 1. Vérification et création de l'école fictive
+        test_school_id = "63017630119000999"
+        school = db.query(SchoolInformation).filter(SchoolInformation.school_id == test_school_id).first()
+        
+        if not school:
+            school = SchoolInformation(
+                school_id=test_school_id,
+                bulletin_seq_id="SEQ_TEST_001",
+                code="630119",
+                name_school="ÉCOLE DE TEST CLASSNET",
+                city="BUKAVU",
+                commune="IBANDA",
+                name_responsable="Directeur Gabriel",
+                num_tel="+243900000000",
+                adresse_physique="Avenue du Test N°12",
+                email="ecole.test@classnet.cd",
+                pass_word="123456"
+            )
+            db.add(school)
+            print("🏫 [SEED] École fictive de test créée avec succès !")
+
+        # 2. Vérification et création de l'enseignant fictif
+        test_teacher_email = "prof.kabila@gmail.com"
+        teacher = db.query(Teacher).filter(Teacher.email == test_teacher_email).first()
+        
+        if not teacher:
+            teacher = Teacher(
+                full_name="Prof. Kabila Test",
+                email=test_teacher_email,
+                school_name="ÉCOLE DE TEST CLASSNET",
+                password_hash="profpassword123",  # Utilise le hashage si ton auth l'exige
+                phone_number="+243810000000",
+                age=32,
+                teacher_code="PROF_TEST_001",
+                school_id=test_school_id,
+                is_active=True
+            )
+            db.add(teacher)
+            print("👨‍🏫 [SEED] Enseignant fictif de test créé avec succès !")
+
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"⚠️ [SEED] Erreur lors de la création des données de test : {e}")
+    finally:
+        db.close()
+
+# Événement FastAPI déclenché au lancement du serveur
+@app.on_event("startup")
+def on_startup():
+    seed_initial_test_data()
+# ==============================================================================================================================================================
 class ScheduleEngine:
     """
     Moteur de génération d'horaires scolaires hybride (CSP + Heuristique).
@@ -631,23 +690,104 @@ def login_teacher(data: LoginSchema, db: Session = Depends(get_db)):
 
 @app.post("/api/auth/school/login")
 def login_school(data: LoginSchema, db: Session = Depends(get_db)):
-    """Connexion École : Renvoie l'état exact defaultState pour PrimeNet/ClassNet P."""
-    school = db.query(SchoolInformation).filter(SchoolInformation.school_id == data.identifier, SchoolInformation.pass_word == data.password).first()
+    """Connexion École : Charge et renvoie l'état exact defaultState pour PrimeNet/ClassNet P depuis la DB."""
+    school = db.query(SchoolInformation).filter(
+        SchoolInformation.school_id == data.identifier, 
+        SchoolInformation.pass_word == data.password
+    ).first()
+    
     if not school:
         return {"status": False, "message": "Identifiants incorrects."}
     
+    # 1. Chargement des classes
+    classes_data = []
+    for c in school.classes:
+        classes_data.append({
+            "id": c.id,
+            "name": c.class_name,
+            "titulaire": c.titulaire_name or "",
+            "categories": c.domaines if isinstance(c.domaines, list) else []
+        })
+
+    # 2. Chargement des élèves
+    students_data = []
+    student_id_map = {}  # Mappe le numéro permanent vers l'id de l'élève
+    for s in school.students:
+        students_data.append({
+            "id": s.id,
+            "name": s.student_name,
+            "postname": s.student_post_name,
+            "prename": s.student_pre_name,
+            "sexe": s.student_sexe,
+            "bornDate": s.student_born_date or "",
+            "bornWhere": s.student_born_place or "",
+            "permi": s.student_n_permanent or "",
+            "classId": s.class_id
+        })
+        if s.student_n_permanent:
+            student_id_map[s.student_n_permanent] = s.id
+
+    # 3. Chargement des cours
+    courses_data = []
+    for crs in school.courses:
+        courses_data.append({
+            "id": crs.id,
+            "name": crs.course_name,
+            "maxPer": float(crs.max_per),
+            "category": crs.category,
+            "classId": crs.class_id,
+            "titulaire": crs.titulaire_name or ""
+        })
+
+    # 4. Chargement des enseignants
+    teachers_data = []
+    for t in school.teachers:
+        teachers_data.append({
+            "uniqueId": t.teacher_code or f"prof_{t.id}",
+            "name": t.full_name,
+            "subject": t.subject or "",
+            "status": t.status or "Actif"
+        })
+
+    # 5. Chargement des notes (TeacherEvaluation)
+    evaluations = db.query(TeacherEvaluation).filter(TeacherEvaluation.school_id == school.school_id).all()
+    grades_data = {}
+    for ev in evaluations:
+        st_id = student_id_map.get(ev.student_n_permanent, ev.student_n_permanent)
+        grade_key = f"{st_id}_{ev.course_id}"
+        
+        grade_obj = {}
+        if ev.p1 is not None: grade_obj["p1"] = ev.p1
+        if ev.p2 is not None: grade_obj["p2"] = ev.p2
+        if ev.ex1 is not None: grade_obj["ex1"] = ev.ex1
+        if ev.p3 is not None: grade_obj["p3"] = ev.p3
+        if ev.p4 is not None: grade_obj["p4"] = ev.p4
+        if ev.ex2 is not None: grade_obj["ex2"] = ev.ex2
+
+        if grade_obj:
+            grades_data[grade_key] = grade_obj
+
+    # 6. Assemblage de l'état complet
     primenet_state = {
         "school": {
-            "name": school.name_school, "id": school.school_id, "code": school.code,
-            "city": school.city, "commune": school.commune
+            "id": school.school_id,
+            "name": school.name_school,
+            "code": school.code,
+            "city": school.city,
+            "commune": school.commune
         },
-        "classes": [], "students": [], "courses": [], "teachers": [], "grades": {},
+        "classes": classes_data,
+        "students": students_data,
+        "courses": courses_data,
+        "teachers": teachers_data,
+        "grades": grades_data,
         "tools": {
             "presences": {"students": [], "teachers": []},
             "mixage": {"config": {}, "surveillants": [], "salles": [], "coursProgrammes": [], "generatedSchedules": []},
             "horaire": {"config": {}, "profsDispo": [], "generatedSchedules": []}
         }
     }
+
     return {"status": True, "data": primenet_state}
 
 # ---------------------------------------------------------
@@ -874,7 +1014,7 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db)):
 
 @app.post("/api/sync/primenet")
 def sync_primenet(payload: dict, db: Session = Depends(get_db)):
-    """Reçoit la DB PrimeNet (ClassNet P). Met à jour sans historique."""
+    """Reçoit la DB PrimeNet (ClassNet P) et met à jour l'ensemble des données de l'école."""
     school_data = payload.get("school", {})
     school_id = school_data.get("id")
     
@@ -882,12 +1022,132 @@ def sync_primenet(payload: dict, db: Session = Depends(get_db)):
     if not school:
         return {"status": False, "message": "École non trouvée."}
 
-    # Logique de mise à jour directe (Classes, Students, Courses)
-    # Remplacement destructif ou update selon besoin PrimeNet
-    # (Logique similaire simplifiée pour économie de tokens)
-    
+    # 1. Mise à jour des informations générales de l'école
+    if school_data.get("name"): school.name_school = school_data.get("name")
+    if school_data.get("code"): school.code = school_data.get("code")
+    if school_data.get("city"): school.city = school_data.get("city")
+    if school_data.get("commune"): school.commune = school_data.get("commune")
+
+    # 2. Synchronisation des classes (ClasseInformation)
+    classes_payload = payload.get("classes", [])
+    for c in classes_payload:
+        c_id = c.get("id")
+        if not c_id: continue
+        
+        classe_obj = db.query(ClasseInformation).filter(
+            ClasseInformation.id == c_id, 
+            ClasseInformation.school_id == school_id
+        ).first()
+        
+        if not classe_obj:
+            classe_obj = ClasseInformation(id=c_id, school_id=school_id)
+            db.add(classe_obj)
+            
+        classe_obj.class_name = c.get("name", "")
+        classe_obj.titulaire_name = c.get("titulaire", "")
+        classe_obj.domaines = c.get("categories", [])
+
+    # 3. Synchronisation des cours (CourseInformation)
+    courses_payload = payload.get("courses", [])
+    for crs in courses_payload:
+        crs_id = crs.get("id")
+        if not crs_id: continue
+        
+        course_obj = db.query(CourseInformation).filter(
+            CourseInformation.id == crs_id, 
+            CourseInformation.school_id == school_id
+        ).first()
+        
+        if not course_obj:
+            course_obj = CourseInformation(id=crs_id, school_id=school_id)
+            db.add(course_obj)
+            
+        course_obj.course_name = crs.get("name", "")
+        course_obj.max_per = float(crs.get("maxPer", 40.0))
+        course_obj.category = crs.get("category", "")
+        course_obj.titulaire_name = crs.get("titulaire", "")
+        course_obj.class_id = crs.get("classId")
+
+    # 4. Synchronisation des élèves (SchoolStudentInformation)
+    students_payload = payload.get("students", [])
+    for st in students_payload:
+        st_id = st.get("id")
+        if not st_id: continue
+        
+        student_obj = db.query(SchoolStudentInformation).filter(
+            SchoolStudentInformation.id == st_id, 
+            SchoolStudentInformation.school_id == school_id
+        ).first()
+        
+        if not student_obj:
+            student_obj = SchoolStudentInformation(id=st_id, school_id=school_id)
+            db.add(student_obj)
+            
+        student_obj.student_name = st.get("name", "")
+        student_obj.student_post_name = st.get("postname", "")
+        student_obj.student_pre_name = st.get("prename", "")
+        student_obj.student_sexe = st.get("sexe", "M")
+        student_obj.student_born_date = st.get("bornDate", "")
+        student_obj.student_born_place = st.get("bornWhere", "")
+        student_obj.student_n_permanent = st.get("permi") or st_id
+        student_obj.class_id = st.get("classId")
+
+    # 5. Rapprochement et mise à jour des enseignants (Teacher)
+    teachers_payload = payload.get("teachers", [])
+    for t in teachers_payload:
+        t_code = t.get("uniqueId")
+        if not t_code: continue
+        
+        teacher_obj = db.query(Teacher).filter(
+            (Teacher.teacher_code == t_code) | (Teacher.full_name == t.get("name"))
+        ).first()
+        
+        if teacher_obj:
+            teacher_obj.school_id = school_id
+            if t.get("subject"): teacher_obj.subject = t.get("subject")
+            if t.get("status"): teacher_obj.status = t.get("status")
+
+    # 6. Synchronisation des évaluations/notes (TeacherEvaluation)
+    # La clé dans payload['grades'] est de la forme "s1_k1" (studentId_courseId)
+    grades_payload = payload.get("grades", {})
+    for grade_key, eval_scores in grades_payload.items():
+        if "_" not in grade_key: continue
+        
+        parts = grade_key.split("_")
+        st_id = parts[0]
+        course_id = parts[1]
+        
+        # Récupération du numéro permanent de l'élève
+        student_obj = db.query(SchoolStudentInformation).filter(
+            SchoolStudentInformation.id == st_id, 
+            SchoolStudentInformation.school_id == school_id
+        ).first()
+        
+        n_perm = student_obj.student_n_permanent if student_obj and student_obj.student_n_permanent else st_id
+
+        eval_obj = db.query(TeacherEvaluation).filter(
+            TeacherEvaluation.school_id == school_id,
+            TeacherEvaluation.student_n_permanent == n_perm,
+            TeacherEvaluation.course_id == course_id
+        ).first()
+
+        if not eval_obj:
+            eval_obj = TeacherEvaluation(
+                school_id=school_id,
+                student_n_permanent=n_perm,
+                course_id=course_id
+            )
+            db.add(eval_obj)
+
+        if "p1" in eval_scores and eval_scores["p1"] is not None: eval_obj.p1 = float(eval_scores["p1"])
+        if "p2" in eval_scores and eval_scores["p2"] is not None: eval_obj.p2 = float(eval_scores["p2"])
+        if "ex1" in eval_scores and eval_scores["ex1"] is not None: eval_obj.ex1 = float(eval_scores["ex1"])
+        if "p3" in eval_scores and eval_scores["p3"] is not None: eval_obj.p3 = float(eval_scores["p3"])
+        if "p4" in eval_scores and eval_scores["p4"] is not None: eval_obj.p4 = float(eval_scores["p4"])
+        if "ex2" in eval_scores and eval_scores["ex2"] is not None: eval_obj.ex2 = float(eval_scores["ex2"])
+
     db.commit()
-    return {"status": True, "message": "Synchronisation PrimeNet effectuée."}
+    return {"status": True, "message": "Synchronisation PrimeNet de l'école effectuée avec succès."}
 
 # ---------------------------------------------------------
 # 9. EXTRACTION DONNÉES ENSEIGNANT
