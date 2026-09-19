@@ -620,6 +620,7 @@ function deleteClass(classNameToDelete) {
 }
 
 let db = JSON.parse(localStorage.getItem(DB_KEY)) || defaultDB;
+db.school_id = "63017630119000656"
 
 function saveDB() {
     localStorage.setItem(DB_KEY, JSON.stringify(db));
