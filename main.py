@@ -958,19 +958,20 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db)):
 def sync_primenet(payload: dict, db: Session = Depends(get_db)):
     """Reçoit la DB PrimeNet (ClassNet P) et met à jour l'ensemble des données de l'école."""
     school_data = payload.get("school", {})
-    school_id = school_data.get("id")
+    # Récupère 'id' ou 'school_id' pour éviter les incompatibilités de nom de clé
+    school_id = school_data.get("id") or school_data.get("school_id")
     
     school = db.query(SchoolInformation).filter(SchoolInformation.school_id == school_id).first()
     if not school:
-        return {"status": False, "message": "École non trouvée."}
+        return {"status": False, "message": f"École non trouvée (ID transmis : {school_id})."}
 
-    # 1. Mise à jour des informations générales de l'école
+    # 1. Mise à jour des informations générales
     if school_data.get("name"): school.name_school = school_data.get("name")
     if school_data.get("code"): school.code = school_data.get("code")
     if school_data.get("city"): school.city = school_data.get("city")
     if school_data.get("commune"): school.commune = school_data.get("commune")
 
-    # 2. Synchronisation des classes (ClasseInformation)
+    # 2. Synchronisation des classes
     classes_payload = payload.get("classes", [])
     for c in classes_payload:
         c_id = c.get("id")
@@ -989,7 +990,7 @@ def sync_primenet(payload: dict, db: Session = Depends(get_db)):
         classe_obj.titulaire_name = c.get("titulaire", "")
         classe_obj.domaines = c.get("categories", [])
 
-    # 3. Synchronisation des cours (CourseInformation)
+    # 3. Synchronisation des cours
     courses_payload = payload.get("courses", [])
     for crs in courses_payload:
         crs_id = crs.get("id")
@@ -1010,7 +1011,7 @@ def sync_primenet(payload: dict, db: Session = Depends(get_db)):
         course_obj.titulaire_name = crs.get("titulaire", "")
         course_obj.class_id = crs.get("classId")
 
-    # 4. Synchronisation des élèves (SchoolStudentInformation)
+    # 4. Synchronisation des élèves
     students_payload = payload.get("students", [])
     for st in students_payload:
         st_id = st.get("id")
@@ -1034,7 +1035,7 @@ def sync_primenet(payload: dict, db: Session = Depends(get_db)):
         student_obj.student_n_permanent = st.get("permi") or st_id
         student_obj.class_id = st.get("classId")
 
-    # 5. Rapprochement et mise à jour des enseignants (Teacher)
+    # 5. Rapprochement des enseignants
     teachers_payload = payload.get("teachers", [])
     for t in teachers_payload:
         t_code = t.get("uniqueId")
@@ -1049,17 +1050,14 @@ def sync_primenet(payload: dict, db: Session = Depends(get_db)):
             if t.get("subject"): teacher_obj.subject = t.get("subject")
             if t.get("status"): teacher_obj.status = t.get("status")
 
-    # 6. Synchronisation des évaluations/notes (TeacherEvaluation)
-    # La clé dans payload['grades'] est de la forme "s1_k1" (studentId_courseId)
+    # 6. Synchronisation des évaluations/notes
     grades_payload = payload.get("grades", {})
     for grade_key, eval_scores in grades_payload.items():
         if "_" not in grade_key: continue
         
-        parts = grade_key.split("_")
-        st_id = parts[0]
-        course_id = parts[1]
+        # Découpage robuste à partir du dernier '_'
+        st_id, course_id = grade_key.rsplit("_", 1)
         
-        # Récupération du numéro permanent de l'élève
         student_obj = db.query(SchoolStudentInformation).filter(
             SchoolStudentInformation.id == st_id, 
             SchoolStudentInformation.school_id == school_id
@@ -1090,7 +1088,6 @@ def sync_primenet(payload: dict, db: Session = Depends(get_db)):
 
     db.commit()
     return {"status": True, "message": "Synchronisation PrimeNet de l'école effectuée avec succès."}
-
 # ---------------------------------------------------------
 # 9. EXTRACTION DONNÉES ENSEIGNANT
 # ---------------------------------------------------------
@@ -1218,6 +1215,26 @@ def seed_initial_test_data():
     try:
         # 1. Vérification et création de l'école fictive
         test_school_id = "63017630119000999"
+        school = db.query(SchoolInformation).filter(SchoolInformation.school_id == test_school_id).first()
+        
+        if not school:
+            school = SchoolInformation(
+                school_id=test_school_id,
+                bulletin_seq_id="SEQ_TEST_001",
+                code="630119",
+                name_school="ÉCOLE DE TEST CLASSNET",
+                city="BUKAVU",
+                commune="IBANDA",
+                name_responsable="Directeur Gabriel",
+                num_tel="+243900000000",
+                adresse_physique="Avenue du Test N°12",
+                email="ecole.test@classnet.cd",
+                pass_word="123456"
+            )
+            db.add(school)
+            print("🏫 [SEED] École fictive de test créée avec succès !")
+
+        test_school_id = "63017630119000656"
         school = db.query(SchoolInformation).filter(SchoolInformation.school_id == test_school_id).first()
         
         if not school:
