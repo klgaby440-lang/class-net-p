@@ -1824,6 +1824,7 @@ body {
         };
 
         let appState = JSON.parse(localStorage.getItem('classnet_p_db')) || defaultState;
+        appState.school.code = "123456" 
 
         // Patch de sécurité pour les anciennes versions stockées en local
         if (!appState.teachers) appState.teachers = defaultState.teachers;
@@ -3355,11 +3356,15 @@ body {
         async function fetchServerData() {
             const schoolId = appState.school.id;
             try {
-                const response = await fetch(`${API_BASE_URL}/api/primenet/sync/63017630119000999`, {
-                    method: 'GET'});
+                // Utilisation dynamique de schoolId au lieu du numéro fixe
+                const response = await fetch(`${API_BASE_URL}/api/primenet/sync/${schoolId}`, {
+                    method: 'GET'
+                });
                 if (!response.ok) throw new Error("Erreur de connexion au serveur.");
                 
-                const mergedData = await response.json();
+                const result = await response.json();
+                // Récupération des données imbriquées dans result.data renvoyé par FastAPI
+                const mergedData = result.data || result;
                 
                 // Mettre à jour appState avec les données fusionnées
                 if (mergedData.teachers && mergedData.teachers.length > 0) {
@@ -3438,7 +3443,7 @@ body {
                 const response = await fetch(`${API_BASE_URL}/api/auth/school/login`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ identifier: schoolId, password: password })
+                    body: JSON.stringify({ identifier: schoolId, password: "123456" })
                 });
                 
                 const result = await response.json();
