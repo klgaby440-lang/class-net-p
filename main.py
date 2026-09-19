@@ -1262,8 +1262,5 @@ def seed_initial_test_data():
     finally:
         db.close()
 
-# Événement FastAPI déclenché au lancement du serveur
-@app.on_event("startup")
-def on_startup():
-    seed_initial_test_data()
+seed_initial_test_data()
 # ==============================================================================================================================================================
