@@ -355,6 +355,23 @@ class StudentGrade(Base):
     max_score = Column(Float, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+class PrimeNetPayload(Base):
+    __tablename__ = "primenet_payloads"
+
+    id = Column(Integer, primary_key=True, index=True)
+    school_id = Column(String, index=True, nullable=False)
+    teacher_email = Column(String, unique=True, index=True, nullable=False)
+    
+    # Déclaration de la colonne JSON
+    payload_data = Column(JSON, nullable=False, default=dict)
+    
+    # Horodatage automatique pour suivre les mises à jour
+    updated_at = Column(
+        DateTime(timezone=True), 
+        server_default=func.now(), 
+        onupdate=func.now()
+    )
+
 Base.metadata.create_all(bind=engine)
 
 # --- FONCTIONS DE GESTION DE LA BASE ---
@@ -773,6 +790,72 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db)):
 
         updates_count += 1
 
+    # --- 4. Génération et Sauvegarde des données pour PrimeNet ---
+    school_id = payload.get("school_id") or getattr(teacher, "school_id", None)
+    
+    # On ne génère le format PrimeNet que si l'enseignant appartient à une école
+    if school_id and str(school_id).lower() != "indépendant":
+        # Construction des listes et dictionnaires de base
+        classes_list = list(students_dict.keys())
+        presences_dict = payload.get("presences", {})
+        dates_presence = list(presences_dict.keys())
+        
+        # Formatage des élèves : { "classe": ["Nom Post-nom", ...] }
+        formatted_students = {}
+        for c_name, st_list in students_dict.items():
+            formatted_students[c_name] = [st.get("name", "") for st in st_list if st.get("name")]
+            
+        # Construction de la moyenne classe selon ta structure
+        moyenne_classe = {}
+        for c_name in classes_list:
+            moyenne_classe[c_name] = {}
+            # On récupère les cours de cette classe
+            c_courses = courses_dict.get(c_name, [])
+            for course in c_courses:
+                moyenne_classe[c_name][course] = {"P1": {}, "P2": {}, "EX1": {}, "P3": {}, "P4": {}, "EX2": {}}
+                
+                # Remplissage des notes/moyennes pour ce cours et cette classe
+                for grade_key, score in grades_dict.items():
+                    if "_EV-" not in grade_key: continue
+                    parts = grade_key.split("_EV-")
+                    s_id = parts[0]
+                    e_id = "EV-" + parts[1]
+                    
+                    s_info = student_lookup.get(s_id)
+                    e_info = eval_lookup.get(e_id)
+                    
+                    if s_info and e_info and s_info["class"] == c_name and e_info["course"] == course:
+                        s_name = s_info["name"]
+                        period = e_info["period"]
+                        # Si tu as déjà précalculé la moyenne, on l'injecte. Sinon on injecte la note brute.
+                        if period in moyenne_classe[c_name][course]:
+                            moyenne_classe[c_name][course][period][s_name] = score
+
+        # Assemblage final du JSON PrimeNet pour cet enseignant
+        primenet_data = {
+            "teacher_id": teacher.email,
+            "school_id": school_id,
+            "classes": classes_list,
+            "cours": courses_dict,
+            "date_presence": dates_presence,
+            "students": formatted_students,
+            "moyenne_classe": moyenne_classe,
+            "presences": presences_dict
+        }
+        
+        # Sauvegarde dans la base de données (Table à créer si pas encore fait)
+        # On met à jour s'il existe déjà un enregistrement pour ce prof, sinon on crée.
+        existing_payload = db.query(PrimeNetPayload).filter_by(teacher_email=teacher.email).first()
+        if existing_payload:
+            existing_payload.payload_data = primenet_data
+        else:
+            new_payload = PrimeNetPayload(
+                school_id=school_id,
+                teacher_email=teacher.email,
+                payload_data=primenet_data
+            )
+            db.add(new_payload)
+
     # Historique de synchronisation
     db.add(SyncHistory(
         teacher_email=teacher.email,
@@ -830,4 +913,95 @@ def get_teacher_info(identifier: str, db: Session = Depends(get_db)):
             "status": teacher.status,
             "llink_preferences": teacher.llink_preferences
         }
+    }
+
+
+@app.get("/api/primenet/sync/{school_id}")
+def get_primenet_data(school_id: str, db: Session = Depends(get_db)):
+    """
+    Récupère et fusionne les données de tous les enseignants d'une école spécifique
+    pour les envoyer à PrimeNet.
+    """
+    # 1. Récupérer tous les payloads enregistrés pour cette école
+    school_payloads = db.query(PrimeNetPayload).filter(PrimeNetPayload.school_id == school_id).all()
+    
+    if not school_payloads:
+        raise HTTPException(status_code=404, detail="Aucune donnée trouvée pour cette école ou identifiant non enregistré.")
+    
+    # 2. Structure globale fusionnée à renvoyer à PrimeNet
+    merged_data = {
+        "school_id": school_id,
+        "teachers": [],
+        "classes": set(),
+        "cours": {},
+        "date_presence": set(),
+        "students": {},
+        "moyenne_classe": {},
+        "presences": {}
+    }
+    
+    # 3. Fusion des données de chaque enseignant
+    for record in school_payloads:
+        data = record.payload_data
+        
+        # Ajout du prof
+        merged_data["teachers"].append(data.get("teacher_id"))
+        
+        # Fusion des classes
+        for c_name in data.get("classes", []):
+            merged_data["classes"].add(c_name)
+            
+        # Fusion des dates de présence
+        for date_p in data.get("date_presence", []):
+            merged_data["date_presence"].add(date_p)
+            
+        # Fusion des cours par classe
+        for c_name, courses in data.get("cours", {}).items():
+            if c_name not in merged_data["cours"]:
+                merged_data["cours"][c_name] = []
+            # On ajoute les cours en évitant les doublons
+            merged_data["cours"][c_name] = list(set(merged_data["cours"][c_name] + courses))
+            
+        # Fusion des élèves par classe
+        for c_name, st_list in data.get("students", {}).items():
+            if c_name not in merged_data["students"]:
+                merged_data["students"][c_name] = []
+            merged_data["students"][c_name] = list(set(merged_data["students"][c_name] + st_list))
+            
+        # Fusion des moyennes
+        for c_name, courses_dict in data.get("moyenne_classe", {}).items():
+            if c_name not in merged_data["moyenne_classe"]:
+                merged_data["moyenne_classe"][c_name] = {}
+                
+            for course_name, periods_dict in courses_dict.items():
+                if course_name not in merged_data["moyenne_classe"][c_name]:
+                    merged_data["moyenne_classe"][c_name][course_name] = {"P1": {}, "P2": {}, "EX1": {}, "P3": {}, "P4": {}, "EX2": {}}
+                    
+                for period, students_scores in periods_dict.items():
+                    # Met à jour le dictionnaire avec les notes des élèves
+                    merged_data["moyenne_classe"][c_name][course_name][period].update(students_scores)
+                    
+        # Fusion des présences (très complexe si format imbriqué, on fait un update profond)
+        for date_p, classes_dict in data.get("presences", {}).items():
+            if date_p not in merged_data["presences"]:
+                merged_data["presences"][date_p] = {}
+                
+            for c_name, courses_dict in classes_dict.items():
+                if c_name not in merged_data["presences"][date_p]:
+                    merged_data["presences"][date_p][c_name] = {}
+                    
+                for course_name, statuses in courses_dict.items():
+                    if course_name not in merged_data["presences"][date_p][c_name]:
+                        merged_data["presences"][date_p][c_name][course_name] = {}
+                        
+                    merged_data["presences"][date_p][c_name][course_name].update(statuses)
+
+    # Convertir les sets en listes pour que le JSON soit valide (sérialisable)
+    merged_data["classes"] = list(merged_data["classes"])
+    merged_data["date_presence"] = list(merged_data["date_presence"])
+    
+    return {
+        "status": True,
+        "message": "Données PrimeNet récupérées avec succès.",
+        "data": merged_data
     }
