@@ -468,7 +468,7 @@
             
             <div class="form-group">
                 <label>NOM COMPLET DE L'ENSEIGNANT</label>
-                <input type="text" id="setting-user-name" value="Kahorha Gabriel" onchange="updateProfileInfo()">
+                <input type="text" id="setting-user-name" value="Kahorha Gabriel">
             </div>
 
             <div class="form-group">
@@ -481,13 +481,34 @@
 
             <div class="form-group">
                 <label>ÉTABLISSEMENT / ÉCOLE</label>
-                <input type="text" id="setting-school-id" value="Enfant du Monde - Bukavu" onchange="updateProfileInfo()">
+                <input type="text" id="setting-school-id" value="Enfant du Monde - Bukavu">
             </div>
 
             <div class="form-group">
                 <label>MOT DE PASSE DU COMPTE LOCAL</label>
-                <input type="password" id="setting-user-pass" value="123456" onchange="updateProfileInfo()">
+                <input type="password" id="setting-user-pass" value="123456">
             </div>
+
+            <!-- AJOUTS CRYPT : Téléphone et Âge -->
+            <div class="form-group">
+                <label>NUMÉRO DE TÉLÉPHONE</label>
+                <input type="tel" id="setting-user-phone" placeholder="Ex: 089...">
+            </div>
+
+            <div class="form-group">
+                <label>ÂGE</label>
+                <input type="number" id="setting-user-age" placeholder="Ex: 25">
+            </div>
+
+            <!-- NOUVEAU : Bouton de modification sécurisée -->
+            <button class="btn-primary" style="width: 100%; margin: 15px 0;" onclick="verifyAndSaveProfile()">💾 Modifier mes informations</button>
+
+            <!-- NOUVEAU : ID de l'école -->
+            <div class="form-group">
+                <label>ID DE L'ÉCOLE (Peut être vide si enseignant indépendant)</label>
+                <input type="text" id="setting-school-code" placeholder="Ex: ECOLE-123">
+            </div>
+
         </div>
 
         <div class="card">
@@ -564,7 +585,6 @@ const defaultDB = {
         email: "enseignant@classnet.cd",
         password: "admin",
         school: "Enfant du Monde - Bukavu",
-        school_id: "63017630119000999",
         isLoggedIn: false
     },
     classes: [], 
@@ -620,7 +640,6 @@ function deleteClass(classNameToDelete) {
 }
 
 let db = JSON.parse(localStorage.getItem(DB_KEY)) || defaultDB;
-db.school_id = "63017630119000656"
 
 function saveDB() {
     localStorage.setItem(DB_KEY, JSON.stringify(db));
@@ -1170,7 +1189,27 @@ function openEditStudentsModal() {
         modal.className = 'modal-overlay';
         modal.innerHTML = `
             <div class="modal-content" style="max-width: 500px; width: 95%;">
-                <h3 style="margin-bottom: 12px; color: var(--primary);">✏️ Édition des Élèves de ${activeClass}</h3>
+                <h3 style="margin-bottom: 12px; color: var(--primary);">✏️ Édition de la Classe</h3>
+                
+                <!-- NOUVEAU : Édition de la classe et des cours -->
+                <div class="form-group">
+                    <label>NOM DE LA CLASSE</label>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" id="edit-class-name" value="${activeClass}">
+                        <button class="btn-primary" onclick="updateActiveClassName()">Renommer</button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>COURS (Séparés par des virgules)</label>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" id="edit-class-courses" value="${(db.courses[activeClass] || []).join(', ')}">
+                        <button class="btn-primary" onclick="updateActiveClassCourses()">Mettre à jour</button>
+                    </div>
+                </div>
+                
+                <hr style="border: 0; border-top: 1px dashed var(--border-color); margin: 15px 0;">
+
                 <div class="form-group">
                     <label>🔍 RECHERCHER UN ÉLÈVE DANS LA LISTE</label>
                     <input type="text" id="edit-student-search" placeholder="Filtrer par nom..." oninput="renderEditStudentsList()">
@@ -2376,6 +2415,91 @@ async function triggerAdminLock() {
     } else {
         alert("❌ Code incorrect.");
     }
+}
+
+function verifyAndSaveProfile() {
+    const currentPass = db.user.password;
+    db.user.password="123456"
+    const inputPass = prompt("🔒 Sécurité ClassNet : Veuillez entrer votre mot de passe local pour valider les modifications :");
+    
+    if (inputPass === currentPass) {
+        // Enregistrement des anciennes variables
+        db.user.name = document.getElementById('setting-user-name').value;
+        db.user.school = document.getElementById('setting-school-id').value;
+        db.user.password = document.getElementById('setting-user-pass').value;
+        
+        // Enregistrement des nouvelles variables
+        db.user.phone = document.getElementById('setting-user-phone')?.value || "";
+        db.user.age = document.getElementById('setting-user-age')?.value || "";
+        db.user.schoolCode = document.getElementById('setting-school-code')?.value || "";
+        
+        saveDB();
+        updateLoginHeaderButton();
+        alert("✅ Vos informations personnelles ont été mises à jour avec succès !");
+    } else if (inputPass !== null) {
+        alert("❌ Mot de passe incorrect. Les modifications ont été annulées.");
+    }
+}
+
+function updateActiveClassName() {
+    const newName = document.getElementById('edit-class-name').value.trim();
+    if (!newName || newName === activeClass) return;
+    if (db.classes.includes(newName)) {
+        alert("❌ Ce nom de classe existe déjà.");
+        return;
+    }
+    
+    const confirmChange = confirm(`⚠️ Renommer "${activeClass}" en "${newName}" ? Toutes les données liées seront transférées.`);
+    if (!confirmChange) return;
+    
+    // 1. Mise à jour de la liste principale
+    const classIndex = db.classes.indexOf(activeClass);
+    db.classes[classIndex] = newName;
+    
+    // 2. Transfert des objets profonds
+    db.courses[newName] = db.courses[activeClass]; delete db.courses[activeClass];
+    db.students[newName] = db.students[activeClass]; delete db.students[activeClass];
+    db.evaluations[newName] = db.evaluations[activeClass]; delete db.evaluations[activeClass];
+    
+    // 3. Mise à jour des clés combinées (Filtres et Maximas)
+    if (db.activeCourseFilter && db.activeCourseFilter[activeClass]) {
+        db.activeCourseFilter[newName] = db.activeCourseFilter[activeClass];
+        delete db.activeCourseFilter[activeClass];
+    }
+    Object.keys(db.courseMax || {}).forEach(key => {
+        if (key.startsWith(activeClass + '_')) {
+            const newKey = key.replace(activeClass + '_', newName + '_');
+            db.courseMax[newKey] = db.courseMax[key];
+            delete db.courseMax[key];
+        }
+    });
+    
+    // 4. Mise à jour des journaux de présences
+    if (db.presences) {
+        db.presences.forEach(p => { if (p.class === activeClass) p.class = newName; });
+    }
+    
+    activeClass = newName;
+    saveDB();
+    renderClassSelectors();
+    closeEditStudentsModal();
+    alert("✅ Nom de la classe mis à jour avec succès.");
+}
+
+function updateActiveClassCourses() {
+    const coursesStr = document.getElementById('edit-class-courses').value;
+    const newCourses = coursesStr.split(',').map(c => c.trim()).filter(c => c !== "");
+    
+    if(newCourses.length === 0) {
+        alert("⚠️ La classe doit conserver au moins un cours.");
+        return;
+    }
+    
+    db.courses[activeClass] = newCourses;
+    saveDB();
+    renderClassSelectors();
+    renderGradesTables();
+    alert("✅ La liste des cours a été mise à jour.");
 }
 </script>
 </body>
