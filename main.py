@@ -471,7 +471,7 @@ class OTPVerifySchema(BaseModel):
     identifier: Optional[str] = None
     email: Optional[str] = None  # Conservé pour éviter toute rupture
     code: str
-    teacher_data: Optional[TeacherRegisterSchema] = None
+    teacher_data: Optional[TeacherInitSchema] = None
 
 class SchoolRegisterSchema(BaseModel):
     school_id: str
