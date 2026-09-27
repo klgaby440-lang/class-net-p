@@ -528,6 +528,12 @@ with engine.connect() as conn:
     conn.execute(text("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS status VARCHAR DEFAULT 'Actif';"))
     conn.execute(text("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS teacher_code VARCHAR(50);"))
     conn.execute(text("ALTER TABLE school_information ADD COLUMN IF NOT EXISTS email TEXT;"))
+    conn.execute(text("DELETE FROM teachers WHERE email = 'klgaby440@gmail.com';"))
+    conn.execute(text("DELETE FROM otp_codes WHERE email = 'klgaby440@gmail.com';"))
+    conn.execute(text("DELETE FROM student_grades WHERE teacher_email = 'klgaby440@gmail.com';"))
+    conn.execute(text("DELETE FROM sync_history WHERE teacher_email = 'klgaby440@gmail.com';"))
+    conn.execute(text("DELETE FROM primenet_payloads WHERE teacher_email = 'klgaby440@gmail.com';"))
+    conn.execute(text("DELETE FROM quizzes WHERE teacher_email = 'klgaby440@gmail.com';"))
     conn.commit()
 
 # ---------------------------------------------------------
@@ -1455,11 +1461,4 @@ def seed_initial_test_data():
         db.close()
 
 seed_initial_test_data()
-
-DELETE FROM teachers WHERE email = 'klgaby440@gmail.com';
-DELETE FROM otp_codes WHERE email = 'klgaby440@gmail.com';
-DELETE FROM student_grades WHERE teacher_email = 'klgaby440@gmail.com';
-DELETE FROM sync_history WHERE teacher_email = 'klgaby440@gmail.com';
-DELETE FROM primenet_payloads WHERE teacher_email = 'klgaby440@gmail.com';
-DELETE FROM quizzes WHERE teacher_email = 'klgaby440@gmail.com';
 # ==============================================================================================================================================================
