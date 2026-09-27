@@ -262,7 +262,7 @@ ADMIN_EMAIL = "klgaby440@gmail.com" # Ton adresse pour recevoir les codes
 class OTPVerification(Base):
     __tablename__ = "otp_codes"
     id = Column(Integer, primary_key=True, index=True)
-    identifier = Column(String, index=True, nullable=False)  # Remplacement de 'email' par 'identifier'
+    email = Column(String, index=True, nullable=False)  # Remplacement de 'email' par 'identifier'
     code = Column(String, nullable=False)
     expires_at = Column(DateTime, nullable=False)
 
