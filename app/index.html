@@ -180,7 +180,7 @@
 
     <!-- HEADER -->
     <header>
-        <div>CLASSNET APP</div>
+        <div>CLASS-INK APP</div>
         <div class="header-actions">
             <button id="btn-login-header" class="btn-auth-header">Se connecter</button>
             <button id="btn-header-settings" class="icon-btn">⚙️</button>
@@ -648,30 +648,6 @@
    1. MOTEUR DE BASE DE DONNÉES LOCALES (LOCALSTORAGE SÉCURISÉ)
    ========================================================================== */
 
-// 1. Définir et sauvegarder le thème
-function setTheme(mode) {
-    db.theme = mode;
-    saveDB(); // Enregistre dans localStorage
-
-    if (mode === 'dark') {
-        document.body.setAttribute('data-theme', 'dark');
-    } else {
-        document.body.removeAttribute('data-theme');
-    }
-}
-
-// 2. Charger le thème lors du démarrage de l'application
-function loadTheme() {
-    const savedTheme = db.theme || 'light';
-    setTheme(savedTheme);
-
-    // Cocher le bon bouton radio dans les paramètres
-    const radioBtn = document.querySelector(`input[name="theme"][value="${savedTheme}"]`);
-    if (radioBtn) {
-        radioBtn.checked = true;
-    }
-}
-
 function generateUniqueId(prefix = "CN") {
     const year = new Date().getFullYear();
     const randomHash1 = Math.random().toString(36).substring(2, 6).toUpperCase();
@@ -761,10 +737,8 @@ document.addEventListener('DOMContentLoaded', () => {
 function initApp() {
     loadTheme();
     if (!db.user.id) db.user.id = generateUniqueId("SYS-CRYPT");
-    document.getElementById('setting-user-id').value = db.user.id;
     document.getElementById('setting-user-name').value = db.user.name;
     document.getElementById('setting-school-id').value = db.user.school;
-    // Dans la fonction initApp()
     document.getElementById('setting-user-email').value = db.user.email || 'Non renseigné';
 
     updateLoginHeaderButton();
@@ -1994,12 +1968,6 @@ document.getElementById('btn-header-settings').addEventListener('click', () => {
     document.getElementById('view-settings').classList.add('active');
 });
 
-function windowSetTheme(mode) {
-    if (mode === 'dark') document.body.setAttribute('data-theme', 'dark');
-    else document.body.removeAttribute('data-theme');
-}
-window.setTheme = windowSetTheme;
-
 async function regenerateCryptoID() {
     const name = document.getElementById('setting-user-name').value;
     const school = document.getElementById('setting-school-id').value;
@@ -2714,6 +2682,29 @@ function closeEditProfileModal() {
     document.getElementById('edit-profile-modal').classList.remove('active');
 }
 
+// 1. Définir et sauvegarder le thème
+function setTheme(mode) {
+    db.theme = mode;
+    saveDB(); // Enregistre dans localStorage
+
+    if (mode === 'dark') {
+        document.body.setAttribute('data-theme', 'dark');
+    } else {
+        document.body.removeAttribute('data-theme');
+    }
+}
+
+// 2. Charger le thème lors du démarrage de l'application
+function loadTheme() {
+    const savedTheme = db.theme || 'light';
+    setTheme(savedTheme);
+
+    // Cocher le bon bouton radio dans les paramètres
+    const radioBtn = document.querySelector(`input[name="theme"][value="${savedTheme}"]`);
+    if (radioBtn) {
+        radioBtn.checked = true;
+    }
+}
 
 </script>
 </body>
