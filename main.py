@@ -262,7 +262,7 @@ ADMIN_EMAIL = "klgaby440@gmail.com" # Ton adresse pour recevoir les codes
 class OTPVerification(Base):
     __tablename__ = "otp_codes"
     id = Column(Integer, primary_key=True, index=True)
-    email = Column(String, index=True, nullable=False)  # Remplacement de 'email' par 'identifier'
+    identifier = Column(String, index=True, nullable=False)  # Remplacement de 'email' par 'identifier'
     code = Column(String, nullable=False)
     expires_at = Column(DateTime, nullable=False)
 
@@ -468,9 +468,10 @@ class TeacherInitSchema(BaseModel):
     age: int
 
 class OTPVerifySchema(BaseModel):
-    identifier: str
-    otp_code: str
-    teacher_data: TeacherInitSchema
+    identifier: Optional[str] = None
+    email: Optional[str] = None  # Conservé pour éviter toute rupture
+    code: str
+    teacher_data: Optional[TeacherRegisterSchema] = None
 
 class SchoolRegisterSchema(BaseModel):
     school_id: str
@@ -620,18 +621,25 @@ async def init_teacher_register(data: TeacherInitSchema, background_tasks: Backg
 
 @app.post("/api/auth/teacher/verify-register")
 def verify_teacher_register(data: OTPVerifySchema, db: Session = Depends(get_db)):
-    """Vérifie l'OTP, quel que soit le canal utilisé (Email ou SMS)."""
-    raw_identifier = (data.email or data.teacher_data.phone_number or "").strip()
-    
-    identifier = raw_identifier.lower() if is_email(raw_identifier) else format_phone_e164(raw_identifier)
+    # ➔ CORRECTION LIGNE 624 : Récupération sécurisée de l'identifiant
+    raw_identifier = (
+        data.identifier 
+        or data.email 
+        or (data.teacher_data.phone_number if data.teacher_data else "") 
+        or ""
+    ).strip()
 
-    record = db.query(OTPVerification).filter(
-        OTPVerification.identifier == identifier,
-        OTPVerification.code == data.otp_code
+    if not raw_identifier:
+        raise HTTPException(status_code=400, detail="Identifiant (e-mail ou téléphone) manquant.")
+
+    # Recherche dans la table otp_codes avec la colonne 'identifier'
+    otp_record = db.query(OTPVerification).filter(
+        OTPVerification.identifier == raw_identifier,
+        OTPVerification.code == data.code
     ).first()
 
-    if not record or record.expires_at < datetime.utcnow():
-        return {"status": False, "message": "Code invalide ou expiré."}
+    if not otp_record:
+        raise HTTPException(status_code=400, detail="Code OTP invalide ou expiré.")
 
     # Création de l'enseignant avec l'identifiant approprié
     new_teacher = Teacher(
