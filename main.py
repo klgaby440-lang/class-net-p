@@ -621,18 +621,19 @@ async def init_teacher_register(data: TeacherInitSchema, background_tasks: Backg
 
 @app.post("/api/auth/teacher/verify-register")
 def verify_teacher_register(data: OTPVerifySchema, db: Session = Depends(get_db)):
-    # ➔ CORRECTION LIGNE 624 : Récupération sécurisée de l'identifiant
+    # 1. Extraction et nettoyage de l'identifiant
     raw_identifier = (
         data.identifier 
         or data.email 
         or (data.teacher_data.phone_number if data.teacher_data else "") 
+        or (data.teacher_data.email if data.teacher_data else "")
         or ""
     ).strip()
 
     if not raw_identifier:
         raise HTTPException(status_code=400, detail="Identifiant (e-mail ou téléphone) manquant.")
 
-    # Recherche dans la table otp_codes avec la colonne 'identifier'
+    # 2. Vérification dans la table des codes OTP
     otp_record = db.query(OTPVerification).filter(
         OTPVerification.identifier == raw_identifier,
         OTPVerification.code == data.code
@@ -641,19 +642,28 @@ def verify_teacher_register(data: OTPVerifySchema, db: Session = Depends(get_db)
     if not otp_record:
         raise HTTPException(status_code=400, detail="Code OTP invalide ou expiré.")
 
-    # Création de l'enseignant avec l'identifiant approprié
+    # 3. Validation des données de l'enseignant
+    t_data = data.teacher_data
+    if not t_data:
+        raise HTTPException(status_code=400, detail="Données de profil enseignant manquantes.")
+
+    # Détermination de l'e-mail et du téléphone selon la nature de l'identifiant
+    email_val = raw_identifier if is_email(raw_identifier) else t_data.email
+    phone_val = raw_identifier if not is_email(raw_identifier) else t_data.phone_number
+
+    # 4. Création du compte enseignant
     new_teacher = Teacher(
-        email=identifier if is_email(identifier) else data.teacher_data.email,
-        phone_number=identifier if not is_email(identifier) else data.teacher_data.phone_number,
-        full_name=data.teacher_data.full_name,
-        school_name=data.teacher_data.school_name,
-        password=data.teacher_data.password,
-        age=data.teacher_data.age,
+        email=email_val,
+        phone_number=phone_val,
+        full_name=t_data.full_name,
+        school_name=t_data.school_name,
+        password=t_data.password,
+        age=t_data.age,
         teacher_code=f"prof_{generate_otp()}"
     )
     
     db.add(new_teacher)
-    db.delete(record)
+    db.delete(otp_record)  # Correction : 'otp_record' au lieu de 'record'
     db.commit()
 
     return {"status": True, "message": "Compte enseignant créé avec succès !"}
