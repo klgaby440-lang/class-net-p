@@ -875,7 +875,7 @@ async function handleRegisterVerify() {
     }
 
     const payload = {
-        email: tempTeacherData.email,
+        identifier: tempTeacherData.email,
         otp_code: otpCode,
         teacher_data: tempTeacherData
     };
