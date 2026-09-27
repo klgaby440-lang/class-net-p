@@ -7,6 +7,7 @@
     <!-- LIBRAIRIES JSPDF ET AUTO-TABLE POUR EXPORT PDF -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         /* --- VARIABLES & RESET --- */
         :root {
@@ -383,7 +384,16 @@
             <!-- HEADER LLINK (Sans Auth Google & Sans switch Online/Offline) -->
             <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: var(--card-bg); border-radius: 12px; border: 1px solid var(--border-color);">
                 <div style="display: flex; align-items: center; gap: 8px;">
-                    <span style="font-size: 1.5rem;"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="20" r="18" fill="none" stroke="%23FF5733" stroke-width="3"/><circle cx="76" cy="35" r="18" fill="none" stroke="%2333FF57" stroke-width="3"/><circle cx="76" cy="65" r="18" fill="none" stroke="%233357FF" stroke-width="3"/><circle cx="50" cy="80" r="18" fill="none" stroke="%23F333FF" stroke-width="3"/><circle cx="24" cy="65" r="18" fill="none" stroke="%23FFBD33" stroke-width="3"/><circle cx="24" cy="35" r="18" fill="none" stroke="%2333FFF3" stroke-width="3"/></svg>'></span>
+                    <span style="font-size: 1.5rem;">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="1em" height="1em">
+                            <circle cx="50" cy="20" r="18" fill="none" stroke="#FF5733" stroke-width="3"/>
+                            <circle cx="76" cy="35" r="18" fill="none" stroke="#33FF57" stroke-width="3"/>
+                            <circle cx="76" cy="65" r="18" fill="none" stroke="#3357FF" stroke-width="3"/>
+                            <circle cx="50" cy="80" r="18" fill="none" stroke="#F333FF" stroke-width="3"/>
+                            <circle cx="24" cy="65" r="18" fill="none" stroke="#FFBD33" stroke-width="3"/>
+                            <circle cx="24" cy="35" r="18" fill="none" stroke="#33FFF3" stroke-width="3"/>
+                        </svg>
+                    </span>
                     <div>
                         <strong style="color: var(--primary); font-size: 1rem;">Llink AI</strong>
                         <div style="font-size: 0.7rem; color: var(--text-muted);">CRYPT Neural Engine</div>
@@ -472,10 +482,9 @@
             </div>
 
             <div class="form-group">
-                <label>IDENTIFIANT UNIQUE SÉCURISÉ (SHA-256)</label>
+                <label>ADRESSE E-MAIL DE L'ENSEIGNANT</label>
                 <div style="display: flex; gap: 8px;">
-                    <input type="text" id="setting-user-id" readonly style="font-family: monospace; font-weight: bold; background: rgba(0,0,0,0.05);">
-                    <button class="btn-action" onclick="regenerateCryptoID()" title="Régénérer une empreinte cryptographique">🔄</button>
+                    <input type="email" id="setting-user-email" readonly style="font-weight: bold; background: rgba(0,0,0,0.05);">
                 </div>
             </div>
 
@@ -500,14 +509,13 @@
                 <input type="number" id="setting-user-age" placeholder="Ex: 25">
             </div>
 
-            <!-- NOUVEAU : Bouton de modification sécurisée -->
-            <button class="btn-primary" style="width: 100%; margin: 15px 0;" onclick="verifyAndSaveProfile()">💾 Modifier mes informations</button>
-
             <!-- NOUVEAU : ID de l'école -->
             <div class="form-group">
                 <label>ID DE L'ÉCOLE (Peut être vide si enseignant indépendant)</label>
                 <input type="text" id="setting-school-code" placeholder="Ex: ECOLE-123">
             </div>
+
+            <button class="btn-primary" onclick="openEditProfileModal()">✏️ Modifier le profil</button>
 
         </div>
 
@@ -549,7 +557,7 @@
         </div>
 
         <div class="app-info">
-            <p><strong>ClassNet App</strong> - Version 1.4.0 (Build Cryptographique)</p>
+            <p><strong>ClassNet App</strong> - Version 2.1.0 (Build Cryptographique)</p>
             <p>Site officiel : <a href="https://klgaby440-lang.github.io/class-net/" target="_blank" style="color: var(--primary);">klgaby440-lang.github.io/classnet</a></p>
             <p style="margin-top: 8px; color: var(--primary); font-weight: bold;">Developped by CRYPT Entreprise ⚡</p>
         </div>
@@ -564,10 +572,105 @@
         <button class="nav-btn" data-target="view-settings">Réglages</button>
     </nav>
 
+    <!-- MODAL DE REMPLACEMENT DE PROMPT() -->
+    <div id="custom-prompt-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3 id="custom-prompt-title" style="margin-bottom: 10px; color: var(--primary);">Saisie requise</h3>
+            <div class="form-group">
+                <label id="custom-prompt-label"></label>
+                <input type="text" id="custom-prompt-input" style="width:100%; padding:8px; border-radius:6px; border:1px solid var(--border-color);">
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 15px;">
+                <button class="btn-action" id="custom-prompt-cancel" style="flex:1;">Annuler</button>
+                <button class="btn-primary" id="custom-prompt-confirm" style="flex:1;">Valider</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE REMPLACEMENT DE CONSOLE.LOG() ET ALERT() -->
+    <div id="custom-alert-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3 id="custom-alert-title" style="margin-bottom: 10px; color: var(--primary);">Notification ClassNet</h3>
+            <p id="custom-alert-label" style="font-size: 0.9rem; color: var(--text-main); margin-bottom: 15px;"></p>
+            <button class="btn-primary" id="custom-alert-ok" style="width: 100%;">Ok</button>
+        </div>
+    </div>
+
+    <!-- MODAL SÉCURISÉE DE MODIFICATION DU PROFIL ENSEIGNANT -->
+    <div id="edit-profile-modal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 420px; width: 92%;">
+            <h3 style="color: var(--primary); margin-bottom: 15px;">Profil & Identité Enseignant</h3>
+            
+            <div class="form-group">
+                <label>NOM COMPLET DE L'ENSEIGNANT</label>
+                <input type="text" id="setting-user-name">
+            </div>
+
+            <div class="form-group">
+                <label>ADRESSE E-MAIL DE L'ENSEIGNANT (IDENTIFIANT UNIQUE)</label>
+                <input type="email" id="setting-user-email">
+            </div>
+
+            <div class="form-group">
+                <label>ÉTABLISSEMENT / ÉCOLE</label>
+                <input type="text" id="setting-school-id">
+            </div>
+
+            <div class="form-group">
+                <label>NOUVEAU MOT DE PASSE (Optionnel)</label>
+                <input type="password" id="setting-user-pass" placeholder="••••••••">
+            </div>
+
+            <div class="form-group">
+                <label>NUMÉRO DE TÉLÉPHONE</label>
+                <input type="tel" id="setting-user-phone">
+            </div>
+
+            <div class="form-group">
+                <label>ÂGE</label>
+                <input type="number" id="setting-user-age">
+            </div>
+
+            <div class="form-group">
+                <label>ID DE L'ÉCOLE (Optionnel)</label>
+                <input type="text" id="setting-school-code">
+            </div>
+
+            <div style="display: flex; gap: 10px; margin-top: 15px;">
+                <button class="btn-action" onclick="closeEditProfileModal()" style="flex:1;">Annuler</button>
+                <button class="btn-primary" onclick="verifyAndSaveProfile()" style="flex:1;">💾 Valider les modifications</button>
+            </div>
+        </div>
+    </div>
+
 <script>
 /* ==========================================================================
    1. MOTEUR DE BASE DE DONNÉES LOCALES (LOCALSTORAGE SÉCURISÉ)
    ========================================================================== */
+
+// 1. Définir et sauvegarder le thème
+function setTheme(mode) {
+    db.theme = mode;
+    saveDB(); // Enregistre dans localStorage
+
+    if (mode === 'dark') {
+        document.body.setAttribute('data-theme', 'dark');
+    } else {
+        document.body.removeAttribute('data-theme');
+    }
+}
+
+// 2. Charger le thème lors du démarrage de l'application
+function loadTheme() {
+    const savedTheme = db.theme || 'light';
+    setTheme(savedTheme);
+
+    // Cocher le bon bouton radio dans les paramètres
+    const radioBtn = document.querySelector(`input[name="theme"][value="${savedTheme}"]`);
+    if (radioBtn) {
+        radioBtn.checked = true;
+    }
+}
 
 function generateUniqueId(prefix = "CN") {
     const year = new Date().getFullYear();
@@ -656,10 +759,13 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function initApp() {
+    loadTheme();
     if (!db.user.id) db.user.id = generateUniqueId("SYS-CRYPT");
     document.getElementById('setting-user-id').value = db.user.id;
     document.getElementById('setting-user-name').value = db.user.name;
     document.getElementById('setting-school-id').value = db.user.school;
+    // Dans la fonction initApp()
+    document.getElementById('setting-user-email').value = db.user.email || 'Non renseigné';
 
     updateLoginHeaderButton();
     renderClassSelectors();
@@ -854,32 +960,30 @@ function updateProfileInfo() {
 /* ==========================================================================
    3. GESTION DYNAMIQUE DES CLASSES, COURS ET ÉLÈVES
    ========================================================================== */
-function promptAddClass() {
-    const className = prompt("Entrez le nom de la nouvelle classe (ex: 3ème Scientifique) :");
-    if (!className || !className.trim()) return;
-    const cleanClass = className.trim();
+async function promptAddClass() {
+    const className = await showCustomPrompt("Entrez le nom de la nouvelle classe (ex: 3ème Scientifique) :");
+    if (!className) return;
 
-    const courseName = prompt(`Entrez le premier cours pour "${cleanClass}" (ex: SVT, Chimie) :`, "SVT");
-    if (!courseName || !courseName.trim()) return;
-    const cleanCourse = courseName.trim();
+    const courseName = await showCustomPrompt(`Entrez le premier cours pour "${className}" (ex: SVT, Chimie) :`, "SVT");
+    if (!courseName) return;
 
-    const maxBulletin = prompt(`Maximum sur le bulletin pour "${cleanCourse}" en Période (ex: 10, 20, 50, 100) :`, "20");
+    const maxBulletin = await showCustomPrompt(`Maximum sur le bulletin pour "${courseName}" en Période :`, "20");
     const cleanMax = (!maxBulletin || isNaN(maxBulletin)) ? 20 : parseFloat(maxBulletin);
 
-    if (!db.classes.includes(cleanClass)) {
-        db.classes.push(cleanClass);
-        db.courses[cleanClass] = [cleanCourse];
+    if (!db.classes.includes(className)) {
+        db.classes.push(className);
+        db.courses[className] = [courseName];
         if (!db.courseMax) db.courseMax = {};
-        db.courseMax[`${cleanClass}_${cleanCourse}`] = cleanMax;
-        db.students[cleanClass] = [];
-        db.evaluations[cleanClass] = { "P1": [], "P2": [], "EX1": [], "P3": [], "P4": [], "EX2": [] };
-        activeClass = cleanClass;
+        db.courseMax[`${className}_${courseName}`] = cleanMax;
+        db.students[className] = [];
+        db.evaluations[className] = { "P1": [], "P2": [], "EX1": [], "P3": [], "P4": [], "EX2": [] };
+        activeClass = className;
         saveDB();
         renderClassSelectors();
         renderGradesTables();
         renderAttendanceList();
     } else {
-        alert("Cette classe existe déjà.");
+        await showCustomAlert("Cette classe existe déjà.");
     }
 }
 
@@ -890,35 +994,32 @@ function changeGradeCourseFilter(courseName) {
     renderGradesTables();
 }
 
-function promptAddCourseToActiveClass() {
+async function promptAddCourseToActiveClass() {
     if (!activeClass) {
-        alert("⚠️ Veuillez d'abord sélectionner ou créer une classe.");
+        await showCustomAlert("⚠️ Veuillez d'abord sélectionner ou créer une classe.");
         return;
     }
 
-    const courseName = prompt(`Entrez le nom du nouveau cours pour la classe "${activeClass}" (ex: Mathématiques, Physique) :`);
-    if (!courseName || courseName.trim() === "") return;
+    const courseName = await showCustomPrompt(`Entrez le nom du nouveau cours pour "${activeClass}" :`);
+    if (!courseName) return;
 
-    const cleanCourse = courseName.trim();
-    const maxBulletin = prompt(`Quel est le maximum sur le bulletin pour "${cleanCourse}" (ex: 20, 50, 100) :`, "100");
+    const maxBulletin = await showCustomPrompt(`Quel est le maximum sur le bulletin pour "${courseName}" :`, "100");
     const cleanMax = (!maxBulletin || isNaN(maxBulletin)) ? 100 : parseFloat(maxBulletin);
 
-    if (!db.courses[activeClass]) {
-        db.courses[activeClass] = [];
-    }
+    if (!db.courses[activeClass]) db.courses[activeClass] = [];
 
-    if (!db.courses[activeClass].includes(cleanCourse)) {
-        db.courses[activeClass].push(cleanCourse);
+    if (!db.courses[activeClass].includes(courseName)) {
+        db.courses[activeClass].push(courseName);
         if (!db.courseMax) db.courseMax = {};
-        db.courseMax[`${activeClass}_${cleanCourse}`] = cleanMax;
+        db.courseMax[`${activeClass}_${courseName}`] = cleanMax;
 
         saveDB();
         renderClassSelectors();
         renderGradesTables();
         renderAttendanceList();
-        alert(`✅ Cours "${cleanCourse}" ajouté avec succès à la classe "${activeClass}" !`);
+        await showCustomAlert(`✅ Cours "${courseName}" ajouté avec succès à la classe "${activeClass}" !`);
     } else {
-        alert("⚠️ Ce cours existe déjà pour cette classe.");
+        await showCustomAlert("⚠️ Ce cours existe déjà pour cette classe.");
     }
 }
 
@@ -1414,23 +1515,23 @@ function togglePeriodVisibility(pKey) {
     renderGradesTables(); // Le tableau conserve maintenant l'état au rafraîchissement !
 }
 
-function addEvaluationColumn(pKey) {
+async function addEvaluationColumn(pKey) {
     const currentCourse = (db.activeCourseFilter && db.activeCourseFilter[activeClass]) 
         || (db.courses[activeClass] ? db.courses[activeClass][0] : null);
 
     if (!currentCourse) {
-        alert("⚠️ Veuillez d'abord ajouter un cours à la classe.");
+        await showCustomAlert("⚠️ Veuillez d'abord ajouter un cours à la classe.");
         return;
     }
 
-    const evalName = prompt(`Nom du devoir/interro pour [${currentCourse}] (ex: Interro 1) :`, "Interro");
+    const evalName = await showCustomPrompt(`Nom du devoir/interro pour [${currentCourse}] :`, "Interro");
     if (!evalName) return;
-    const maxVal = prompt("Note maximale (ex: 10 ou 20) :", "10");
+
+    const maxVal = await showCustomPrompt("Note maximale (ex: 10 ou 20) :", "10");
     if (!maxVal || isNaN(maxVal)) return;
 
-    // 📅 Récupération de la date avec la date du jour pré-remplie par défaut
     const defaultToday = new Date().toISOString().substring(0, 10);
-    const evalDate = prompt("Date de l'épreuve (AAAA-MM-JJ) :", defaultToday);
+    const evalDate = await showCustomPrompt("Date de l'épreuve (AAAA-MM-JJ) :", defaultToday);
     if (!evalDate) return;
 
     if (!db.evaluations[activeClass]) db.evaluations[activeClass] = {};
@@ -1438,9 +1539,9 @@ function addEvaluationColumn(pKey) {
 
     db.evaluations[activeClass][pKey].push({
         id: generateUniqueId("EV"),
-        name: evalName.trim(),
+        name: evalName,
         max: parseFloat(maxVal),
-        date: evalDate.trim(),
+        date: evalDate,
         course: currentCourse
     });
 
@@ -1734,102 +1835,91 @@ function saveAttendanceSession() {
 /* ==========================================================================
    6. SYNCHRONISATION (INTRANET & INTERNET)
    ========================================================================== */
-async function saveOfflineCommit() {
-    const unsentData = appState.syncHistory.intranet;
-    
-    if (unsentData.length === 0) {
-        alert("✅ Aucune nouvelle note à envoyer. ClassNet P est déjà à jour.");
-        return;
-    }
+/* ==========================================================================
+   CONFIG ET SYNCHRONISATION INTRANET (PUSH OFF)
+   ========================================================================== */
 
-    const serverUrl = await SERVER_CONFIG.discoverLocalServer();
-    if (!serverUrl) {
-        alert("❌ Impossible de trouver ClassNet P sur le réseau Wi-Fi. Assurez-vous que le serveur tourne.");
-        return;
-    }
+const CONFIG = {
+  PRIMARY_URL: "http://serveur-class-net-prime.local:5001",
+  FALLBACK_URL: "http://192.168.1.200:5001", // IP fixe attribuée au serveur sur le routeur
+  TIMEOUT_MS: 3500 // 3.5 secondes max par tentative
+};
 
-    // Extraction et calcul des moyennes pour les élèves ayant des nouvelles notes
-    const moyennesAEnvoyer = [];
-    const studentsProcessed = new Set();
+/**
+ * Effectue une requête POST avec gestion du timeout et basculement automatique (fallback)
+ */
+async function postDataWithFallback(endpoint, payload) {
+    const urls = [CONFIG.PRIMARY_URL, CONFIG.FALLBACK_URL];
 
-    unsentData.forEach(record => {
-        const { studentId, courseId } = record;
-        const processKey = `${studentId}_${courseId}`;
-        
-        // Éviter de recalculer plusieurs fois le même élève pour le même cours lors d'un batch
-        if (studentsProcessed.has(processKey)) return;
-        studentsProcessed.add(processKey);
+    for (const baseUrl of urls) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), CONFIG.TIMEOUT_MS);
 
-        // Recherche de l'élève et de sa classe
-        let studentName = "";
-        let studentClass = "";
-        for (const cls in db.students) {
-            const student = db.students[cls].find(s => s.id === studentId);
-            if (student) {
-                studentName = student.name;
-                studentClass = cls;
-                break;
-            }
-        }
-
-        // Calcul mathématique de la moyenne exacte
-        let total = 0;
-        let maxTotal = 0;
-        const maxBulletin = (db.courseMax && db.courseMax[`${studentClass}_${courseId}`]) || 100;
-
-        // Parcourir toutes les périodes (P1, P2, EX1...) pour cet élève et ce cours
-        const gradeKey = `${studentId}_${courseId}`;
-        if (appState.grades[gradeKey]) {
-            Object.keys(appState.grades[gradeKey]).forEach(periodId => {
-                const evalData = db.evaluations[studentClass][periodId]?.find(e => e.id === periodId); // Adapté à ta structure
-                const gradeVal = appState.grades[gradeKey][periodId];
-                if (evalData && gradeVal !== undefined && gradeVal !== "") {
-                    total += parseFloat(gradeVal);
-                    maxTotal += parseFloat(evalData.max);
-                }
+        try {
+            const response = await fetch(`${baseUrl}${endpoint}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+                signal: controller.signal
             });
+
+            clearTimeout(timeoutId);
+
+            if (response.ok) {
+                return { success: true, url: baseUrl, response };
+            }
+        } catch (error) {
+            clearTimeout(timeoutId);
+            console.warn(`Échec de connexion vers ${baseUrl} :`, error.name === 'AbortError' ? 'Timeout dépassé' : error.message);
         }
+    }
 
-        const moyenneFinale = maxTotal > 0 ? ((total / maxTotal) * maxBulletin).toFixed(1) : 0;
+    return { success: false };
+}
 
-        moyennesAEnvoyer.push({
-            id_eleve: studentId,
-            nom: studentName,
-            classe: studentClass,
-            cours: courseId,
-            moyenne: parseFloat(moyenneFinale)
-        });
-    });
+/**
+ * Transmet l'intégralité de la base de données locale vers le serveur Intranet
+ */
+async function saveOfflineCommit() {
+    // 1. Vérification par mot de passe
+    const inputPass = await showCustomPrompt("🔒 Entrez votre mot de passe pour autoriser l'envoi vers l'Intranet (Push Off) :");
+    if (inputPass === null) return;
+    if (inputPass !== db.user.password) {
+        await showCustomAlert("❌ Mot de passe incorrect. Synchronisation Intranet annulée.");
+        return;
+    }
 
+    // 2. Préparation du payload contenant toute la base de données
     const payload = {
         ecole: db.user.school,
-        professeur: db.user.id,
-        donnees: moyennesAEnvoyer,
-        action: "FILL_EMPTY_BULLETINS"
+        professeur: db.user.email,
+        database: db, // Envoi complet de l'objet db (élèves, classes, notes, présences, quiz, etc.)
+        action: "FULL_DATABASE_SYNC",
+        timestamp: new Date().toISOString()
     };
 
-    try {
-        const response = await fetch(`${serverUrl}/api/intranet/sync`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
+    // 3. Tentative d'envoi avec basculement automatique
+    const result = await postDataWithFallback('/api/intranet/sync', payload);
 
-        if (response.ok) {
-            appState.syncHistory.intranet = []; // Réinitialisation après succès
-            localStorage.setItem('classnet_app_db', JSON.stringify(appState));
-            alert(`💾 Push Off réussi ! Les moyennes de ${moyennesAEnvoyer.length} enregistrements ont été envoyées à ClassNet P 🚀`);
-        } else {
-            throw new Error("Erreur Serveur");
-        }
-    } catch (error) {
-        alert("❌ Échec de la transmission locale.");
+    if (result.success) {
+        db.pendingCommits = 0;
+        saveDB();
+        await showCustomAlert(`💾 Push Off réussi ! La base de données complète a été transmise au serveur Intranet via : ${result.url}`);
+    } else {
+        await showCustomAlert("❌ Échec de la synchronisation : Le serveur Intranet est inatteignable (URL primaire et de secours hors ligne).");
     }
 }
 
 async function syncWithCloud() {
     if (!navigator.onLine) {
-        alert("⚠️ Mode Hors-Ligne détecté. Connexion Internet requise pour le Push On.");
+        await showCustomAlert("⚠️ Mode Hors-Ligne détecté. Connexion Internet requise pour le Push On.");
+        return;
+    }
+
+    const inputPass = await showCustomPrompt("🔒 Entrez votre mot de passe pour autoriser la synchronisation Internet (Push On) :");
+    if (inputPass === null) return;
+    if (inputPass !== db.user.password) {
+        await showCustomAlert("❌ Mot de passe incorrect. Synchronisation Cloud annulée.");
         return;
     }
 
@@ -1850,13 +1940,12 @@ async function syncWithCloud() {
                 appState.syncHistory.internet.push(Date.now());
             }
             saveDB();
-            alert(`🚀 ${result.message}`);
+            await showCustomAlert(`🚀 ${result.message}`);
         } else {
-            alert(`❌ Erreur du serveur : ${result.message || "Refus de synchronisation."}`);
+            await showCustomAlert(`❌ Erreur du serveur : ${result.message || "Refus de synchronisation."}`);
         }
     } catch (error) {
-        alert("❌ Erreur de réseau critique. Assurez-vous que le serveur Render n'est pas en veille.");
-        console.error("Erreur de Push On :", error);
+        logSystemEvent('error', "Erreur de réseau critique lors du Push On Cloud.", error);
     }
 }
 
@@ -2049,11 +2138,7 @@ async function sendLlinkMessage() {
 
 function formatMarkdown(text) {
     if (!text) return "";
-    let html = text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    html = html.replace(/\*\*([\s\S]*?)\*\*/g, '<strong>$1</strong>');
-    html = html.replace(/```([\s\S]*?)```/g, '<pre style="background:rgba(0,0,0,0.1); padding:8px; border-radius:6px; font-family:monospace; margin:6px 0;"><code>$1</code></pre>');
-    html = html.replace(/\n/g, '<br>');
-    return html;
+    return typeof marked !== 'undefined' ? marked.parse(text) : text;
 }
 
 /* ====================================================================================================
@@ -2273,7 +2358,7 @@ function printQuiz(quizId) {
         '<div class="meta"><span>Nom de l\'élève : _______________________</span><span>Classe : ' + quiz.class + '</span><span>Max : /' + quiz.maxScore + ' pts</span></div><hr>' +
         '<h4 style="text-align: center;">' + quiz.title + '</h4>' +
         '<div class="content">' + quiz.textContent + '</div>' +
-        '<div class="footer">ClassNet App - Prof. ' + db.user.name + '</div>' +
+        '<div class="footer">Class-Ink App - Prof. ' + db.user.name + '</div>' +
         '</body></html>';
 
     printWindow.document.open();
@@ -2501,6 +2586,135 @@ function updateActiveClassCourses() {
     renderGradesTables();
     alert("✅ La liste des cours a été mise à jour.");
 }
+
+function showCustomPrompt(message, defaultValue = '') {
+    return new Promise((resolve) => {
+        const modal = document.getElementById('custom-prompt-modal');
+        const label = document.getElementById('custom-prompt-label');
+        const input = document.getElementById('custom-prompt-input');
+        const btnConfirm = document.getElementById('custom-prompt-confirm');
+        const btnCancel = document.getElementById('custom-prompt-cancel');
+
+        label.textContent = message;
+        input.value = defaultValue;
+        modal.classList.add('active');
+        input.focus();
+
+        const cleanup = () => {
+            modal.classList.remove('active');
+            btnConfirm.onclick = null;
+            btnCancel.onclick = null;
+        };
+
+        btnConfirm.onclick = () => {
+            const val = input.value.trim();
+            cleanup();
+            resolve(val);
+        };
+
+        btnCancel.onclick = () => {
+            cleanup();
+            resolve(null);
+        };
+    });
+}
+
+function showCustomAlert(message, title = "ClassNet App") {
+    return new Promise((resolve) => {
+        const modal = document.getElementById('custom-alert-modal');
+        const label = document.getElementById('custom-alert-label');
+        const titleEl = document.getElementById('custom-alert-title');
+        const btnOk = document.getElementById('custom-alert-ok');
+
+        if (titleEl) titleEl.textContent = title;
+        label.textContent = message;
+        modal.classList.add('active');
+
+        btnOk.onclick = () => {
+            modal.classList.remove('active');
+            btnOk.onclick = null;
+            resolve();
+        };
+    });
+}
+
+// Remplacement du journal de logs interne
+function logSystemEvent(level, message, detail = null) {
+    const timestamp = new Date().toISOString();
+    if (level === 'error' || level === 'warn') {
+        showCustomAlert(`[${level.toUpperCase()}] ${message}`, "Journal Système");
+    }
+}
+
+/* ==========================================================================
+   GÉRATION SÉCURISÉE DES PARAMS ET PROFIL ENSEIGNANT (E-MAIL UNIQUE)
+   ========================================================================== */
+
+function openEditProfileModal() {
+    document.getElementById('setting-user-name').value = db.user.name || '';
+    document.getElementById('setting-user-email').value = db.user.email || '';
+    document.getElementById('setting-school-id').value = db.user.school || '';
+    document.getElementById('setting-user-phone').value = db.user.phone || '';
+    document.getElementById('setting-user-age').value = db.user.age || '';
+    document.getElementById('setting-school-code').value = db.user.schoolCode || '';
+    document.getElementById('edit-profile-modal').classList.add('active');
+}
+
+function closeEditProfileModal() {
+    document.getElementById('edit-profile-modal').classList.remove('active');
+}
+
+async function verifyAndSaveProfile() {
+    const enteredPassword = await showCustomPrompt("🔑 Veuillez saisir votre mot de passe actuel pour confirmer les modifications :");
+    
+    if (enteredPassword === null) return;
+    if (enteredPassword !== db.user.password) {
+        await showCustomAlert("❌ Mot de passe incorrect. Modifications refusées.", "Erreur Authentification");
+        return;
+    }
+
+    const newEmail = document.getElementById('setting-user-email').value.trim();
+    if (!newEmail || !newEmail.includes('@')) {
+        await showCustomAlert("⚠️ Veuillez saisir une adresse e-mail valide.");
+        return;
+    }
+
+    db.user.name = document.getElementById('setting-user-name').value.trim();
+    db.user.email = newEmail;
+    db.user.school = document.getElementById('setting-school-id').value.trim();
+    db.user.phone = document.getElementById('setting-user-phone').value.trim();
+    db.user.age = document.getElementById('setting-user-age').value.trim();
+    db.user.schoolCode = document.getElementById('setting-school-code').value.trim();
+
+    const newPass = document.getElementById('setting-user-pass').value.trim();
+    if (newPass) {
+        db.user.password = newPass;
+    }
+
+    saveDB();
+    closeEditProfileModal();
+    updateLoginHeaderButton();
+    await showCustomAlert("✅ Informations du profil mises à jour avec succès !");
+}
+
+// Fonction pour ouvrir la fenêtre de modification du profil
+function openEditProfileModal() {
+    document.getElementById('setting-user-name').value = db.user.name || '';
+    document.getElementById('setting-user-email').value = db.user.email || '';
+    document.getElementById('setting-school-id').value = db.user.school || '';
+    document.getElementById('setting-user-phone').value = db.user.phone || '';
+    document.getElementById('setting-user-age').value = db.user.age || '';
+    document.getElementById('setting-school-code').value = db.user.schoolCode || '';
+
+    document.getElementById('edit-profile-modal').classList.add('active');
+}
+
+// Fonction pour fermer la fenêtre
+function closeEditProfileModal() {
+    document.getElementById('edit-profile-modal').classList.remove('active');
+}
+
+
 </script>
 </body>
 </html>
