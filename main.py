@@ -13,6 +13,45 @@ from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session, relationship
 import random
+import re
+
+import os
+import httpx
+
+RESEND_API_KEY = os.getenv("RESEND_API_KEY")
+TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
+TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
+TWILIO_PHONE_NUMBER = os.getenv("TWILIO_PHONE_NUMBER")
+
+async def send_email_via_resend(to_email: str, subject: str, html_content: str) -> bool:
+    """Envoie un e-mail via l'API HTTP Resend"""
+    if not RESEND_API_KEY:
+        print("⚠️ [RESEND] RESEND_API_KEY non configurée.")
+        return False
+        
+    payload = {
+        "from": "ClassNet <onboarding@resend.dev>",
+        "to": [to_email],
+        "subject": subject,
+        "html": html_content
+    }
+    headers = {
+        "Authorization": f"Bearer {RESEND_API_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.post("https://api.resend.com/emails", json=payload, headers=headers)
+            if response.status_code in [200, 201]:
+                print(f"✅ [RESEND] Email envoyé avec succès à {to_email}")
+                return True
+            else:
+                print(f"❌ [RESEND ERREUR] Code {response.status_code} : {response.text}")
+                return False
+    except Exception as e:
+        print(f"❌ [EMAIL ERREUR] Exception lors de l'appel HTTP Resend : {str(e)}")
+        return False
 
 class ScheduleEngine:
     """
@@ -376,6 +415,26 @@ Base.metadata.create_all(bind=engine)
 
 # --- FONCTIONS DE GESTION DE LA BASE ---
 
+def is_email(identifier: str) -> bool:
+    """Détecte si la chaîne est un e-mail valide."""
+    pattern = r"^[\w\.-]+@[\w\.-]+\.\w+$"
+    return bool(re.match(pattern, identifier.strip()))
+
+def format_phone_e164(phone: str, default_country_code: str = "+243") -> str:
+    """
+    Nettoie et formate le numéro au format E.164 international pour Twilio (+243...).
+    Exemple : '0812345678' -> '+243812345678'
+    """
+    # Conserve uniquement les chiffres et le signe '+'
+    cleaned = re.sub(r"[^\d+]", "", phone.strip())
+    
+    if cleaned.startswith("+"):
+        return cleaned
+    elif cleaned.startswith("0"):
+        return f"{default_country_code}{cleaned[1:]}"
+    else:
+        return f"{default_country_code}{cleaned}"
+
 def init_db():
     """
     Crée toutes les tables définies ci-dessus si elles n'existent pas encore.
@@ -494,44 +553,87 @@ app.add_middleware(
 # 6. ROUTES D'AUTHENTIFICATION ET COMPTES
 # ---------------------------------------------------------
 @app.post("/api/auth/teacher/init-register")
-def init_teacher_register(data: TeacherInitSchema, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    """Étape 1: Vérifie l'email et envoie un code OTP valable 15 minutes."""
-    if db.query(Teacher).filter(Teacher.email == data.email).first():
-        return {"status": False, "message": "Cet email est déjà utilisé."}
+async def init_teacher_register(data: TeacherInitSchema, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    """
+    Détecte automatiquement si l'entrée est un numéro de téléphone ou un e-mail 
+    et adapte l'envoi de l'OTP en conséquence.
+    """
+    # L'utilisateur envoie l'identifiant dans le champ email ou phone_number
+    raw_identifier = (data.email or data.phone_number or "").strip()
     
+    if not raw_identifier:
+        return {"status": False, "message": "Veuillez fournir un e-mail ou un numéro de téléphone."}
+
+    # 1. Détection du canal et normalisation
+    if is_email(raw_identifier):
+        channel = "email"
+        identifier = raw_identifier.lower()
+    else:
+        channel = "phone"
+        identifier = format_phone_e164(raw_identifier)
+
+    # 2. Vérification de l'existence du compte dans la DB
+    existing_teacher = db.query(Teacher).filter(
+        (Teacher.email == identifier) | (Teacher.phone_number == identifier)
+    ).first()
+    
+    if existing_teacher:
+        return {"status": False, "message": "Cet identifiant est déjà associé à un compte."}
+
+    # 3. Génération du code OTP et sauvegarde
     otp = generate_otp()
     expiry = datetime.utcnow() + timedelta(minutes=15)
-    
-    db.query(OTPVerification).filter(OTPVerification.email == data.email).delete()
-    db.add(OTPVerification(email=data.email, code=otp, expires_at=expiry))
+
+    db.query(OTPVerification).filter(OTPVerification.identifier == identifier).delete()
+    db.add(OTPVerification(identifier=identifier, code=otp, expires_at=expiry))
     db.commit()
-    
-    msg = f"Salut {data.full_name}, ton code de vérification ClassNet est : {otp}. Il expire dans 15 minutes."
-    background_tasks.add_task(send_email_mock, data.email, "Code de vérification ClassNet", msg)
-    
-    return {"status": True, "message": "Code envoyé sur l'adresse mail."}
+
+    # 4. Routage automatique selon le canal détecté
+    if channel == "email":
+        email_html = (
+            f"<h3>Salut {data.full_name} ⚡</h3>"
+            f"<p>Ton code de vérification ClassNet est : <b>{otp}</b></p>"
+            f"<p>Il expire dans 15 minutes.</p>"
+        )
+        background_tasks.add_task(send_email_via_resend, identifier, "Code de vérification ClassNet", email_html)
+        return {"status": True, "message": f"Code envoyé à l'adresse email {identifier}."}
+
+    else:  # SMS / Téléphone
+        sms_text = f"ClassNet : Ton code de vérification est {otp}. Valable 15 minutes."
+        background_tasks.add_task(send_sms_via_twilio, identifier, sms_text)
+        return {"status": True, "message": f"Code envoyé par SMS au {identifier}."}
 
 @app.post("/api/auth/teacher/verify-register")
 def verify_teacher_register(data: OTPVerifySchema, db: Session = Depends(get_db)):
-    """Étape 2: Valide l'OTP et crée l'enseignant."""
-    record = db.query(OTPVerification).filter(OTPVerification.email == data.email, OTPVerification.code == data.otp_code).first()
+    """Vérifie l'OTP, quel que soit le canal utilisé (Email ou SMS)."""
+    raw_identifier = (data.email or data.teacher_data.phone_number or "").strip()
     
+    identifier = raw_identifier.lower() if is_email(raw_identifier) else format_phone_e164(raw_identifier)
+
+    record = db.query(OTPVerification).filter(
+        OTPVerification.identifier == identifier,
+        OTPVerification.code == data.otp_code
+    ).first()
+
     if not record or record.expires_at < datetime.utcnow():
         return {"status": False, "message": "Code invalide ou expiré."}
-    
+
+    # Création de l'enseignant avec l'identifiant approprié
     new_teacher = Teacher(
-        email=data.teacher_data.email,
+        email=identifier if is_email(identifier) else data.teacher_data.email,
+        phone_number=identifier if not is_email(identifier) else data.teacher_data.phone_number,
         full_name=data.teacher_data.full_name,
         school_name=data.teacher_data.school_name,
         password=data.teacher_data.password,
-        phone_number=data.teacher_data.phone_number,
         age=data.teacher_data.age,
         teacher_code=f"prof_{generate_otp()}"
     )
+    
     db.add(new_teacher)
     db.delete(record)
     db.commit()
-    return {"status": True, "message": "Enseignant enregistré avec succès !"}
+
+    return {"status": True, "message": "Compte enseignant créé avec succès !"}
 
 @app.post("/api/auth/school/register")
 def register_school(data: SchoolRegisterSchema, db: Session = Depends(get_db)):
@@ -735,14 +837,73 @@ def login_school(data: LoginSchema, db: Session = Depends(get_db)):
 # ---------------------------------------------------------
 # 7. GESTION DES CODES À USAGE UNIQUE (119 BITS)
 # ---------------------------------------------------------
+import os
+import httpx
+
+RESEND_API_KEY = os.getenv("RESEND_API_KEY")
+
+async def send_email_via_resend(to_email: str, subject: str, html_body: str) -> bool:
+    """Envoie un e-mail réel à l'aide de l'API REST de Resend."""
+    if not RESEND_API_KEY:
+        print("⚠️ [RESEND] Variable RESEND_API_KEY non configurée.")
+        return False
+        
+    payload = {
+        "from": "ClassNet Admin <onboarding@resend.dev>",
+        "to": [to_email],
+        "subject": subject,
+        "html": html_body
+    }
+    headers = {
+        "Authorization": f"Bearer {RESEND_API_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.post("https://api.resend.com/emails", json=payload, headers=headers)
+            if response.status_code in [200, 201]:
+                print(f"✅ [EMAIL ENVOYÉ] Code envoyé avec succès à {to_email}")
+                return True
+            else:
+                print(f"❌ [RESEND ERREUR] {response.status_code} : {response.text}")
+                return False
+    except Exception as e:
+        print(f"❌ [EMAIL ERREUR] Exception lors de l'envoi : {str(e)}")
+        return False
+        
 @app.post("/api/admin/codes/generate")
 def generate_and_send_code(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    """Génère un code de 20 caractères et l'envoie réellement par e-mail à l'administrateur."""
     new_code = generate_20_char_code()
-    print(new_code)
+    print(f"🔑 [ADMIN CODE GENERATED] : {new_code}")
+    
+    # 1. Sauvegarde en base de données
     db.add(AccessCode(code=new_code))
     db.commit()
-    background_tasks.add_task(send_email_mock, ADMIN_EMAIL, "Nouveau Code ClassNet", f"Code généré : {new_code}")
-    return {"status": True, "message": "Code généré et envoyé à l'administrateur."}
+    
+    # 2. Préparation du template d'e-mail
+    subject = "Nouveau Code d'Accès ClassNet Généré"
+    email_html = f"""
+    <div style="font-family: Arial, sans-serif; padding: 20px; color: #1a1a1a; border: 1px solid #e0e0e0; border-radius: 8px;">
+        <h2 style="color: #2563eb;">Notification Administrateur ClassNet ⚡</h2>
+        <p>Un nouveau code d'accès à usage unique de 20 caractères a été généré :</p>
+        <div style="background-color: #f3f4f6; padding: 15px; border-radius: 6px; font-family: monospace; font-size: 18px; font-weight: bold; text-align: center; letter-spacing: 2px;">
+            {new_code}
+        </div>
+        <p style="margin-top: 20px; font-size: 12px; color: #6b7280;">
+            Ce code expirera ou sera recyclé dès sa première utilisation.
+        </p>
+    </div>
+    """
+    
+    # 3. Envoi effectif de l'e-mail en arrière-plan
+    background_tasks.add_task(send_email_via_resend, ADMIN_EMAIL, subject, email_html)
+    
+    return {
+        "status": True, 
+        "message": f"Code généré avec succès et envoyé à l'adresse {ADMIN_EMAIL}."
+    }
 
 @app.post("/api/admin/codes/verify")
 def verify_and_cycle_code(data: CodeVerifySchema, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
@@ -1294,4 +1455,11 @@ def seed_initial_test_data():
         db.close()
 
 seed_initial_test_data()
+
+DELETE FROM teachers WHERE email = 'klgaby440@gmail.com';
+DELETE FROM otp_codes WHERE email = 'klgaby440@gmail.com';
+DELETE FROM student_grades WHERE teacher_email = 'klgaby440@gmail.com';
+DELETE FROM sync_history WHERE teacher_email = 'klgaby440@gmail.com';
+DELETE FROM primenet_payloads WHERE teacher_email = 'klgaby440@gmail.com';
+DELETE FROM quizzes WHERE teacher_email = 'klgaby440@gmail.com';
 # ==============================================================================================================================================================
