@@ -789,7 +789,7 @@ async function handleLogin() {
         const response = await fetch(`${CLOUD_AUTH_URL}/api/auth/teacher/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ identifier: email, password: pass })
+            body: JSON.stringify({ email: email, password: pass })
         });
 
         const result = await response.json();
