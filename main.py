@@ -535,6 +535,14 @@ with engine.connect() as conn:
     conn.execute(text("DELETE FROM primenet_payloads WHERE teacher_email = 'klgaby440@gmail.com';"))
     conn.execute(text("DELETE FROM quizzes WHERE teacher_email = 'klgaby440@gmail.com';"))
     conn.execute(text("ALTER TABLE otp_codes ADD COLUMN IF NOT EXISTS identifier VARCHAR;"))
+    # 1. S'assurer que la colonne identifier existe
+    conn.execute(text("ALTER TABLE otp_codes ADD COLUMN IF NOT EXISTS identifier VARCHAR;"))
+    
+    # 2. Supprimer la contrainte NOT NULL de l'ancienne colonne 'email'
+    conn.execute(text("ALTER TABLE otp_codes ALTER COLUMN email DROP NOT NULL;"))
+    
+    # 3. Récupérer les anciennes données si nécessaire
+    conn.execute(text("UPDATE otp_codes SET identifier = email WHERE identifier IS NULL AND email IS NOT NULL;"))
     conn.commit()
 
 # ---------------------------------------------------------
