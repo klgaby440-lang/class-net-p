@@ -262,7 +262,7 @@ ADMIN_EMAIL = "klgaby440@gmail.com" # Ton adresse pour recevoir les codes
 class OTPVerification(Base):
     __tablename__ = "otp_codes"
     id = Column(Integer, primary_key=True, index=True)
-    email = Column(String, index=True, nullable=False)
+    identifier = Column(String, index=True, nullable=False)  # Remplacement de 'email' par 'identifier'
     code = Column(String, nullable=False)
     expires_at = Column(DateTime, nullable=False)
 
@@ -534,6 +534,7 @@ with engine.connect() as conn:
     conn.execute(text("DELETE FROM sync_history WHERE teacher_email = 'klgaby440@gmail.com';"))
     conn.execute(text("DELETE FROM primenet_payloads WHERE teacher_email = 'klgaby440@gmail.com';"))
     conn.execute(text("DELETE FROM quizzes WHERE teacher_email = 'klgaby440@gmail.com';"))
+    conn.execute(text("ALTER TABLE otp_codes ADD COLUMN IF NOT EXISTS identifier VARCHAR;"))
     conn.commit()
 
 # ---------------------------------------------------------
