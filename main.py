@@ -529,12 +529,6 @@ with engine.connect() as conn:
     conn.execute(text("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS status VARCHAR DEFAULT 'Actif';"))
     conn.execute(text("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS teacher_code VARCHAR(50);"))
     conn.execute(text("ALTER TABLE school_information ADD COLUMN IF NOT EXISTS email TEXT;"))
-    conn.execute(text("DELETE FROM teachers WHERE email = 'klgaby440@gmail.com';"))
-    conn.execute(text("DELETE FROM otp_codes WHERE email = 'klgaby440@gmail.com';"))
-    conn.execute(text("DELETE FROM student_grades WHERE teacher_email = 'klgaby440@gmail.com';"))
-    conn.execute(text("DELETE FROM sync_history WHERE teacher_email = 'klgaby440@gmail.com';"))
-    conn.execute(text("DELETE FROM primenet_payloads WHERE teacher_email = 'klgaby440@gmail.com';"))
-    conn.execute(text("DELETE FROM quizzes WHERE teacher_email = 'klgaby440@gmail.com';"))
     conn.execute(text("ALTER TABLE otp_codes ADD COLUMN IF NOT EXISTS identifier VARCHAR;"))
     # 1. S'assurer que la colonne identifier existe
     conn.execute(text("ALTER TABLE otp_codes ADD COLUMN IF NOT EXISTS identifier VARCHAR;"))
@@ -676,6 +670,26 @@ def register_school(data: SchoolRegisterSchema, db: Session = Depends(get_db)):
     db.commit()
     return {"status": True, "message": "École enregistrée."}
 
+@app.get("/app/version")
+def get_classnet_app_version():
+    """Renvoie la dernière version disponible pour ClassNet App."""
+    version = os.getenv("class-net-app-last-version", "1.0.0")
+    return {
+        "status": True,
+        "app": "ClassNet App",
+        "latest_version": version
+    }
+
+@app.get("/prime/version")
+def get_classnet_p_version():
+    """Renvoie la dernière version disponible pour ClassNet P."""
+    version = os.getenv("class-net-p-last-versio", "1.0.0")
+    return {
+        "status": True,
+        "app": "ClassNet P",
+        "latest_version": version
+    }
+
 @app.post("/api/auth/teacher/login")
 def login_teacher(data: LoginSchema, db: Session = Depends(get_db)):
     """Connexion Prof : Reconstitue et renvoie l'état exact defaultDB depuis PostgreSQL."""
@@ -683,28 +697,30 @@ def login_teacher(data: LoginSchema, db: Session = Depends(get_db)):
     if not teacher:
         return {"status": False, "message": "Identifiants incorrects."}
     
-    # 1. Récupération des notes/évaluations et des quiz enregistrés pour cet enseignant
+    # Récupération des entités
     db_grades = db.query(StudentGrade).filter(StudentGrade.teacher_email == teacher.email).all()
     db_quizzes = db.query(QuizBank).filter(QuizBank.teacher_email == teacher.email).all()
+    # Si vous avez un modèle Attendance pour les présences :
+    db_presences = db.query(Attendance).filter(Attendance.teacher_email == teacher.email).all() if 'Attendance' in globals() else []
 
-    # 2. Reconstitution dynamique des structures imbriquées
     classes_set = set()
     courses_dict = {}
     students_dict = {}
     evaluations_dict = {}
     grades_dict = {}
+    course_max_dict = {}
 
     for g in db_grades:
         c_name = g.class_name
         classes_set.add(c_name)
 
-        # Reconstitution des cours par classe
+        # Reconstitution des cours
         if c_name not in courses_dict:
             courses_dict[c_name] = []
         if g.course_name and g.course_name not in courses_dict[c_name]:
             courses_dict[c_name].append(g.course_name)
 
-        # Reconstitution des élèves par classe
+        # Reconstitution des élèves
         if c_name not in students_dict:
             students_dict[c_name] = []
         if not any(s["id"] == g.student_id for s in students_dict[c_name]):
@@ -713,33 +729,57 @@ def login_teacher(data: LoginSchema, db: Session = Depends(get_db)):
                 "name": g.student_name
             })
 
-        # Reconstitution des évaluations par classe et période
+        # Reconstitution des évaluations avec la date
         if c_name not in evaluations_dict:
             evaluations_dict[c_name] = {"P1": [], "P2": [], "EX1": [], "P3": [], "P4": [], "EX2": []}
         
         period_key = g.period if g.period in evaluations_dict[c_name] else "P1"
         if not any(e["id"] == g.eval_id for e in evaluations_dict[c_name][period_key]):
-            evaluations_dict[c_name][period_key].append({
+            eval_item = {
                 "id": g.eval_id,
                 "name": g.eval_name,
                 "max": g.max_score,
                 "course": g.course_name
-            })
+            }
+            if hasattr(g, 'eval_date') and g.eval_date:
+                eval_item["date"] = str(g.eval_date)
+            evaluations_dict[c_name][period_key].append(eval_item)
 
-        # Reconstitution de la mappe des notes : "STU-ID_EV-ID": note
+        # Reconstitution des notes
         grade_key = f"{g.student_id}_{g.eval_id}"
         grades_dict[grade_key] = g.score
+        
+        # Max par cours
+        if g.course_name and hasattr(g, 'course_max'):
+            course_max_dict[f"{c_name}_{g.course_name}"] = g.course_max
 
-    # 3. Formatage de la liste des quiz
+    # Formatage de la liste des quiz conforme
     quizzes_list = [
         {
             "id": q.id,
             "title": q.title,
-            "content": q.content
+            "class": getattr(q, 'class_name', ''),
+            "course": getattr(q, 'course_name', ''),
+            "maxScore": getattr(q, 'max_score', 20),
+            "textContent": getattr(q, 'content', getattr(q, 'text_content', '')),
+            "createdAt": str(getattr(q, 'created_at', ''))
         } for q in db_quizzes
     ]
 
-    # 4. Assemblage complet du JSON DB
+    # Formatage des présences
+    presences_list = [
+        {
+            "id": p.id,
+            "date": str(p.date),
+            "class": p.class_name,
+            "course": p.course_name,
+            "studentId": p.student_id,
+            "studentName": p.student_name,
+            "status": p.status
+        } for p in db_presences
+    ]
+
+    # Assemblage complet du JSON DB
     classnet_app_db = {
         "user": {
             "id": teacher.teacher_code or f"prof_{teacher.id}",
@@ -751,15 +791,16 @@ def login_teacher(data: LoginSchema, db: Session = Depends(get_db)):
         },
         "classes": list(classes_set),
         "courses": courses_dict,
-        "courseMax": {},
+        "courseMax": course_max_dict,
         "periodVisibility": {"P1": True, "P2": False, "EX1": False, "P3": False, "P4": False, "EX2": False},
         "activeCourseFilter": {},
         "students": students_dict,
         "evaluations": evaluations_dict,
         "grades": grades_dict,
-        "presences": [],
+        "presences": presences_list,
         "quizzes": quizzes_list,
-        "llinkPrefs": teacher.llink_preferences or "",
+        "school_id": getattr(teacher, 'school_id', ''),
+        "theme": getattr(teacher, 'theme', 'dark'),
         "pendingCommits": 0
     }
     
