@@ -175,8 +175,129 @@
         .app-info { text-align: center; margin-top: 25px; font-size: 0.8rem; color: var(--text-muted); }
         .empty-state { text-align: center; color: var(--text-muted); padding: 20px 10px; font-size: 0.85rem; }
         .badge-info { background: var(--bg-color); padding: 4px 8px; border-radius: 6px; font-size: 0.75rem; color: var(--primary); border: 1px solid var(--border-color); }
+
+        /* --- SPLASH SCREEN MISE EN PRODUCTION --- */
+        #splash-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: linear-gradient(135deg, #0F172A 0%, #1E293B 50%, #1D4ED8 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 99999;
+            color: #FFFFFF;
+            transition: opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.6s;
+        }
+
+        #splash-screen.fade-out {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+
+        .splash-container {
+            text-align: center;
+            animation: splashContainerAppear 0.8s ease-out forwards;
+        }
+
+        .splash-logo-wrapper {
+            position: relative;
+            width: 90px;
+            height: 90px;
+            margin: 0 auto 20px auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .splash-logo-ring {
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            border: 3px solid rgba(255, 255, 255, 0.15);
+            border-top-color: #60A5FA;
+            animation: splashSpin 1.4s linear infinite;
+        }
+
+        .splash-logo-icon {
+            width: 52px;
+            height: 52px;
+            animation: splashPulse 2s ease-in-out infinite;
+        }
+
+        .splash-title {
+            font-size: 1.8rem;
+            font-weight: 800;
+            letter-spacing: 2px;
+            margin-bottom: 6px;
+            background: linear-gradient(90deg, #FFFFFF 0%, #93C5FD 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .splash-subtitle {
+            font-size: 0.8rem;
+            color: #94A3B8;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+
+        @keyframes splashSpin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @keyframes splashPulse {
+            0%, 100% { transform: scale(1); opacity: 0.95; }
+            50% { transform: scale(1.08); opacity: 1; filter: drop-shadow(0 0 14px rgba(96, 165, 250, 0.7)); }
+        }
+
+        @keyframes splashContainerAppear {
+            from { opacity: 0; transform: translateY(12px) scale(0.95); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
     </style>
 </head>
+
+<!-- SPLASH SCREEN ANIMÉ -->
+<div id="splash-screen">
+    <div class="splash-container">
+        <div class="splash-logo-wrapper">
+            <div class="splash-logo-ring"></div>
+            <!-- Logo Vectoriel Officiel ClassNet -->
+            <svg class="splash-logo-icon" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stop-color="#3B82F6"/>
+                        <stop offset="100%" stop-color="#06B6D4"/>
+                    </linearGradient>
+                </defs>
+                <g transform="translate(512,512) scale(1.1) translate(-280,-320)">
+                    <rect x="60" y="40" width="340" height="480" rx="12" fill="none" stroke="white" stroke-width="14" stroke-linecap="round"/>
+                    <line x1="60" y1="520" x2="400" y2="520" stroke="white" stroke-width="14" stroke-linecap="round"/>
+                    <path d="M 60 280 Q 220 280 360 520" fill="none" stroke="white" stroke-width="18" stroke-linecap="round"/>
+                    <path d="M 60 380 Q 170 380 260 520" fill="none" stroke="white" stroke-width="18" stroke-linecap="round"/>
+                    <path d="M 60 470 A 70 70 0 0 1 130 520 L 60 520 Z" fill="white"/>
+                    <path d="M 60 280 Q 220 280 360 520" fill="none" stroke="url(#accent)" stroke-width="18" stroke-linecap="round" opacity="0.9"/>
+                    <g transform="translate(460, 40)">
+                        <rect x="0" y="40" width="28" height="400" rx="6" fill="none" stroke="white" stroke-width="10"/>
+                        <path d="M 0 40 L 14 0 L 28 40 Z" fill="none" stroke="white" stroke-width="10" stroke-linejoin="round"/>
+                        <rect x="0" y="440" width="28" height="28" rx="4" fill="#3B82F6"/>
+                    </g>
+                </g>
+            </svg>
+        </div>
+        <div class="splash-title">CLASSNET</div>
+        <div class="splash-subtitle">Propulsé par CRYPT Neural Engine</div>
+    </div>
+</div>
+
 <body>
 
     <!-- HEADER -->
@@ -648,6 +769,18 @@
     </div>
 
 <script>
+
+// Déclenchement et fermeture automatique du Splash Screen au chargement de l'application
+window.addEventListener('load', () => {
+    setTimeout(() => {
+        const splash = document.getElementById('splash-screen');
+        if (splash) {
+            splash.classList.add('fade-out');
+            setTimeout(() => splash.remove(), 600); // Retire l'élément du DOM après l'animation
+        }
+    }, 2800); // Masquage après 1.8 seconde
+});
+
 /* ==========================================================================
    1. MOTEUR DE BASE DE DONNÉES LOCALES (LOCALSTORAGE SÉCURISÉ)
    ========================================================================== */
