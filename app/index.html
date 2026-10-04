@@ -8,6 +8,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg width='1024' height='1024' viewBox='0 0 1024 1024' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3ClinearGradient id='bg' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%230F2040'/%3E%3Cstop offset='100%25' stop-color='%230A1628'/%3E%3C/linearGradient%3E%3ClinearGradient id='accent' x1='0%25' y1='0%25' x2='100%25' y2='0%25'%3E%3Cstop offset='0%25' stop-color='%233B82F6'/%3E%3Cstop offset='100%25' stop-color='%2306B6D4'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='1024' height='1024' rx='200' fill='url(%23bg)'/%3E%3Cg transform='translate(512,512) scale(1.1) translate(-280,-320)'%3E%3Crect x='60' y='40' width='340' height='480' rx='12' fill='none' stroke='white' stroke-width='14' stroke-linecap='round'/%3E%3Cline x1='60' y1='520' x2='400' y2='520' stroke='white' stroke-width='14' stroke-linecap='round'/%3E%3Cpath d='M 60 280 Q 220 280 360 520' fill='none' stroke='white' stroke-width='18' stroke-linecap='round'/%3E%3Cpath d='M 60 380 Q 170 380 260 520' fill='none' stroke='white' stroke-width='18' stroke-linecap='round'/%3E%3Cpath d='M 60 470 A 70 70 0 0 1 130 520 L 60 520 Z' fill='white'/%3E%3Cpath d='M 60 280 Q 220 280 360 520' fill='none' stroke='url(%23accent)' stroke-width='18' stroke-linecap='round' opacity='0.9'/%3E%3Cg transform='translate(460, 40)'%3E%3Crect x='0' y='40' width='28' height='400' rx='6' fill='none' stroke='white' stroke-width='10'/%3E%3Cpath d='M 0 40 L 14 0 L 28 40 Z' fill='none' stroke='white' stroke-width='10' stroke-linejoin='round'/%3E%3Crect x='0' y='440' width='28' height='28' rx='4' fill='%233B82F6'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E">
     <style>
         /* --- VARIABLES & RESET --- */
         :root {
@@ -253,6 +254,9 @@
                 <div class="form-group">
                     <label>CODE OTP DE VÉRIFICATION</label>
                     <input type="text" id="reg-otp-code" placeholder="123456" maxlength="6" style="text-align: center; letter-spacing: 4px; font-weight: bold; font-size: 1.2rem;">
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <span>En cliquant sur <strong>Valider mon compte</strong>, vous reconnaissez avoir lu et accepté la <a href="https://class-net-p.vercel.app/confidentialite" target="_blank" rel="noopener noreferrer">politique de confidentialité</a> de CRYPT Entreprise pour ClassNet.</span>
                 </div>
                 <div style="display: flex; gap: 10px; margin-top: 20px;">
                     <button class="btn-action" style="flex:1;" onclick="switchAuthSubView('register')">Modifier infos</button>
@@ -648,6 +652,165 @@
    1. MOTEUR DE BASE DE DONNÉES LOCALES (LOCALSTORAGE SÉCURISÉ)
    ========================================================================== */
 
+const version = "2.1.7546"
+
+async function search_version(url, version_actuelle) {
+    try {
+        const res = await fetch(`${url}/app/version`, { method: 'POST' });
+        const data = await res.json();
+        
+        if (data && data.status === true) {
+            if (version_actuelle !== data.latest_version) {
+                if (typeof showCustomAlert === 'function') {
+                    await showCustomAlert("📢 Une nouvelle version est disponible. Rendez-vous sur CRYPT Store pour la télécharger.");
+                } else {
+                    console.log("Une nouvelle version est disponible.");
+                }
+            }
+        }
+    } catch (err) {
+        /* Crash silencieux ou log système */
+        if (typeof systemLog === 'function') {
+            systemLog("Échec de la vérification de version", "warn", "Version");
+        }
+    }
+}
+
+search_version('https://class-net-p.onrender.com', version)
+   /**
+ * Imprime un contenu HTML via une iframe cachée compatible WebView / Tauri
+ */
+function imprimerDocument(htmlContent) {
+  let printIframe = document.getElementById('classnet-print-iframe');
+
+  // Création de l'iframe si elle n'existe pas encore
+  if (!printIframe) {
+    printIframe = document.createElement('iframe');
+    printIframe.id = 'classnet-print-iframe';
+    printIframe.style.position = 'fixed';
+    printIframe.style.right = '0';
+    printIframe.style.bottom = '0';
+    printIframe.style.width = '0px';
+    printIframe.style.height = '0px';
+    printIframe.style.border = 'none';
+    printIframe.style.visibility = 'hidden';
+    document.body.appendChild(printIframe);
+  }
+
+  const iframeDoc = printIframe.contentWindow.document;
+
+  // Réinitialisation du contenu de l'iframe
+  iframeDoc.open();
+  iframeDoc.write(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Impression ClassNet</title>
+        <style>
+          @page {
+            margin: 10mm;
+            size: auto;
+          }
+          body {
+            font-family: Arial, sans-serif;
+            padding: 15px;
+            color: #000;
+            background: #fff;
+            margin: 0;
+          }
+          h1, h2 { text-align: center; }
+          table { width: 100%; border-collapse: collapse; }
+          th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+          @media print {
+            body { margin: 0; padding: 0; }
+          }
+        </style>
+      </head>
+      <body>
+        ${htmlContent}
+      </body>
+    </html>
+  `);
+  iframeDoc.close();
+
+  // Fonction de déclenchement de l'impression
+  const triggerPrint = () => {
+    setTimeout(() => {
+      try {
+        printIframe.contentWindow.focus();
+        printIframe.contentWindow.print();
+      } catch (err) {
+        console.error("Erreur lors du déclenchement de l'impression :", err);
+      }
+    }, 250);
+  };
+
+  // S'assurer que le contenu et les éléments de l'iframe sont entièrement prêts
+  if (iframeDoc.readyState === 'complete') {
+    triggerPrint();
+  } else {
+    printIframe.onload = triggerPrint;
+  }
+}
+
+/**
+ * Exporte un document jsPDF compatible Tauri et Navigateur Web
+ */
+async function exporterPDF(doc, filename = "interrogation.pdf") {
+  // Détection de l'environnement Tauri
+  const isTauri = typeof window !== 'undefined' && (window.__TAURI__ || window.__TAURI_INTERNALS__);
+
+  if (isTauri) {
+    try {
+      // 1. Récupération des API natives de Tauri (support v1 et v2)
+      const dialog = window.__TAURI__?.dialog || await import('@tauri-apps/plugin-dialog');
+      const fs = window.__TAURI__?.fs || await import('@tauri-apps/plugin-fs');
+
+      // 2. Extraire les données binaires du PDF généré par jsPDF
+      const arrayBuffer = doc.output('arraybuffer');
+      const uint8Array = new Uint8Array(arrayBuffer);
+
+      // 3. Ouvrir la boîte de dialogue système pour choisir l'emplacement de sauvegarde
+      const filePath = await dialog.save({
+        defaultPath: filename,
+        filters: [{ name: 'Document PDF', extensions: ['pdf'] }]
+      });
+
+      // 4. Écrire le fichier directement sur le disque si l'utilisateur valide
+      if (filePath) {
+        if (fs.writeBinaryFile) {
+          await fs.writeBinaryFile(filePath, uint8Array); // Tauri v1
+        } else if (fs.writeFile) {
+          await fs.writeFile(filePath, uint8Array); // Tauri v2
+        }
+        
+        if (typeof showCustomAlert === 'function') {
+          await showCustomAlert("✅ Le fichier PDF a été enregistré avec succès !");
+        }
+      }
+      return;
+    } catch (err) {
+      console.error("Échec de l'export via l'API native Tauri, tentative par Blob :", err);
+    }
+  }
+
+  // Fallback pour Navigateur Web standard / WebView générique
+  try {
+    doc.save(filename);
+  } catch (e) {
+    const blob = doc.output('blob');
+    const blobUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+  }
+}
+
 function generateUniqueId(prefix = "CN") {
     const year = new Date().getFullYear();
     const randomHash1 = Math.random().toString(36).substring(2, 6).toUpperCase();
@@ -781,7 +944,7 @@ async function handleLogin() {
     const pass = document.getElementById('login-password').value.trim();
 
     if (!email || !pass) {
-        alert("⚠️ Veuillez saisir votre e-mail et votre mot de passe.");
+        await showCustomAlert("⚠️ Veuillez saisir votre e-mail et votre mot de passe.");
         return;
     }
 
@@ -795,7 +958,6 @@ async function handleLogin() {
         const result = await response.json();
 
         if (result.status && result.data) {
-            // Fusion de la base reçue avec la base locale
             db = { ...db, ...result.data };
             db.user.isLoggedIn = true;
             saveDB();
@@ -804,13 +966,12 @@ async function handleLogin() {
             renderClassSelectors();
             renderGradesTables();
             closeLoginModal();
-            alert(`✅ Connexion réussie ! Bienvenue ${db.user.name}`);
+            await showCustomAlert(`✅ Connexion réussie ! Bienvenue ${db.user.name}`);
         } else {
-            alert(`❌ Échec de connexion : ${result.message || 'Identifiants incorrects.'}`);
+            await showCustomAlert(`❌ Échec de connexion : ${result.message || 'Identifiants incorrects.'}`);
         }
     } catch (error) {
-        console.error("Erreur connexion cloud :", error);
-        alert("❌ Impossible de joindre le serveur Cloud. Vérifiez votre connexion Internet.");
+        await systemLog("Impossible de joindre le serveur Cloud. Vérifiez votre connexion Internet.", 'error', "Erreur Connexion Cloud");
     }
 }
 
@@ -2030,6 +2191,37 @@ function getLlinkContextPreferences() {
     });
 }
 
+async function postDataWithFallback(endpoint, payload) {
+    const urls = [CONFIG.PRIMARY_URL, CONFIG.FALLBACK_URL];
+
+    for (const baseUrl of urls) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), CONFIG.TIMEOUT_MS);
+
+        try {
+            const response = await fetch(`${baseUrl}${endpoint}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+                signal: controller.signal
+            });
+
+            clearTimeout(timeoutId);
+
+            if (response.ok) {
+                return { success: true, url: baseUrl, response };
+            }
+        } catch (error) {
+            clearTimeout(timeoutId);
+            const reason = error.name === 'AbortError' ? 'Timeout dépassé' : error.message;
+            await systemLog(`Échec de connexion vers ${baseUrl} (${reason})`, 'warn', 'Réseau Intranet');
+        }
+    }
+
+    return { success: false };
+}
+
+// --- 3. SEND LLINK MESSAGE ---
 async function sendLlinkMessage() {
     const input = document.getElementById('llink-input');
     const text = input.value.trim();
@@ -2039,7 +2231,6 @@ async function sendLlinkMessage() {
     const emptyState = document.getElementById('llink-empty-state');
     if (emptyState) emptyState.remove();
 
-    // 1. Affichage du message Utilisateur
     const userMsgDiv = document.createElement('div');
     userMsgDiv.style.cssText = "align-self: flex-end; background: var(--primary); color: white; padding: 10px 14px; border-radius: 14px 14px 2px 14px; max-width: 80%; font-size: 0.88rem; word-break: break-word; line-height: 1.4;";
     userMsgDiv.textContent = text;
@@ -2048,7 +2239,6 @@ async function sendLlinkMessage() {
     input.value = '';
     chatWindow.scrollTop = chatWindow.scrollHeight;
 
-    // 2. Préparation du conteneur de réponse Llink
     const botMsgContainer = document.createElement('div');
     botMsgContainer.style.cssText = "align-self: flex-start; background: var(--bg-color); color: var(--text-main); border: 1px solid var(--border-color); padding: 10px 14px; border-radius: 14px 14px 14px 2px; max-width: 85%; font-size: 0.88rem; word-break: break-word; line-height: 1.4;";
     botMsgContainer.innerHTML = "<em>Réflexion de Llink en cours... 🧠</em>";
@@ -2058,11 +2248,10 @@ async function sendLlinkMessage() {
     const selectedModel = document.getElementById('llink-model-select').value;
     const userPrefs = getLlinkContextPreferences();
 
-    // 3. Construction du Payload conforme à la classe ChatPayload de l'API FastAPI/Pydantic
     const payload = {
         message: text,
         modèle: selectedModel,
-        model: selectedModel, // Sécurité de compatibilité
+        model: selectedModel,
         préférences: userPrefs,
         preferences: userPrefs,
         mode: "chat",
@@ -2072,9 +2261,7 @@ async function sendLlinkMessage() {
     try {
         const response = await fetch(`${SERVER_URL}/api/chat`, {
             method: "POST",
-            headers: { 
-                "Content-Type": "application/json"
-            },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload)
         });
 
@@ -2085,7 +2272,6 @@ async function sendLlinkMessage() {
         let fullReply = "";
         botMsgContainer.innerHTML = "";
 
-        // 4. Lecture en streaming
         while (true) {
             const { value, done } = await reader.read();
             if (done) break;
@@ -2099,8 +2285,69 @@ async function sendLlinkMessage() {
         chatWindow.scrollTop = chatWindow.scrollHeight;
 
     } catch (err) {
-        console.error("Erreur Llink API:", err);
+        await systemLog("Erreur Llink API : Impossible de contacter le serveur Llink.", 'error', 'Llink AI');
         botMsgContainer.innerHTML = "❌ Impossible de contacter le serveur Llink. Vérifie ta connexion réseau.";
+    }
+}
+
+// --- 4. GENERATE QUIZ WITH LLINK ---
+async function generateQuizWithLlink() {
+    const title = document.getElementById('quiz-title-input').value.trim();
+    const className = document.getElementById('quiz-select-class').value;
+    const courseName = document.getElementById('quiz-select-course').value;
+    const maxScore = document.getElementById('quiz-max-score').value;
+    const textarea = document.getElementById('quiz-text-content');
+
+    if (!title) {
+        await showCustomAlert("⚠️ Précise d'abord le titre ou le sujet dans le champ 'TITRE DE L'ÉVALUATION'.");
+        return;
+    }
+
+    textarea.value = "🤖 Llink rédige ton interrogation en arrière-plan... Patientez quelques secondes...";
+
+    const promptText = `Rédige une interrogation écrite complète et prête à imprimer sur le sujet : "${title}".
+Classe : ${className}
+Cours : ${courseName}
+Total des points : /${maxScore} points.
+Structure demandée :
+1. En-tête officiel de l'épreuve (Nom de l'élève, Date, Classe, Cours).
+2. 3 à 5 questions très précises et pédagogiques adaptées au programme.
+3. Le barème de cotation détaillé pour chaque question entre parenthèses. Ne mets pas de conclusion ni d'introduction.`;
+
+    const payload = {
+        message: promptText,
+        modèle: document.getElementById('llink-model-select') ? document.getElementById('llink-model-select').value : "gemini-1.5-flash",
+        model: "gemini-1.5-flash",
+        préférences: getLlinkContextPreferences(),
+        preferences: getLlinkContextPreferences(),
+        mode: "quiz_gen",
+        source: "classnet_app"
+    };
+
+    try {
+        const response = await fetch(`${SERVER_URL}/api/chat`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) throw new Error("Erreur serveur Llink");
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+        let generatedText = "";
+        textarea.value = "";
+
+        while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            generatedText += decoder.decode(value, { stream: true });
+            textarea.value = generatedText;
+        }
+
+    } catch (err) {
+        await systemLog("Erreur lors de la génération du quiz via Llink AI.", 'error', 'Génération Quiz');
+        textarea.value = "❌ Erreur de génération. Vérifie ta connexion réseau à l'API Llink.";
     }
 }
 
@@ -2197,67 +2444,6 @@ function saveQuizToDB() {
     document.getElementById('quiz-title-input').value = '';
     document.getElementById('quiz-text-content').value = '';
     alert("✅ Interrogation enregistrée avec succès dans la banque de données !");
-}
-
-// 4. Génération automatique d'un Quiz par Llink AI
-async function generateQuizWithLlink() {
-    const title = document.getElementById('quiz-title-input').value.trim();
-    const className = document.getElementById('quiz-select-class').value;
-    const courseName = document.getElementById('quiz-select-course').value;
-    const maxScore = document.getElementById('quiz-max-score').value;
-    const textarea = document.getElementById('quiz-text-content');
-
-    if (!title) {
-        alert("⚠️ Précise d'abord le titre ou le sujet dans le champ 'TITRE DE L'ÉVALUATION' pour que Llink sache sur quoi générer le quiz.");
-        return;
-    }
-
-    textarea.value = "🤖 Llink rédigé ton interrogation en arrière-plan... Patientez quelques secondes...";
-
-    const promptText = `Rédige une interrogation écrite complète et prête à imprimer sur le sujet : "${title}".
-Classe : ${className}
-Cours : ${courseName}
-Total des points : /${maxScore} points.
-Structure demandée :
-1. En-tête officiel de l'épreuve (Nom de l'élève, Date, Classe, Cours).
-2. 3 à 5 questions très précises et pédagogiques adaptées au programme.
-3. Le barème de cotation détaillé pour chaque question entre parenthèses. Ne mets pas de conclusion ni d'introduction.`;
-
-    const payload = {
-        message: promptText,
-        modèle: document.getElementById('llink-model-select') ? document.getElementById('llink-model-select').value : "gemini-1.5-flash",
-        model: "gemini-1.5-flash",
-        préférences: getLlinkContextPreferences(),
-        preferences: getLlinkContextPreferences(),
-        mode: "quiz_gen",
-        source: "classnet_app"
-    };
-
-    try {
-        const response = await fetch(`${SERVER_URL}/api/chat`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-        });
-
-        if (!response.ok) throw new Error("Erreur serveur Llink");
-
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder("utf-8");
-        let generatedText = "";
-        textarea.value = "";
-
-        while (true) {
-            const { value, done } = await reader.read();
-            if (done) break;
-            generatedText += decoder.decode(value, { stream: true });
-            textarea.value = generatedText;
-        }
-
-    } catch (err) {
-        console.error("Erreur génération Quiz Llink:", err);
-        textarea.value = "❌ Erreur de génération. Vérifie ta connexion réseau à l'API Llink.";
-    }
 }
 
 // 5. Affichage dynamique de la liste des quiz
@@ -2706,6 +2892,83 @@ function loadTheme() {
     }
 }
 
+/* ==========================================================================
+   MOTEUR DE CONSOLE SYSTÈME ET DIALOGUES MODAUX (REMPLACEMENT NATIVE)
+   ========================================================================== */
+
+/**
+ * Affiche une alerte / notification dans la console visuelle du système
+ */
+function showCustomAlert(message, title = "Notification ClassNet") {
+    return new Promise((resolve) => {
+        const modal = document.getElementById('custom-alert-modal');
+        const titleEl = document.getElementById('custom-alert-title');
+        const labelEl = document.getElementById('custom-alert-label');
+        const okBtn = document.getElementById('custom-alert-ok');
+
+        if (titleEl) titleEl.textContent = title;
+        if (labelEl) labelEl.textContent = message;
+
+        modal.classList.add('active');
+
+        const handleOk = () => {
+            modal.classList.remove('active');
+            okBtn.removeEventListener('click', handleOk);
+            resolve();
+        };
+
+        okBtn.addEventListener('click', handleOk);
+    });
+}
+
+/**
+ * Affiche une invite de saisie dans la modale système (remplace prompt())
+ */
+function showCustomPrompt(message, defaultValue = "", title = "Saisie requise") {
+    return new Promise((resolve) => {
+        const modal = document.getElementById('custom-prompt-modal');
+        const titleEl = document.getElementById('custom-prompt-title');
+        const labelEl = document.getElementById('custom-prompt-label');
+        const inputEl = document.getElementById('custom-prompt-input');
+        const confirmBtn = document.getElementById('custom-prompt-confirm');
+        const cancelBtn = document.getElementById('custom-prompt-cancel');
+
+        if (titleEl) titleEl.textContent = title;
+        if (labelEl) labelEl.textContent = message;
+        if (inputEl) inputEl.value = defaultValue;
+
+        modal.classList.add('active');
+        if (inputEl) inputEl.focus();
+
+        const cleanup = () => {
+            modal.classList.remove('active');
+            confirmBtn.removeEventListener('click', handleConfirm);
+            cancelBtn.removeEventListener('click', handleCancel);
+        };
+
+        const handleConfirm = () => {
+            const val = inputEl ? inputEl.value : "";
+            cleanup();
+            resolve(val);
+        };
+
+        const handleCancel = () => {
+            cleanup();
+            resolve(null);
+        };
+
+        confirmBtn.addEventListener('click', handleConfirm);
+        cancelBtn.addEventListener('click', handleCancel);
+    });
+}
+
+/**
+ * Console du système pour intercepter et afficher les erreurs/logs dans la modale
+ */
+function systemLog(message, type = 'info', title = 'Console ClassNet') {
+    const prefix = type === 'error' ? '❌ Erreur Système : ' : (type === 'warn' ? '⚠️ Avertissement : ' : 'ℹ️ ');
+    return showCustomAlert(`${prefix}${message}`, title);
+}
 </script>
 </body>
 </html>
