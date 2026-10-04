@@ -683,7 +683,7 @@ def get_classnet_app_version():
 @app.get("/prime/version")
 def get_classnet_p_version():
     """Renvoie la dernière version disponible pour ClassNet P."""
-    version = os.getenv("class-net-p-last-versio", "1.0.0")
+    version = os.getenv("class-net-p-last-version", "1.0.0")
     return {
         "status": True,
         "app": "ClassNet P",
