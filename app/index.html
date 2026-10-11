@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ClassNet App</title>
+    <title>Class-Ink App | Suite Pédagogique</title>
     <!-- LIBRAIRIES JSPDF ET AUTO-TABLE POUR EXPORT PDF -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
@@ -12,8 +12,9 @@
     <style>
         /* --- VARIABLES & RESET --- */
         :root {
-            --primary: #2563EB;
-            --primary-dark: #1D4ED8;
+            --primary-gradient: linear-gradient(135deg, #412b66 0%, #3731a8 50%, #2563EB 100%);
+            --primary: #6D28D9;
+            --primary-dark: #5B21B6;
             --bg-color: #F3F4F6;
             --card-bg: #FFFFFF;
             --text-main: #1F2937;
@@ -39,8 +40,9 @@
         
         /* --- HEADER --- */
         header {
-            background-color: var(--primary);
-            color: white;
+            background: var(--primary-gradient); 
+            color: white; 
+            flex: 1;
             padding: 12px 20px;
             display: flex;
             justify-content: space-between;
@@ -116,7 +118,7 @@
             border: 1px solid var(--border-color); padding: 6px 14px;
             border-radius: 20px; white-space: nowrap; cursor: pointer; font-size: 0.85rem;
         }
-        .btn-badge.active { background-color: var(--primary); color: white; border-color: var(--primary); font-weight: bold; }
+        .btn-badge.active { background: var(--primary-gradient); color: white; border-color: transparent; font-weight: bold; }
         .btn-add-class {
             background-color: var(--primary); color: white; border: none;
             width: 32px; height: 32px; border-radius: 50%; font-weight: bold;
@@ -261,7 +263,110 @@
             from { opacity: 0; transform: translateY(12px) scale(0.95); }
             to { opacity: 1; transform: translateY(0) scale(1); }
         }
+        
+        .drawer-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5); z-index: 300; display: none; justify-content: flex-end;
+            backdrop-filter: blur(3px);
+        }
+        .drawer-overlay.active { display: flex; }
+        .drawer-content {
+            width: 100%; max-width: 460px; height: 100%; background: var(--card-bg);
+            padding: 20px; display: flex; flex-direction: column; box-shadow: -5px 0 25px rgba(0,0,0,0.3);
+            animation: slideInRight 0.3s ease-out forwards; overflow-y: auto;
+        }
+        @keyframes slideInRight { from { transform: translateX(100%); } to { transform: translateX(0); } }
 
+/* --- Bouton Flottant & Cercles Tourbillonnants --- */
+.floating-nav-btn {
+    position: fixed;
+    bottom: 25px;
+    right: 25px;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background-color: #6D28D9;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 15px rgba(109, 40, 217, 0.4);
+    z-index: 1001;
+    transition: transform 0.3s ease;
+}
+
+/* Cercles tourbillonnants en arrière-plan */
+.floating-nav-btn .spinner-ring {
+    position: absolute;
+    top: -6px;
+    left: -6px;
+    right: -6px;
+    bottom: -6px;
+    border: 2px dashed rgba(109, 40, 217, 0.7);
+    border-radius: 50%;
+    animation: spin-circles 4s linear infinite;
+}
+
+.floating-nav-btn:hover {
+    transform: scale(1.08);
+}
+
+.floating-nav-btn:hover .spinner-ring {
+    animation-duration: 1.5s; /* S'accélère au survol */
+}
+
+@keyframes spin-circles {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.floating-nav-btn .btn-icon {
+    font-size: 1.25rem;
+    z-index: 2;
+}
+
+/* --- Barre de navigation (Masquée / Glissante) --- */
+.bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background-color: #FFFFFF;
+    display: flex;
+    justify-content: space-around;
+    padding: 10px 0;
+    z-index: 1000;
+    border-top: 1px solid #E5E7EB;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.08);
+    
+    /* Cachée par défaut en bas de l'écran */
+    transform: translateY(100%);
+    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Classe ajoutée en JS pour afficher la barre */
+.bottom-nav.show {
+    transform: translateY(0);
+}
+
+.bottom-nav button.nav-btn {
+    background: none;
+    border: none;
+    color: #6B7280;
+    font-size: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    cursor: pointer;
+    padding: 4px 8px;
+    transition: color 0.2s;
+}
+
+.bottom-nav button.nav-btn.active {
+    color: #6D28D9;
+    font-weight: bold;
+}
     </style>
 </head>
 
@@ -302,10 +407,11 @@
 
     <!-- HEADER -->
     <header>
-        <div>CLASSNET APP</div>
+        <div>CLASS-INK SUITE ⚡</div>
         <div class="header-actions">
+            <!-- NOUVEAU BOUTON DE MENU STYLE THINK / PAY.HTML -->
+            <button id="btn-header-schedule" class="icon-btn" title="Horaire & Admin Chat" onclick="toggleScheduleDrawer()">📅💬</button>
             <button id="btn-login-header" class="btn-auth-header">Se connecter</button>
-            <button id="btn-header-settings" class="icon-btn">⚙️</button>
         </div>
     </header>
 
@@ -688,10 +794,15 @@
         </div>
     </main>
 
+    <button id="nav-toggle-btn" class="floating-nav-btn" aria-label="Menu des options">
+        <span class="spinner-ring"></span>
+        <span class="btn-icon">⚙️</span>
+    </button>
+
     <!-- NAVIGATION INFERIEURE -->
-    <nav class="bottom-nav">
+    <nav id="bottom-nav" class="bottom-nav">
         <button class="nav-btn active" data-target="view-notes">Notes</button>
-        <button class="nav-btn" data-target="view-presence">Présence</button>
+        <button class="nav-btn" data-target="view-presence">Présences</button>
         <button class="nav-btn" data-target="view-llink">Llink</button>
         <button class="nav-btn" data-target="view-interrogations">Quiz</button>
         <button class="nav-btn" data-target="view-settings">Réglages</button>
@@ -764,6 +875,74 @@
             <div style="display: flex; gap: 10px; margin-top: 15px;">
                 <button class="btn-action" onclick="closeEditProfileModal()" style="flex:1;">Annuler</button>
                 <button class="btn-primary" onclick="verifyAndSaveProfile()" style="flex:1;">💾 Valider les modifications</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- DRAWER COULISSANT : HORAIRE, MINUTEUR & WHATSAPP ADMIN CHAT -->
+    <div id="schedule-chat-drawer" class="drawer-overlay">
+        <div class="drawer-content">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">
+                <h3 style="color: var(--primary);">🏫 Centre de Contrôle & Admin</h3>
+                <button onclick="toggleScheduleDrawer()" style="background:none; border:none; font-size:1.4rem; cursor:pointer; color:var(--text-main);">✕</button>
+            </div>
+
+            <!-- SÉLECTEUR D'ONGLETS -->
+            <div style="display: flex; gap: 8px; margin-bottom: 15px;">
+                <button class="btn-primary" style="flex:1; font-size:0.75rem;" onclick="switchDrawerTab('schedule')">📅 Horaire & Sonnerie</button>
+                <button class="btn-action" style="flex:1; font-size:0.75rem;" onclick="switchDrawerTab('chat')">💬 Groupe Direction</button>
+            </div>
+
+            <!-- SECTION 1 : HORAIRE & MINUTEUR SONNERIE -->
+            <div id="drawer-tab-schedule">
+                <div class="card" style="background: rgba(109, 40, 217, 0.05); border: 1px dashed var(--primary);">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <strong style="font-size: 0.85rem; color: var(--primary);">🔔 Minuteur de Cours</strong>
+                            <div id="live-timer-display" style="font-size: 1.1rem; font-weight: bold; margin-top: 2px;">00:00:00 (Hors période)</div>
+                        </div>
+                        <button class="btn-primary" style="padding: 6px 10px; font-size: 0.75rem;" onclick="testSchoolBell()">Test Sonnerie 🔊</button>
+                    </div>
+                </div>
+
+                <h4 style="margin: 10px 0; font-size: 0.95rem;">🗓️ Emploi du Temps Général</h4>
+                <div style="overflow-x: auto; margin-bottom: 15px;">
+                    <table style="font-size: 0.8rem;">
+                        <thead>
+                            <tr>
+                                <th>Heure</th>
+                                <th>Lundi</th>
+                                <th>Mardi</th>
+                                <th>Mercredi</th>
+                                <th>Jeudi</th>
+                                <th>Vendredi</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><strong>07:30 - 08:30</strong></td><td>Algèbre</td><td>Analyse</td><td>Physique</td><td>Chimie</td><td>Biologie</td></tr>
+                            <tr><td><strong>08:30 - 09:30</strong></td><td>Français</td><td>Anglais</td><td>Histoire</td><td>Géographie</td><td>Informatique</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- SECTION 2 : WHATSAPP STYLE ADMIN CHAT -->
+            <div id="drawer-tab-chat" style="display: none; flex-direction: column; height: calc(100% - 120px);">
+                <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid var(--success); padding: 8px 12px; border-radius: 8px; margin-bottom: 10px; font-size: 0.75rem; color: var(--success); font-weight: bold;">
+                    📢 Canal Officiel de la Direction (Sécurisé)
+                </div>
+                
+                <div id="admin-chat-messages" style="flex-grow: 1; overflow-y: auto; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px;">
+                    <div style="background: var(--card-bg); padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border-color); font-size: 0.8rem;">
+                        <strong style="color: var(--primary);">Direction :</strong> Réunion pédagogique ce samedi à 10h précise.
+                        <div style="font-size: 0.65rem; color: var(--text-muted); text-align: right; margin-top: 2px;">08:15</div>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 6px;">
+                    <input type="text" id="admin-chat-input" placeholder="Écrire à la direction..." style="flex-grow: 1; padding: 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-color); color: var(--text-main); font-size: 0.85rem;" onkeydown="if(event.key==='Enter') sendAdminMessage()">
+                    <button class="btn-primary" style="padding: 8px 14px;" onclick="sendAdminMessage()">➤</button>
+                </div>
             </div>
         </div>
     </div>
@@ -3102,6 +3281,104 @@ function systemLog(message, type = 'info', title = 'Console ClassNet') {
     const prefix = type === 'error' ? '❌ Erreur Système : ' : (type === 'warn' ? '⚠️ Avertissement : ' : 'ℹ️ ');
     return showCustomAlert(`${prefix}${message}`, title);
 }
+
+// --- GESTION DU DRAWER HORAIRE & CHAT ---
+function toggleScheduleDrawer() {
+    const drawer = document.getElementById('schedule-chat-drawer');
+    drawer.classList.toggle('active');
+}
+
+function switchDrawerTab(tab) {
+    document.getElementById('drawer-tab-schedule').style.display = tab === 'schedule' ? 'block' : 'none';
+    document.getElementById('drawer-tab-chat').style.display = tab === 'chat' ? 'flex' : 'none';
+}
+
+// Sonnerie audio native (Web Audio API)
+function testSchoolBell() {
+    try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(880, audioCtx.currentTime); // La4
+        gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 1.5);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 1.5);
+    } catch(e) {
+        console.log("Audio non supporté");
+    }
+}
+
+// Minuteur dynamique en temps réel
+setInterval(() => {
+    const now = new Date();
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const seconds = String(now.getSeconds()).padStart(2, '0');
+    const timeStr = `${hours}:${minutes}:${seconds}`;
+    
+    const display = document.getElementById('live-timer-display');
+    if (display) {
+        if (hours === '08' && minutes === '30' && seconds === '00') {
+            testSchoolBell();
+            display.textContent = `🚨 Fin de l'heure de cours !`;
+        } else {
+            display.textContent = `${timeStr} (En cours)`;
+        }
+    }
+}, 1000);
+
+// Envoi de message style WhatsApp dans le chat admin
+function sendAdminMessage() {
+    const input = document.getElementById('admin-chat-input');
+    const text = input.value.trim();
+    if (!text) return;
+
+    const chatWindow = document.getElementById('admin-chat-messages');
+    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    chatWindow.innerHTML += `
+        <div style="background: rgba(109, 40, 217, 0.1); padding: 8px 10px; border-radius: 8px; border: 1px solid var(--primary); font-size: 0.8rem; align-self: flex-end; max-width: 85%;">
+            <strong style="color: var(--primary);">Moi :</strong> ${text}
+            <div style="font-size: 0.65rem; color: var(--text-muted); text-align: right; margin-top: 2px;">${time}</div>
+        </div>
+    `;
+    input.value = '';
+    chatWindow.scrollTop = chatWindow.scrollHeight;
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const toggleBtn = document.getElementById('nav-toggle-btn');
+    const bottomNav = document.getElementById('bottom-nav');
+    const navButtons = document.querySelectorAll('.bottom-nav .nav-btn');
+    const viewSections = document.querySelectorAll('.view-section');
+
+    // 1. Afficher / Masquer la barre de navigation au clic sur le bouton à cercles
+    toggleBtn.addEventListener('click', () => {
+        bottomNav.classList.toggle('show');
+    });
+
+    // 2. Gérer le changement de sections (Notes, Présences, Llink, Quiz, Réglages)
+    navButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            const targetId = button.getAttribute('data-target');
+
+            // Désactiver tous les boutons et cacher les sections
+            navButtons.forEach(btn => btn.classList.remove('active'));
+            viewSections.forEach(section => section.classList.remove('active'));
+
+            // Activer la vue sélectionnée
+            button.classList.add('active');
+            const targetSection = document.getElementById(targetId);
+            if (targetSection) {
+                targetSection.classList.add('active');
+            }
+        });
+    });
+});
 </script>
 </body>
 </html>
