@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Class-Ink S (Suivi)</title>
+    <style>
+        :root {
+            --bg-gradient: linear-gradient(135deg, #7c3aed, #2563eb);
+            --bg-main: #0f172a;
+            --bg-card: #1e293b;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent: #7c3aed;
+            --accent-hover: #6d28d9;
+            --border: #334155;
+            --danger: #ef4444;
+            --success: #22c55e;
+        }
+
+        [data-theme="light"] {
+            --bg-main: #f1f5f9;
+            --bg-card: #ffffff;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --border: #cbd5e1;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            transition: background 0.3s, color 0.3s;
+        }
+
+        body {
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            padding-bottom: 90px;
+        }
+
+        header {
+            background: var(--bg-gradient);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            font-size: 1.25rem;
+            font-weight: 700;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 0 15px;
+            width: 100%;
+            flex: 1;
+        }
+
+        .card {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 12px 16px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--bg-main);
+            color: var(--text-main);
+            font-size: 1rem;
+            margin-bottom: 12px;
+        }
+
+        button {
+            background: var(--bg-gradient);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        button:hover {
+            opacity: 0.9;
+        }
+
+        .btn-secondary {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-main);
+        }
+
+        .btn-danger {
+            background: var(--danger);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* IDs list & Pills */
+        .id-pills {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+
+        .id-pill {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--bg-main);
+            border: 1px solid var(--border);
+            padding: 6px 12px;
+            border-radius: 20px;
+            cursor: pointer;
+        }
+
+        .id-pill span.delete-id {
+            color: var(--danger);
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            margin-bottom: 20px;
+        }
+
+        th, td {
+            padding: 10px;
+            border-bottom: 1px solid var(--border);
+            text-align: left;
+            font-size: 0.95rem;
+        }
+
+        th {
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+
+        .fee-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .locked-banner {
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid var(--danger);
+            color: var(--danger);
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+
+        /* Navigation Flottante */
+        nav {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+        }
+
+        .nav-toggle-btn {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: var(--bg-gradient);
+            color: white;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .nav-menu {
+            display: none;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            padding: 10px;
+            border-radius: 30px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+            gap: 10px;
+            align-items: center;
+        }
+
+        .nav-menu.active {
+            display: flex;
+        }
+
+        .nav-menu button {
+            background: transparent;
+            color: var(--text-main);
+            box-shadow: none;
+            padding: 8px 16px;
+            border-radius: 20px;
+        }
+
+        .nav-menu button.active-tab {
+            background: var(--bg-gradient);
+            color: white;
+        }
+
+        .modal {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-card {
+            background: var(--bg-card);
+            padding: 25px;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 400px;
+            border: 1px solid var(--border);
+        }
+    </style>
+</head>
+<body>
+
+    <header>Class-Ink S (Suivi)</header>
+
+    <div class="container">
+
+        <!-- Onglet Accueil / Recherche -->
+        <div id="tab-accueil" class="tab-content active">
+            <div class="card">
+                <h3>Rechercher une école</h3>
+                <p style="color: var(--text-muted); margin-bottom: 12px; font-size: 0.9rem;">Trouvez votre établissement pour accéder au suivi.</p>
+                <input type="text" id="school-search" placeholder="Nom de l'école ou ID..." oninput="handleSchoolSearch()">
+                <div id="school-results" style="margin-top: 10px;"></div>
+            </div>
+
+            <div class="card" id="student-id-card" style="display:none;">
+                <h3 id="selected-school-title">École sélectionnée</h3>
+                <p style="color: var(--text-muted); margin: 8px 0 12px 0; font-size: 0.9rem;">Entrez l'identifiant unique de l'élève.</p>
+                <input type="text" id="student-id-input" placeholder="Ex: CL-2026-8942">
+                <div style="display: flex; gap: 10px;">
+                    <button onclick="validerEleve()">Valider</button>
+                    <button class="btn-secondary" onclick="annulerRecherche()">Annuler</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Onglet Notes -->
+        <div id="tab-notes" class="tab-content">
+            <div class="card">
+                <h3>Élèves consultés récemment</h3>
+                <div class="id-pills" id="recent-ids-notes"></div>
+            </div>
+
+            <div id="notes-container">
+                <div class="card" style="text-align: center; color: var(--text-muted);">
+                    Aucun élève sélectionné. Rendez-vous à l'accueil ou choisissez un ID ci-dessus.
+                </div>
+            </div>
+        </div>
+
+        <!-- Onglet Frais -->
+        <div id="tab-frais" class="tab-content">
+            <div class="card">
+                <h3>Élèves consultés récemment</h3>
+                <div class="id-pills" id="recent-ids-frais"></div>
+            </div>
+
+            <div id="frais-container">
+                <div class="card" style="text-align: center; color: var(--text-muted);">
+                    Aucun élève sélectionné.
+                </div>
+            </div>
+        </div>
+
+        <!-- Onglet Communications & Historique -->
+        <div id="tab-comms" class="tab-content">
+            <div class="card">
+                <h3>Communications Officielles</h3>
+                <div id="comms-list" style="margin-top: 15px;">
+                    <p style="color: var(--text-muted);">Sélectionnez un élève pour voir les notes de service de son école.</p>
+                </div>
+            </div>
+            <div class="card">
+                <h3>Historique des consultations</h3>
+                <div id="history-list" style="margin-top: 15px;">
+                    <p style="color: var(--text-muted);">Aucun historique récent.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Onglet Paramètres -->
+        <div id="tab-parametres" class="tab-content">
+            <div class="card">
+                <h3>Paramètres de l'application</h3>
+                <div class="fee-row" style="align-items: center; margin-top: 15px;">
+                    <span>Mode Sombre / Clair</span>
+                    <button onclick="toggleTheme()" class="btn-secondary">Changer de thème</button>
+                </div>
+                <div class="fee-row" style="align-items: center; margin-top: 15px;">
+                    <span>Effacer tous les identités enregistrées</span>
+                    <button onclick="clearSavedIds()" class="btn-danger">Effacer</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Modal d'affichage du contenu d'une interrogation -->
+    <div class="modal" id="eval-modal">
+        <div class="modal-card">
+            <h3>Détails de l'évaluation</h3>
+            <p id="modal-eval-content" style="margin: 15px 0; color: var(--text-muted);"></p>
+            <button onclick="closeModal()">Fermer</button>
+        </div>
+    </div>
+
+    <!-- Navigation Flottante -->
+    <nav>
+        <button class="nav-toggle-btn" id="nav-toggler" onclick="toggleNavMenu()">⚙️</button>
+        <div class="nav-menu" id="nav-menu">
+            <button onclick="switchTab('accueil')" class="active-tab" id="btn-tab-accueil">Accueil</button>
+            <button onclick="switchTab('notes')" id="btn-tab-notes">Notes</button>
+            <button onclick="switchTab('frais')" id="btn-tab-frais">Frais</button>
+            <button onclick="switchTab('comms')" id="btn-tab-comms">Comms & Historique</button>
+            <button onclick="switchTab('parametres')" id="btn-tab-parametres">Paramètres</button>
+        </div>
+    </nav>
+
+    <script>
+        // État global simulé (Stockage local des ID enregistrés)
+        let savedStudents = JSON.parse(localStorage.getItem('class_ink_saved_students') || '[]');
+        let currentStudentData = null;
+        let selectedSchool = null;
+
+        // Gestion de la Navigation Flottante
+        function toggleNavMenu() {
+            const menu = document.getElementById('nav-menu');
+            const toggler = document.getElementById('nav-toggler');
+            if (menu.style.display === 'flex') {
+                menu.style.display = 'none';
+                toggler.style.display = 'flex';
+            } else {
+                menu.style.display = 'flex';
+                toggler.style.display = 'none';
+            }
+        }
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.nav-menu button').forEach(el => el.classList.remove('active-tab'));
+
+            document.getElementById('tab-' + tabId).classList.add('active');
+            document.getElementById('btn-tab-' + tabId).classList.add('active-tab');
+
+            // Fermer le menu après sélection sur mobile
+            document.getElementById('nav-menu').style.display = 'none';
+            document.getElementById('nav-toggler').style.display = 'flex';
+
+            renderPills();
+        }
+
+        // Recherche d'école simulée
+        function handleSchoolSearch() {
+            const query = document.getElementById('school-search').value.toLowerCase();
+            const resultsDiv = document.getElementById('school-results');
+            if (!query) {
+                resultsDiv.innerHTML = '';
+                return;
+            }
+            // Simulation de résultats
+            resultsDiv.innerHTML = `
+                <div style="padding: 10px; background: var(--bg-main); border-radius: 8px; cursor: pointer; border: 1px solid var(--border);" onclick="selectSchool('Complexe Scolaire Excellence')">
+                    <strong>Complexe Scolaire Excellence</strong> (Paris, FR)
+                </div>
+            `;
+        }
+
+        function selectSchool(schoolName) {
+            selectedSchool = schoolName;
+            document.getElementById('selected-school-title').innerText = "École : " + schoolName;
+            document.getElementById('student-id-card').style.display = 'block';
+            document.getElementById('school-results').innerHTML = '';
+        }
+
+        function annulerRecherche() {
+            selectedSchool = null;
+            document.getElementById('student-id-card').style.display = 'none';
+            document.getElementById('school-search').value = '';
+        }
+
+        // Validation et appel API simulé
+        function validerEleve() {
+            const studentId = document.getElementById('student-id-input').value.trim();
+            if (!studentId) return alert('Veuillez entrer un ID valide.');
+
+            // Simulation de données retournées par le serveur
+            currentStudentData = {
+                id: studentId,
+                name: "Jean Dupont (" + studentId + ")",
+                school: selectedSchool || "École Partenaire",
+                payment: {
+                    amountPaid: 350,
+                    totalFee: 700,
+                    minRequired: 300,
+                    tranches: [
+                        { label: "Première tranche", amount: 300, dueDate: "12/11/2026", status: "Payé" },
+                        { label: "Deuxième tranche", amount: 230, dueDate: "12/02/2027", status: "En attente" },
+                        { label: "Troisième tranche", amount: 170, dueDate: "12/04/2027", status: "En attente" }
+                    ]
+                },
+                grades: [
+                    {
+                        course: "Mathématiques",
+                        evaluations: [
+                            { title: "Interro 1", date: "12/03/2026", max: 10, obtained: 8, content: "Contenu détaillé de l'interrogation de maths 1..." },
+                            { title: "Interro 2", date: "25/03/2026", max: 20, obtained: 15, content: "Contenu détaillé de l'interrogation de maths 2..." }
+                        ]
+                    },
+                    {
+                        course: "Physique",
+                        evaluations: [
+                            { title: "TP Optique", date: "14/03/2026", max: 10, obtained: 7, content: "Compte rendu du TP optique..." }
+                        ]
+                    }
+                ],
+                communications: [
+                    { date: "10/10/2026", title: "Réunion des parents", message: "Présence obligatoire ce vendredi." }
+                ],
+                history: [
+                    { timestamp: new Date().toLocaleString(), action: "Consultation du dossier " + studentId }
+                ]
+            };
+
+            // Sauvegarder dans la liste récente si absent
+            if (!savedStudents.includes(studentId)) {
+                savedStudents.push(studentId);
+                localStorage.setItem('class_ink_saved_students', JSON.stringify(savedStudents));
+            }
+
+            renderStudentData();
+            switchTab('notes');
+        }
+
+        function loadStudentById(studentId) {
+            document.getElementById('student-id-input').value = studentId;
+            validerEleve();
+        }
+
+        function removeStudentId(studentId, event) {
+            event.stopPropagation();
+            savedStudents = savedStudents.filter(id => id !== studentId);
+            localStorage.setItem('class_ink_saved_students', JSON.stringify(savedStudents));
+            renderPills();
+        }
+
+        function renderPills() {
+            const containers = ['recent-ids-notes', 'recent-ids-frais'];
+            containers.forEach(containerId => {
+                const el = document.getElementById(containerId);
+                if (!el) return;
+                if (savedStudents.length === 0) {
+                    el.innerHTML = '<span style="color: var(--text-muted); font-size: 0.85rem;">Aucun ID enregistré.</span>';
+                    return;
+                }
+                el.innerHTML = savedStudents.map(id => `
+                    <div class="id-pill" onclick="loadStudentById('${id}')">
+                        <span>${id}</span>
+                        <span class="delete-id" onclick="removeStudentId('${id}', event)">&times;</span>
+                    </div>
+                `).join('');
+            });
+        }
+
+        function renderStudentData() {
+            if (!currentStudentData) return;
+
+            // Rendu Notes
+            const notesContainer = document.getElementById('notes-container');
+            let notesHtml = `<div class="card"><h3>Élève : ${currentStudentData.name}</h3></div>`;
+
+            // Vérification du montant minimum payé
+            const isUnlocked = currentStudentData.payment.amountPaid >= currentStudentData.payment.minRequired;
+
+            if (!isUnlocked) {
+                notesHtml += `
+                    <div class="locked-banner">
+                        🔒 Notes verrouillées : Le montant payé (${currentStudentData.payment.amountPaid} $) est inférieur au minimum requis (${currentStudentData.payment.minRequired} $) pour afficher les résultats.
+                    </div>
+                `;
+            } else {
+                currentStudentData.grades.forEach(course => {
+                    notesHtml += `
+                        <div class="card">
+                            <h4>${course.course}</h4>
+                            <table>
+                                <tr>
+                                    <th>Nom Evaluation</th>
+                                    <th>Date</th>
+                                    <th>Max</th>
+                                    <th>Pts obtenus</th>
+                                    <th>Actions</th>
+                                </tr>
+                                ${course.evaluations.map(ev => `
+                                    <tr>
+                                        <td>${ev.title}</td>
+                                        <td>${ev.date}</td>
+                                        <td>${ev.max}</td>
+                                        <td>${ev.obtained}</td>
+                                        <td><button style="padding: 5px 10px; font-size: 0.8rem;" onclick="showEvalContent('${encodeURIComponent(ev.content)}')">Afficher</button></td>
+                                    </tr>
+                                `).join('')}
+                            </table>
+                        </div>
+                    `;
+                });
+            }
+            notesContainer.innerHTML = notesHtml;
+
+            // Rendu Frais
+            const fraisContainer = document.getElementById('frais-container');
+            fraisContainer.innerHTML = `
+                <div class="card">
+                    <h3>Suivi Financier - ${currentStudentData.name}</h3>
+                    <div class="fee-row"><span>Somme Payée</span><strong>${currentStudentData.payment.amountPaid} $</strong></div>
+                    <div class="fee-row"><span>Somme Due</span><strong>${currentStudentData.payment.totalFee - currentStudentData.payment.amountPaid} $</strong></div>
+                    <div class="fee-row"><span>Frais Scolaire Total</span><strong>${currentStudentData.payment.totalFee} $</strong></div>
+                    ${currentStudentData.payment.tranches.map(t => `
+                        <div class="fee-row">
+                            <span>${t.label} (${t.dueDate})</span>
+                            <span><strong>${t.amount} $</strong> [${t.status}]</span>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+
+            // Rendu Communications
+            const commsList = document.getElementById('comms-list');
+            commsList.innerHTML = currentStudentData.communications.map(c => `
+                <div style="padding: 10px 0; border-bottom: 1px solid var(--border);">
+                    <small style="color: var(--text-muted);">${c.date}</small>
+                    <h5 style="margin: 4px 0;">${c.title}</h5>
+                    <p style="font-size: 0.9rem;">${c.message}</p>
+                </div>
+            `).join('');
+
+            // Rendu Historique
+            const historyList = document.getElementById('history-list');
+            historyList.innerHTML = currentStudentData.history.map(h => `
+                <div style="padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 0.9rem;">
+                    <span style="color: var(--text-muted);">${h.timestamp}</span> - ${h.action}
+                </div>
+            `).join('');
+        }
+
+        function showEvalContent(content) {
+            document.getElementById('modal-eval-content').innerText = decodeURIComponent(content);
+            document.getElementById('eval-modal').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('eval-modal').classList.remove('active');
+        }
+
+        function toggleTheme() {
+            const html = document.documentElement;
+            const currentTheme = html.getAttribute('data-theme');
+            html.setAttribute('data-theme', currentTheme === 'dark' ? 'light' : 'dark');
+        }
+
+        function clearSavedIds() {
+            savedStudents = [];
+            localStorage.removeItem('class_ink_saved_students');
+            renderPills();
+            alert('Tous les identifiants enregistrés ont été supprimés.');
+        }
+
+        // Initialisation
+        renderPills();
+    </script>
+</body>
+</html>
