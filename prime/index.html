@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ClassNet P - CRYPT Enterprise</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg width='1024' height='1024' viewBox='0 0 1024 1024' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3ClinearGradient id='bg' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%230F2040'/%3E%3Cstop offset='100%25' stop-color='%230A1628'/%3E%3C/linearGradient%3E%3ClinearGradient id='accent' x1='0%25' y1='0%25' x2='100%25' y2='0%25'%3E%3Cstop offset='0%25' stop-color='%233B82F6'/%3E%3Cstop offset='100%25' stop-color='%2306B6D4'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='1024' height='1024' rx='200' fill='url(%23bg)'/%3E%3Cg transform='translate(512,512) scale(1.1) translate(-280,-320)'%3E%3Crect x='60' y='40' width='340' height='480' rx='12' fill='none' stroke='white' stroke-width='14' stroke-linecap='round'/%3E%3Cline x1='60' y1='520' x2='400' y2='520' stroke='white' stroke-width='14' stroke-linecap='round'/%3E%3Cpath d='M 60 280 Q 220 280 360 520' fill='none' stroke='white' stroke-width='18' stroke-linecap='round'/%3E%3Cpath d='M 60 380 Q 170 380 260 520' fill='none' stroke='white' stroke-width='18' stroke-linecap='round'/%3E%3Cpath d='M 60 470 A 70 70 0 0 1 130 520 L 60 520 Z' fill='white'/%3E%3Cpath d='M 60 280 Q 220 280 360 520' fill='none' stroke='url(%23accent)' stroke-width='18' stroke-linecap='round' opacity='0.9'/%3E%3Cg transform='translate(460, 40)'%3E%3Crect x='0' y='40' width='28' height='400' rx='6' fill='none' stroke='white' stroke-width='10'/%3E%3Cpath d='M 0 40 L 14 0 L 28 40 Z' fill='none' stroke='white' stroke-width='10' stroke-linejoin='round'/%3E%3Crect x='0' y='440' width='28' height='28' rx='4' fill='%233B82F6'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <style> 
 /* ==========================================================================
    CLASSNET P - FEUILLE DE STYLE (CRYPT DESIGN & VISION)
@@ -1497,197 +1497,149 @@ body {
 
         <!-- L'interface pour le mixage -->
         <div id="tab-mixage" class="tools-tab-content">
-            <div class="settings-card">
-                <div class="form-group">
-                    <label>Nombre de Exemplaire</label>
-                    <input type="number" id="mixExemplaires" class="form-control" maxlength="1" value="1" min="1" max="5">
+            <!-- Zone de Configuration du Mixage -->
+            <div id="mixConfigArea" style="display: flex; flex-direction: column; gap: 1.5rem; padding-bottom: 70px;">
+                <div class="settings-card">
+                    <div class="form-group">
+                        <label>Nombre d'Exemplaires</label>
+                        <input type="number" id="mixExemplaires" class="form-control" value="1" min="1" max="5">
+                    </div>
+                    <div class="form-group">
+                        <label>Durée des examens (min)</label>
+                        <input type="number" id="mixDureeSession" class="form-control" value="120">
+                    </div>
+                    <div class="form-group">
+                        <label>Mode IA</label>
+                        <select id="mixModelSelector" class="form-control">
+                            <option value="deepseek-v3">Réflexion</option>
+                            <option value="gemini-1">Standard</option>
+                        </select>
+                    </div>
                 </div>
 
-                <div class="form-group">
-                    <label>Durée des examens</label>
-                    <input type="number" id="mixDureeSession" class="form-control" maxlength="2" value="120">
+                <div class="settings-card">
+                    <span><strong>SELECTIONNEZ LES ENSEIGNANTS SURVEILLANTS</strong></span>
+                    <div style="margin-top: 0.5rem; display: flex; gap: 0.8rem;">
+                        <select id="mixTeacherSelect" class="form-control" style="flex:1;"></select>
+                        <button class="btn-primary" onclick="addSurveillantMixage()">+ Ajouter</button>
+                    </div>
+                    <ul id="mixSurveillantsList" style="margin-top: 1rem; padding-left: 1.2rem;"></ul>
                 </div>
 
-                <div class="form-group">
-                    <label>Durée des examens hors-sessions</label>
-                    <input type="number" id="mixDureeHors" class="form-control" maxlength="2" value="90">
-                </div>
-
-                <div class="form-group">
-                    <label>Mode</label>
-                    <select id="mixModelSelector" class="form-control">
-                        <option value="deepseek-v3">Relfexion</option>
-                        <option value="gemini-1">Standard</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label>Instructions, préférences et règles à suivre</label>
-                    <textarea id="mixInstructions" class="form-control" placeholder="ex: les examens vont durer 14 jours"></textarea>
-                </div>
-
-                <button class="btn-primary" onclick="switchPresenceSubView('prof')">Surveillant</button>
-            </div>
-
-            <div class="settings-card">
-                <span><strong>SELECTIONNEZ TOUS LES ENSEIGNANTS SURVEILLANTS</strong></span>
-                <div style="margin-top: 0.5rem;">
-                    <select id="mixTeacherSelect" class="form-control">
-                        <!-- Noms des enseignants enregistrés -->
-                    </select>
-                </div>
-                <div class="action-toolbar" style="justify-content: flex-start; margin-top:0.8rem;">
-                    <button class="btn-primary" onclick="addSurveillantMixage()">+ Ajouter</button>
-                    <button class="btn-secondary" onclick="removeSurveillantMixage()">- Supprimer</button>
-                    <button class="btn-secondary" onclick="editSurveillantMixage()">| Editer</button>
-                </div>
-                <ul id="mixSurveillantsList" style="margin-top: 1rem; padding-left: 1.2rem; color: var(--text-primary);"></ul>
-            </div>
-
-            <!-- Ajouter des informations sur chaque salle -->
-            <div class="settings-card">
-                <span><strong>>>> Ajouter des informations sur chaque salle</strong></span>
-                <div id="sallesContainer" style="margin-top: 0.8rem;">
-                    <!-- Cartes des salles -->
-                </div>
-
-                <div class="action-toolbar" style="justify-content: flex-start;">
-                    <button class="btn-primary" onclick="addSalleCard()">+ Ajouter</button>
-                    <button class="btn-secondary" onclick="removeSalleCard()">- Supprimer</button>
+                <div class="settings-card">
+                    <span><strong>>>> Salles d'examen</strong></span>
+                    <div id="sallesContainer" style="margin-top: 0.8rem;"></div>
+                    <button class="btn-primary" onclick="addSalleCard()">+ Ajouter une salle</button>
                 </div>
             </div>
 
-            <!-- Ajouter des informations sur chaque classe et ses cours -->
-            <div class="settings-card">
-                <span><strong>>>> Ajouter des informations sur chaque classe et ses cours</strong></span>
-                <div id="mixCoursContainer" style="margin-top: 0.8rem;">
-                    <!-- Cours mixage -->
-                </div>
-
-                <div class="action-toolbar" style="justify-content: flex-start;">
-                    <button class="btn-primary" onclick="addMixCourseRow()">+ Ajouter</button>
-                    <button class="btn-secondary" onclick="removeMixCourseRow()">- Supprimer</button>
-                </div>
-            </div>
-
-            <div class="action-toolbar" style="justify-content: flex-start; gap: 0.8rem;">
-                <button class="btn-primary" style="background:#16a34a;" onclick="requestServerMixageGeneration()">Génèrer l'horaire</button>
-                <button class="btn-secondary" onclick="showMixageResultsView()">Regarder l'horaire</button>
-                <button class="btn-secondary" onclick="showMixageEditView()">Ajouter/Editer une information</button>
-            </div>
-
-            <!-- Interface pour regarder l'horaire du Mixage -->
-            <div id="mixResultsArea" class="settings-card hidden">
+            <!-- Zone de Résultats du Mixage -->
+            <div id="mixResultsArea" class="settings-card hidden" style="margin-bottom: 70px;">
                 <nav class="sub-navbar">
                     <button class="sub-nav-btn active" id="btnMixResultClasses" onclick="switchMixResultSubView('classes')">Classes</button>
                     <button class="sub-nav-btn" id="btnMixResultSalles" onclick="switchMixResultSubView('salles')">Salles</button>
+                    <button class="btn-primary" onclick="window.print()" style="margin-left:auto;">Exporter en PDF</button>
+                </nav>
+                <div id="mix-view-classes" class="sub-view-content active" style="margin-top: 1rem;">
+                    <p>Affichage des répartitions par classe...</p>
+                </div>
+                <div id="mix-view-salles" class="sub-view-content hidden" style="margin-top: 1rem;">
+                    <p>Affichage des plans de salles et bancs anti-triche...</p>
+                </div>
+            </div>
+
+            <!-- Barre d'action fixe en bas de l'écran pour le mixage -->
+            <div style="position: fixed; bottom: 0; left: 0; width: 100%; background: var(--bg-card); border-top: 1px solid var(--border-color); padding: 0.8rem 2rem; display: flex; gap: 0.8rem; justify-content: flex-start; z-index: 99;">
+                <button class="btn-primary" style="background:#16a34a;" onclick="requestServerMixageGeneration()">Générer l'Horaire</button>
+                <button class="btn-secondary" onclick="showMixageResultsView()">Regarder l'horaire</button>
+                <button class="btn-secondary" onclick="showMixageEditView()">Ajouter/Éditer une information</button>
+            </div>
+        </div>
+
+        <!-- Interface Horaire -->
+        <div id="tab-horaire" class="tools-tab-content active">
+            <!-- Zone de Configuration (Celle qui s'efface) -->
+            <div id="horConfigArea" style="display: flex; flex-direction: column; gap: 1.5rem; padding-bottom: 70px;">
+                
+                <!-- Paramètres globaux -->
+                <div class="settings-card">
+                    <h2>Paramètres Globaux de l'Horaire</h2>
+                    <div class="grid-2col">
+                        <div class="form-group">
+                            <label>Jours de travail / semaine</label>
+                            <input type="number" id="horJoursSemaine" class="form-control" min="1" max="6" value="6" oninput="updateHoraireStructure()">
+                        </div>
+                        <div class="form-group">
+                            <label>Heures de cours / jour</label>
+                            <input type="number" id="horHeuresJour" class="form-control" min="1" max="10" value="6" oninput="updateHoraireStructure()">
+                        </div>
+                        <div class="form-group">
+                            <label>Nombre d'Exemplaires</label>
+                            <input type="number" id="horExemplaires" class="form-control" min="1" max="5" value="1">
+                        </div>
+                        <div class="form-group">
+                            <label>Mode IA</label>
+                            <select id="horModelSelector" class="form-control">
+                                <option value="deepseek-v3">Réflexion (DeepSeek)</option>
+                                <option value="gemini-1.5-flash">Standard (Gemini)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tranches horaires -->
+                <div class="settings-card">
+                    <h2>Configuration des Tranches Horaires</h2>
+                    <div id="timeSlotsContainer" style="display: flex; flex-direction: column; gap: 0.6rem;"></div>
+                </div>
+
+                <!-- Préférences Enseignants -->
+                <div class="settings-card">
+                    <h2>Configuration et Préférences des Enseignants</h2>
+                    <div id="horTeachersContainer" style="margin-top: 0.8rem;"></div>
+                    <div class="action-toolbar" style="justify-content: flex-start;">
+                        <button class="btn-primary" onclick="addTeacherHoraireConfig()">+ Ajouter un enseignant</button>
+                        <button class="btn-secondary" onclick="removeTeacherHoraireConfig()">- Supprimer</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Interface des Résultats (S'affiche ou se masque) -->
+            <div id="horResultsArea" class="settings-card hidden" style="margin-bottom: 70px;">
+                <nav class="sub-navbar">
+                    <button class="sub-nav-btn active" id="btnHorResultClasses" onclick="switchHoraireResultSubView('classes')">Classes</button>
+                    <button class="sub-nav-btn" id="btnHorResultEnseignants" onclick="switchHoraireResultSubView('enseignants')">Enseignants</button>
                     <div style="display:flex; align-items:center; gap:0.5rem; margin-left:auto;">
                         <span>Exemplaire 1</span>
-                        <div id="mixExemplairesCheckboxes"></div>
                     </div>
                     <button class="btn-primary" onclick="window.print()" style="margin-left:0.5rem;">Exporter en PDF</button>
                 </nav>
 
-                <!-- Interface Classes Mixage -->
-                <div id="mix-view-classes" class="sub-view-content active" style="margin-top: 1rem;">
-                    <div class="retractable-sidebar" id="mixClassesListSidebar">
-                        <!-- Liste des classes -->
-                    </div>
-
-                    <div class="detail-display-area" id="mixClassesDetailArea">
-                        <h3>Professeur : <span id="mixSelectedTeacherName">-</span></h3>
+                <div id="hor-view-enseignants" class="sub-view-content hidden" style="margin-top: 1rem;">
+                    <div class="retractable-sidebar" id="horTeachersListSidebar"></div>
+                    <div class="detail-display-area" id="horTeachersDetailArea">
+                        <h3>Professeur : <span id="horSelectedTeacherName">-</span></h3>
                         <table class="data-table" style="margin-top:1rem;">
-                            <thead>
-                                <tr>
-                                    <th>DATE | Cours</th>
-                                    <th>Date 1</th>
-                                    <th>Date 2</th>
-                                    <th>Date 3</th>
-                                </tr>
-                            </thead>
-                            <tbody id="mixClassTableBody"></tbody>
+                            <thead><tr id="horTeacherTableHeader"><th>Heure | Jour</th></tr></thead>
+                            <tbody id="horTeacherTableBody"></tbody>
                         </table>
                     </div>
                 </div>
 
-                <!-- Interface Salles Mixage -->
-                <div id="mix-view-salles" class="sub-view-content hidden" style="margin-top: 1rem;">
-                    <div class="retractable-sidebar" id="mixSallesListSidebar">
-                        <!-- Liste des salles -->
-                    </div>
-
-                    <div class="detail-display-area" id="mixSallesDetailArea">
-                        <h3>Surveillants & Disposition des Bancs</h3>
-                        <p style="margin-bottom:0.8rem; font-size:0.9rem; color:var(--text-secondary);" id="mixSalleSurveillantText">Surveillant : -</p>
-                        <table class="data-table">
-                            <tbody id="mixSallesBancsBody"></tbody>
+                <div id="hor-view-classes" class="sub-view-content active" style="margin-top: 1rem;">
+                    <div class="retractable-sidebar" id="horClassesListSidebar"></div>
+                    <div class="detail-display-area" id="horClassesDetailArea">
+                        <h3>Classe : <span id="horSelectedClassName">-</span></h3>
+                        <table class="data-table" style="margin-top:1rem;">
+                            <thead><tr id="horClassTableHeader"><th>Heure | Jour</th></tr></thead>
+                            <tbody id="horClassTableBody"></tbody>
                         </table>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <div id="tab-horaire" class="tools-tab-content active">
-            <!-- Configuration des tranches d'heures -->
-            <div class="settings-card">
-                <h2>Configuration des Heures de Cours</h2>
-                <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:1rem;">
-                    Indiquez les plages horaires de chaque période d'enseignement.
-                </p>
-                <div id="timeSlotsContainer" style="display: flex; flex-direction: column; gap: 0.6rem;">
-                    <div class="grid-2col time-slot-row">
-                        <span><strong>1ère Heure</strong></span>
-                        <div style="display:flex; gap:0.5rem; align-items:center;">
-                            <input type="time" class="form-control slot-start" value="07:30">
-                            <span>à</span>
-                            <input type="time" class="form-control slot-end" value="08:25">
-                        </div>
-                    </div>
-                </div>
-                <button class="btn-secondary" style="margin-top: 0.8rem;" onclick="addTimeSlotRow()">+ Ajouter une heure</button>
-            </div>
-
-            <!-- Paramètres généraux Horaire -->
-            <div class="settings-card">
-                <h2>Paramètres de Génération</h2>
-                <div class="grid-2col">
-                    <div class="form-group">
-                        <label>Nombre d'Exemplaires</label>
-                        <input type="number" id="horExemplaires" class="form-control" min="1" max="5" value="1">
-                    </div>
-                    <div class="form-group">
-                        <label>Mode IA</label>
-                        <select id="horModelSelector" class="form-control">
-                            <option value="deepseek-v3">Réflexion (DeepSeek)</option>
-                            <option value="gemini-1.5-flash">Standard (Gemini)</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Jours de travail / semaine</label>
-                        <input type="number" id="horJoursSemaine" class="form-control" min="1" max="6" value="6">
-                    </div>
-                    <div class="form-group">
-                        <label>Heures de cours / jour</label>
-                        <input type="number" id="horHeuresJour" class="form-control" min="1" max="10" value="6">
-                    </div>
-                </div>
-            </div>
-
-            <!-- Informations et Préférences des Enseignants -->
-            <div class="settings-card">
-                <h2>Configuration et Préférences des Enseignants</h2>
-                <div id="horTeachersContainer" style="margin-top: 0.8rem;">
-                    <!-- Généré dynamiquement -->
-                </div>
-
-                <div class="action-toolbar" style="justify-content: flex-start;">
-                    <button class="btn-primary" onclick="addTeacherHoraireConfig()">+ Ajouter un enseignant</button>
-                    <button class="btn-secondary" onclick="removeTeacherHoraireConfig()">- Supprimer</button>
-                </div>
-            </div>
-
-            <!-- Toolbar fixe d'action -->
-            <div class="action-toolbar" style="justify-content: flex-start; gap: 0.8rem; margin-top: 1.5rem;">
+            <!-- Barre d'action fixe en bas de l'écran -->
+            <div style="position: fixed; bottom: 0; left: 0; width: 100%; background: var(--bg-card); border-top: 1px solid var(--border-color); padding: 0.8rem 2rem; display: flex; gap: 0.8rem; justify-content: flex-start; z-index: 99;">
                 <button class="btn-primary" style="background:#16a34a;" onclick="requestServerScheduleGeneration()">Générer l'Horaire</button>
                 <button class="btn-secondary" onclick="showScheduleResultsView()">Regarder l'horaire</button>
                 <button class="btn-secondary" onclick="showScheduleEditView()">Ajouter/Éditer une information</button>
@@ -3002,20 +2954,18 @@ body {
         };
 
         window.requestServerMixageGeneration = function() {
-            const area = document.getElementById('mixResultsArea');
-            if(area) area.classList.remove('hidden');
             showMixageResultsView();
             alert("⚡ Génération du Mixage effectuée par l'IA CRYPT Engine !");
         };
 
         window.showMixageResultsView = function() {
-            const area = document.getElementById('mixResultsArea');
-            if(area) area.classList.remove('hidden');
+            document.getElementById('mixConfigArea').classList.add('hidden');
+            document.getElementById('mixResultsArea').classList.remove('hidden');
         };
 
         window.showMixageEditView = function() {
-            const area = document.getElementById('mixResultsArea');
-            if(area) area.classList.add('hidden');
+            document.getElementById('mixConfigArea').classList.remove('hidden');
+            document.getElementById('mixResultsArea').classList.add('hidden');
         };
 
         window.switchMixResultSubView = function(view) {
@@ -3037,71 +2987,99 @@ body {
             }
         };
 
-        window.addTeacherHoraireConfig = function() {
-            const container = document.getElementById('horTeachersContainer');
-            if(!container) return;
-            const count = container.children.length + 1;
-            const uniqueContainerId = 'courses_container_' + Date.now();
+// 1. Correction de la création d'un enseignant (utilisation de la classe unifiée .teacher-pref-grid)
+window.addTeacherHoraireConfig = function() {
+    const container = document.getElementById('horTeachersContainer');
+    if(!container) return;
+    const count = container.children.length + 1;
+    const joursTravail = parseInt(document.getElementById('horJoursSemaine')?.value) || 6;
+    const heuresJour = parseInt(document.getElementById('horHeuresJour')?.value) || 6;
 
-            const card = document.createElement('div');
-            card.className = 'prof-config-card';
-            card.style.marginBottom = '1rem';
-            card.innerHTML = `
-                <div class="form-group">
-                    <label>Enseignant N°${count}</label>
-                    <select class="form-control">
-                        ${appState.teachers.map(t => `<option value="${t.uniqueId}">${t.name}</option>`).join('')}
-                    </select>
+    const card = document.createElement('div');
+    card.className = 'prof-config-card';
+    card.style.marginBottom = '1rem';
+    card.innerHTML = `
+        <div class="form-group">
+            <label>Enseignant N°${count}</label>
+            <select class="form-control">
+                ${appState.teachers.map(t => `<option value="${t.uniqueId}">${t.name}</option>`).join('')}
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>Préférences d'heures de travail</label>
+            <div class="teacher-pref-grid"></div>
+        </div>
+
+        <div class="form-group">
+            <label>Cours attribué(s)</label>
+            <div class="courses-sub-container" style="display:flex; flex-direction:column; gap:0.5rem;">
+                <div class="grid-2col">
+                    <input type="text" class="form-control" placeholder="Nom du cours (ex: Mathématiques)">
+                    <input type="text" class="form-control" placeholder="Classe (ex: 3ème SCIENTIFIQUE)">
+                    <input type="number" class="form-control" placeholder="Heures / semaine">
+                    <input type="text" class="form-control" placeholder="TC (Tronc Commun ex: 3SCI/2SCI)">
                 </div>
+            </div>
+            <button type="button" class="btn-secondary" style="margin-top:0.6rem; font-size:0.8rem;" onclick="addCourseRowToTeacher(this)">+ Ajouter un cours</button>
+        </div>
+    `;
+    container.appendChild(card);
 
-                <div class="form-group">
-                    <label>Jours de Travail de l'enseignant</label>
-                    <div style="display:flex; gap:0.8rem; flex-wrap:wrap; margin-top:0.4rem;">
-                        <label><input type="checkbox" checked> Lundi</label>
-                        <label><input type="checkbox" checked> Mardi</label>
-                        <label><input type="checkbox" checked> Mercredi</label>
-                        <label><input type="checkbox" checked> Jeudi</label>
-                        <label><input type="checkbox" checked> Vendredi</label>
-                        <label><input type="checkbox" checked> Samedi</label>
-                    </div>
-                </div>
+    // Injection de la grille initiale
+    const prefElem = card.querySelector('.teacher-pref-grid');
+    if (typeof window.renderTeacherAvailabilityGridCustom === 'function') {
+        window.renderTeacherAvailabilityGridCustom(prefElem, joursTravail, heuresJour);
+    }
+};
 
-                <div class="form-group">
-                    <label>Cours attribué(s)</label>
-                    <div id="${uniqueContainerId}" style="display:flex; flex-direction:column; gap:0.5rem;">
-                        <div class="grid-2col">
-                            <input type="text" class="form-control" placeholder="Nom du cours (ex: Mathématiques)">
-                            <input type="text" class="form-control" placeholder="Classe (ex: 3ème SCIENTIFIQUE)">
-                            <input type="number" class="form-control" placeholder="Heures / semaine">
-                            <input type="text" class="form-control" placeholder="TC (Tronc Commun ex: 3SCI/2SCI)">
-                        </div>
-                    </div>
-                    <button type="button" class="btn-secondary" style="margin-top:0.6rem; font-size:0.8rem;" onclick="addCourseRowToTeacher('${uniqueContainerId}')">+ Ajouter un cours</button>
-                </div>
-            `;
-            container.appendChild(card);
-        };
+// 2. Mise à jour adaptative propre qui cible directement .teacher-pref-grid
+window.updateHoraireStructure = function() {
+    const joursCount = parseInt(document.getElementById('horJoursSemaine')?.value) || 6;
+    const heuresCount = parseInt(document.getElementById('horHeuresJour')?.value) || 6;
 
+    // Actualiser les tranches horaires
+    renderTimeSlotsDynamic(heuresCount);
+
+    // Sauvegarder l'état actuel des cases cochées
+    const savedPreferences = {};
+    document.querySelectorAll('.prof-config-card').forEach((card, index) => {
+        savedPreferences[index] = {};
+        card.querySelectorAll('.pref-hour-check').forEach(cb => {
+            const key = `${cb.dataset.day}_${cb.dataset.hour}`;
+            savedPreferences[index][key] = cb.checked;
+        });
+    });
+
+    // Mettre à jour chaque grille existante sans en créer de nouvelles en double
+    document.querySelectorAll('.prof-config-card').forEach((card, index) => {
+        const prefElem = card.querySelector('.teacher-pref-grid');
+        if (prefElem) {
+            window.renderTeacherAvailabilityGridCustom(prefElem, joursCount, heuresCount, savedPreferences[index] || {});
+        }
+    });
+
+    // Mettre à jour les en-têtes des tableaux de résultats
+    updateScheduleResultTables(joursCount, heuresCount);
+};
         window.removeTeacherHoraireConfig = function() {
             const container = document.getElementById('horTeachersContainer');
             if(container && container.lastElementChild) container.removeChild(container.lastElementChild);
         };
 
         window.requestServerScheduleGeneration = function() {
-            const area = document.getElementById('horResultsArea');
-            if(area) area.classList.remove('hidden');
             showScheduleResultsView();
             alert("⚡ Génération de l'Horaire Scolaire réussie !");
         };
 
         window.showScheduleResultsView = function() {
-            const area = document.getElementById('horResultsArea');
-            if(area) area.classList.remove('hidden');
+            document.getElementById('horConfigArea').classList.add('hidden');
+            document.getElementById('horResultsArea').classList.remove('hidden');
         };
 
         window.showScheduleEditView = function() {
-            const area = document.getElementById('horResultsArea');
-            if(area) area.classList.add('hidden');
+            document.getElementById('horConfigArea').classList.remove('hidden');
+            document.getElementById('horResultsArea').classList.add('hidden');
         };
 
         window.switchHoraireResultSubView = function(view) {
@@ -3146,6 +3124,76 @@ body {
             `;
             container.appendChild(newRow);
         };
+
+// Générateur dynamique des tranches horaires
+function renderTimeSlotsDynamic(heuresCount) {
+    const container = document.getElementById('timeSlotsContainer');
+    if (!container) return;
+    
+    const existingSlots = [];
+    container.querySelectorAll('.time-slot-row').forEach(row => {
+        const start = row.querySelector('.slot-start')?.value || '';
+        const end = row.querySelector('.slot-end')?.value || '';
+        existingSlots.push({ start, end });
+    });
+
+    container.innerHTML = '';
+    for (let i = 1; i <= heuresCount; i++) {
+        const slot = existingSlots[i - 1] || { start: '', end: '' };
+        const row = document.createElement('div');
+        row.className = 'grid-2col time-slot-row';
+        row.innerHTML = `
+            <span><strong>${i}ème Heure</strong></span>
+            <div style="display:flex; gap:0.5rem; align-items:center;">
+                <input type="time" class="form-control slot-start" value="${slot.start}">
+                <span>à</span>
+                <input type="time" class="form-control slot-end" value="${slot.end}">
+            </div>
+        `;
+        container.appendChild(row);
+    }
+}
+
+// Grille adaptative des enseignants avec restauration des états
+window.renderTeacherAvailabilityGridCustom = function(containerElem, daysCount, hoursCount, savedState = {}) {
+    const days = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+    let html = `<div style="display:flex; flex-direction:column; gap:0.6rem; margin-top:0.8rem;">`;
+
+    for (let d = 0; d < Math.min(daysCount, days.length); d++) {
+        html += `
+            <div>
+                <strong style="font-size:0.85rem; color:var(--primary-color);">${days[d]}</strong>
+                <div style="display:flex; gap:0.6rem; flex-wrap:wrap; margin-top:0.3rem;">`;
+        for (let h = 1; h <= hoursCount; h++) {
+            const key = `${days[d]}_${h}`;
+            const isChecked = (savedState[key] !== undefined) ? savedState[key] : true;
+            html += `
+                <label style="font-size:0.8rem; display:flex; align-items:center; gap:0.2rem; background:var(--bg-main); padding:0.2rem 0.5rem; border-radius:4px; border:1px solid var(--border-color);">
+                    <input type="checkbox" ${isChecked ? 'checked' : ''} class="pref-hour-check" data-day="${days[d]}" data-hour="${h}">
+                    ${h}H
+                </label>`;
+        }
+        html += `</div></div>`;
+    }
+    html += `</div>`;
+    containerElem.innerHTML = html;
+};
+
+// Adaptation automatique des en-têtes des tableaux de résultats
+function updateScheduleResultTables(joursCount, heuresCount) {
+    const days = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'].slice(0, joursCount);
+    
+    const classHeader = document.getElementById('horClassTableHeader');
+    if (classHeader) {
+        classHeader.innerHTML = `<th>Heures \\ Jours</th>` + days.map(d => `<th>${d}</th>`).join('');
+    }
+
+    const profHeader = document.getElementById('horTeacherTableHeader');
+    if (profHeader) {
+        profHeader.innerHTML = `<th>Heures \\ Jours</th>` + days.map(d => `<th>${d}</th>`).join('');
+    }
+}
+
 // REGISTRE DES ENSEIGNANTS (PARAMÈTRES)
         function renderTeachersTable() {
             const tbody = document.getElementById('teachersTableBody');
