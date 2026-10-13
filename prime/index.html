@@ -3110,20 +3110,29 @@ window.updateHoraireStructure = function() {
         }); 
 
         // Fonction pour insérer 4 nouveaux champs (Nom cours, Classe, Heures, TC) sous la ligne précédente
-        window.addCourseRowToTeacher = function(containerId) {
-            const container = document.getElementById(containerId);
-            if (!container) return;
+        // Fonction corrigée pour ajouter dynamiquement un bloc de cours à un enseignant
+window.addCourseRowToTeacher = function(btn) {
+    // Retrouve la carte de configuration parente de l'enseignant
+    const card = btn.closest('.prof-config-card');
+    if (!card) return;
 
-            const newRow = document.createElement('div');
-            newRow.className = 'grid-2col';
-            newRow.innerHTML = `
-                <input type="text" class="form-control" placeholder="Nom du cours (ex: Mathématiques)">
-                <input type="text" class="form-control" placeholder="Classe (ex: 3ème SCIENTIFIQUE)">
-                <input type="number" class="form-control" placeholder="Heures / semaine">
-                <input type="text" class="form-control" placeholder="TC (Tronc Commun ex: 3SCI/2SCI)">
-            `;
-            container.appendChild(newRow);
-        };
+    // Cible directement le conteneur des cours de cette carte spécifique
+    const container = card.querySelector('.courses-sub-container');
+    if (!container) return;
+
+    // Crée la nouvelle ligne de champs
+    const newRow = document.createElement('div');
+    newRow.className = 'grid-2col';
+    newRow.style.marginTop = '0.5rem';
+    newRow.innerHTML = `
+        <input type="text" class="form-control" placeholder="Nom du cours (ex: Mathématiques)">
+        <input type="text" class="form-control" placeholder="Classe (ex: 3ème SCIENTIFIQUE)">
+        <input type="number" class="form-control" placeholder="Heures / semaine">
+        <input type="text" class="form-control" placeholder="TC (Tronc Commun ex: 3SCI/2SCI)">
+    `;
+    
+    container.appendChild(newRow);
+};
 
 // Générateur dynamique des tranches horaires
 function renderTimeSlotsDynamic(heuresCount) {
