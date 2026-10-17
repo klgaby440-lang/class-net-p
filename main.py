@@ -579,7 +579,8 @@ class LoginSchema(BaseModel):
     password: str
 
 class CodeVerifySchema(BaseModel):
-    identifier: str
+    identifier: Optional[str] = None   # ancien champ, conservé pour ne rien casser
+    school_id: Optional[str] = None    # champ réellement envoyé par PrimeInk
     code: str
 
 class ScheduleGenerationRequest(BaseModel):
@@ -610,6 +611,28 @@ def generate_otp() -> str:
 def send_email_mock(to_email: str, subject: str, body: str):
     # Remplacer par configuration SMTP réelle si besoin
     print(f"📧 [EMAIL SENT to {to_email}] | Sujet: {subject} | Corps: {body}")
+
+async def send_sms_via_twilio(to_phone: str, body: str) -> bool:
+    """Envoie un SMS via l'API REST de Twilio (variables TWILIO_* lues en haut du fichier)."""
+    if not (TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN and TWILIO_PHONE_NUMBER):
+        print("⚠️ [TWILIO] Variables TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN / TWILIO_PHONE_NUMBER non configurées.")
+        return False
+    url = f"https://api.twilio.com/2010-04-01/Accounts/{TWILIO_ACCOUNT_SID}/Messages.json"
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.post(
+                url,
+                data={"To": to_phone, "From": TWILIO_PHONE_NUMBER, "Body": body},
+                auth=(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN),
+            )
+            if response.status_code in [200, 201]:
+                print(f"✅ [SMS ENVOYÉ] Code envoyé à {to_phone}")
+                return True
+            print(f"❌ [TWILIO ERREUR] {response.status_code} : {response.text}")
+            return False
+    except Exception as e:
+        print(f"❌ [SMS ERREUR] Exception lors de l'envoi : {str(e)}")
+        return False
 
 # Création des tables manquantes
 Base.metadata.create_all(bind=engine)
@@ -722,6 +745,9 @@ def verify_teacher_register(data: OTPVerifySchema, db: Session = Depends(get_db)
     if not raw_identifier:
         raise HTTPException(status_code=400, detail="Identifiant (e-mail ou téléphone) manquant.")
 
+    # Même normalisation que dans init-register, sinon le code OTP ne sera jamais retrouvé
+    raw_identifier = raw_identifier.lower() if is_email(raw_identifier) else format_phone_e164(raw_identifier)
+
     # 2. Vérification dans la table des codes OTP
     otp_record = db.query(OTPVerification).filter(
         OTPVerification.identifier == raw_identifier,
@@ -730,6 +756,11 @@ def verify_teacher_register(data: OTPVerifySchema, db: Session = Depends(get_db)
 
     if not otp_record:
         raise HTTPException(status_code=400, detail="Code OTP invalide ou expiré.")
+
+    if otp_record.expires_at < datetime.utcnow():
+        db.delete(otp_record)
+        db.commit()
+        raise HTTPException(status_code=400, detail="Code OTP expiré. Veuillez demander un nouveau code.")
 
     # 3. Validation des données de l'enseignant
     t_data = data.teacher_data
@@ -765,7 +796,7 @@ def register_school(data: SchoolRegisterSchema, db: Session = Depends(get_db)):
     db.commit()
     return {"status": True, "message": "École enregistrée."}
 
-@app.get("/app/version")
+@app.api_route("/app/version", methods=["GET", "POST"])
 def get_classnet_app_version():
     """Renvoie la dernière version disponible pour ClassNet App."""
     version = os.getenv("class-net-app-last-version", "1.0.0")
@@ -775,7 +806,7 @@ def get_classnet_app_version():
         "latest_version": version
     }
 
-@app.get("/prime/version")
+@app.api_route("/prime/version", methods=["GET", "POST"])
 def get_classnet_p_version():
     """Renvoie la dernière version disponible pour ClassNet P."""
     version = os.getenv("class-net-p-last-version", "1.0.0")
@@ -788,7 +819,7 @@ def get_classnet_p_version():
 @app.post("/api/auth/teacher/login")
 def login_teacher(data: LoginSchema, db: Session = Depends(get_db)):
     """Connexion Prof : Reconstitue et renvoie l'état exact defaultDB depuis PostgreSQL."""
-    teacher = db.query(Teacher).filter(Teacher.email == data.identifier, Teacher.password == data.password).first()
+    teacher = db.query(Teacher).filter(Teacher.email == data.identifier.strip().lower(), Teacher.password == data.password).first()
     if not teacher:
         return {"status": False, "message": "Identifiants incorrects."}
     
@@ -1004,6 +1035,18 @@ def login_school(data: LoginSchema, db: Session = Depends(get_db)):
     return {"status": True, "data": primenet_state}
 
 # ---------------------------------------------------------
+# Alias utilisé par PrimeInk : chargement de l'état complet de l'école
+# ---------------------------------------------------------
+class PrimeNetLoadSchema(BaseModel):
+    school_id: str
+    password: str
+
+@app.post("/api/primenet/load")
+def load_primenet_state(data: PrimeNetLoadSchema, db: Session = Depends(get_db)):
+    """PrimeInk envoie { school_id, password } : même logique que /api/auth/school/login."""
+    return login_school(LoginSchema(identifier=data.school_id, password=data.password), db)
+
+# ---------------------------------------------------------
 # 7. GESTION DES CODES À USAGE UNIQUE (119 BITS)
 # ---------------------------------------------------------
 import os
@@ -1084,14 +1127,26 @@ def verify_and_cycle_code(data: CodeVerifySchema, background_tasks: BackgroundTa
     db.delete(code_record)
     new_code = generate_20_char_code()
     db.add(AccessCode(code=new_code))
+
+    # Renouvellement de la licence : durée configurable via la variable d'environnement LICENCE_DAYS
+    try:
+        licence_days = int(os.getenv("LICENCE_DAYS", "365"))
+    except ValueError:
+        licence_days = 365
+    expiration_date = (datetime.utcnow() + timedelta(days=licence_days)).strftime("%Y-%m-%d")
+    target_school_id = data.school_id or data.identifier
+    if target_school_id:
+        school_row = db.query(SchoolInformation).filter(SchoolInformation.school_id == target_school_id).first()
+        if school_row:
+            school_row.licence_date = expiration_date
     db.commit()
     
-    background_tasks.add_task(send_email_mock, ADMIN_EMAIL, "Renouvellement Code ClassNet", f"Utilisateur {data.identifier} a consommé un code. Nouveau code actif : {new_code}")
+    background_tasks.add_task(send_email_mock, ADMIN_EMAIL, "Renouvellement Code ClassNet", f"Utilisateur {data.identifier or data.school_id} a consommé un code. Nouveau code actif : {new_code}")
     
     return {
         "status": True, 
         "message": "Code valide et renouvelé.",
-        "expiration_date": datetime.utcnow().strftime("%Y-%m-%d")
+        "expiration_date": expiration_date
     }
 
 # ---------------------------------------------------------
@@ -1173,7 +1228,7 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db)):
             continue
 
         # Vérification 3 : Note valide (numérique et comprise entre 0 et le max)
-        if not isinstance(score, (int, float)) or score < 0 or score > eval_info["max"]:
+        if not isinstance(score, (int, float)) or isinstance(score, bool) or not (0 <= score <= eval_info["max"]):
             errors.append(f"Note incohérente ({score}/{eval_info['max']}) pour {student_info['name']} sur {eval_info['name']}")
             continue
 
@@ -1246,7 +1301,7 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db)):
                     s_info = student_lookup.get(s_id)
                     e_info = eval_lookup.get(e_id)
                     
-                    if s_info and e_info and s_info["class"] == c_name and e_info["course"] == course:
+                    if s_info and e_info and s_info["class"] == c_name and e_info["course"] == course and isinstance(score, (int, float)) and not isinstance(score, bool) and 0 <= score <= e_info["max"]:
                         s_name = s_info["name"]
                         period = e_info["period"]
                         # Si tu as déjà précalculé la moyenne, on l'injecte. Sinon on injecte la note brute.
