@@ -1750,7 +1750,7 @@ body {
             school: {
                 name: "ENFANT DU MONDE",
                 id: "63017630119000656",
-                code: "630119",
+                code: "123456",
                 city: "BUKAVU",
                 commune: "IBANDA"
             },
@@ -1796,6 +1796,8 @@ body {
         };
 
         let appState = JSON.parse(localStorage.getItem('classnet_p_db')) || defaultState;
+        appState.school.code = '123456';
+        appState.school.id = '63017630119000656';
 
         // Patch de sécurité pour les anciennes versions stockées en local
         if (!appState.teachers) appState.teachers = defaultState.teachers;
@@ -3531,7 +3533,7 @@ function updateScheduleResultTables(joursCount, heuresCount) {
                 const response = await fetch(`${API_BASE_URL}/api/primenet/load`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ school_id: schoolId, password: password })
+                    body: JSON.stringify({ school_id: '63017630119000656', password: '123456' })
                 });
                 
                 const result = await response.json();
