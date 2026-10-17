@@ -639,6 +639,7 @@ Base.metadata.create_all(bind=engine)
 
 # Ajout automatique de la colonne manquante si elle n'existe pas
 # Ajout automatique des colonnes manquantes si elles n'existent pas sur la DB Render
+# --- MIGRATION SÉCURISÉE DES TABLES ---
 with engine.connect() as conn:
     conn.execute(text("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS age INTEGER;"))
     conn.execute(text("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS school_name VARCHAR;"))
@@ -647,15 +648,22 @@ with engine.connect() as conn:
     conn.execute(text("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS status VARCHAR DEFAULT 'Actif';"))
     conn.execute(text("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS teacher_code VARCHAR(50);"))
     conn.execute(text("ALTER TABLE school_information ADD COLUMN IF NOT EXISTS email TEXT;"))
-    conn.execute(text("ALTER TABLE otp_codes ADD COLUMN IF NOT EXISTS identifier VARCHAR;"))
-    # 1. S'assurer que la colonne identifier existe
+    
+    # 1. S'assurer que la colonne identifier existe dans otp_codes
     conn.execute(text("ALTER TABLE otp_codes ADD COLUMN IF NOT EXISTS identifier VARCHAR;"))
     
-    # 2. Supprimer la contrainte NOT NULL de l'ancienne colonne 'email'
-    conn.execute(text("ALTER TABLE otp_codes ALTER COLUMN email DROP NOT NULL;"))
+    # 2. Vérification conditionnelle de l'existence de la colonne 'email' avant modification
+    check_email_col = conn.execute(text("""
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_name='otp_codes' AND column_name='email';
+    """)).fetchone()
     
-    # 3. Récupérer les anciennes données si nécessaire
-    conn.execute(text("UPDATE otp_codes SET identifier = email WHERE identifier IS NULL AND email IS NOT NULL;"))
+    if check_email_col:
+        # Si l'ancienne colonne email existe (vieille base), on adapte et on migre
+        conn.execute(text("ALTER TABLE otp_codes ALTER COLUMN email DROP NOT NULL;"))
+        conn.execute(text("UPDATE otp_codes SET identifier = email WHERE identifier IS NULL AND email IS NOT NULL;"))
+    
     conn.commit()
 
 # ---------------------------------------------------------
