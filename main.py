@@ -55,101 +55,189 @@ async def send_email_via_resend(to_email: str, subject: str, html_content: str) 
 
 class ScheduleEngine:
     """
-    Moteur de génération d'horaires scolaires hybride (CSP + Heuristique).
+    Moteur de génération d'horaires scolaires robuste :
+    - Gère les cours individuels et les cours de tronc commun (multi-classes simultanées).
+    - Respecte les disponibilités et préférences de chaque enseignant.
+    - Évite en priorité la dernière heure de chaque journée (heures de fatigue).
+    - Garantit l'absence totale de conflits (double-booking prof ou classe).
     """
-
-    def __init__(self, config: Dict[str, Any], classes: List[Dict], teachers: List[Dict], courses: List[Dict]):
-        self.jours_travail = config.get("joursTravail", 6)
-        self.heures_par_jour = config.get("heuresParJour", 6)
-        self.classes = classes
-        self.teachers = teachers
-        self.courses = courses
-        self.grid = {} # Structure: { (class_id, jour, heure): course_id }
-        self.teacher_busy = set() # Structure: (teacher_name, jour, heure)
-
-    # --- ÉTAPE 1 : Extraire et valider les contraintes de volume horaire ---
-    def step_1_prepare_variables() -> List[Dict]:
-        tasks = []
-        for course in self.courses:
-            # Récupère le volume horaire hebdomadaire attribué
-            volume_heures = course.get("maxPer", 4) // 10 # Estimation créneaux
-            for _ in range(max(1, volume_heures)):
-                tasks.append({
-                    "course_id": course["id"],
-                    "class_id": course["classId"],
-                    "teacher": course["titulaire"],
-                    "course_name": course["name"]
-                })
-        return tasks
-
-    # --- ÉTAPE 2 : Définir la matrice de disponibilité des enseignants ---
-    def step_2_build_teacher_availability(self) -> Dict[str, List[int]]:
-        avail_map = {}
-        for t in self.teachers:
-            # Map les jours de disponibilité déclarés
-            avail_map[t["name"]] = t.get("dispoJours", list(range(1, self.jours_travail + 1)))
-        return avail_map
-
-    # --- ÉTAPE 3 : Tri heuristique des cours (Placement des plus contraints d'abord) ---
-    def step_3_heuristic_sort(self, tasks: List[Dict], avail_map: Dict) -> List[Dict]:
-        def constraint_score(task):
-            teacher_dispo = len(avail_map.get(task["teacher"], []))
-            return teacher_dispo # Moins le prof a de jours, plus il est prioritaire
+    def __init__(self, config: Dict[str, Any], teachers: List[Dict[str, Any]]):
+        self.config = config
+        self.jours_travail = config.get("jours_travail", 5)
+        self.heures_par_jour = config.get("heures_par_jour", 6)
+        self.heures_utilisables_max = max(1, self.heures_par_jour - 1)
         
-        return sorted(tasks, key=constraint_score)
+        all_days = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"]
+        self.days_list = all_days[:self.jours_travail]
+        self.teachers = teachers
 
-    # --- ÉTAPE 4 : Moteur d'affectation par Retour Arrière (Backtracking) ---
-    def step_4_backtrack_assignment(self, tasks: List[Dict], avail_map: Dict) -> bool:
-        if not tasks:
-            return True # Tous les cours sont placés
+        # Grilles de suivi pour éviter les conflits
+        self.teacher_grid = {t["teacher_id"]: {d: {} for d in self.days_list} for t in teachers}
+        self.class_grid = {} # { class_name: { day: { hour_str: { course, teacher, room } } } }
 
-        task = tasks[0]
-        teacher = task["teacher"]
-        class_id = task["class_id"]
-        valid_days = avail_map.get(teacher, list(range(1, self.jours_travail + 1)))
+    def _prepare_and_group_tasks(self):
+        """
+        Analyse les cours des enseignants, isole les cours individuels 
+        et regroupe les cours de tronc commun par (trunk_id, course_name, teacher_id).
+        """
+        trunk_groups = {} 
+        individual_tasks = []
 
-        for jour in valid_days:
-            for heure in range(1, self.heures_par_jour + 1):
-                # Vérification des Contraintes Strictes (Hard Constraints)
-                slot_class = (class_id, jour, heure)
-                slot_teacher = (teacher, jour, heure)
+        for teacher in self.teachers:
+            t_id = teacher["teacher_id"]
+            t_name = teacher["name"]
+            availability = teacher["availability"]
 
-                if slot_class not in self.grid and slot_teacher not in self.teacher_busy:
-                    # Affectation temporaire
-                    self.grid[slot_class] = task
-                    self.teacher_busy.add(slot_teacher)
+            for course in teacher.get("assigned_courses", []):
+                c_name = course["course_name"]
+                class_name = course["class_name"]
+                hours = course["hours_per_week"]
+                trunk = course.get("trunk_common")
 
-                    if self.step_4_backtrack_assignment(tasks[1:], avail_map):
-                        return True
+                if class_name not in self.class_grid:
+                    self.class_grid[class_name] = {d: {} for d in self.days_list}
 
-                    # Annulation (Backtrack)
-                    del self.grid[slot_class]
-                    self.teacher_busy.remove(slot_teacher)
+                if trunk:
+                    group_key = (trunk, c_name, t_id)
+                    if group_key not in trunk_groups:
+                        trunk_groups[group_key] = {
+                            "trunk_id": trunk,
+                            "course_name": c_name,
+                            "teacher_id": t_id,
+                            "teacher_name": t_name,
+                            "hours_per_week": hours,
+                            "classes": set(),
+                            "availability": availability
+                        }
+                    trunk_groups[group_key]["classes"].add(class_name)
+                else:
+                    for _ in range(hours):
+                        individual_tasks.append({
+                            "type": "individual",
+                            "teacher_id": t_id,
+                            "teacher_name": t_name,
+                            "course_name": c_name,
+                            "class_name": class_name,
+                            "availability": availability
+                        })
 
-        return False
+        # Aplatissement des troncs communs en tâches unitaires de 1 heure
+        trunk_tasks = []
+        for group_key, data in trunk_groups.items():
+            classes_list = list(data["classes"])
+            for _ in range(data["hours_per_week"]):
+                trunk_tasks.append({
+                    "type": "trunk",
+                    "trunk_id": data["trunk_id"],
+                    "teacher_id": data["teacher_id"],
+                    "teacher_name": data["teacher_name"],
+                    "course_name": data["course_name"],
+                    "classes": classes_list,
+                    "availability": data["availability"]
+                })
 
-    # --- ÉTAPE 5 : Validation & Formatage de la Grille Générée ---
-    def step_5_export_schedule() -> List[Dict]:
-        formatted_schedules = []
-        for (class_id, jour, heure), task in self.grid.items():
-            formatted_schedules.append({
-                "classId": class_id,
-                "jour": jour,
-                "heure": heure,
-                "course": task["course_name"],
-                "teacher": task["teacher"]
-            })
-        return formatted_schedules
+        # Tri MRV (Priorité absolue aux troncs communs impliquant le plus de classes)
+        sorted_trunk = sorted(trunk_tasks, key=lambda x: len(x["classes"]), reverse=True)
+        random.shuffle(individual_tasks)
+
+        return sorted_trunk + individual_tasks
 
     def generate(self) -> Dict[str, Any]:
-        tasks = self.step_1_prepare_variables()
-        avail_map = self.step_2_build_teacher_availability()
-        sorted_tasks = self.step_3_heuristic_sort(tasks, avail_map)
-        
-        success = self.step_4_backtrack_assignment(sorted_tasks, avail_map)
-        if success:
-            return {"status": True, "schedule": self.step_5_export_schedule()}
-        return {"status": False, "message": "Impossible de résoudre l'horaire avec ces contraintes."}
+        tasks = self._prepare_and_group_tasks()
+
+        # Création des créneaux priorisés (Heures 1 à H-1 en premier, dernière heure H en secours)
+        primary_slots = []
+        fallback_slots = []
+
+        for d in self.days_list:
+            for h in range(1, self.heures_par_jour + 1):
+                h_str = str(h)
+                if h <= self.heures_utilisables_max:
+                    primary_slots.append((d, h_str))
+                else:
+                    fallback_slots.append((d, h_str))
+
+        ordered_slots = primary_slots + fallback_slots
+        unassigned_tasks = []
+
+        for task in tasks:
+            placed = False
+            t_id = task["teacher_id"]
+            availability = task["availability"]
+
+            for day, h_str in ordered_slots:
+                # 1. Disponibilité de l'enseignant ce jour/heure
+                if not availability.get(day, {}).get(h_str, True):
+                    continue
+                # 2. Prof libre ?
+                if h_str in self.teacher_grid[t_id][day]:
+                    continue
+
+                if task["type"] == "individual":
+                    c_name = task["class_name"]
+                    # 3. Classe libre ?
+                    if h_str in self.class_grid[c_name][day]:
+                        continue
+
+                    # Placement cours individuel
+                    room = "Salle N°1"
+                    self.teacher_grid[t_id][day][h_str] = {
+                        "class": c_name,
+                        "course": task["course_name"]
+                    }
+                    self.class_grid[c_name][day][h_str] = {
+                        "course": task["course_name"],
+                        "teacher": task["teacher_name"],
+                        "room": room
+                    }
+                    placed = True
+                    break
+
+                elif task["type"] == "trunk":
+                    target_classes = task["classes"]
+                    # 3. Est-ce que TOUTES les classes du tronc commun sont libres simultanément ?
+                    all_classes_free = all(h_str not in self.class_grid[c][day] for c in target_classes)
+                    if not all_classes_free:
+                        continue
+
+                    # Placement simultané pour le tronc commun
+                    classes_label = " + ".join(target_classes)
+                    self.teacher_grid[t_id][day][h_str] = {
+                        "class": f"TRONC COMMUN ({classes_label})",
+                        "course": task["course_name"]
+                    }
+                    for c_name in target_classes:
+                        self.class_grid[c_name][day][h_str] = {
+                            "course": task["course_name"],
+                            "teacher": task["teacher_name"],
+                            "room": "Auditoire / Salle Principale"
+                        }
+                    placed = True
+                    break
+
+            if not placed:
+                unassigned_tasks.append(task)
+
+        # Formatage des sorties conforme au contrat
+        formatted_classes = [
+            {"class_name": c_name, "grid": c_grid}
+            for c_name, c_grid in self.class_grid.items()
+        ]
+        formatted_teachers = [
+            {"teacher_id": t_id, "grid": t_grid}
+            for t_id, t_grid in self.teacher_grid.items()
+        ]
+
+        return {
+            "success": len(unassigned_tasks) == 0,
+            "message": "Horaire généré et optimisé avec succès." if len(unassigned_tasks) == 0 else f"Horaire généré avec {len(unassigned_tasks)} créneaux non placés.",
+            "generated_at": datetime.utcnow().isoformat() + "Z",
+            "schedules": {
+                "classes": formatted_classes,
+                "teachers": formatted_teachers
+            },
+            "unassigned_count": len(unassigned_tasks)
+        }
 
 class ExamMixerEngine:
     """
@@ -493,6 +581,13 @@ class LoginSchema(BaseModel):
 class CodeVerifySchema(BaseModel):
     identifier: str
     code: str
+
+class ScheduleGenerationRequest(BaseModel):
+    school_id: str
+    academic_year: str
+    config: Dict[str, Any]
+    time_slots: List[Dict[str, Any]]
+    teachers: List[Dict[str, Any]]
 
 # ---------------------------------------------------------
 # 4. SERVICES AUXILIAIRES
@@ -1451,6 +1546,78 @@ def get_primenet_data(school_id: str, db: Session = Depends(get_db)):
         "status": True,
         "message": "Données PrimeNet récupérées avec succès.",
         "data": merged_data
+    }
+
+
+@app.post("/api/schedule/generate")
+def generate_optimized_schedule(payload: ScheduleGenerationRequest):
+    """
+    Endpoint FastAPI pour la génération d'horaires scolaires avec prise en charge
+    des troncs communs, préférences et évitement des dernières heures.
+    """
+    engine = ScheduleEngine(config=payload.config, teachers=payload.teachers)
+    return engine.generate()
+
+@app.post("/api/mixage/generate")
+def generate_exam_mixage(payload: dict, db: Session = Depends(get_db)):
+    """
+    Route FastAPI pour le mixage des examens anti-triche.
+    Utilise le moteur ExamMixerEngine et s'adapte au format d'entrée/sortie requis.
+    """
+    school_id = payload.get("school_id")
+    target_classes = payload.get("target_classes", [])
+    rooms = payload.get("rooms", [])
+    
+    # 1. Récupération des élèves concernés depuis la base de données pour les classes cibles
+    db_students = db.query(SchoolStudentInformation).filter(
+        SchoolStudentInformation.school_id == school_id,
+        SchoolStudentInformation.class_id.in_(target_classes)
+    ).all()
+
+    # Transformation au format attendu par le moteur
+    students_list = [
+        {
+            "id": s.id,
+            "name": s.student_name,
+            "postname": s.student_post_name,
+            "classId": s.class_id
+        }
+        for s in db_students
+    ]
+
+    # 2. Exécution du moteur de mixage
+    mixer_result = ExamMixerEngine.mix_students_and_assign_seats(students_list, rooms)
+
+    # 3. Adaptation de la sortie au format exact attendu par ton client
+    formatted_seating_plans = []
+    supervisor_name = payload.get("supervisors", [{}])[0].get("name", "Surveillant")
+
+    for room_res in mixer_result.get("result", []):
+        benches_list = []
+        # Regroupement par banc (ou conversion du plan de salle)
+        for seat in room_res.get("seating_plan", []):
+            benches_list.append({
+                "bench_number": seat["banc"],
+                "row": seat["rangee"],
+                "student_left": {
+                    "id": seat["student_exam_id"], # Ou l'ID réel selon le besoin
+                    "name": seat["student_name"],
+                    "class": seat["original_class"],
+                    "variant_code": "A"
+                },
+                "student_right": None # Géré automatiquement si tu veux placer 2 élèves par banc
+            })
+
+        formatted_seating_plans.append({
+            "room_name": room_res["room_name"],
+            "supervisor": supervisor_name,
+            "benches": benches_list
+        })
+
+    return {
+        "success": True,
+        "allocation_id": f"mix_{datetime.utcnow().strftime('%Y_%m_%d_%H%M')}",
+        "seating_plans": formatted_seating_plans
     }
 
 # ==============================================================================================================================================================
