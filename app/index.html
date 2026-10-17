@@ -1250,6 +1250,76 @@ function switchAuthSubView(viewName) {
     document.getElementById('auth-view-otp').style.display = viewName === 'otp' ? 'block' : 'none';
 }
 
+// BEGIN mergeServerDataIntoLocal
+// Fusion NON destructive : la réponse du serveur ne remplace jamais ce qui existe déjà en local
+// (le serveur reconstruit l'état uniquement à partir des notes déjà synchronisées).
+function mergeServerDataIntoLocal(local, server) {
+    local = local || {};
+    server = server || {};
+    const merged = { ...local, ...server };
+
+    // Identité : le serveur fait foi, le local garde ses champs supplémentaires
+    merged.user = { ...(local.user || {}), ...(server.user || {}) };
+
+    // Liste de classes : union sans doublon
+    merged.classes = Array.from(new Set([...(local.classes || []), ...(server.classes || [])]));
+
+    // { classe: [éléments] } : union par identifiant, l'élément local prime
+    const mergeListMap = (a, b, idOf) => {
+        a = a || {};
+        b = b || {};
+        const out = {};
+        new Set([...Object.keys(a), ...Object.keys(b)]).forEach(key => {
+            const seen = new Set();
+            out[key] = [];
+            [...(a[key] || []), ...(b[key] || [])].forEach(item => {
+                const id = idOf(item);
+                if (!seen.has(id)) {
+                    seen.add(id);
+                    out[key].push(item);
+                }
+            });
+        });
+        return out;
+    };
+
+    merged.courses = mergeListMap(local.courses, server.courses, c => c);
+    merged.students = mergeListMap(local.students, server.students, s => s.id);
+
+    // Évaluations : { classe: { P1: [...], P2: [...] } }
+    const evals = {};
+    new Set([...Object.keys(local.evaluations || {}), ...Object.keys(server.evaluations || {})]).forEach(cls => {
+        evals[cls] = mergeListMap((local.evaluations || {})[cls], (server.evaluations || {})[cls], ev => ev.id);
+    });
+    merged.evaluations = evals;
+
+    // Notes : en cas de conflit, le local gagne s'il y a des modifications non envoyées, sinon le serveur
+    const hasPending = (local.pendingCommits || 0) > 0;
+    merged.grades = hasPending
+        ? { ...(server.grades || {}), ...(local.grades || {}) }
+        : { ...(local.grades || {}), ...(server.grades || {}) };
+
+    merged.courseMax = { ...(server.courseMax || {}), ...(local.courseMax || {}) };
+    merged.presences = (local.presences && local.presences.length) ? local.presences : (server.presences || []);
+
+    const seenQuiz = new Set();
+    merged.quizzes = [];
+    [...(local.quizzes || []), ...(server.quizzes || [])].forEach(q => {
+        if (!seenQuiz.has(q.id)) {
+            seenQuiz.add(q.id);
+            merged.quizzes.push(q);
+        }
+    });
+
+    // Préférences et compteur : toujours ceux du local (le serveur renvoie des valeurs par défaut)
+    ['periodVisibility', 'activeCourseFilter', 'llinkPrefs', 'theme'].forEach(k => {
+        if (local[k] !== undefined) merged[k] = local[k];
+    });
+    merged.pendingCommits = local.pendingCommits || 0;
+    return merged;
+}
+// END mergeServerDataIntoLocal
+
 // 1. CONNEXION AVEC FUSION DE LA BASE DE DONNÉES REÇUE DU SERVEUR
 async function handleLogin() {
     const email = document.getElementById('login-email').value.trim();
@@ -1270,7 +1340,7 @@ async function handleLogin() {
         const result = await response.json();
 
         if (result.status && result.data) {
-            db = { ...db, ...result.data };
+            db = mergeServerDataIntoLocal(db, result.data);
             db.user.isLoggedIn = true;
             saveDB();
             
@@ -2879,10 +2949,10 @@ function importDatabaseJSON(event) {
 // --- GESTION DYNAMIQUE DU RÉSEAU ET HISTORIQUE (CRYPT) ---
 const SERVER_CONFIG = {
     // Mécanisme 1 : URL mDNS standardisée diffusée par ClassNet P
-    intranetMDNS: "http://classnet-server.local:5000",
+    intranetMDNS: CONFIG.PRIMARY_URL, // une seule source de vérité pour l'adresse de l'Intranet (port 5001)
     
     // IP de secours en cas de routeur bloquant le protocole Bonjour/mDNS
-    fallbackIP: "http://192.168.1.100:5000", 
+    fallbackIP: CONFIG.FALLBACK_URL, 
     
     getInternetUrl: function(schoolName) {
         const formatName = schoolName.toLowerCase().replace(/\s+/g, '-');
