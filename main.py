@@ -6,7 +6,8 @@ from email.mime.text import MIMEText
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
 import httpx
-from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, status
+from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, status, Header
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, EmailStr
 from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, Text, JSON, Float, text, func
@@ -353,6 +354,7 @@ class OTPVerification(Base):
     identifier = Column(String, index=True, nullable=False)  # Remplacement de 'email' par 'identifier'
     code = Column(String, nullable=False)
     expires_at = Column(DateTime, nullable=False)
+    attempts = Column(Integer, default=0)  # essais de saisie du code (limite : OTP_MAX_ATTEMPTS)
 
 class SchoolInformation(Base):
     __tablename__ = "school_information"
@@ -593,6 +595,154 @@ class ScheduleGenerationRequest(BaseModel):
 # ---------------------------------------------------------
 # 4. SERVICES AUXILIAIRES
 # ---------------------------------------------------------
+# BEGIN SECURITY
+# ---------------------------------------------------------
+# SÉCURITÉ : mots de passe hachés (PBKDF2), jetons signés (HMAC-SHA256), limite d'essais.
+# Aucune dépendance externe : uniquement la bibliothèque standard Python.
+# Variables d'environnement (Render) : AUTH_SECRET (obligatoire en production),
+# TEACHER_TOKEN_DAYS (défaut 14), SCHOOL_TOKEN_HOURS (défaut 12).
+# ---------------------------------------------------------
+import base64
+import hashlib
+import hmac
+import json
+import time
+
+PASSWORD_SCHEME = "pbkdf2_sha256"
+PASSWORD_ITERATIONS = 600_000
+
+AUTH_SECRET = os.getenv("AUTH_SECRET")
+if not AUTH_SECRET:
+    AUTH_SECRET = secrets.token_urlsafe(48)
+    print("⚠️ [SÉCURITÉ] AUTH_SECRET absente : un secret aléatoire est utilisé et toutes les sessions seront "
+          "invalidées à chaque redémarrage. Définissez AUTH_SECRET dans les variables d'environnement Render.")
+
+
+def _env_int(name: str, default: int) -> int:
+    try:
+        return int(os.getenv(name, str(default)))
+    except ValueError:
+        return default
+
+
+TEACHER_TOKEN_TTL = _env_int("TEACHER_TOKEN_DAYS", 14) * 86400
+SCHOOL_TOKEN_TTL = _env_int("SCHOOL_TOKEN_HOURS", 12) * 3600
+OTP_MAX_ATTEMPTS = 5
+
+
+def hash_password(password: str, iterations: int = PASSWORD_ITERATIONS) -> str:
+    """Renvoie  pbkdf2_sha256$<itérations>$<sel>$<empreinte>  (sel aléatoire unique par mot de passe)."""
+    salt = secrets.token_bytes(16)
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations)
+    return f"{PASSWORD_SCHEME}${iterations}${base64.b64encode(salt).decode()}${base64.b64encode(digest).decode()}"
+
+
+def is_password_hashed(stored) -> bool:
+    return isinstance(stored, str) and stored.startswith(PASSWORD_SCHEME + "$")
+
+
+def verify_password(password: str, stored) -> bool:
+    """Accepte aussi l'ancien format en clair (migré automatiquement à la prochaine connexion réussie)."""
+    if not stored or not isinstance(password, str):
+        return False
+    if not is_password_hashed(stored):
+        return hmac.compare_digest(password.encode("utf-8"), str(stored).encode("utf-8"))
+    try:
+        _, iterations, salt_b64, hash_b64 = stored.split("$")
+        expected = base64.b64decode(hash_b64)
+        candidate = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), base64.b64decode(salt_b64), int(iterations))
+        return hmac.compare_digest(candidate, expected)
+    except Exception:
+        return False
+
+
+def _b64url(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
+
+
+def _b64url_decode(text: str) -> bytes:
+    return base64.urlsafe_b64decode(text + "=" * (-len(text) % 4))
+
+
+def create_token(claims: dict, ttl_seconds: int) -> str:
+    """Jeton signé  <charge>.<signature>  contenant les revendications et une date d'expiration."""
+    body = dict(claims)
+    body["exp"] = int(time.time()) + int(ttl_seconds)
+    payload = _b64url(json.dumps(body, separators=(",", ":")).encode("utf-8"))
+    signature = _b64url(hmac.new(AUTH_SECRET.encode("utf-8"), payload.encode("ascii"), hashlib.sha256).digest())
+    return f"{payload}.{signature}"
+
+
+def verify_token(token: str):
+    """Renvoie les revendications si le jeton est authentique et non expiré, sinon None."""
+    try:
+        payload, signature = token.split(".")
+        expected = _b64url(hmac.new(AUTH_SECRET.encode("utf-8"), payload.encode("ascii"), hashlib.sha256).digest())
+        if not hmac.compare_digest(signature, expected):
+            return None
+        claims = json.loads(_b64url_decode(payload))
+        if int(claims.get("exp", 0)) < int(time.time()):
+            return None
+        return claims
+    except Exception:
+        return None
+
+
+class AttemptLimiter:
+    """Compteur en mémoire : bloque une clé après N événements dans une fenêtre de temps."""
+
+    def __init__(self, max_attempts: int = 5, window_seconds: int = 900):
+        self.max_attempts = max_attempts
+        self.window = window_seconds
+        self._events = {}
+
+    def _recent(self, key: str) -> list:
+        now = time.time()
+        recent = [t for t in self._events.get(key, []) if now - t < self.window]
+        if recent:
+            self._events[key] = recent
+        else:
+            self._events.pop(key, None)
+        return recent
+
+    def is_blocked(self, key: str) -> bool:
+        return len(self._recent(key)) >= self.max_attempts
+
+    def record(self, key: str) -> None:
+        if len(self._events) > 10000:  # évite une croissance sans limite de la mémoire
+            for k in list(self._events.keys()):
+                self._recent(k)
+        self._events.setdefault(key, []).append(time.time())
+
+    def reset(self, key: str) -> None:
+        self._events.pop(key, None)
+
+
+LOGIN_LIMITER = AttemptLimiter(max_attempts=5, window_seconds=900)       # 5 échecs / 15 min
+OTP_REQUEST_LIMITER = AttemptLimiter(max_attempts=5, window_seconds=3600)  # 5 demandes de code / heure
+
+
+def get_bearer_claims(authorization: Optional[str] = Header(None)) -> dict:
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="Authentification requise : connectez-vous d'abord.")
+    claims = verify_token(authorization[7:].strip())
+    if not claims:
+        raise HTTPException(status_code=401, detail="Session invalide ou expirée : reconnectez-vous.")
+    return claims
+
+
+def require_teacher(claims: dict = Depends(get_bearer_claims)) -> dict:
+    if claims.get("role") != "teacher":
+        raise HTTPException(status_code=403, detail="Accès réservé aux enseignants.")
+    return claims
+
+
+def require_school(claims: dict = Depends(get_bearer_claims)) -> dict:
+    if claims.get("role") != "school":
+        raise HTTPException(status_code=403, detail="Accès réservé à l'administration de l'école.")
+    return claims
+# END SECURITY
+
 def get_db():
     db = SessionLocal()
     try:
@@ -639,7 +789,6 @@ Base.metadata.create_all(bind=engine)
 
 # Ajout automatique de la colonne manquante si elle n'existe pas
 # Ajout automatique des colonnes manquantes si elles n'existent pas sur la DB Render
-# --- MIGRATION SÉCURISÉE DES TABLES ---
 with engine.connect() as conn:
     conn.execute(text("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS age INTEGER;"))
     conn.execute(text("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS school_name VARCHAR;"))
@@ -648,22 +797,22 @@ with engine.connect() as conn:
     conn.execute(text("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS status VARCHAR DEFAULT 'Actif';"))
     conn.execute(text("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS teacher_code VARCHAR(50);"))
     conn.execute(text("ALTER TABLE school_information ADD COLUMN IF NOT EXISTS email TEXT;"))
-    
-    # 1. S'assurer que la colonne identifier existe dans otp_codes
+
+    # 1. Colonnes de otp_codes (identifier + compteur d'essais de l'étape 2)
     conn.execute(text("ALTER TABLE otp_codes ADD COLUMN IF NOT EXISTS identifier VARCHAR;"))
-    
-    # 2. Vérification conditionnelle de l'existence de la colonne 'email' avant modification
+    conn.execute(text("ALTER TABLE otp_codes ADD COLUMN IF NOT EXISTS attempts INTEGER DEFAULT 0;"))
+
+    # 2. Ancienne colonne 'email' : uniquement si elle existe (vieille base)
     check_email_col = conn.execute(text("""
-        SELECT column_name 
-        FROM information_schema.columns 
+        SELECT column_name
+        FROM information_schema.columns
         WHERE table_name='otp_codes' AND column_name='email';
     """)).fetchone()
-    
+
     if check_email_col:
-        # Si l'ancienne colonne email existe (vieille base), on adapte et on migre
         conn.execute(text("ALTER TABLE otp_codes ALTER COLUMN email DROP NOT NULL;"))
         conn.execute(text("UPDATE otp_codes SET identifier = email WHERE identifier IS NULL AND email IS NOT NULL;"))
-    
+
     conn.commit()
 
 # ---------------------------------------------------------
@@ -716,6 +865,11 @@ async def init_teacher_register(data: TeacherInitSchema, background_tasks: Backg
     if existing_teacher:
         return {"status": False, "message": "Cet identifiant est déjà associé à un compte."}
 
+    # Limite les demandes de code (coût SMS/e-mail et force brute par renouvellement du code)
+    if OTP_REQUEST_LIMITER.is_blocked(identifier):
+        return {"status": False, "message": "Trop de demandes de code. Réessayez dans une heure."}
+    OTP_REQUEST_LIMITER.record(identifier)
+
     # 3. Génération du code OTP et sauvegarde
     otp = generate_otp()
     expiry = datetime.utcnow() + timedelta(minutes=15)
@@ -756,13 +910,20 @@ def verify_teacher_register(data: OTPVerifySchema, db: Session = Depends(get_db)
     # Même normalisation que dans init-register, sinon le code OTP ne sera jamais retrouvé
     raw_identifier = raw_identifier.lower() if is_email(raw_identifier) else format_phone_e164(raw_identifier)
 
-    # 2. Vérification dans la table des codes OTP
-    otp_record = db.query(OTPVerification).filter(
-        OTPVerification.identifier == raw_identifier,
-        OTPVerification.code == data.code
-    ).first()
+    # 2. Vérification dans la table des codes OTP (avec limite d'essais)
+    otp_record = db.query(OTPVerification).filter(OTPVerification.identifier == raw_identifier).first()
 
     if not otp_record:
+        raise HTTPException(status_code=400, detail="Code OTP invalide ou expiré.")
+
+    if (otp_record.attempts or 0) >= OTP_MAX_ATTEMPTS:
+        db.delete(otp_record)
+        db.commit()
+        raise HTTPException(status_code=429, detail="Trop de tentatives. Demandez un nouveau code.")
+
+    if not hmac.compare_digest(str(otp_record.code), str(data.code or "").strip()):
+        otp_record.attempts = (otp_record.attempts or 0) + 1
+        db.commit()
         raise HTTPException(status_code=400, detail="Code OTP invalide ou expiré.")
 
     if otp_record.expires_at < datetime.utcnow():
@@ -777,6 +938,9 @@ def verify_teacher_register(data: OTPVerifySchema, db: Session = Depends(get_db)
 
     # Détermination de l'e-mail et du téléphone selon la nature de l'identifiant
     email_val = raw_identifier if is_email(raw_identifier) else t_data.email
+    email_val = str(email_val or "").strip().lower()
+    if not is_email(email_val):
+        raise HTTPException(status_code=400, detail="Adresse e-mail invalide.")
     phone_val = raw_identifier if not is_email(raw_identifier) else t_data.phone_number
 
     # 4. Création du compte enseignant
@@ -785,7 +949,7 @@ def verify_teacher_register(data: OTPVerifySchema, db: Session = Depends(get_db)
         phone_number=phone_val,
         full_name=t_data.full_name,
         school_name=t_data.school_name,
-        password=t_data.password,
+        password=hash_password(t_data.password),
         age=t_data.age,
         teacher_code=f"prof_{generate_otp()}"
     )
@@ -800,7 +964,9 @@ def verify_teacher_register(data: OTPVerifySchema, db: Session = Depends(get_db)
 def register_school(data: SchoolRegisterSchema, db: Session = Depends(get_db)):
     if db.query(SchoolInformation).filter(SchoolInformation.school_id == data.school_id).first():
         return {"status": False, "message": "École déjà existante."}
-    db.add(SchoolInformation(**data.dict()))
+    school_fields = data.dict()
+    school_fields["pass_word"] = hash_password(school_fields["pass_word"])
+    db.add(SchoolInformation(**school_fields))
     db.commit()
     return {"status": True, "message": "École enregistrée."}
 
@@ -827,9 +993,19 @@ def get_classnet_p_version():
 @app.post("/api/auth/teacher/login")
 def login_teacher(data: LoginSchema, db: Session = Depends(get_db)):
     """Connexion Prof : Reconstitue et renvoie l'état exact defaultDB depuis PostgreSQL."""
-    teacher = db.query(Teacher).filter(Teacher.email == data.identifier.strip().lower(), Teacher.password == data.password).first()
-    if not teacher:
+    limiter_key = "teacher:" + data.identifier.strip().lower()
+    if LOGIN_LIMITER.is_blocked(limiter_key):
+        return JSONResponse(status_code=429, content={"status": False, "message": "Trop de tentatives échouées. Réessayez dans 15 minutes."})
+
+    teacher = db.query(Teacher).filter(Teacher.email == data.identifier.strip().lower()).first()
+    if not teacher or not verify_password(data.password, teacher.password):
+        LOGIN_LIMITER.record(limiter_key)
         return {"status": False, "message": "Identifiants incorrects."}
+    LOGIN_LIMITER.reset(limiter_key)
+
+    if not is_password_hashed(teacher.password):
+        teacher.password = hash_password(data.password)  # migration silencieuse de l'ancien format en clair
+        db.commit()
     
     # Récupération des entités
     db_grades = db.query(StudentGrade).filter(StudentGrade.teacher_email == teacher.email).all()
@@ -919,7 +1095,7 @@ def login_teacher(data: LoginSchema, db: Session = Depends(get_db)):
             "id": teacher.teacher_code or f"prof_{teacher.id}",
             "name": teacher.full_name,
             "email": teacher.email,
-            "password": teacher.password,
+            "password": data.password,  # jamais l'empreinte : le client garde le mot de passe saisi (mode hors-ligne)
             "school": teacher.school_name or "Indépendant",
             "isLoggedIn": True
         },
@@ -938,18 +1114,28 @@ def login_teacher(data: LoginSchema, db: Session = Depends(get_db)):
         "pendingCommits": 0
     }
     
-    return {"status": True, "data": classnet_app_db}
+    return {"status": True, "data": classnet_app_db,
+            "token": create_token({"role": "teacher", "email": teacher.email}, TEACHER_TOKEN_TTL)}
 
 @app.post("/api/auth/school/login")
 def login_school(data: LoginSchema, db: Session = Depends(get_db)):
     """Connexion École : Charge et renvoie l'état exact defaultState pour PrimeNet/ClassNet P depuis la DB."""
     school = db.query(SchoolInformation).filter(
-        SchoolInformation.school_id == data.identifier, 
-        SchoolInformation.pass_word == data.password
+        SchoolInformation.school_id == data.identifier
     ).first()
     
-    if not school:
+    limiter_key = "school:" + str(data.identifier).strip()
+    if LOGIN_LIMITER.is_blocked(limiter_key):
+        return JSONResponse(status_code=429, content={"status": False, "message": "Trop de tentatives échouées. Réessayez dans 15 minutes."})
+
+    if not school or not verify_password(data.password, school.pass_word):
+        LOGIN_LIMITER.record(limiter_key)
         return {"status": False, "message": "Identifiants incorrects."}
+    LOGIN_LIMITER.reset(limiter_key)
+
+    if not is_password_hashed(school.pass_word):
+        school.pass_word = hash_password(data.password)  # migration silencieuse de l'ancien format en clair
+        db.commit()
     
     # 1. Chargement des classes
     classes_data = []
@@ -1040,7 +1226,8 @@ def login_school(data: LoginSchema, db: Session = Depends(get_db)):
         }
     }
 
-    return {"status": True, "data": primenet_state}
+    return {"status": True, "data": primenet_state,
+            "token": create_token({"role": "school", "school_id": school.school_id}, SCHOOL_TOKEN_TTL)}
 
 # ---------------------------------------------------------
 # Alias utilisé par PrimeInk : chargement de l'état complet de l'école
@@ -1161,7 +1348,7 @@ def verify_and_cycle_code(data: CodeVerifySchema, background_tasks: BackgroundTa
 # 8. SYNCHRONISATION ET MISE À JOUR (APP & PRIMENET)
 # ---------------------------------------------------------
 @app.post("/api/sync/classnet-app")
-def sync_classnet_app(payload: dict, db: Session = Depends(get_db)):
+def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict = Depends(require_teacher)):
     """
     Synchronise la DB ClassNet App avec contrôles complets des données :
     - Vérification des noms d'élèves et appartenance aux classes
@@ -1169,7 +1356,9 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db)):
     - Contrôle des notes (intervalle 0 <= note <= max_score)
     """
     user_data = payload.get("user", {})
-    email = user_data.get("email")
+    email = str(user_data.get("email") or "").strip().lower()  # même normalisation que la connexion
+    if email != claims.get("email"):
+        raise HTTPException(status_code=403, detail="Ce jeton ne correspond pas à l'enseignant indiqué dans les données.")
     
     teacher = db.query(Teacher).filter(Teacher.email == email).first()
     if not teacher:
@@ -1358,11 +1547,13 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db)):
     }
 
 @app.post("/api/sync/primenet")
-def sync_primenet(payload: dict, db: Session = Depends(get_db)):
+def sync_primenet(payload: dict, db: Session = Depends(get_db), claims: dict = Depends(require_school)):
     """Reçoit la DB PrimeNet (ClassNet P) et met à jour l'ensemble des données de l'école."""
     school_data = payload.get("school", {})
     # Récupère 'id' ou 'school_id' pour éviter les incompatibilités de nom de clé
     school_id = school_data.get("id") or school_data.get("school_id")
+    if school_id != claims.get("school_id"):
+        raise HTTPException(status_code=403, detail="Ce jeton ne correspond pas à l'école indiquée dans les données.")
     
     school = db.query(SchoolInformation).filter(SchoolInformation.school_id == school_id).first()
     if not school:
@@ -1495,12 +1686,17 @@ def sync_primenet(payload: dict, db: Session = Depends(get_db)):
 # 9. EXTRACTION DONNÉES ENSEIGNANT
 # ---------------------------------------------------------
 @app.get("/api/teachers/{identifier}")
-def get_teacher_info(identifier: str, db: Session = Depends(get_db)):
+def get_teacher_info(identifier: str, db: Session = Depends(get_db), claims: dict = Depends(get_bearer_claims)):
     """Renvoie toutes les informations concernant un enseignant via son identifiant (email)."""
     teacher = db.query(Teacher).filter(Teacher.email == identifier).first()
     if not teacher:
         return {"status": False, "message": "Enseignant introuvable."}
-    
+
+    is_self = claims.get("role") == "teacher" and claims.get("email") == teacher.email
+    is_same_school = claims.get("role") == "school" and bool(teacher.school_id) and claims.get("school_id") == teacher.school_id
+    if not (is_self or is_same_school):
+        raise HTTPException(status_code=403, detail="Accès refusé à ce profil.")
+
     return {
         "status": True,
         "data": {
@@ -1519,11 +1715,14 @@ def get_teacher_info(identifier: str, db: Session = Depends(get_db)):
 
 
 @app.get("/api/primenet/sync/{school_id}")
-def get_primenet_data(school_id: str, db: Session = Depends(get_db)):
+def get_primenet_data(school_id: str, db: Session = Depends(get_db), claims: dict = Depends(require_school)):
     """
     Récupère et fusionne les données de tous les enseignants d'une école spécifique
     pour les envoyer à PrimeNet.
     """
+    if school_id != claims.get("school_id"):
+        raise HTTPException(status_code=403, detail="Accès refusé aux données d'une autre école.")
+
     # 1. Récupérer tous les payloads enregistrés pour cette école
     school_payloads = db.query(PrimeNetPayload).filter(PrimeNetPayload.school_id == school_id).all()
     
@@ -1613,7 +1812,7 @@ def get_primenet_data(school_id: str, db: Session = Depends(get_db)):
 
 
 @app.post("/api/schedule/generate")
-def generate_optimized_schedule(payload: ScheduleGenerationRequest):
+def generate_optimized_schedule(payload: ScheduleGenerationRequest, claims: dict = Depends(require_school)):
     """
     Endpoint FastAPI pour la génération d'horaires scolaires avec prise en charge
     des troncs communs, préférences et évitement des dernières heures.
@@ -1622,12 +1821,14 @@ def generate_optimized_schedule(payload: ScheduleGenerationRequest):
     return engine.generate()
 
 @app.post("/api/mixage/generate")
-def generate_exam_mixage(payload: dict, db: Session = Depends(get_db)):
+def generate_exam_mixage(payload: dict, db: Session = Depends(get_db), claims: dict = Depends(require_school)):
     """
     Route FastAPI pour le mixage des examens anti-triche.
     Utilise le moteur ExamMixerEngine et s'adapte au format d'entrée/sortie requis.
     """
     school_id = payload.get("school_id")
+    if school_id and school_id != claims.get("school_id"):
+        raise HTTPException(status_code=403, detail="Accès refusé aux données d'une autre école.")
     target_classes = payload.get("target_classes", [])
     rooms = payload.get("rooms", [])
     
@@ -1686,77 +1887,100 @@ def generate_exam_mixage(payload: dict, db: Session = Depends(get_db)):
 # ==============================================================================================================================================================
 from sqlalchemy.orm import Session
 
+SEED_SCHOOL_IDS = ["63017630119000999", "63017630119000656"]
+SEED_TEACHER_EMAIL = "prof.kabila@gmail.com"
+OLD_DEFAULT_SCHOOL_PASSWORD = "123456"
+OLD_DEFAULT_TEACHER_PASSWORD = "profpassword123"
+
+
+def lock_known_default_accounts(db: Session) -> int:
+    """Verrouille les comptes de test qui utilisent encore l'ancien mot de passe public (123456 / profpassword123)."""
+    locked = 0
+    for school_id in SEED_SCHOOL_IDS:
+        school = db.query(SchoolInformation).filter(SchoolInformation.school_id == school_id).first()
+        if school and verify_password(OLD_DEFAULT_SCHOOL_PASSWORD, school.pass_word):
+            school.pass_word = hash_password(secrets.token_urlsafe(24))
+            locked += 1
+    teacher = db.query(Teacher).filter(Teacher.email == SEED_TEACHER_EMAIL).first()
+    if teacher and verify_password(OLD_DEFAULT_TEACHER_PASSWORD, teacher.password):
+        teacher.password = hash_password(secrets.token_urlsafe(24))
+        locked += 1
+    if locked:
+        db.commit()
+        print(f"🔒 [SEED] {locked} compte(s) de test verrouillé(s) : ils utilisaient l'ancien mot de passe public. "
+              f"Pour les réutiliser : SEED_TEST_DATA=1 + SEED_SCHOOL_PASSWORD + SEED_TEACHER_PASSWORD.")
+    return locked
+
+
 def seed_initial_test_data():
-    """Initialise l'école et l'enseignant de test automatiquement au démarrage du serveur."""
-    # SessionLocal est directement disponible dans le même fichier
+    """
+    Comptes de TEST (écoles fictives + enseignant fictif).
+    - Désactivé par défaut. Pour l'activer : SEED_TEST_DATA=1 (jamais sur une base contenant de vraies écoles).
+    - Mots de passe : SEED_SCHOOL_PASSWORD et SEED_TEACHER_PASSWORD. Absents, ils sont générés au hasard et affichés dans les logs.
+    - Désactivé, les comptes de test encore protégés par l'ancien mot de passe public sont verrouillés.
+    """
     db: Session = SessionLocal()
     try:
-        # 1. Vérification et création de l'école fictive
-        test_school_id = "63017630119000999"
-        school = db.query(SchoolInformation).filter(SchoolInformation.school_id == test_school_id).first()
-        
-        if not school:
-            school = SchoolInformation(
-                school_id=test_school_id,
-                bulletin_seq_id="SEQ_TEST_001",
-                code="630119",
-                name_school="ÉCOLE DE TEST CLASSNET",
-                city="BUKAVU",
-                commune="IBANDA",
-                name_responsable="Directeur Gabriel",
-                num_tel="+243900000000",
-                adresse_physique="Avenue du Test N°12",
-                email="ecole.test@classnet.cd",
-                pass_word="123456"
-            )
-            db.add(school)
-            print("🏫 [SEED] École fictive de test créée avec succès !")
+        if os.getenv("SEED_TEST_DATA", "0") != "1":
+            lock_known_default_accounts(db)
+            return
 
-        test_school_id = "63017630119000656"
-        school = db.query(SchoolInformation).filter(SchoolInformation.school_id == test_school_id).first()
-        
-        if not school:
-            school = SchoolInformation(
-                school_id=test_school_id,
-                bulletin_seq_id="SEQ_TEST_002",
-                code="630119",
-                name_school="ÉCOLE DE TEST CLASSNET",
-                city="BUKAVU",
-                commune="IBANDA",
-                name_responsable="Directeur Gabriel",
-                num_tel="+243900000000",
-                adresse_physique="Avenue du Test N°12",
-                email="ecole.test@classnet.cd",
-                pass_word="123456"
-            )
-            db.add(school)
-            print("🏫 [SEED] École fictive de test créée avec succès !")
+        env_school_pw = os.getenv("SEED_SCHOOL_PASSWORD")
+        env_teacher_pw = os.getenv("SEED_TEACHER_PASSWORD")
+        school_pw = env_school_pw or secrets.token_urlsafe(9)
+        teacher_pw = env_teacher_pw or secrets.token_urlsafe(9)
+        generated = []
 
-        # 2. Vérification et création de l'enseignant fictif
-        test_teacher_email = "prof.kabila@gmail.com"
-        teacher = db.query(Teacher).filter(Teacher.email == test_teacher_email).first()
-        
+        for index, school_id in enumerate(SEED_SCHOOL_IDS, start=1):
+            school = db.query(SchoolInformation).filter(SchoolInformation.school_id == school_id).first()
+            if not school:
+                db.add(SchoolInformation(
+                    school_id=school_id,
+                    bulletin_seq_id=f"SEQ_TEST_00{index}",
+                    code="630119",
+                    name_school="ÉCOLE DE TEST CLASSNET",
+                    city="BUKAVU",
+                    commune="IBANDA",
+                    name_responsable="Directeur Gabriel",
+                    num_tel="+243900000000",
+                    adresse_physique="Avenue du Test N°12",
+                    email="ecole.test@classnet.cd",
+                    pass_word=hash_password(school_pw)
+                ))
+                if not env_school_pw:
+                    generated.append(f"école {school_id} : {school_pw}")
+                print(f"🏫 [SEED] École fictive de test créée : {school_id}")
+            elif env_school_pw:
+                school.pass_word = hash_password(env_school_pw)
+
+        teacher = db.query(Teacher).filter(Teacher.email == SEED_TEACHER_EMAIL).first()
         if not teacher:
-            teacher = Teacher(
+            db.add(Teacher(
                 full_name="Prof. Kabila Test",
-                email=test_teacher_email,
+                email=SEED_TEACHER_EMAIL,
                 school_name="ÉCOLE DE TEST CLASSNET",
-                password="profpassword123",  # Champ 'password' du modèle Teacher
+                password=hash_password(teacher_pw),
                 phone_number="+243810000000",
                 age=32,
                 teacher_code="PROF_TEST_001",
-                school_id=test_school_id,
+                school_id=SEED_SCHOOL_IDS[-1],
                 status="Actif"
-            )
-            db.add(teacher)
-            print("👨‍🏫 [SEED] Enseignant fictif de test créé avec succès !")
+            ))
+            if not env_teacher_pw:
+                generated.append(f"enseignant {SEED_TEACHER_EMAIL} : {teacher_pw}")
+            print("👨‍🏫 [SEED] Enseignant fictif de test créé.")
+        elif env_teacher_pw:
+            teacher.password = hash_password(env_teacher_pw)
 
         db.commit()
+        for line in generated:
+            print(f"🔑 [SEED] Mot de passe généré — {line}")
     except Exception as e:
         db.rollback()
         print(f"⚠️ [SEED] Erreur lors de la création des données de test : {e}")
     finally:
         db.close()
+
 
 seed_initial_test_data()
 # ==============================================================================================================================================================
