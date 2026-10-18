@@ -948,6 +948,21 @@
     </div>
 
 <script>
+// ---------------------------------------------------------------------------
+// PROTECTION XSS : tout texte saisi par un utilisateur est échappé avant d'être inséré dans du HTML.
+//  - safeHTML(valeur)  : pour le texte et les attributs HTML (échappe & < > " ')
+//  - jsArg(valeur)     : pour un argument JavaScript dans onclick="..." (littéral JSON, puis échappement HTML)
+// ---------------------------------------------------------------------------
+function safeHTML(value) {
+    return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function jsArg(value) {
+    return safeHTML(JSON.stringify(String(value == null ? '' : value)));
+}
+
+
 
 // Déclenchement et fermeture automatique du Splash Screen au chargement de l'application
 window.addEventListener('load', () => {
@@ -1250,6 +1265,16 @@ function switchAuthSubView(viewName) {
     document.getElementById('auth-view-otp').style.display = viewName === 'otp' ? 'block' : 'none';
 }
 
+// Jeton de session Cloud reçu à la connexion. Stocké à part de « db » pour ne jamais être renvoyé dans les synchronisations.
+function cloudAuthHeaders() {
+    const headers = { 'Content-Type': 'application/json' };
+    try {
+        const token = localStorage.getItem('classink_cloud_token');
+        if (token) headers['Authorization'] = 'Bearer ' + token;
+    } catch (e) { /* stockage indisponible */ }
+    return headers;
+}
+
 // BEGIN mergeServerDataIntoLocal
 // Fusion NON destructive : la réponse du serveur ne remplace jamais ce qui existe déjà en local
 // (le serveur reconstruit l'état uniquement à partir des notes déjà synchronisées).
@@ -1341,6 +1366,9 @@ async function handleLogin() {
 
         if (result.status && result.data) {
             db = mergeServerDataIntoLocal(db, result.data);
+            if (result.token) {
+                try { localStorage.setItem('classink_cloud_token', result.token); } catch (e) { /* stockage indisponible */ }
+            }
             db.user.isLoggedIn = true;
             saveDB();
             
@@ -1457,6 +1485,7 @@ document.getElementById('btn-login-header').addEventListener('click', () => {
     if (db.user.isLoggedIn) {
         if (confirm("Voulez-vous vous déconnecter ?")) {
             db.user.isLoggedIn = false;
+            try { localStorage.removeItem('classink_cloud_token'); } catch (e) { /* stockage indisponible */ }
             saveDB();
             updateLoginHeaderButton();
         }
@@ -1575,15 +1604,15 @@ function renderClassSelectors() {
         btn.onclick = () => syncSelectedClass(cls);
         classContainer.appendChild(btn);
 
-        selectStudentClass.innerHTML += `<option value="${cls}" ${cls === activeClass ? 'selected' : ''}>${classWithCourse}</option>`;
-        presenceSelectClass.innerHTML += `<option value="${cls}" ${cls === activeClass ? 'selected' : ''}>${classWithCourse}</option>`;
+        selectStudentClass.innerHTML += `<option value="${safeHTML(cls)}" ${cls === activeClass ? 'selected' : ''}>${safeHTML(classWithCourse)}</option>`;
+        presenceSelectClass.innerHTML += `<option value="${safeHTML(cls)}" ${cls === activeClass ? 'selected' : ''}>${safeHTML(classWithCourse)}</option>`;
     });
 
     const activeCourseList = (db.courses[activeClass] && db.courses[activeClass].length > 0) ? db.courses[activeClass].join(', ') : 'Aucun cours';
     
     // Titre de la classe active avec le bouton de suppression intégrée
     document.getElementById('current-class-title').innerHTML = activeClass 
-        ? `${activeClass} — Cours : ${activeCourseList} <button onclick="deleteClass('${activeClass}')" style="background:none; border:none; cursor:pointer; font-size:1.1rem; margin-left:8px;" title="Supprimer cette classe">🗑️</button>`
+        ? `${safeHTML(activeClass)} — Cours : ${safeHTML(activeCourseList)} <button onclick="deleteClass(${jsArg(activeClass)})" style="background:none; border:none; cursor:pointer; font-size:1.1rem; margin-left:8px;" title="Supprimer cette classe">🗑️</button>`
         : "Aucune classe";
 
     coursesDisplay.textContent = activeCourseList;
@@ -1600,7 +1629,7 @@ function renderPresenceCourseOptions() {
         courseSelect.innerHTML = '<option value="">-- Aucun cours disponible --</option>';
     } else {
         courses.forEach(c => {
-            courseSelect.innerHTML += `<option value="${c}">${c}</option>`;
+            courseSelect.innerHTML += `<option value="${safeHTML(c)}">${safeHTML(c)}</option>`;
         });
     }
 }
@@ -1651,7 +1680,7 @@ function renderGradesTables() {
     container.innerHTML = '';
 
     if (!activeClass || !db.students[activeClass] || db.students[activeClass].length === 0) {
-        container.innerHTML = `<div class="card empty-state">Aucun élève enregistré dans <strong>${activeClass || 'cette classe'}</strong>.</div>`;
+        container.innerHTML = `<div class="card empty-state">Aucun élève enregistré dans <strong>${safeHTML(activeClass || 'cette classe')}</strong>.</div>`;
         if (courseSelect) courseSelect.innerHTML = '<option value="">-- Aucun cours --</option>';
         return;
     }
@@ -1662,7 +1691,7 @@ function renderGradesTables() {
         courseSelect.innerHTML = '';
         classCourses.forEach(c => {
             const selected = (db.activeCourseFilter && db.activeCourseFilter[activeClass] === c) ? 'selected' : '';
-            courseSelect.innerHTML += `<option value="${c}" ${selected}>${c}</option>`;
+            courseSelect.innerHTML += `<option value="${safeHTML(c)}" ${selected}>${safeHTML(c)}</option>`;
         });
     }
 
@@ -1700,12 +1729,12 @@ function renderGradesTables() {
 
         let tableHTML = `
             <div class="card-header-toggle">
-                <h4 style="color: var(--primary);">${periodLabels[pKey]} <small style="font-weight:normal; color:var(--text-muted);">(${selectedCourse})</small></h4>
-                <button class="btn-action" onclick="togglePeriodVisibility('${pKey}')">
+                <h4 style="color: var(--primary);">${periodLabels[pKey]} <small style="font-weight:normal; color:var(--text-muted);">(${safeHTML(selectedCourse)})</small></h4>
+                <button class="btn-action" onclick="togglePeriodVisibility(${jsArg(pKey)})">
                     ${isVisible === 'block' ? '👁️ Masquer' : '👁️ Afficher'}
                 </button>
             </div>
-            <div id="period-body-${pKey}" style="display: ${isVisible}; overflow-x: auto;">
+            <div id="period-body-${safeHTML(pKey)}" style="display: ${isVisible}; overflow-x: auto;">
                 <table>
                     <thead>
                         <tr>
@@ -1713,23 +1742,23 @@ function renderGradesTables() {
         
         // 📅 Affichage conditionnel de la date sous le titre du devoir
         evals.forEach(ev => {
-            const dateBadge = ev.date ? `<br><small style="color:var(--text-muted); font-weight:normal; font-size:0.75rem;">📅 ${ev.date}</small>` : '';
-            tableHTML += `<th style="text-align:center;">${ev.name}${dateBadge}<br><small style="color:var(--primary); font-weight:bold;">/${ev.max}</small></th>`;
+            const dateBadge = ev.date ? `<br><small style="color:var(--text-muted); font-weight:normal; font-size:0.75rem;">📅 ${safeHTML(ev.date)}</small>` : '';
+            tableHTML += `<th style="text-align:center;">${safeHTML(ev.name)}${dateBadge}<br><small style="color:var(--primary); font-weight:bold;">/${safeHTML(ev.max)}</small></th>`;
         });
 
         tableHTML += `
             <th style="text-align:center;">Total</th>
-            <th style="text-align:center; color: var(--success);">Moyenne (/${currentMaxBulletin})</th>
+            <th style="text-align:center; color: var(--success);">Moyenne (/${safeHTML(currentMaxBulletin)})</th>
         </tr></thead><tbody>`;
 
         if (filteredStudents.length === 0) {
-            tableHTML += `<tr><td colspan="${evals.length + 3}" style="text-align:center; color: var(--text-muted); padding: 12px;">🔍 Aucun élève ne correspond à "${searchTerm}"</td></tr>`;
+            tableHTML += `<tr><td colspan="${evals.length + 3}" style="text-align:center; color: var(--text-muted); padding: 12px;">🔍 Aucun élève ne correspond à "${safeHTML(searchTerm)}"</td></tr>`;
         } else {
             filteredStudents.forEach(st => {
                 let total = 0;
                 let maxTotal = 0;
 
-                tableHTML += `<tr><td><strong>${st.name}</strong></td>`;
+                tableHTML += `<tr><td><strong>${safeHTML(st.name)}</strong></td>`;
 
                 evals.forEach(ev => {
                     const gradeKey = `${st.id}_${ev.id}`;
@@ -1762,26 +1791,26 @@ function renderGradesTables() {
                     tableHTML += `
                         <td style="text-align:center;">
                             <input type="number" 
-                                   value="${gradeVal}" 
+                                   value="${safeHTML(gradeVal)}" 
                                    placeholder="-" 
-                                   min="0" max="${ev.max}"
+                                   min="0" max="${safeHTML(ev.max)}"
                                    style="${inputStyle}"
-                                   onchange="updateGrade('${st.id}', '${ev.id}', this.value, ${ev.max})">
+                                   onchange="updateGrade(${jsArg(st.id)}, ${jsArg(ev.id)}, this.value, ${Number(ev.max) || 0})">
                         </td>`;
                 });
 
                 const moyenneBulletin = maxTotal > 0 ? ((total / maxTotal) * currentMaxBulletin).toFixed(1) : "0.0";
 
                 tableHTML += `
-                    <td style="text-align:center; font-weight:bold; color:var(--primary);">${total}/${maxTotal}</td>
-                    <td style="text-align:center; font-weight:bold; color:var(--success);">${moyenneBulletin} / ${currentMaxBulletin}</td>
+                    <td style="text-align:center; font-weight:bold; color:var(--primary);">${safeHTML(total)}/${safeHTML(maxTotal)}</td>
+                    <td style="text-align:center; font-weight:bold; color:var(--success);">${safeHTML(moyenneBulletin)} / ${safeHTML(currentMaxBulletin)}</td>
                 </tr>`;
             });
         }
 
         tableHTML += `</tbody></table>
-            <button class="btn-action" style="margin-top: 10px; width: 100%;" onclick="addEvaluationColumn('${pKey}')">
-                + Ajouter évaluation pour ${selectedCourse}
+            <button class="btn-action" style="margin-top: 10px; width: 100%;" onclick="addEvaluationColumn(${jsArg(pKey)})">
+                + Ajouter évaluation pour ${safeHTML(selectedCourse)}
             </button>
         </div>`;
 
@@ -1813,7 +1842,7 @@ function openEditStudentsModal() {
                 <div class="form-group">
                     <label>NOM DE LA CLASSE</label>
                     <div style="display: flex; gap: 8px;">
-                        <input type="text" id="edit-class-name" value="${activeClass}">
+                        <input type="text" id="edit-class-name" value="${safeHTML(activeClass)}">
                         <button class="btn-primary" onclick="updateActiveClassName()">Renommer</button>
                     </div>
                 </div>
@@ -1821,7 +1850,7 @@ function openEditStudentsModal() {
                 <div class="form-group">
                     <label>COURS (Séparés par des virgules)</label>
                     <div style="display: flex; gap: 8px;">
-                        <input type="text" id="edit-class-courses" value="${(db.courses[activeClass] || []).join(', ')}">
+                        <input type="text" id="edit-class-courses" value="${safeHTML((db.courses[activeClass] || []).join(', '))}">
                         <button class="btn-primary" onclick="updateActiveClassCourses()">Mettre à jour</button>
                     </div>
                 </div>
@@ -1868,12 +1897,12 @@ function renderEditStudentsList() {
         html += `
             <tr>
                 <td style="padding: 4px;">
-                    <input type="text" value="${st.name}" 
+                    <input type="text" value="${safeHTML(st.name)}" 
                            style="width: 100%; padding: 6px; border-radius: 6px; border: 1px solid var(--border-color);"
-                           onchange="updateStudentName('${st.id}', this.value)">
+                           onchange="updateStudentName(${jsArg(st.id)}, this.value)">
                 </td>
                 <td style="width: 40px; text-align: center;">
-                    <button onclick="removeStudent('${st.id}')" style="background:none; border:none; cursor:pointer;" title="Supprimer cet élève">🗑️</button>
+                    <button onclick="removeStudent(${jsArg(st.id)})" style="background:none; border:none; cursor:pointer;" title="Supprimer cet élève">🗑️</button>
                 </td>
             </tr>
         `;
@@ -1921,7 +1950,7 @@ function renderCourseSummarySheet() {
     let html = `
         <div class="card" style="margin-top: 20px; border: 2px solid var(--primary);">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-                <h3 style="color: var(--primary);">📊 Fiche Récapitulative : ${selectedCourse} (${activeClass})</h3>
+                <h3 style="color: var(--primary);">📊 Fiche Récapitulative : ${safeHTML(selectedCourse)} (${safeHTML(activeClass)})</h3>
                 <button class="btn-action" onclick="document.getElementById('course-summary-sheet-container').innerHTML=''">✖ Masquer</button>
             </div>
             <div style="overflow-x: auto;">
@@ -2004,16 +2033,16 @@ function renderCourseSummarySheet() {
         html += `
             <tr>
                 <td>${index + 1}</td>
-                <td><strong>${st.name}</strong></td>
+                <td><strong>${safeHTML(st.name)}</strong></td>
                 <td style="text-align:center;">${periodMoyennes["P1"]}</td>
                 <td style="text-align:center;">${periodMoyennes["P2"]}</td>
                 <td style="text-align:center; font-weight:bold; color:var(--primary);">${periodMoyennes["EX1"]}</td>
-                <td style="text-align:center; font-weight:bold; background-color: rgba(0,0,0,0.02);">${hasSm1 ? sm1Val.toFixed(1) : "-"} / ${maxSM1}</td>
+                <td style="text-align:center; font-weight:bold; background-color: rgba(0,0,0,0.02);">${hasSm1 ? sm1Val.toFixed(1) : "-"} / ${safeHTML(maxSM1)}</td>
                 <td style="text-align:center;">${periodMoyennes["P3"]}</td>
                 <td style="text-align:center;">${periodMoyennes["P4"]}</td>
                 <td style="text-align:center; font-weight:bold; color:var(--primary);">${periodMoyennes["EX2"]}</td>
-                <td style="text-align:center; font-weight:bold; background-color: rgba(0,0,0,0.02);">${hasSm2 ? sm2Val.toFixed(1) : "-"} / ${maxSM2}</td>
-                <td style="text-align:center; font-weight:bold; color:var(--success); font-size:0.95rem;">${hasAnnuelData ? totalAnnuelVal.toFixed(1) : "0.0"} / ${maxAnnuel}</td>
+                <td style="text-align:center; font-weight:bold; background-color: rgba(0,0,0,0.02);">${hasSm2 ? sm2Val.toFixed(1) : "-"} / ${safeHTML(maxSM2)}</td>
+                <td style="text-align:center; font-weight:bold; color:var(--success); font-size:0.95rem;">${hasAnnuelData ? totalAnnuelVal.toFixed(1) : "0.0"} / ${safeHTML(maxAnnuel)}</td>
             </tr>
         `;
     });
@@ -2129,7 +2158,7 @@ function renderAttendanceList() {
     }
 
     let html = `<p style="font-size: 0.8rem; margin-bottom: 10px; color: var(--text-muted);">
-                    Appel du <strong>${selectedDate}</strong> | Cours : <strong>${selectedCourse}</strong>
+                    Appel du <strong>${safeHTML(selectedDate)}</strong> | Cours : <strong>${safeHTML(selectedCourse)}</strong>
                 </p>
                 <table>
                     <thead>
@@ -2161,9 +2190,9 @@ function renderAttendanceList() {
 
         html += `
             <tr>
-                <td><strong>${st.name}</strong></td>
+                <td><strong>${safeHTML(st.name)}</strong></td>
                 <td style="text-align:center;">
-                    <select id="attendance-status-${st.id}" style="padding: 4px; border-radius: 6px;">
+                    <select id="attendance-status-${safeHTML(st.id)}" style="padding: 4px; border-radius: 6px;">
                         <option value="P" ${currentStatus === 'P' ? 'selected' : ''}>✅ Présent</option>
                         <option value="A" ${currentStatus === 'A' ? 'selected' : ''}>❌ Absent</option>
                         <option value="R" ${currentStatus === 'R' ? 'selected' : ''}>⚠️ Retard</option>
@@ -2264,7 +2293,7 @@ function exportPresenceToPDF() {
         printWin.document.write(`
             <html>
             <head>
-                <title>Rapport de Présence - ${selectedClass}</title>
+                <title>Rapport de Présence - ${safeHTML(selectedClass)}</title>
                 <style>
                     body { font-family: Arial, sans-serif; padding: 20px; color: #333; }
                     h2 { color: #2563EB; margin-bottom: 5px; }
@@ -2277,21 +2306,21 @@ function exportPresenceToPDF() {
                 </style>
             </head>
             <body>
-                <h2>📌 Rapport de Présence - ${db.user.school || 'Enfant du Monde'}</h2>
+                <h2>📌 Rapport de Présence - ${safeHTML(db.user.school || 'Enfant du Monde')}</h2>
                 <div class="meta">
-                    <strong>Enseignant :</strong> ${db.user.name} | <strong>Classe :</strong> ${selectedClass}<br>
-                    <strong>Cours :</strong> ${selectedCourse} | <strong>Date :</strong> ${selectedDate}
+                    <strong>Enseignant :</strong> ${safeHTML(db.user.name)} | <strong>Classe :</strong> ${safeHTML(selectedClass)}<br>
+                    <strong>Cours :</strong> ${safeHTML(selectedCourse)} | <strong>Date :</strong> ${safeHTML(selectedDate)}
                 </div>
                 <table>
                     <thead>
                         <tr><th>N°</th><th>Nom de l'Élève</th><th>Statut</th></tr>
                     </thead>
                     <tbody>
-                        ${tableRows.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td></tr>`).join('')}
+                        ${tableRows.map(r => `<tr><td>${r[0]}</td><td>${safeHTML(r[1])}</td><td>${r[2]}</td></tr>`).join('')}
                     </tbody>
                 </table>
                 <div class="stats">
-                    📊 Totaux : ${totalP} Présent(s) | ${totalA} Absent(s) | ${totalR} En retard
+                    📊 Totaux : ${safeHTML(totalP)} Présent(s) | ${safeHTML(totalA)} Absent(s) | ${safeHTML(totalR)} En retard
                 </div>
             </body>
             </html>
@@ -2445,9 +2474,14 @@ async function syncWithCloud() {
     try {
         const response = await fetch(`${targetUrl}/api/sync/classnet-app`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: cloudAuthHeaders(),
             body: JSON.stringify(db)
         });
+
+        if (response.status === 401 || response.status === 403) {
+            await showCustomAlert("🔒 Session Cloud absente ou expirée. Reconnectez-vous avec le bouton Connexion, puis relancez le Push On.");
+            return;
+        }
 
         const result = await response.json();
 
@@ -2768,7 +2802,7 @@ function renderQuizFormSelectors() {
     }
 
     db.classes.forEach(cls => {
-        classSelect.innerHTML += `<option value="${cls}" ${cls === activeClass ? 'selected' : ''}>${cls}</option>`;
+        classSelect.innerHTML += `<option value="${safeHTML(cls)}" ${cls === activeClass ? 'selected' : ''}>${safeHTML(cls)}</option>`;
     });
 
     const selectedClass = classSelect.value || db.classes[0];
@@ -2778,7 +2812,7 @@ function renderQuizFormSelectors() {
         courseSelect.innerHTML = '<option value="">-- Aucun cours --</option>';
     } else {
         courses.forEach(crs => {
-            courseSelect.innerHTML += `<option value="${crs}">${crs}</option>`;
+            courseSelect.innerHTML += `<option value="${safeHTML(crs)}">${safeHTML(crs)}</option>`;
         });
     }
 
@@ -2787,7 +2821,7 @@ function renderQuizFormSelectors() {
         courseSelect.innerHTML = '';
         const crsList = db.courses[currentCls] || [];
         crsList.forEach(crs => {
-            courseSelect.innerHTML += `<option value="${crs}">${crs}</option>`;
+            courseSelect.innerHTML += `<option value="${safeHTML(crs)}">${safeHTML(crs)}</option>`;
         });
     };
 }
@@ -2844,16 +2878,16 @@ function renderQuizList() {
             <div style="background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; margin-bottom: 10px;">
                 <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px;">
                     <div>
-                        <strong style="color: var(--primary); font-size: 0.95rem;">${q.title}</strong>
+                        <strong style="color: var(--primary); font-size: 0.95rem;">${safeHTML(q.title)}</strong>
                         <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">
-                            📚 ${q.class} | 📖 ${q.course} | 🎯 Note Max: ${q.maxScore} pts | 📅 ${q.createdAt}
+                            📚 ${safeHTML(q.class)} | 📖 ${safeHTML(q.course)} | 🎯 Note Max: ${safeHTML(q.maxScore)} pts | 📅 ${safeHTML(q.createdAt)}
                         </div>
                     </div>
-                    <button onclick="deleteQuiz('${q.id}')" style="background:none; border:none; cursor:pointer; font-size:1rem;" title="Supprimer">🗑️</button>
+                    <button onclick="deleteQuiz(${jsArg(q.id)})" style="background:none; border:none; cursor:pointer; font-size:1rem;" title="Supprimer">🗑️</button>
                 </div>
-                <pre style="white-space: pre-wrap; font-family: inherit; font-size: 0.82rem; background: var(--card-bg); padding: 8px; border-radius: 6px; border: 1px solid var(--border-color); max-height: 120px; overflow-y: auto; margin: 8px 0;">${q.textContent}</pre>
+                <pre style="white-space: pre-wrap; font-family: inherit; font-size: 0.82rem; background: var(--card-bg); padding: 8px; border-radius: 6px; border: 1px solid var(--border-color); max-height: 120px; overflow-y: auto; margin: 8px 0;">${safeHTML(q.textContent)}</pre>
                 <div style="display: flex; gap: 8px; justify-content: flex-end;">
-                    <button class="btn-action" onclick="printQuiz('${q.id}')" style="font-size:0.75rem; padding: 4px 10px;">🖨️ Imprimer / Exporter</button>
+                    <button class="btn-action" onclick="printQuiz(${jsArg(q.id)})" style="font-size:0.75rem; padding: 4px 10px;">🖨️ Imprimer / Exporter</button>
                 </div>
             </div>
         `;
@@ -2882,7 +2916,7 @@ function printQuiz(quizId) {
         return;
     }
 
-    const htmlContent = '<html><head><title>' + quiz.title + '</title>' +
+    const htmlContent = '<html><head><title>' + safeHTML(quiz.title) + '</title>' +
         '<style>' +
         'body { font-family: Arial, sans-serif; padding: 30px; color: #000; line-height: 1.5; }' +
         '.header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }' +
@@ -2890,11 +2924,11 @@ function printQuiz(quizId) {
         '.content { font-size: 1rem; white-space: pre-wrap; }' +
         '.footer { margin-top: 50px; text-align: right; font-style: italic; font-size: 0.8rem; }' +
         '</style></head><body>' +
-        '<div class="header"><h2>ÉCOLE : ' + (db.user.school || 'Enfant du Monde') + '</h2><h3>EVALUATION DE : ' + quiz.course.toUpperCase() + '</h3></div>' +
-        '<div class="meta"><span>Nom de l\'élève : _______________________</span><span>Classe : ' + quiz.class + '</span><span>Max : /' + quiz.maxScore + ' pts</span></div><hr>' +
-        '<h4 style="text-align: center;">' + quiz.title + '</h4>' +
-        '<div class="content">' + quiz.textContent + '</div>' +
-        '<div class="footer">Class-Ink App - Prof. ' + db.user.name + '</div>' +
+        '<div class="header"><h2>ÉCOLE : ' + safeHTML(db.user.school || 'Enfant du Monde') + '</h2><h3>EVALUATION DE : ' + safeHTML(quiz.course.toUpperCase()) + '</h3></div>' +
+        '<div class="meta"><span>Nom de l\'élève : _______________________</span><span>Classe : ' + safeHTML(quiz.class) + '</span><span>Max : /' + safeHTML(quiz.maxScore) + ' pts</span></div><hr>' +
+        '<h4 style="text-align: center;">' + safeHTML(quiz.title) + '</h4>' +
+        '<div class="content">' + safeHTML(quiz.textContent) + '</div>' +
+        '<div class="footer">Class-Ink App - Prof. ' + safeHTML(db.user.name) + '</div>' +
         '</body></html>';
 
     printWindow.document.open();
@@ -3038,29 +3072,8 @@ async function triggerAdminLock() {
     }
 }
 
-function verifyAndSaveProfile() {
-    const currentPass = db.user.password;
-    db.user.password="123456"
-    const inputPass = prompt("🔒 Sécurité ClassNet : Veuillez entrer votre mot de passe local pour valider les modifications :");
-    
-    if (inputPass === currentPass) {
-        // Enregistrement des anciennes variables
-        db.user.name = document.getElementById('setting-user-name').value;
-        db.user.school = document.getElementById('setting-school-id').value;
-        db.user.password = document.getElementById('setting-user-pass').value;
-        
-        // Enregistrement des nouvelles variables
-        db.user.phone = document.getElementById('setting-user-phone')?.value || "";
-        db.user.age = document.getElementById('setting-user-age')?.value || "";
-        db.user.schoolCode = document.getElementById('setting-school-code')?.value || "";
-        
-        saveDB();
-        updateLoginHeaderButton();
-        alert("✅ Vos informations personnelles ont été mises à jour avec succès !");
-    } else if (inputPass !== null) {
-        alert("❌ Mot de passe incorrect. Les modifications ont été annulées.");
-    }
-}
+// (Ancienne version de verifyAndSaveProfile supprimée : elle était remplacée par la version asynchrone plus bas
+// et remettait le mot de passe local à « 123456 » avant de le demander.)
 
 function updateActiveClassName() {
     const newName = document.getElementById('edit-class-name').value.trim();
@@ -3412,8 +3425,8 @@ function sendAdminMessage() {
 
     chatWindow.innerHTML += `
         <div style="background: rgba(109, 40, 217, 0.1); padding: 8px 10px; border-radius: 8px; border: 1px solid var(--primary); font-size: 0.8rem; align-self: flex-end; max-width: 85%;">
-            <strong style="color: var(--primary);">Moi :</strong> ${text}
-            <div style="font-size: 0.65rem; color: var(--text-muted); text-align: right; margin-top: 2px;">${time}</div>
+            <strong style="color: var(--primary);">Moi :</strong> ${safeHTML(text)}
+            <div style="font-size: 0.65rem; color: var(--text-muted); text-align: right; margin-top: 2px;">${safeHTML(time)}</div>
         </div>
     `;
     input.value = '';
