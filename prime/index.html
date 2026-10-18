@@ -1720,6 +1720,21 @@ body {
          SCRIPT JAVASCRIPT - LOGIQUE CLASSNET P COMPLÈTE
          ========================================================================== -->
     <script>
+// ---------------------------------------------------------------------------
+// PROTECTION XSS : tout texte saisi par un utilisateur est échappé avant d'être inséré dans du HTML.
+//  - safeHTML(valeur)  : pour le texte et les attributs HTML (échappe & < > " ')
+//  - jsArg(valeur)     : pour un argument JavaScript dans onclick="..." (littéral JSON, puis échappement HTML)
+// ---------------------------------------------------------------------------
+function safeHTML(value) {
+    return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function jsArg(value) {
+    return safeHTML(JSON.stringify(String(value == null ? '' : value)));
+}
+
+
 
         // --- CRYPT PROTOCOLE DE SÉCURITÉ ---
         document.addEventListener('keydown', (e) => {
@@ -1750,7 +1765,7 @@ body {
             school: {
                 name: "ENFANT DU MONDE",
                 id: "63017630119000656",
-                code: "123456",
+                code: "630119",
                 city: "BUKAVU",
                 commune: "IBANDA"
             },
@@ -1796,8 +1811,6 @@ body {
         };
 
         let appState = JSON.parse(localStorage.getItem('classnet_p_db')) || defaultState;
-        appState.school.code = '630119';
-        appState.school.id = '63017630119000656';
 
         // Patch de sécurité pour les anciennes versions stockées en local
         if (!appState.teachers) appState.teachers = defaultState.teachers;
@@ -1815,7 +1828,7 @@ body {
             if (!str) str = "";
             const chars = str.toString().replace(/[^0-9A-Za-z]/g, '').split('');
             return `<div class="digit-group">` + 
-                chars.map(c => `<div class="digit-box">${c}</div>`).join('') + 
+                chars.map(c => `<div class="digit-box">${safeHTML(c)}</div>`).join('') + 
                 `</div>`;
         }
 
@@ -1910,7 +1923,7 @@ body {
                     const sorted = [...studentTotals].sort((a, b) => b[key] - a[key]);
                     const rank = sorted.findIndex(s => s.id === studentId) + 1;
                     const suffix = (rank === 1) ? (sexe === 'F' ? 'ère' : 'er') : 'ème';
-                    return `${rank}<sup>${suffix}</sup> / ${totalStudentsCount}`;
+                    return `${safeHTML(rank)}<sup>${safeHTML(suffix)}</sup> / ${safeHTML(totalStudentsCount)}`;
                 };
 
                 return {
@@ -1954,7 +1967,7 @@ body {
                 const catCourses = classCourses.filter(c => c.category === cat);
                 if (catCourses.length > 0) {
                     const trCat = document.createElement('tr');
-                    trCat.innerHTML = `<td colspan="15" class="cat-header">${cat.toUpperCase()}</td>`;
+                    trCat.innerHTML = `<td colspan="15" class="cat-header">${safeHTML(cat.toUpperCase())}</td>`;
                     tbody.appendChild(trCat);
 
                     let subMaxP1 = 0, subMaxP2 = 0, subMaxEx1 = 0, subMaxS1 = 0;
@@ -1988,21 +2001,21 @@ body {
 
                         const tr = document.createElement('tr');
                         tr.innerHTML = `
-                            <td class="course-name" style="text-align:left;">${crs.name}</td>
-                            <td>${mPer}</td>
-                            <td contenteditable="true" class="edit-grade" data-key="${gradeKey}" data-field="p1">${g.p1}</td>
-                            <td contenteditable="true" class="edit-grade" data-key="${gradeKey}" data-field="p2">${g.p2}</td>
-                            <td>${mEx}</td>
-                            <td contenteditable="true" class="edit-grade" data-key="${gradeKey}" data-field="ex1">${g.ex1}</td>
-                            <td class="calc-cell">${tS1}</td>
-                            <td>${mPer}</td>
-                            <td contenteditable="true" class="edit-grade" data-key="${gradeKey}" data-field="p3">${g.p3}</td>
-                            <td contenteditable="true" class="edit-grade" data-key="${gradeKey}" data-field="p4">${g.p4}</td>
-                            <td>${mEx}</td>
-                            <td contenteditable="true" class="edit-grade" data-key="${gradeKey}" data-field="ex2">${g.ex2}</td>
-                            <td class="calc-cell">${tS2}</td>
-                            <td class="calc-cell">${mTG}</td>
-                            <td class="calc-cell" style="font-weight:bold;">${tg}</td>
+                            <td class="course-name" style="text-align:left;">${safeHTML(crs.name)}</td>
+                            <td>${safeHTML(mPer)}</td>
+                            <td contenteditable="true" class="edit-grade" data-key="${safeHTML(gradeKey)}" data-field="p1">${safeHTML(g.p1)}</td>
+                            <td contenteditable="true" class="edit-grade" data-key="${safeHTML(gradeKey)}" data-field="p2">${safeHTML(g.p2)}</td>
+                            <td>${safeHTML(mEx)}</td>
+                            <td contenteditable="true" class="edit-grade" data-key="${safeHTML(gradeKey)}" data-field="ex1">${safeHTML(g.ex1)}</td>
+                            <td class="calc-cell">${safeHTML(tS1)}</td>
+                            <td>${safeHTML(mPer)}</td>
+                            <td contenteditable="true" class="edit-grade" data-key="${safeHTML(gradeKey)}" data-field="p3">${safeHTML(g.p3)}</td>
+                            <td contenteditable="true" class="edit-grade" data-key="${safeHTML(gradeKey)}" data-field="p4">${safeHTML(g.p4)}</td>
+                            <td>${safeHTML(mEx)}</td>
+                            <td contenteditable="true" class="edit-grade" data-key="${safeHTML(gradeKey)}" data-field="ex2">${safeHTML(g.ex2)}</td>
+                            <td class="calc-cell">${safeHTML(tS2)}</td>
+                            <td class="calc-cell">${safeHTML(mTG)}</td>
+                            <td class="calc-cell" style="font-weight:bold;">${safeHTML(tg)}</td>
                         `;
                         tbody.appendChild(tr);
                     });
@@ -2012,20 +2025,20 @@ body {
                     trSub.className = "subtotal-row";
                     trSub.innerHTML = `
                         <td class="course-name" style="text-align:left;"><strong>Sous-Total</strong></td>
-                        <td><strong>${subMaxP1}</strong></td>
-                        <td><strong>${subTotP1}</strong></td>
-                        <td><strong>${subTotP2}</strong></td>
-                        <td><strong>${subMaxEx1}</strong></td>
-                        <td><strong>${subTotEx1}</strong></td>
-                        <td class="calc-cell"><strong>${subTotS1} / ${subMaxS1}</strong></td>
-                        <td><strong>${subMaxP3}</strong></td>
-                        <td><strong>${subTotP3}</strong></td>
-                        <td><strong>${subTotP4}</strong></td>
-                        <td><strong>${subMaxEx2}</strong></td>
-                        <td><strong>${subTotEx2}</strong></td>
-                        <td class="calc-cell"><strong>${subTotS2} / ${subMaxS2}</strong></td>
-                        <td class="calc-cell"><strong>${subMaxTG}</strong></td>
-                        <td class="calc-cell"><strong>${subTotTG}</strong></td>
+                        <td><strong>${safeHTML(subMaxP1)}</strong></td>
+                        <td><strong>${safeHTML(subTotP1)}</strong></td>
+                        <td><strong>${safeHTML(subTotP2)}</strong></td>
+                        <td><strong>${safeHTML(subMaxEx1)}</strong></td>
+                        <td><strong>${safeHTML(subTotEx1)}</strong></td>
+                        <td class="calc-cell"><strong>${safeHTML(subTotS1)} / ${safeHTML(subMaxS1)}</strong></td>
+                        <td><strong>${safeHTML(subMaxP3)}</strong></td>
+                        <td><strong>${safeHTML(subTotP3)}</strong></td>
+                        <td><strong>${safeHTML(subTotP4)}</strong></td>
+                        <td><strong>${safeHTML(subMaxEx2)}</strong></td>
+                        <td><strong>${safeHTML(subTotEx2)}</strong></td>
+                        <td class="calc-cell"><strong>${safeHTML(subTotS2)} / ${safeHTML(subMaxS2)}</strong></td>
+                        <td class="calc-cell"><strong>${safeHTML(subMaxTG)}</strong></td>
+                        <td class="calc-cell"><strong>${safeHTML(subTotTG)}</strong></td>
                     `;
                     tbody.appendChild(trSub);
 
@@ -2055,59 +2068,59 @@ body {
             const summaryHTML = `
                 <tr class="summary-row main-max-row">
                     <td class="course-name" style="text-align:left;">MAXIMA GÉNÉRAUX</td>
-                    <td>${grandMaxP1}</td><td>-</td><td>-</td><td>${grandMaxEx1}</td><td>-</td><td class="calc-cell">${grandMaxS1}</td>
-                    <td>${grandMaxP3}</td><td>-</td><td>-</td><td>${grandMaxEx2}</td><td>-</td><td class="calc-cell">${grandMaxS2}</td>
-                    <td class="calc-cell">${grandMaxTG}</td><td>-</td>
+                    <td>${safeHTML(grandMaxP1)}</td><td>-</td><td>-</td><td>${safeHTML(grandMaxEx1)}</td><td>-</td><td class="calc-cell">${safeHTML(grandMaxS1)}</td>
+                    <td>${safeHTML(grandMaxP3)}</td><td>-</td><td>-</td><td>${safeHTML(grandMaxEx2)}</td><td>-</td><td class="calc-cell">${safeHTML(grandMaxS2)}</td>
+                    <td class="calc-cell">${safeHTML(grandMaxTG)}</td><td>-</td>
                 </tr>
                 <tr class="summary-row">
                     <td class="course-name" style="text-align:left;">TOTAUX OBTENUS</td>
-                    <td class="black-cell"></td><td>${grandTotP1}</td><td>${grandTotP2}</td><td class="black-cell"></td><td>${grandTotEx1}</td><td class="calc-cell">${grandTotS1}</td>
-                    <td class="black-cell"></td><td>${grandTotP3}</td><td>${grandTotP4}</td><td class="black-cell"></td><td>${grandTotEx2}</td><td class="calc-cell">${grandTotS2}</td>
-                    <td class="black-cell"></td><td class="calc-cell" style="font-weight:800;">${grandTotTG}</td>
+                    <td class="black-cell"></td><td>${safeHTML(grandTotP1)}</td><td>${safeHTML(grandTotP2)}</td><td class="black-cell"></td><td>${safeHTML(grandTotEx1)}</td><td class="calc-cell">${safeHTML(grandTotS1)}</td>
+                    <td class="black-cell"></td><td>${safeHTML(grandTotP3)}</td><td>${safeHTML(grandTotP4)}</td><td class="black-cell"></td><td>${safeHTML(grandTotEx2)}</td><td class="calc-cell">${safeHTML(grandTotS2)}</td>
+                    <td class="black-cell"></td><td class="calc-cell" style="font-weight:800;">${safeHTML(grandTotTG)}</td>
                 </tr>
                 <tr class="summary-row">
                     <td class="course-name" style="text-align:left;">POURCENTAGE</td>
-                    <td class="black-cell"></td><td>${pctP1}%</td><td>${pctP2}%</td><td class="black-cell"></td><td>${pctEx1}%</td><td class="calc-cell">${pctS1}%</td>
-                    <td class="black-cell"></td><td>${pctP3}%</td><td>${pctP4}%</td><td class="black-cell"></td><td>${pctEx2}%</td><td class="calc-cell">${pctS2}%</td>
-                    <td class="black-cell"></td><td class="calc-cell" style="font-weight:800; color:var(--primary-color);">${pctTG}%</td>
+                    <td class="black-cell"></td><td>${safeHTML(pctP1)}%</td><td>${safeHTML(pctP2)}%</td><td class="black-cell"></td><td>${safeHTML(pctEx1)}%</td><td class="calc-cell">${safeHTML(pctS1)}%</td>
+                    <td class="black-cell"></td><td>${safeHTML(pctP3)}%</td><td>${safeHTML(pctP4)}%</td><td class="black-cell"></td><td>${safeHTML(pctEx2)}%</td><td class="calc-cell">${safeHTML(pctS2)}%</td>
+                    <td class="black-cell"></td><td class="calc-cell" style="font-weight:800; color:var(--primary-color);">${safeHTML(pctTG)}%</td>
                 </tr>
                 <tr class="summary-row">
                     <td class="course-name" style="text-align:left;">PLACE / NBRE ÉLÈVES</td>
-                    <td class="black-cell"></td><td>${ranks.p1}</td><td>${ranks.p2}</td><td class="black-cell"></td><td>${ranks.ex1}</td><td class="calc-cell">${ranks.totS1}</td>
-                    <td class="black-cell"></td><td>${ranks.p3}</td><td>${ranks.p4}</td><td class="black-cell"></td><td>${ranks.ex2}</td><td class="calc-cell">${ranks.totS2}</td>
-                    <td class="black-cell"></td><td class="calc-cell" style="font-weight:800;">${ranks.tg}</td>
+                    <td class="black-cell"></td><td>${safeHTML(ranks.p1)}</td><td>${safeHTML(ranks.p2)}</td><td class="black-cell"></td><td>${safeHTML(ranks.ex1)}</td><td class="calc-cell">${safeHTML(ranks.totS1)}</td>
+                    <td class="black-cell"></td><td>${safeHTML(ranks.p3)}</td><td>${safeHTML(ranks.p4)}</td><td class="black-cell"></td><td>${safeHTML(ranks.ex2)}</td><td class="calc-cell">${safeHTML(ranks.totS2)}</td>
+                    <td class="black-cell"></td><td class="calc-cell" style="font-weight:800;">${safeHTML(ranks.tg)}</td>
                 </tr>
                 <tr class="summary-row">
                     <td class="course-name" style="text-align:left;">APPLICATION</td>
                     <td class="black-cell"></td>
-                    <td contenteditable="true" class="edit-beh" data-type="app" data-field="p1">${beh.app.p1}</td>
-                    <td contenteditable="true" class="edit-beh" data-type="app" data-field="p2">${beh.app.p2}</td>
+                    <td contenteditable="true" class="edit-beh" data-type="app" data-field="p1">${safeHTML(beh.app.p1)}</td>
+                    <td contenteditable="true" class="edit-beh" data-type="app" data-field="p2">${safeHTML(beh.app.p2)}</td>
                     <td class="black-cell"></td>
-                    <td contenteditable="true" class="edit-beh" data-type="app" data-field="ex1">${beh.app.ex1}</td>
-                    <td class="calc-cell">${beh.app.totS1}</td>
+                    <td contenteditable="true" class="edit-beh" data-type="app" data-field="ex1">${safeHTML(beh.app.ex1)}</td>
+                    <td class="calc-cell">${safeHTML(beh.app.totS1)}</td>
                     <td class="black-cell"></td>
-                    <td contenteditable="true" class="edit-beh" data-type="app" data-field="p3">${beh.app.p3}</td>
-                    <td contenteditable="true" class="edit-beh" data-type="app" data-field="p4">${beh.app.p4}</td>
+                    <td contenteditable="true" class="edit-beh" data-type="app" data-field="p3">${safeHTML(beh.app.p3)}</td>
+                    <td contenteditable="true" class="edit-beh" data-type="app" data-field="p4">${safeHTML(beh.app.p4)}</td>
                     <td class="black-cell"></td>
-                    <td contenteditable="true" class="edit-beh" data-type="app" data-field="ex2">${beh.app.ex2}</td>
-                    <td class="calc-cell">${beh.app.totS2}</td>
-                    <td class="black-cell"></td><td class="calc-cell">${beh.app.tg}</td>
+                    <td contenteditable="true" class="edit-beh" data-type="app" data-field="ex2">${safeHTML(beh.app.ex2)}</td>
+                    <td class="calc-cell">${safeHTML(beh.app.totS2)}</td>
+                    <td class="black-cell"></td><td class="calc-cell">${safeHTML(beh.app.tg)}</td>
                 </tr>
                 <tr class="summary-row">
                     <td class="course-name" style="text-align:left;">CONDUITE</td>
                     <td class="black-cell"></td>
-                    <td contenteditable="true" class="edit-beh" data-type="cond" data-field="p1">${beh.cond.p1}</td>
-                    <td contenteditable="true" class="edit-beh" data-type="cond" data-field="p2">${beh.cond.p2}</td>
+                    <td contenteditable="true" class="edit-beh" data-type="cond" data-field="p1">${safeHTML(beh.cond.p1)}</td>
+                    <td contenteditable="true" class="edit-beh" data-type="cond" data-field="p2">${safeHTML(beh.cond.p2)}</td>
                     <td class="black-cell"></td>
-                    <td contenteditable="true" class="edit-beh" data-type="cond" data-field="ex1">${beh.cond.ex1}</td>
-                    <td class="calc-cell">${beh.cond.totS1}</td>
+                    <td contenteditable="true" class="edit-beh" data-type="cond" data-field="ex1">${safeHTML(beh.cond.ex1)}</td>
+                    <td class="calc-cell">${safeHTML(beh.cond.totS1)}</td>
                     <td class="black-cell"></td>
-                    <td contenteditable="true" class="edit-beh" data-type="cond" data-field="p3">${beh.cond.p3}</td>
-                    <td contenteditable="true" class="edit-beh" data-type="cond" data-field="p4">${beh.cond.p4}</td>
+                    <td contenteditable="true" class="edit-beh" data-type="cond" data-field="p3">${safeHTML(beh.cond.p3)}</td>
+                    <td contenteditable="true" class="edit-beh" data-type="cond" data-field="p4">${safeHTML(beh.cond.p4)}</td>
                     <td class="black-cell"></td>
-                    <td contenteditable="true" class="edit-beh" data-type="cond" data-field="ex2">${beh.cond.ex2}</td>
-                    <td class="calc-cell">${beh.cond.totS2}</td>
-                    <td class="black-cell"></td><td class="calc-cell">${beh.cond.tg}</td>
+                    <td contenteditable="true" class="edit-beh" data-type="cond" data-field="ex2">${safeHTML(beh.cond.ex2)}</td>
+                    <td class="calc-cell">${safeHTML(beh.cond.totS2)}</td>
+                    <td class="black-cell"></td><td class="calc-cell">${safeHTML(beh.cond.tg)}</td>
                 </tr>
                 <tr class="summary-row">
                     <td class="course-name" style="text-align:left;">SIGNATURES TITULAIRE</td>
@@ -2192,12 +2205,12 @@ body {
             appState.teachers.forEach(teacher => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td><code>${teacher.uniqueId}</code></td>
-                    <td><strong>${teacher.name}</strong></td>
-                    <td>${teacher.subject}</td>
-                    <td><span class="status-badge">${teacher.status}</span></td>
+                    <td><code>${safeHTML(teacher.uniqueId)}</code></td>
+                    <td><strong>${safeHTML(teacher.name)}</strong></td>
+                    <td>${safeHTML(teacher.subject)}</td>
+                    <td><span class="status-badge">${safeHTML(teacher.status)}</span></td>
                     <td>
-                        <button class="btn-secondary" style="padding: 0.2rem 0.6rem; font-size: 0.75rem; background:#dc2626;" onclick="removeTeacher('${teacher.uniqueId}')">Retirer</button>
+                        <button class="btn-secondary" style="padding: 0.2rem 0.6rem; font-size: 0.75rem; background:#dc2626;" onclick="removeTeacher(${jsArg(teacher.uniqueId)})">Retirer</button>
                     </td>
                 `;
                 tbody.appendChild(tr);
@@ -2268,9 +2281,9 @@ body {
                     const tr = document.createElement('tr');
                     tr.className = 'clickable-row';
                     tr.innerHTML = `
-                        <td>${cls.name}</td>
-                        <td>${cls.titulaire}</td>
-                        <td>${count}</td>
+                        <td>${safeHTML(cls.name)}</td>
+                        <td>${safeHTML(cls.titulaire)}</td>
+                        <td>${safeHTML(count)}</td>
                     `;
                     tr.addEventListener('click', () => {
                         activeClassId = cls.id;
@@ -2352,16 +2365,16 @@ body {
 
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
-                        <td>${st.name} ${st.postname} ${st.prename}</td>
-                        <td>${g.p1}</td>
-                        <td>${g.p2}</td>
-                        <td>${g.ex1}</td>
-                        <td class="calc-cell">${totS1}</td>
-                        <td>${g.p3}</td>
-                        <td>${g.p4}</td>
-                        <td>${g.ex2}</td>
-                        <td class="calc-cell">${totS2}</td>
-                        <td class="calc-cell" style="color:var(--primary-color);">${tg} / ${maxTG}</td>
+                        <td>${safeHTML(st.name)} ${safeHTML(st.postname)} ${safeHTML(st.prename)}</td>
+                        <td>${safeHTML(g.p1)}</td>
+                        <td>${safeHTML(g.p2)}</td>
+                        <td>${safeHTML(g.ex1)}</td>
+                        <td class="calc-cell">${safeHTML(totS1)}</td>
+                        <td>${safeHTML(g.p3)}</td>
+                        <td>${safeHTML(g.p4)}</td>
+                        <td>${safeHTML(g.ex2)}</td>
+                        <td class="calc-cell">${safeHTML(totS2)}</td>
+                        <td class="calc-cell" style="color:var(--primary-color);">${safeHTML(tg)} / ${safeHTML(maxTG)}</td>
                     `;
                     tbody.appendChild(tr);
                 });
@@ -2416,11 +2429,11 @@ body {
 
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
-                        <td>${st.name} ${st.postname} ${st.prename}</td>
-                        <td>${totS1}</td>
-                        <td>${totS2}</td>
-                        <td>${tg} / ${maxTG}</td>
-                        <td>${pct}%</td>
+                        <td>${safeHTML(st.name)} ${safeHTML(st.postname)} ${safeHTML(st.prename)}</td>
+                        <td>${safeHTML(totS1)}</td>
+                        <td>${safeHTML(totS2)}</td>
+                        <td>${safeHTML(tg)} / ${safeHTML(maxTG)}</td>
+                        <td>${safeHTML(pct)}%</td>
                         <td><span class="${isSuccess ? 'badge-success' : 'badge-danger'}">${isSuccess ? 'Réussite' : 'Échec'}</span></td>
                     `;
                     tbody.appendChild(tr);
@@ -2480,20 +2493,21 @@ body {
                 const name = document.getElementById('name-student').value.trim();
                 const postname = document.getElementById('post-name-student').value.trim();
                 const prename = document.getElementById('pre-name-student').value.trim();
-                const sexe = document.getElementById('sexe-student').value.trim() || 'M';
+                const sexe = document.getElementById('sexe-student').value.trim().toUpperCase();
                 const bornDate = document.getElementById('born-date-student').value;
                 const bornWhere = document.getElementById('born-where-student').value.trim();
                 const permi = document.getElementById('number-permi-student').value.trim();
 
                 if (!name) return alert('Veuillez renseigner le nom de l\'élève.');
+                if (sexe !== 'M' && sexe !== 'F') return alert('Veuillez indiquer le sexe de l\'élève : M ou F.');
 
                 const newStudent = {
                     id: 's_' + Date.now(),
                     classId: activeClassId,
                     name, postname, prename, sexe,
-                    bornDate: bornDate || '2008-01-01',
-                    bornWhere: bornWhere || 'Bukavu',
-                    permi: permi || '763011900000'
+                    bornDate,
+                    bornWhere,
+                    permi
                 };
 
                 appState.students.push(newStudent);
@@ -2657,9 +2671,8 @@ body {
             /* 8. VERROUILLAGE ET INITIALISATION */
             const lockOverlay = document.getElementById('lock-screen-overlay');
             const unlockBtn = document.getElementById('unlockBtn');
-            if (unlockBtn) {
-                unlockBtn.addEventListener('click', () => lockOverlay.classList.add('hidden'));
-            }
+            // (Le déverrouillage avec vérification du mot de passe est enregistré dans le second bloc DOMContentLoaded,
+            // « 7. Déverrouillage Écran » : l'enregistrer aussi ici déverrouillait avec n'importe quel mot de passe.)
 
             document.getElementById('themeSelect').addEventListener('change', (e) => {
                 document.body.className = e.target.value === 'dark' ? 'theme-dark' : 'theme-light';
@@ -2829,7 +2842,7 @@ body {
                 const card = document.createElement('div');
                 card.className = 'settings-card';
                 card.innerHTML = `
-                    <h2>Cours ${idx + 1} : ${crs.name} | Prof. ${crs.titulaire}</h2>
+                    <h2>Cours ${idx + 1} : ${safeHTML(crs.name)} | Prof. ${safeHTML(crs.titulaire)}</h2>
                     <table class="data-table">
                         <thead>
                             <tr>
@@ -2840,7 +2853,7 @@ body {
                         <tbody>
                             ${students.map(s => `
                                 <tr>
-                                    <td><strong>${s.name} ${s.postname}</strong></td>
+                                    <td><strong>${safeHTML(s.name)} ${safeHTML(s.postname)}</strong></td>
                                     <td>
                                         <input type="checkbox" checked style="width: 18px; height: 18px;"> Présent(e)
                                     </td>
@@ -2856,7 +2869,7 @@ body {
             if(summaryBody) {
                 summaryBody.innerHTML = students.map(s => `
                     <tr>
-                        <td><strong>${s.name} ${s.postname} ${s.prename}</strong></td>
+                        <td><strong>${safeHTML(s.name)} ${safeHTML(s.postname)} ${safeHTML(s.prename)}</strong></td>
                         <td><span class="badge-success">Présent</span></td>
                         <td>Participation à tous les cours de la journée</td>
                     </tr>
@@ -2872,7 +2885,7 @@ body {
             appState.teachers.forEach(t => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td><strong>${t.name}</strong></td>
+                    <td><strong>${safeHTML(t.name)}</strong></td>
                     <td><input type="time" class="form-control" value="07:30" style="width: 120px;"></td>
                     <td><input type="time" class="form-control" value="12:30" style="width: 120px;"></td>
                     <td><button class="btn-primary" style="padding:0.3rem 0.6rem; font-size:0.8rem;" onclick="alert('Présence enregistrée !')">Sauvegarder</button></td>
@@ -2922,7 +2935,7 @@ body {
             card.className = 'salle-card';
             card.style.marginBottom = '0.8rem';
             card.innerHTML = `
-                <label><strong>Salle N°${count}</strong></label>
+                <label><strong>Salle N°${safeHTML(count)}</strong></label>
                 <div class="grid-2col" style="margin-top:0.5rem;">
                     <input type="number" class="form-control" placeholder="Nombre de Place dans la classe (ex: 28)">
                     <input type="number" class="form-control" placeholder="Nombre de Rangée (ex: 3)">
@@ -2945,10 +2958,10 @@ body {
             div.style.marginBottom = '0.8rem';
             div.innerHTML = `
                 <select class="form-control">
-                    ${appState.classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
+                    ${appState.classes.map(c => `<option value="${safeHTML(c.id)}">${safeHTML(c.name)}</option>`).join('')}
                 </select>
                 <select class="form-control">
-                    ${appState.courses.map(k => `<option value="${k.id}">${k.name}</option>`).join('')}
+                    ${appState.courses.map(k => `<option value="${safeHTML(k.id)}">${safeHTML(k.name)}</option>`).join('')}
                 </select>
                 <select class="form-control" style="grid-column: 1 / -1;">
                     <option>Examen session</option>
@@ -3010,9 +3023,9 @@ window.addTeacherHoraireConfig = function() {
     card.style.marginBottom = '1rem';
     card.innerHTML = `
         <div class="form-group">
-            <label>Enseignant N°${count}</label>
+            <label>Enseignant N°${safeHTML(count)}</label>
             <select class="form-control">
-                ${appState.teachers.map(t => `<option value="${t.uniqueId}">${t.name}</option>`).join('')}
+                ${appState.teachers.map(t => `<option value="${safeHTML(t.uniqueId)}">${safeHTML(t.name)}</option>`).join('')}
             </select>
         </div>
 
@@ -3162,11 +3175,11 @@ function renderTimeSlotsDynamic(heuresCount) {
         const row = document.createElement('div');
         row.className = 'grid-2col time-slot-row';
         row.innerHTML = `
-            <span><strong>${i}ème Heure</strong></span>
+            <span><strong>${safeHTML(i)}ème Heure</strong></span>
             <div style="display:flex; gap:0.5rem; align-items:center;">
-                <input type="time" class="form-control slot-start" value="${slot.start}">
+                <input type="time" class="form-control slot-start" value="${safeHTML(slot.start)}">
                 <span>à</span>
-                <input type="time" class="form-control slot-end" value="${slot.end}">
+                <input type="time" class="form-control slot-end" value="${safeHTML(slot.end)}">
             </div>
         `;
         container.appendChild(row);
@@ -3188,8 +3201,8 @@ window.renderTeacherAvailabilityGridCustom = function(containerElem, daysCount, 
             const isChecked = (savedState[key] !== undefined) ? savedState[key] : true;
             html += `
                 <label style="font-size:0.8rem; display:flex; align-items:center; gap:0.2rem; background:var(--bg-main); padding:0.2rem 0.5rem; border-radius:4px; border:1px solid var(--border-color);">
-                    <input type="checkbox" ${isChecked ? 'checked' : ''} class="pref-hour-check" data-day="${days[d]}" data-hour="${h}">
-                    ${h}H
+                    <input type="checkbox" ${isChecked ? 'checked' : ''} class="pref-hour-check" data-day="${days[d]}" data-hour="${safeHTML(h)}">
+                    ${safeHTML(h)}H
                 </label>`;
         }
         html += `</div></div>`;
@@ -3204,12 +3217,12 @@ function updateScheduleResultTables(joursCount, heuresCount) {
     
     const classHeader = document.getElementById('horClassTableHeader');
     if (classHeader) {
-        classHeader.innerHTML = `<th>Heures \\ Jours</th>` + days.map(d => `<th>${d}</th>`).join('');
+        classHeader.innerHTML = `<th>Heures \\ Jours</th>` + days.map(d => `<th>${safeHTML(d)}</th>`).join('');
     }
 
     const profHeader = document.getElementById('horTeacherTableHeader');
     if (profHeader) {
-        profHeader.innerHTML = `<th>Heures \\ Jours</th>` + days.map(d => `<th>${d}</th>`).join('');
+        profHeader.innerHTML = `<th>Heures \\ Jours</th>` + days.map(d => `<th>${safeHTML(d)}</th>`).join('');
     }
 }
 
@@ -3222,12 +3235,12 @@ function updateScheduleResultTables(joursCount, heuresCount) {
             appState.teachers.forEach(teacher => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td><code>${teacher.uniqueId}</code></td>
-                    <td><strong>${teacher.name}</strong></td>
-                    <td>${teacher.subject}</td>
-                    <td><span class="status-badge">${teacher.status}</span></td>
+                    <td><code>${safeHTML(teacher.uniqueId)}</code></td>
+                    <td><strong>${safeHTML(teacher.name)}</strong></td>
+                    <td>${safeHTML(teacher.subject)}</td>
+                    <td><span class="status-badge">${safeHTML(teacher.status)}</span></td>
                     <td>
-                        <button class="btn-secondary" style="padding: 0.2rem 0.6rem; font-size: 0.75rem; background:#dc2626;" onclick="removeTeacher('${teacher.uniqueId}')">Retirer</button>
+                        <button class="btn-secondary" style="padding: 0.2rem 0.6rem; font-size: 0.75rem; background:#dc2626;" onclick="removeTeacher(${jsArg(teacher.uniqueId)})">Retirer</button>
                     </td>
                 `;
                 tbody.appendChild(tr);
@@ -3277,80 +3290,9 @@ function updateScheduleResultTables(joursCount, heuresCount) {
                 });
             });
 
-            // 3. Sauvegarde d'un Élève
-            document.getElementById('saveStudentBtn').addEventListener('click', () => {
-                const name = document.getElementById('name-student').value.trim();
-                const postname = document.getElementById('post-name-student').value.trim();
-                const prename = document.getElementById('pre-name-student').value.trim();
-                const sexe = document.getElementById('sexe-student').value.trim().toUpperCase();
-                const bornDate = document.getElementById('born-date-student').value;
-                const bornWhere = document.getElementById('born-where-student').value.trim();
-                const permi = document.getElementById('number-permi-student').value.trim();
-
-                if (!name || !sexe) return alert("Le nom et le sexe sont obligatoires.");
-
-                const newStudent = {
-                    id: 's_' + Date.now(),
-                    classId: activeClassId,
-                    name, postname, prename, sexe, bornDate, bornWhere, permi
-                };
-
-                appState.students.push(newStudent);
-                saveState();
-                renderinterface('ajouter_eleve');
-                renderClassDetails(activeClassId);
-            });
-
-            // 4. Sauvegarde d'un Cours
-            document.getElementById('saveCourseBtn').addEventListener('click', () => {
-                const name = document.getElementById('name-added-cours').value.trim();
-                const maxPer = parseFloat(document.getElementById('max-per-cours').value) || 40;
-                const titulaire = document.getElementById('name-titulaire-added-cours').value.trim();
-                const category = document.getElementById('choix-categorie').value;
-
-                if (!name) return alert("Le nom du cours est obligatoire.");
-
-                const newCourse = {
-                    id: 'k_' + Date.now(),
-                    classId: activeClassId,
-                    name, maxPer, category, titulaire
-                };
-
-                appState.courses.push(newCourse);
-                saveState();
-                renderinterface('ajouter_cours');
-                renderClassDetails(activeClassId);
-            });
-
-            // 5. Sauvegarde d'une Classe
-            document.getElementById('saveClassBtn').addEventListener('click', () => {
-                const name = document.getElementById('name-added-class').value.trim();
-                const titulaire = document.getElementById('name-titulaire-added-class').value.trim();
-                const catInputs = document.querySelectorAll('#categoriesContainer .category-input');
-                const categories = Array.from(catInputs).map(i => i.value.trim()).filter(v => v !== '');
-
-                if (!name) return alert("Le nom de la classe est obligatoire.");
-
-                if (editingClassId) {
-                    const cls = appState.classes.find(c => c.id === editingClassId);
-                    if (cls) {
-                        cls.name = name;
-                        cls.titulaire = titulaire;
-                        cls.categories = categories.length ? categories : ['Général'];
-                    }
-                    editingClassId = null;
-                } else {
-                    appState.classes.push({
-                        id: 'c_' + Date.now(),
-                        name, titulaire,
-                        categories: categories.length ? categories : ['Général']
-                    });
-                }
-
-                saveState();
-                renderinterface('ajouter_classe');
-                renderClassesTable();
-            });
+            // (Les gestionnaires saveStudentBtn / saveCourseBtn / saveClassBtn sont déjà enregistrés plus haut,
+            // dans le premier bloc DOMContentLoaded : les enregistrer une seconde fois ici créait chaque
+            // élève, cours et classe en double, et dupliquait la classe à chaque modification.)
 
             // 6. Filtrage dynamique (Recherche Élèves)
             document.querySelectorAll('.search-input').forEach(input => {
@@ -3393,9 +3335,9 @@ function updateScheduleResultTables(joursCount, heuresCount) {
                 const tr = document.createElement('tr');
                 tr.className = 'clickable-row';
                 tr.innerHTML = `
-                    <td><strong>${cls.name}</strong></td>
-                    <td>${cls.titulaire}</td>
-                    <td><span class="id-badge">${count} élèves</span></td>
+                    <td><strong>${safeHTML(cls.name)}</strong></td>
+                    <td>${safeHTML(cls.titulaire)}</td>
+                    <td><span class="id-badge">${safeHTML(count)} élèves</span></td>
                 `;
                 tr.addEventListener('click', () => {
                     activeClassId = cls.id;
@@ -3481,11 +3423,24 @@ function updateScheduleResultTables(joursCount, heuresCount) {
             }
         }
 
+        // Jeton de session Cloud reçu au chargement de l'école. Stocké à part de appState pour ne jamais être renvoyé dans les synchronisations.
+        function cloudAuthHeaders() {
+            const headers = { 'Content-Type': 'application/json' };
+            try {
+                const token = localStorage.getItem('primeink_cloud_token');
+                if (token) headers['Authorization'] = 'Bearer ' + token;
+            } catch (e) { /* stockage indisponible */ }
+            return headers;
+        }
+
         // 1. Fonction de récupération et fusion des données enseignants
         async function fetchServerData() {
             const schoolId = appState.school.id;
             try {
-                const response = await fetch(`${API_BASE_URL}/api/primenet/sync/${schoolId}`);
+                const response = await fetch(`${API_BASE_URL}/api/primenet/sync/${schoolId}`, { headers: cloudAuthHeaders() });
+                if (response.status === 401 || response.status === 403) {
+                    throw new Error("Session absente ou expirée : rechargez d'abord les données de l'école avec le mot de passe.");
+                }
                 if (!response.ok) throw new Error("Erreur de connexion au serveur.");
                 
                 const rawResponse = await response.json();
@@ -3510,9 +3465,13 @@ function updateScheduleResultTables(joursCount, heuresCount) {
             try {
                 const response = await fetch(`${API_BASE_URL}/api/sync/primenet`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: cloudAuthHeaders(),
                     body: JSON.stringify(appState)
                 });
+                if (response.status === 401 || response.status === 403) {
+                    alert("🔒 Session absente ou expirée : rechargez d'abord les données de l'école avec le mot de passe.");
+                    return;
+                }
                 const res = await response.json();
                 if (res.status) {
                     alert("✅ " + res.message);
@@ -3533,17 +3492,20 @@ function updateScheduleResultTables(joursCount, heuresCount) {
                 const response = await fetch(`${API_BASE_URL}/api/primenet/load`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ school_id: '63017630119000656', password: '630119' })
+                    body: JSON.stringify({ school_id: schoolId, password: password })
                 });
                 
                 const result = await response.json();
                 if (result.status && result.data) {
+                    if (result.token) {
+                        try { localStorage.setItem('primeink_cloud_token', result.token); } catch (e) { /* stockage indisponible */ }
+                    }
                     appState = result.data;
                     saveState();
                     alert("✅ Base de données de l'école chargée avec succès !");
                     location.reload(); // Recharge pour appliquer le nouvel état
                 } else {
-                    alert("❌ " + (result.detail || "Impossible de charger les données."));
+                    alert("❌ " + (result.detail || result.message || "Impossible de charger les données."));
                 }
             } catch (err) {
                 alert("❌ Erreur réseau lors du chargement : " + err.message);
@@ -3604,7 +3566,7 @@ function updateScheduleResultTables(joursCount, heuresCount) {
                     lockBox.innerHTML = `
                         <div class="lock-icon">⚠️</div>
                         <h3>Logiciel Verrouillé</h3>
-                        <p style="margin-bottom: 1rem; color: var(--danger-color);">${message}</p>
+                        <p style="margin-bottom: 1rem; color: var(--danger-color);">${safeHTML(message)}</p>
                         <div class="form-group">
                             <input type="text" id="lockActivationInput" class="form-control" placeholder="Entrez le code CRYPT">
                         </div>
@@ -3624,8 +3586,74 @@ function updateScheduleResultTables(joursCount, heuresCount) {
         }
 
         // Lancement automatique du contrôle au chargement du DOM
+        // BEGIN removeDoubleCreatedEntries
+        // Nettoyage des doublons créés par l'ancien bug (chaque clic sur « Enregistrer » exécutait deux gestionnaires).
+        // Règle prudente : on ne supprime que le SECOND élément d'une paire consécutive de même signature,
+        // créée à moins de 50 ms d'écart (ou avec le même identifiant), et seulement si son identifiant
+        // n'est utilisé nulle part ailleurs (notes, classe d'un élève, etc.).
+        function removeDoubleCreatedEntries(state, dryRun) {
+            const stamp = (id) => { const m = /_(\d{10,})$/.exec(String(id || '')); return m ? Number(m[1]) : NaN; };
+            const norm = (v) => String(v == null ? '' : v).trim().toLowerCase();
+            const signature = {
+                students: s => [s.classId, norm(s.name), norm(s.postname), norm(s.prename)].join('|'),
+                courses: c => [c.classId, norm(c.name)].join('|'),
+                classes: c => norm(c.name)
+            };
+            const removed = { classes: 0, students: 0, courses: 0 };
+            const skipped = { classes: 0, students: 0, courses: 0 };
+
+            ['classes', 'students', 'courses'].forEach(kind => {
+                const list = state[kind] || [];
+                const otherData = JSON.stringify({ ...state, classes: [], students: [], courses: [] });
+                const isReferenced = (id) => {
+                    if (otherData.includes(id)) return true;
+                    if (kind === 'classes') {
+                        return (state.students || []).some(s => s.classId === id) || (state.courses || []).some(c => c.classId === id);
+                    }
+                    return false;
+                };
+                const kept = [];
+                list.forEach(item => {
+                    const prev = kept[kept.length - 1];
+                    if (prev && signature[kind](prev) === signature[kind](item)) {
+                        const sameId = prev.id === item.id;
+                        const created_together = Math.abs(stamp(prev.id) - stamp(item.id)) <= 50;
+                        if (sameId || created_together) {
+                            if (sameId || !isReferenced(item.id)) { removed[kind]++; return; }
+                            skipped[kind]++;
+                        }
+                    }
+                    kept.push(item);
+                });
+                if (!dryRun) state[kind] = kept;
+            });
+            return { removed, skipped };
+        }
+        // END removeDoubleCreatedEntries
+
+        function offerDuplicateCleanup() {
+            try {
+                const preview = removeDoubleCreatedEntries(appState, true);
+                const r = preview.removed;
+                if (r.classes + r.students + r.courses === 0) return;
+                const message = "Doublons détectés (créés par l'ancien bug d'enregistrement) :\n"
+                    + "- " + r.classes + " classe(s)\n- " + r.students + " élève(s)\n- " + r.courses + " cours\n\n"
+                    + "Les supprimer maintenant ?\n(Seuls les doublons sans notes ni données liées sont supprimés.)";
+                if (!confirm(message)) return;
+                removeDoubleCreatedEntries(appState, false);
+                saveState();
+                if (typeof renderClassesTable === 'function') renderClassesTable();
+                if (typeof activeClassId !== 'undefined' && activeClassId && typeof renderClassDetails === 'function') {
+                    renderClassDetails(activeClassId);
+                }
+            } catch (e) {
+                console.error('Nettoyage des doublons ignoré :', e);
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             checkProductActivation();
+            offerDuplicateCleanup();
         });
 
         console.log(defaultState)
@@ -3639,7 +3667,7 @@ window.addTimeSlotRow = function() {
     const row = document.createElement('div');
     row.className = 'grid-2col time-slot-row';
     row.innerHTML = `
-        <span><strong>${count}ème Heure</strong></span>
+        <span><strong>${safeHTML(count)}ème Heure</strong></span>
         <div style="display:flex; gap:0.5rem; align-items:center;">
             <input type="time" class="form-control slot-start">
             <span>à</span>
@@ -3662,8 +3690,8 @@ window.renderTeacherAvailabilityGrid = function(containerElem, daysCount, hoursC
         for (let h = 1; h <= hoursCount; h++) {
             html += `
                 <label style="font-size:0.8rem; display:flex; align-items:center; gap:0.2rem;">
-                    <input type="checkbox" checked class="pref-hour-check" data-day="${days[d]}" data-hour="${h}">
-                    ${h}H
+                    <input type="checkbox" checked class="pref-hour-check" data-day="${days[d]}" data-hour="${safeHTML(h)}">
+                    ${safeHTML(h)}H
                 </label>`;
         }
         html += `</div></div>`;
@@ -3694,11 +3722,11 @@ function renderDeliberationView(studentId) {
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td><strong>${crs.name}</strong> ${crs.category ? `<small>(${crs.category})</small>` : ''}</td>
-            <td>${totalMax}</td>
-            <td><strong>${totObtenu}</strong></td>
-            <td><input type="number" min="0" max="${totObtenu}" class="form-control" id="pts_deduct_${crs.id}" style="width: 100px;" value="0"></td>
-            <td><button class="btn-primary" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;" onclick="openTargetCourseModal('${crs.id}')">Choisir le cours</button></td>
+            <td><strong>${safeHTML(crs.name)}</strong> ${crs.category ? `<small>(${safeHTML(crs.category)})</small>` : ''}</td>
+            <td>${safeHTML(totalMax)}</td>
+            <td><strong>${safeHTML(totObtenu)}</strong></td>
+            <td><input type="number" min="0" max="${safeHTML(totObtenu)}" class="form-control" id="pts_deduct_${safeHTML(crs.id)}" style="width: 100px;" value="0"></td>
+            <td><button class="btn-primary" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;" onclick="openTargetCourseModal(${jsArg(crs.id)})">Choisir le cours</button></td>
         `;
         tbody.appendChild(tr);
     });
@@ -3716,7 +3744,7 @@ function openTargetCourseModal(sourceCourseId) {
         btn.className = 'btn-secondary';
         btn.style.textAlign = 'left';
         btn.style.padding = '0.7rem 1rem';
-        btn.innerHTML = `<strong>${crs.name}</strong> <span>| ${crs.category || "Cours d'option"}</span>`;
+        btn.innerHTML = `<strong>${safeHTML(crs.name)}</strong> <span>| ${safeHTML(crs.category || "Cours d'option")}</span>`;
         btn.onclick = () => selectTargetCourse(crs.id);
         container.appendChild(btn);
     });
