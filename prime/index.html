@@ -126,20 +126,6 @@ body {
     break-after: page;
 }
 
-@media print {
-    body * {
-        visibility: hidden;
-    }
-    #pdfExportContainer, #pdfExportContainer * {
-        visibility: visible;
-    }
-    #pdfExportContainer {
-        position: absolute;
-        left: 0;
-        top: 0;
-        width: 100%;
-    }
-}
 
 .llink-header {
     display: flex;
@@ -940,6 +926,108 @@ body {
     text-align: center;
 }
 
+
+/* ==========================================================================
+   BULLETIN : modèles ClassInk / officiel IGE-PS-010, impression A4 / A3 paysage
+   ========================================================================== */
+.bp-toolbar { display: flex; flex-wrap: wrap; gap: 0.6rem 1rem; align-items: center; margin-bottom: 0.8rem; }
+.bp-toolbar label { font-size: 0.8rem; font-weight: 600; display: flex; align-items: center; gap: 0.35rem; }
+.bp-toolbar select { padding: 0.3rem 0.5rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary); font-size: 0.8rem; }
+.bp-warn { font-size: 0.78rem; color: #b45309; font-weight: 600; }
+.bp-screen-wrap { flex: 1; min-width: 0; }
+.bp-screen-frame { position: relative; overflow: hidden; background: #fff; }
+
+.bp-page { width: 198mm; box-sizing: border-box; padding: 3mm; background: #fff; color: #000; font-family: Arial, Helvetica, sans-serif; font-size: 6.4pt; line-height: 1.15; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.bp-page * { box-sizing: border-box; }
+.bp-head { display: flex; align-items: center; justify-content: space-between; border-bottom: 0.4mm solid #000; padding-bottom: 1mm; margin-bottom: 1mm; }
+.bp-head-title { text-align: center; font-weight: bold; font-size: 8.5pt; line-height: 1.2; }
+.bp-flag { width: 15mm; height: 11mm; border: 0.2mm solid #000; display: block; }
+.bp-armoiries { width: 15mm; height: 15mm; object-fit: contain; display: block; }
+.bp-armoiries-empty { width: 15mm; height: 15mm; border: 0.2mm dashed #94a3b8; }
+.bp-body { display: flex; gap: 3mm; align-items: stretch; }
+.bp-main { width: 151mm; flex: none; }
+.bp-side { width: 38mm; flex: none; border-left: 0.4mm solid #000; padding-left: 1.5mm; display: flex; flex-direction: column; font-size: 5.8pt; }
+.bp-idbar { display: flex; align-items: center; gap: 2mm; border: 0.25mm solid #000; padding: 0.5mm 1.5mm; margin-bottom: 1mm; font-weight: bold; font-size: 7pt; }
+.bp-info { display: grid; grid-template-columns: 1fr 1fr; gap: 0.3mm 2mm; border: 0.25mm solid #000; padding: 0.8mm 1.2mm; margin-bottom: 1mm; font-size: 5.8pt; }
+.bp-info > div { display: flex; align-items: center; gap: 1mm; min-height: 3.9mm; }
+.bp-title { text-align: center; font-weight: bold; font-size: 7pt; text-transform: uppercase; margin: 0.8mm 0 1.2mm; }
+.bp-page .digit-box { width: 3.3mm; height: 3.9mm; font-size: 5.6pt; border-width: 0.2mm; }
+.bp-page .digit-group { gap: 0.3mm; }
+
+.bp-table { width: 151mm; border-collapse: collapse; table-layout: fixed; }
+.bp-table th, .bp-table td { border: 0.25mm solid #000; padding: 0.1mm 0.3mm; text-align: center; vertical-align: middle; height: 3.7mm; font-size: 5.9pt; overflow: hidden; }
+.bp-table th { background: #d9d9d9; font-weight: bold; text-transform: uppercase; font-size: 4.8pt; }
+.bp-table th.bp-th-name { font-size: 7pt; }
+.bp-table td.bp-name { text-align: left; padding-left: 1mm; }
+.bp-table td.bp-domain { background: #bfbfbf; font-weight: bold; text-transform: uppercase; text-align: center; font-size: 6.8pt; }
+.bp-table td.bp-sub { background: #ececec; font-weight: bold; text-align: center; }
+.bp-table tr.bp-subtotal td { font-weight: bold; background: #f2f2f2; }
+.bp-table td.bp-max { color: #222; }
+.bp-table td.bp-calc { background: #f7f7f7; font-weight: bold; }
+.bp-table td.bp-strong { font-weight: bold; }
+.bp-table td.bp-black { background: #000; }
+.bp-table tr.bp-sum td.bp-name { font-weight: bold; text-transform: uppercase; }
+.bp-table tr.bp-sigrow td { height: 8mm; padding: 0.3mm; }
+.bp-sign-img { max-height: 8mm; max-width: 100%; object-fit: contain; display: inline-block; vertical-align: middle; }
+.bp-edit { cursor: text; background: #fffbe6; }
+.bp-edit:focus { outline: 0.4mm solid #2563eb; background: #fff; }
+.bp-foot-date { text-align: right; margin-top: 1.5mm; font-size: 7pt; }
+.bp-foot { display: flex; justify-content: space-between; align-items: flex-start; margin-top: 1mm; font-size: 7pt; text-align: center; }
+.bp-foot > div { flex: 1; min-height: 15mm; display: flex; flex-direction: column; align-items: center; }
+.bp-seal-img { max-height: 13mm; max-width: 20mm; object-fit: contain; margin-top: 0.5mm; }
+.bp-foot-sign { max-height: 9mm; max-width: 28mm; object-fit: contain; }
+.bp-notes { display: flex; justify-content: space-between; margin-top: 1.5mm; font-size: 6.3pt; }
+.bp-box { border: 0.25mm solid #000; padding: 1mm; margin-bottom: 2mm; }
+.bp-box-title { font-weight: bold; text-align: center; text-transform: uppercase; border-bottom: 0.25mm solid #000; padding-bottom: 0.5mm; margin-bottom: 1mm; font-size: 7.5pt; }
+.bp-side-table { width: 100%; border-collapse: collapse; margin-bottom: 1.5mm; }
+.bp-side-table th, .bp-side-table td { border: 0.25mm solid #000; padding: 0.4mm; text-align: center; font-size: 6.5pt; height: 4.5mm; }
+.bp-code-boxes { display: flex; gap: 0.5mm; margin-top: 0.8mm; }
+.bp-code-boxes span { width: 4mm; height: 4.5mm; border: 0.25mm solid #000; display: block; }
+.bp-side-sign { text-align: center; }
+
+.print-sheet { position: relative; overflow: hidden; page-break-after: always; break-after: page; background: #fff; }
+.print-sheet:last-child { page-break-after: auto; break-after: auto; }
+
+/* --- Modèle humanités avec repêchage (A4 portrait, pleine largeur) --- */
+.bp-page[data-model="repechage"] .bp-table { width: 192mm; }
+.bp-page[data-model="repechage"] .digit-box { border-color: #5aa02c; }
+.bp-sep { border-left-width: 0.7mm !important; }
+.bp-page[data-model="repechage"] .bp-table td.bp-max { background: #aeaaaa; font-weight: bold; }
+.bp-page[data-model="repechage"] .bp-subtotal td.bp-max, .bp-page[data-model="repechage"] .bp-maxrow td.bp-max { color: #e00000; }
+.bp-page[data-model="repechage"] .bp-subtotal td { background: #fff; font-weight: bold; }
+.bp-page[data-model="repechage"] .bp-table td.bp-calc { background: #fff; }
+.bp-page[data-model="repechage"] .bp-table td.bp-black { background: #595959; }
+.bp-fail { color: #e00000; }
+.bp-table td.bp-sigcell { padding: 0.2mm; }
+.bp-table td.bp-sigcell .bp-sign-img { max-height: 3.6mm; }
+.bp-table tr.bp-parentrow td { height: 11mm; }
+.bp-table td.bp-passblock { background: #fff; text-align: left; vertical-align: top; font-size: 4.8pt; font-weight: bold; line-height: 1.4; padding: 0.5mm; white-space: nowrap; }
+.bp-table td.bp-passblock span { display: block; text-align: center; font-size: 4.8pt; margin-top: 1mm; white-space: normal; }
+.bp-province { border: 0.25mm solid #000; padding: 1mm 1.5mm; font-weight: bold; font-size: 9pt; }
+.bp-info-rep { display: flex; border: 0.25mm solid #000; border-top: none; padding: 0; margin-bottom: 0; gap: 0; font-size: 7pt; }
+.bp-info-rep .bp-info-col { flex: 1; padding: 1.2mm 1.5mm; display: flex; flex-direction: column; align-items: flex-start; gap: 1mm; }
+.bp-info-rep .bp-info-right { border-left: 0.6mm solid #000; }
+.bp-info-rep .bp-info-col > div { display: flex; align-items: center; gap: 1mm; min-height: 4.2mm; }
+.bp-portrait .bp-title { background: #e7e6e6; margin: 0; padding: 1.2mm 2mm; display: flex; justify-content: space-between; font-size: 8.5pt; border: 0.25mm solid #000; border-top: none; }
+.bp-title span { margin-left: 8mm; }
+.bp-decision { border: 0.25mm solid #000; margin-top: 1mm; padding: 1.5mm 2mm; font-size: 7pt; font-weight: bold; }
+.bp-dotline { border-bottom: 0.25mm dotted #000; height: 5mm; }
+.bp-decision-grid { display: flex; justify-content: space-between; margin-top: 2mm; gap: 2mm; }
+.bp-decision-grid > div { flex: 1; }
+.bp-decision-grid > div:first-child { flex: 1.6; }
+.bp-decision-mid { text-align: center; }
+.bp-decision-right { text-align: center; }
+.bp-decision-notes { margin-top: 3mm; font-size: 6.4pt; }
+
+@media print {
+    html, body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
+    body.bp-printing > *:not(#pdfExportContainer) { display: none !important; }
+    body.bp-printing #pdfExportContainer { display: block !important; position: static !important; left: auto !important; top: auto !important; width: auto !important; }
+    .no-print { display: none !important; }
+    .bp-edit { background: none !important; }
+    .bp-armoiries-empty { border: none !important; }
+}
+
     </style>
 </head>
 
@@ -1087,151 +1175,38 @@ body {
                 <div class="item-list" id="studentListSidebar"></div>
             </nav>
 
-            <div class="detail-display-area" style="padding:0; border:none; background:transparent;"></div>
-                <div class="bulletin-sheet" id="officialBulletinArea" style="padding:0; border:none;">
-                    <div class="bulletin-official-wrapper">
-                        <!-- COLONNE PRINCIPALE (GAUCHE) -->
-                        <div class="bulletin-main-column">
-                            <!-- En-tête officiel avec Drapeau et Armoiries -->
-                            <div class="rdc-header-container">
-                                <img src="https://flagcdn.com/w80/cd.png" alt="Drapeau RDC" style="width: 50px; height: auto; border: 1px solid #000;">
-                                <div class="rdc-header-title">
-                                    RÉPUBLIQUE DÉMOCRATIQUE DU CONGO<br>
-                                    MINISTÈRE DE L'ÉDUCATION NATIONALE ET NOUVELLE CITOYENNETÉ
-                                </div>
-                                <div style="width: 50px; height: 50px; border: 1px solid #000; display:flex; align-items:center; justify-content:center; font-size:0.6rem; text-align:center; font-weight:bold;">
-                                    ARMOIRIES RDC
-                                </div>
-                            </div>
-
-                            <!-- Barre N° ID -->
-                            <div class="rdc-id-bar">
-                                <span>N° ID :</span>
-                                <div id="digitIdBox"></div>
-                            </div>
-
-                            <!-- Grille d'informations Établissement et Élève -->
-                            <div class="rdc-details-grid">
-                                <div>ÉDUCATION PROVINCIALE : <strong id="bProv">-</strong></div>
-                                <div>ÉLÈVE : <strong id="bStudentFullName">-</strong></div>
-                                <div>VILLE : <strong id="schoolCity">BUKAVU</strong></div>
-                                <div>SEXE : <strong id="bStudentSexe">-</strong></div>
-                                <div>COMMUNE/TER : <strong id="schoolCommune">IBANDA</strong></div>
-                                <div>NÉ(E) À : <strong id="bStudentBornWhere">-</strong> LE <strong id="bStudentBornDate">-</strong></div>
-                                <div>ÉCOLE : <strong id="schoolName">ENFANT DU MONDE</strong></div>
-                                <div>CLASSE : <strong id="bStudentClass">-</strong></div>
-                                <div style="display:flex; align-items:center; gap:4px;">CODE : <div id="digitCodeBox"></div></div>
-                                <div style="display:flex; align-items:center; gap:4px;">N° PERM. : <div id="digitPermiBox"></div></div>
-                            </div>
-
-                            <div style="text-align: center; font-size: 0.8rem; font-weight: bold; margin: 4px 0 8px 0; text-transform: uppercase;">
-                                BULLETIN DE LA <span id="bTitleClass">-</span> - ANNÉE SCOLAIRE 2025 – 2026
-                            </div>
-
-                            <!-- Tableau Principal des Notes -->
-                            <table class="bulletin-table" id="bulletinTable">
-                                <thead>
-                                    <tr>
-                                        <th rowspan="2" style="width: 28%;">BRANCHES</th>
-                                        <th colspan="6">PREMIER SEMESTRE</th>
-                                        <th colspan="6">SECOND SEMESTRE</th>
-                                        <th colspan="2">TOTAL GÉNÉRAL</th>
-                                    </tr>
-                                    <tr>
-                                        <th colspan="3">TRAVAUX JOURNAL.</th>
-                                        <th rowspan="2">MAX EX</th>
-                                        <th rowspan="2">EX1</th>
-                                        <th rowspan="2">TOTAL</th>
-                                        <th colspan="3">TRAVAUX JOURNAL.</th>
-                                        <th rowspan="2">MAX EX</th>
-                                        <th rowspan="2">EX2</th>
-                                        <th rowspan="2">TOTAL</th>
-                                        <th rowspan="2">MAX TG</th>
-                                        <th rowspan="2">T.G.</th>
-                                    </tr>
-                                    <tr>
-                                        <th></th>
-                                        <th>MAX</th>
-                                        <th>1<sup>ère</sup>P</th>
-                                        <th>2<sup>ème</sup>P</th>
-                                        <th>MAX</th>
-                                        <th>3<sup>ème</sup>P</th>
-                                        <th>4<sup>ème</sup>P</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="bulletinTableBody"></tbody>
-                            </table>
-
-                            <!-- Signatures Bas de Page -->
-                            <div style="margin-top: 10px; font-size: 0.72rem; text-align: right;">
-                                Fait à <span id="bCityFooter">BUKAVU</span>, le ......../......../20.......
-                            </div>
-                            <div class="rdc-footer-signatures">
-                                <div>Signature de l'élève</div>
-                                <div>Sceau de l'école</div>
-                                <div>Le Chef d'Établissement,<br><br><strong>Nom et Signature</strong></div>
-                            </div>
-                            <div style="margin-top: 8px; font-size: 0.65rem; color: #333; display: flex; justify-content: space-between;">
-                                <span>(1) Biffer la mention inutile</span>
-                                <span>Note importante : Le bulletin est sans valeur s'il est raturé ou surchargé</span>
-                                <span><strong>IGE/PS/010</strong></span>
-                            </div>
-                        </div>
-
-                        <!-- PANNEAU LATÉRAL DROIT (OFFICIEL RDC) -->
-                        <div class="bulletin-side-column">
-                            <!-- Section Examen d'État -->
-                            <div class="side-box">
-                                <div class="side-box-title">EXAMEN D'ÉTAT</div>
-                                <table class="side-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Points Obt.</th>
-                                            <th>MAX</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr>
-                                            <td style="height:20px;"></td>
-                                            <td></td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                                <div style="display:flex; justify-content:space-between; font-size:0.7rem; margin-bottom:4px;">
-                                    <span>MEC : ......</span>
-                                    <span>% : ......</span>
-                                </div>
-                                <div style="font-size:0.68rem; margin-top:6px;">
-                                    Pour le contrôle le......................<br><br>
-                                    <strong>Nom et signature du Chef de centre</strong><br>
-                                    ....................................................
-                                </div>
-                                <div style="margin-top:8px; font-size:0.68rem;">
-                                    Code du Centre :
-                                    <div style="display:flex; gap:2px; margin-top:2px;">
-                                        <div class="digit-box"></div><div class="digit-box"></div><div class="digit-box"></div><div class="digit-box"></div><div class="digit-box"></div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Section Résultat Final -->
-                            <div class="side-box" style="flex:1;">
-                                <div class="side-box-title">RÉSULTAT FINAL</div>
-                                <div style="font-size:0.75rem; line-height: 1.6;">
-                                    Diplôme (1)<br>
-                                    Avec : <strong id="sideFinalPct">........ %</strong><br>
-                                    A échoué (1)<br><br>
-                                    Verser le témoignage :<br>
-                                    ................................................<br><br>
-                                    Le ......./......./20.......<br><br>
-                                    <strong>Le Chef d'Établissement</strong><br><br><br>
-                                    Sceau de l'école
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+            <div class="bp-screen-wrap">
+                <div class="bp-toolbar no-print">
+                    <label>Modèle
+                        <select id="bpModelSelect">
+                            <option value="classink">Modèle ClassInk (standard)</option>
+                            <option value="ige010">Modèle officiel IGE/PS/010 (avec Examen d'État)</option>
+                            <option value="repechage">Modèle humanités avec repêchage (A4 portrait)</option>
+                        </select>
+                    </label>
+                    <label>Signature
+                        <select id="bpSignatureSelect">
+                            <option value="titulaire">Enseignant concerné (titulaire)</option>
+                            <option value="responsable">Chef d'établissement</option>
+                            <option value="default">Signature par défaut</option>
+                            <option value="none">Aucune (à signer à la main)</option>
+                        </select>
+                    </label>
+                    <label>Papier
+                        <select id="bpPaperSelect">
+                            <option value="A4">A4 paysage</option>
+                            <option value="A3">A3 paysage</option>
+                        </select>
+                    </label>
+                    <button class="btn-primary" onclick="printStudentBulletin()">🖨️ Imprimer cet élève</button>
+                    <button class="btn-primary" onclick="printClassBulletins()" style="background-color: #16a34a;">🖨️ Imprimer la classe</button>
+                    <span class="bp-warn" id="bpWarn"></span>
+                </div>
+                <div class="bp-screen-frame" id="bulletinScreenFrame">
+                    <div id="officialBulletinArea"></div>
                 </div>
             </div>
+        </div>
 
             <!-- Fiches des notes -->
         <div id="view-fiches" class="sub-view-content">
@@ -1383,6 +1358,27 @@ body {
                     <label>MOT DE PASSE ÉCOLE</label>
                     <input type="password" id="appPasswordInput" class="form-control" value="12345678">
                 </div>
+            </div>
+
+            <!-- IDENTITÉ DU BULLETIN, SCEAU ET SIGNATURES -->
+            <div class="settings-card" style="grid-column: 1 / -1;" id="identityCard">
+                <h2>IDENTITÉ DU BULLETIN, SCEAU ET SIGNATURES</h2>
+                <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">
+                    Ces informations apparaissent sur chaque bulletin imprimé. Les photos sont détourées automatiquement (fond blanc retiré).
+                </p>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0.8rem;">
+                    <div class="form-group"><label>ANNÉE SCOLAIRE</label><input type="text" class="form-control" id="idSchoolYear" placeholder="Ex : 2026 – 2027"></div>
+                    <div class="form-group"><label>ÉDUCATION PROVINCIALE</label><input type="text" class="form-control" id="idProvince" placeholder="Ex : SUD-KIVU"></div>
+                    <div class="form-group"><label>VILLE</label><input type="text" class="form-control" id="idCity" placeholder="Ex : BUKAVU"></div>
+                    <div class="form-group"><label>COMMUNE / TERRITOIRE</label><input type="text" class="form-control" id="idCommune" placeholder="Ex : IBANDA"></div>
+                    <div class="form-group"><label>NOM DE L'ÉCOLE</label><input type="text" class="form-control" id="idSchoolName" placeholder="Ex : ENFANT DU MONDE"></div>
+                    <div class="form-group"><label>NOM DU CHEF D'ÉTABLISSEMENT</label><input type="text" class="form-control" id="idHeadName" placeholder="Nom et postnom"></div>
+                </div>
+                <p style="font-size: 0.78rem; color: var(--text-secondary); margin: 0.2rem 0 1rem;">N° ID et code de l'école : <strong id="idReadonly">-</strong> (modifiables seulement via le chargement des données de l'école).</p>
+                <div id="identityImages" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1.2rem;"></div>
+                <h2 style="font-size: 0.95rem;">SIGNATURES DES ENSEIGNANTS</h2>
+                <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.6rem;">Une signature par enseignant (titulaires de classes et de cours). Chaque enseignant pourra aussi enregistrer la sienne depuis ClassInk : elle arrivera ici après la mise à jour des serveurs.</p>
+                <div id="identityTitulaires" style="display: flex; flex-direction: column; gap: 0.6rem;"></div>
             </div>
 
             <!-- NOUVELLE CARTE DE GESTION DES ENSEIGNANTS -->
@@ -1683,6 +1679,26 @@ body {
             <h3 style="margin-bottom:1rem; color: var(--primary-color);">Ajouter une Classe</h3>
             <div class="form-group"><label>Nom de la classe</label><input type="text" id="name-added-class" class="form-control" placeholder="Ex: 3ème SCIENTIFIQUE"></div>
             <div class="form-group"><label>Titulaire de la classe</label><input type="text" id="name-titulaire-added-class" class="form-control" placeholder="Ex : Prof. Mwamba"></div>
+            <div class="form-group"><label>Modèle de bulletin</label>
+                <select id="class-bulletin-model" class="form-control">
+                    <option value="classink">Modèle ClassInk (standard)</option>
+                    <option value="ige010">Modèle officiel IGE/PS/010 (avec Examen d'État)</option>
+                            <option value="repechage">Modèle humanités avec repêchage (A4 portrait)</option>
+                </select>
+            </div>
+            <div class="form-group"><label>Intitulé sur le bulletin (facultatif)</label><input type="text" id="class-bulletin-title" class="form-control" placeholder="Ex : 4ème année des humanités scientifiques"></div>
+            <div class="form-group"><label>Signatures sur le bulletin (ligne SIGNATURE / colonne « signatures profs »)</label>
+                <select id="class-signature-source" class="form-control">
+                    <option value="titulaire">Enseignant concerné (titulaire)</option>
+                    <option value="responsable">Chef d'établissement</option>
+                    <option value="default">Signature par défaut</option>
+                    <option value="none">Aucune (à signer à la main)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label style="display:flex; align-items:center; gap:0.5rem; font-weight:500;"><input type="checkbox" id="class-autocourses"> Ajouter automatiquement les cours de ce modèle (4ème humanités scientifiques)</label>
+                <small style="color: var(--text-secondary);">Pour les modèles officiel et repêchage. Ajoute seulement les cours qui manquent, sans toucher à ceux qui existent déjà.</small>
+            </div>
             <div class="form-group">
                 <label>Catégories de cours</label>
                 <div id="categoriesContainer"><input type="text" class="form-control category-input" placeholder="Ex : Domaine des Sciences" style="margin-bottom: 0.4rem;"></div>
@@ -1701,6 +1717,7 @@ body {
             <div class="form-group"><label>Max Période (Points)</label><input type="number" id="max-per-cours" class="form-control" value="40"></div>
             <div class="form-group"><label>Titulaire du cours</label><input type="text" id="name-titulaire-added-cours" class="form-control" placeholder="Ex : Prof. Mwamba"></div>
             <div class="form-group"><label>Catégorie du cours</label><select class="form-control" id="choix-categorie"></select></div>
+            <div class="form-group"><label>Sous-domaine (facultatif)</label><input type="text" id="sub-category-cours" class="form-control" placeholder="Ex : Sous-domaine des mathématiques"></div>
             <button class="btn-primary" style="width: 100%; margin-top: 1rem;" id="saveCourseBtn">Valider & Enregistrer</button>
         </div>
     </div>
@@ -1734,31 +1751,78 @@ function jsArg(value) {
     return safeHTML(JSON.stringify(String(value == null ? '' : value)));
 }
 
-
-
-        // --- CRYPT PROTOCOLE DE SÉCURITÉ ---
-        document.addEventListener('keydown', (e) => {
-            // Raccourci secret : Ctrl + Shift + X
-            if (e.ctrlKey && e.shiftKey && e.key === 'X') {
-                const cmd = prompt("CRYPT TERMINAL :");
-                if (cmd === "CRYPT_LOCK_ABORT") {
-                    localStorage.setItem('crypt_sys_ban', 'true');
-                    alert("Exécution de la directive. Système verrouillé.");
-                    location.reload();
-                }
-            }
-        });
-
-        // Vérification au démarrage (à placer tout au début de la fonction DOMContentLoaded)
-        if (localStorage.getItem('crypt_sys_ban') === 'true') {
-            document.body.innerHTML = `
-                <div style="height:100vh; display:flex; flex-direction:column; justify-content:center; align-items:center; background:#0f172a; color:#dc2626; font-family:monospace;">
-                    <h1>🔒 ACCÈS RÉVOQUÉ</h1>
-                    <p>La licence de ce logiciel a été suspendue par CRYPT Enterprise.</p>
-                    <p>Veuillez contacter l'administrateur.</p>
-                </div>`;
-            throw new Error("CRYPT_FATAL_LOCK"); // Stoppe l'exécution du reste du code
+// ---------------------------------------------------------------------------
+// MESSAGES À L'ÉCRAN (équivalent des fenêtres de ClassInk) : plus de messages dans la console du navigateur ni de fenêtres natives.
+//  - showCustomAlert(message, titre)            -> Promise, fermée par « Ok »
+//  - showCustomPrompt(message, défaut, titre)   -> Promise de la saisie, ou null si annulée
+//  - showCustomConfirm(message, titre)          -> Promise<boolean>
+// Les appels alert("...") existants passent aussi par cette fenêtre.
+// ---------------------------------------------------------------------------
+let __dialogQueue = Promise.resolve();
+function __showDialog(kind, message, title, defaultValue) {
+    const run = () => new Promise(resolve => {
+        const overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(15,23,42,0.55);display:flex;align-items:center;justify-content:center;padding:1rem;';
+        const box = document.createElement('div');
+        box.setAttribute('role', 'dialog');
+        box.style.cssText = 'background:var(--bg-card,#fff);color:var(--text-primary,#0f172a);border:1px solid var(--border-color,#cbd5e1);border-radius:12px;max-width:440px;width:100%;padding:1.2rem;box-shadow:0 20px 50px rgba(0,0,0,0.35);';
+        const h = document.createElement('h3');
+        h.textContent = title;
+        h.style.cssText = 'margin:0 0 0.6rem;font-size:1rem;';
+        const p = document.createElement('p');
+        p.textContent = message;
+        p.style.cssText = 'margin:0 0 1rem;font-size:0.9rem;white-space:pre-wrap;line-height:1.45;';
+        box.append(h, p);
+        let input = null;
+        if (kind === 'prompt') {
+            input = document.createElement('input');
+            input.type = 'text';
+            input.value = defaultValue || '';
+            input.style.cssText = 'width:100%;padding:0.5rem;margin-bottom:1rem;border-radius:6px;border:1px solid var(--border-color,#cbd5e1);background:var(--bg-card,#fff);color:inherit;box-sizing:border-box;';
+            box.appendChild(input);
         }
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;gap:0.6rem;justify-content:flex-end;';
+        const mkBtn = (label, primary) => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.textContent = label;
+            b.className = primary ? 'btn-primary' : 'btn-secondary';
+            b.style.cssText = 'padding:0.45rem 1rem;';
+            return b;
+        };
+        const close = value => { overlay.remove(); document.removeEventListener('keydown', onKey, true); resolve(value); };
+        const okBtn = mkBtn(kind === 'confirm' ? 'Confirmer' : (kind === 'prompt' ? 'Valider' : 'Ok'), true);
+        const accept = () => close(kind === 'prompt' ? input.value.trim() : (kind === 'confirm' ? true : undefined));
+        const cancel = () => close(kind === 'prompt' ? null : (kind === 'confirm' ? false : undefined));
+        okBtn.onclick = accept;
+        if (kind !== 'alert') { const c = mkBtn('Annuler', false); c.onclick = cancel; row.appendChild(c); }
+        row.appendChild(okBtn);
+        box.appendChild(row);
+        overlay.appendChild(box);
+        const onKey = e => {
+            if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+            else if (e.key === 'Enter') { e.preventDefault(); accept(); }
+        };
+        document.addEventListener('keydown', onKey, true);
+        document.body.appendChild(overlay);
+        (input || okBtn).focus();
+    });
+    const result = __dialogQueue.then(run);
+    __dialogQueue = result.catch(() => {});
+    return result;
+}
+function showCustomAlert(message, title = 'ClassNet P') { return __showDialog('alert', String(message), title); }
+function showCustomPrompt(message, defaultValue = '', title = 'Saisie requise') { return __showDialog('prompt', String(message), title, defaultValue); }
+function showCustomConfirm(message, title = 'Confirmation') { return __showDialog('confirm', String(message), title); }
+window.alert = function(message) { showCustomAlert(message); };
+
+
+
+
+        // Ancien verrou local : on retire le drapeau laissé par l'ancienne commande secrète.
+        // Le verrouillage d'une école se fait désormais uniquement depuis le serveur (administrateur).
+        try { localStorage.removeItem('crypt_sys_ban'); } catch (e) { /* stockage indisponible */ }
 
         // État Global de l'Application avec persistance LocalStorage et gestion Enseignants
         const defaultState = {
@@ -1856,6 +1920,765 @@ function jsArg(value) {
                     });
                 }
 
+                // ======================================================================
+                // BULLETIN : modèles, signatures, sceau, impression (A4 / A3 paysage)
+                // ======================================================================
+                const BULLETIN_MODELS = {
+                    classink:  { label: 'Modèle ClassInk (standard)', orientation: 'portrait', examEtat: false, repechage: false },
+                    ige010:    { label: "Modèle officiel IGE/PS/010 (avec Examen d'État)", orientation: 'portrait', examEtat: true, repechage: false },
+                    repechage: { label: 'Modèle humanités avec repêchage (A4 portrait)', orientation: 'portrait', examEtat: false, repechage: true }
+                };
+                const BP_SIGNATURE_SOURCES = ['titulaire', 'responsable', 'default', 'none'];
+                const BP_MAX_DATAURL = 350000;
+                const BP_IMG_RE = /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+\/=]+$/;
+
+                // Seules des images « data: » raster sont acceptées dans les attributs src.
+                function bpSafeImg(src) {
+                    return (typeof src === 'string' && src.length < 900000 && BP_IMG_RE.test(src)) ? src : '';
+                }
+
+                const BP_DEFAULT_SIGNATURE = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
+                    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 80">' +
+                    '<path d="M10 58 C 22 8, 40 6, 38 44 S 56 72, 72 30 S 96 14, 101 46 S 122 62, 136 34 S 162 20, 190 40" fill="none" stroke="#1d3a8a" stroke-width="3" stroke-linecap="round"/>' +
+                    '<path d="M18 68 C 80 58, 140 64, 186 52" fill="none" stroke="#1d3a8a" stroke-width="2" stroke-linecap="round"/></svg>');
+
+                function bpStar(cx, cy, R, r) {
+                    const pts = [];
+                    for (let i = 0; i < 10; i++) {
+                        const a = -Math.PI / 2 + i * Math.PI / 5;
+                        const rad = i % 2 === 0 ? R : r;
+                        pts.push((cx + rad * Math.cos(a)).toFixed(1) + ',' + (cy + rad * Math.sin(a)).toFixed(1));
+                    }
+                    return pts.join(' ');
+                }
+                const BP_FLAG_SVG = '<svg class="bp-flag" viewBox="0 0 150 110" xmlns="http://www.w3.org/2000/svg">' +
+                    '<rect width="150" height="110" fill="#00a3dd"/>' +
+                    '<line x1="-10" y1="125" x2="160" y2="-15" stroke="#f7d618" stroke-width="30"/>' +
+                    '<line x1="-10" y1="125" x2="160" y2="-15" stroke="#ce1021" stroke-width="20"/>' +
+                    '<polygon points="' + bpStar(28, 26, 18, 7.2) + '" fill="#f7d618"/></svg>';
+
+                // ---- Cours du modèle officiel : 4ème année des humanités scientifiques ----
+                const BP_PRESET_HUMANITES_SC = {
+                    categories: ['Domaine des sciences', 'Domaine des langues', "Domaine de l'univers social et environnement", 'Domaine du développement personnel'],
+                    courses: [
+                        ['Domaine des sciences', 'Sous-domaine des mathématiques', 'Algèbre & analyse', 30],
+                        ['Domaine des sciences', 'Sous-domaine des mathématiques', 'Géométrie', 20],
+                        ['Domaine des sciences', 'Sous-domaine des mathématiques', 'Probabilité', 10],
+                        ['Domaine des sciences', 'Sous-domaine des mathématiques', 'Dessin scientifique', 10],
+                        ['Domaine des sciences', 'Sous-domaine des sciences de la vie et de la terre', 'Biologie générale', 30],
+                        ['Domaine des sciences', 'Sous-domaine des sciences de la vie et de la terre', 'Écologie', 10],
+                        ['Domaine des sciences', 'Sous-domaine des sciences de la vie et de la terre', 'Géologie/Évolution', 10],
+                        ['Domaine des sciences', 'Sous-domaine des sciences physiques, technologie et TIC', 'Chimie', 30],
+                        ['Domaine des sciences', 'Sous-domaine des sciences physiques, technologie et TIC', 'Physique', 30],
+                        ['Domaine des sciences', 'Sous-domaine des sciences physiques, technologie et TIC', "Tech. d'info et com (TIC)", 10],
+                        ['Domaine des langues', '', 'Français', 50],
+                        ['Domaine des langues', '', 'Anglais', 30],
+                        ["Domaine de l'univers social et environnement", '', 'Géographie', 20],
+                        ["Domaine de l'univers social et environnement", '', 'Histoire', 20],
+                        ["Domaine de l'univers social et environnement", '', 'Philosophie', 20],
+                        ["Domaine de l'univers social et environnement", '', "L'éducation à la vie", 10],
+                        ["Domaine de l'univers social et environnement", '', 'Éducation civique et morale', 10],
+                        ["Domaine de l'univers social et environnement", '', 'Religion', 10],
+                        ['Domaine du développement personnel', '', "Physique de l'éducation", 10]
+                    ]
+                };
+
+                // ---- Cours du bulletin de l'école (4ème année des humanités scientifiques) ----
+                const BP_PRESET_EIEM_4SC = {
+                    categories: ['Domaine des sciences', 'Domaine des langues', "Domaine de l'univers social et environnement", 'Domaine du développement personnel'],
+                    courses: [
+                        ['Domaine des sciences', 'Sous-domaine des mathématiques', 'Algèbre, stat et analyse', 30],
+                        ['Domaine des sciences', 'Sous-domaine des mathématiques', 'Géométrie', 20],
+                        ['Domaine des sciences', 'Sous-domaine des mathématiques', 'Trigonométrie', 10],
+                        ['Domaine des sciences', 'Sous-domaine des mathématiques', 'Dessin scientifique', 10],
+                        ['Domaine des sciences', 'Sous-domaine des sciences de la vie et de la terre', 'Biologie générale', 20],
+                        ['Domaine des sciences', 'Sous-domaine des sciences de la vie et de la terre', 'Écologie', 20],
+                        ['Domaine des sciences', 'Sous-domaine des sciences de la vie et de la terre', 'Géologie/Évolution', 10],
+                        ['Domaine des sciences', 'Sous-domaine des sciences de la vie et de la terre', 'Entrepreneuriat', 10],
+                        ['Domaine des sciences', 'Sous-domaine des sciences physiques, technologie et TIC', 'Chimie', 30],
+                        ['Domaine des sciences', 'Sous-domaine des sciences physiques, technologie et TIC', 'Physique', 30],
+                        ['Domaine des sciences', 'Sous-domaine des sciences physiques, technologie et TIC', 'TIC', 10],
+                        ['Domaine des langues', '', 'Français', 50],
+                        ['Domaine des langues', '', 'Anglais', 30],
+                        ["Domaine de l'univers social et environnement", '', 'ECM', 10],
+                        ["Domaine de l'univers social et environnement", '', 'Géographie', 20],
+                        ["Domaine de l'univers social et environnement", '', 'Histoire', 20],
+                        ["Domaine de l'univers social et environnement", '', 'Philosophie', 20],
+                        ["Domaine de l'univers social et environnement", '', 'Éducation à la vie', 10],
+                        ["Domaine de l'univers social et environnement", '', 'Religion', 10],
+                        ['Domaine du développement personnel', '', 'Éducation physique', 10]
+                    ]
+                };
+                function bpPresetForModel(model) {
+                    if (model === 'ige010') return BP_PRESET_HUMANITES_SC;
+                    if (model === 'repechage') return BP_PRESET_EIEM_4SC;
+                    return null;
+                }
+
+                function bpNorm(s) {
+                    return String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+                }
+
+                // Ajoute seulement les cours qui manquent à la classe. Renvoie le nombre de cours ajoutés.
+                function bpAutoAddModelCourses(cls) {
+                    const preset = cls ? bpPresetForModel(bpClassModel(cls)) : null;
+                    if (!preset) return 0;
+                    if (!cls.categories) cls.categories = [];
+                    const catSpelling = {};
+                    preset.categories.forEach(cat => {
+                        const existing = cls.categories.find(c => bpNorm(c) === bpNorm(cat));
+                        if (existing) catSpelling[cat] = existing;
+                        else { cls.categories = cls.categories.filter(c => bpNorm(c) !== 'general'); cls.categories.push(cat); catSpelling[cat] = cat; }
+                    });
+                    let added = 0;
+                    preset.courses.forEach((row, i) => {
+                        const [cat, sub, name, maxPer] = row;
+                        const found = appState.courses.find(c => c.classId === cls.id && bpNorm(c.name) === bpNorm(name));
+                        if (found) {
+                            if (!found.subCategory && sub) found.subCategory = sub;
+                            return;
+                        }
+                        appState.courses.push({
+                            id: 'k_' + Date.now() + '_' + i, classId: cls.id, name, maxPer,
+                            category: catSpelling[cat], subCategory: sub || '',
+                            titulaire: cls.titulaire || 'Non assigné'
+                        });
+                        added++;
+                    });
+                    return added;
+                }
+
+                // ---- Traitement des photos : redimensionnement + retrait du fond blanc ----
+                function bpCutBackground(canvas, ctx, w, h) {
+                    const imgData = ctx.getImageData(0, 0, w, h);
+                    const d = imgData.data;
+                    const hist = new Array(256).fill(0);
+                    for (let i = 0; i < d.length; i += 4) hist[Math.round(0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2])]++;
+                    const total = w * h;
+                    let sum = 0;
+                    for (let t = 0; t < 256; t++) sum += t * hist[t];
+                    let sumB = 0, wB = 0, best = -1, thr = 128;
+                    for (let t = 0; t < 256; t++) {
+                        wB += hist[t];
+                        if (!wB) continue;
+                        const wF = total - wB;
+                        if (!wF) break;
+                        sumB += t * hist[t];
+                        const mB = sumB / wB, mF = (sum - sumB) / wF;
+                        const between = wB * wF * (mB - mF) * (mB - mF);
+                        if (between > best) { best = between; thr = t; }
+                    }
+                    const lo = Math.max(0, thr - 35);
+                    const hi = Math.max(lo + 1, Math.min(255, thr + 10));
+                    let minX = w, minY = h, maxX = -1, maxY = -1;
+                    for (let y = 0; y < h; y++) {
+                        for (let x = 0; x < w; x++) {
+                            const i = (y * w + x) * 4;
+                            const lum = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+                            const a = lum <= lo ? 255 : (lum >= hi ? 0 : Math.round(255 * (hi - lum) / (hi - lo)));
+                            d[i + 3] = a;
+                            if (a > 40) { if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; }
+                        }
+                    }
+                    if (maxX < 0) throw new Error("Aucune encre détectée : refaites la photo sur une feuille blanche, bien éclairée.");
+                    ctx.putImageData(imgData, 0, 0);
+                    const pad = 4;
+                    minX = Math.max(0, minX - pad); minY = Math.max(0, minY - pad);
+                    maxX = Math.min(w - 1, maxX + pad); maxY = Math.min(h - 1, maxY + pad);
+                    const cw = maxX - minX + 1, ch = maxY - minY + 1;
+                    const out = document.createElement('canvas');
+                    out.width = cw; out.height = ch;
+                    out.getContext('2d').drawImage(canvas, minX, minY, cw, ch, 0, 0, cw, ch);
+                    return out;
+                }
+
+                async function bpProcessImage(file, opts) {
+                    opts = opts || {};
+                    const maxW = opts.maxW || 700, maxH = opts.maxH || 300;
+                    if (!file || !/^image\//.test(file.type)) throw new Error("Ce fichier n'est pas une image.");
+                    const url = URL.createObjectURL(file);
+                    let img;
+                    try {
+                        img = await new Promise((res, rej) => {
+                            const i = new Image();
+                            i.onload = () => res(i);
+                            i.onerror = () => rej(new Error("Image illisible."));
+                            i.src = url;
+                        });
+                    } finally { URL.revokeObjectURL(url); }
+                    let scale = Math.min(1, maxW / img.naturalWidth, maxH / img.naturalHeight);
+                    let out = '';
+                    for (let attempt = 0; attempt < 4; attempt++) {
+                        const w = Math.max(1, Math.round(img.naturalWidth * scale));
+                        const h = Math.max(1, Math.round(img.naturalHeight * scale));
+                        let canvas = document.createElement('canvas');
+                        canvas.width = w; canvas.height = h;
+                        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                        ctx.drawImage(img, 0, 0, w, h);
+                        canvas = bpCutBackground(canvas, ctx, w, h);
+                        out = canvas.toDataURL('image/png');
+                        if (out.length <= BP_MAX_DATAURL) return out;
+                        scale *= 0.7;
+                    }
+                    if (out.length > 900000) throw new Error("Image trop lourde : reprenez la photo de plus loin.");
+                    return out;
+                }
+
+                function bpPickImage(camera) {
+                    return new Promise(resolve => {
+                        const inp = document.createElement('input');
+                        inp.type = 'file';
+                        inp.accept = 'image/*';
+                        if (camera) inp.setAttribute('capture', 'environment');
+                        inp.onchange = () => resolve(inp.files && inp.files[0] ? inp.files[0] : null);
+                        inp.click();
+                    });
+                }
+
+                // ---- Réglages par classe ----
+                function bpClassModel(cls) { return cls && BULLETIN_MODELS[cls.bulletinModel] ? cls.bulletinModel : 'classink'; }
+                function bpSignatureSource(cls) { return cls && BP_SIGNATURE_SOURCES.includes(cls.signatureSource) ? cls.signatureSource : 'titulaire'; }
+                function bpDefaultSchoolYear() {
+                    const d = new Date();
+                    const start = d.getMonth() >= 8 ? d.getFullYear() : d.getFullYear() - 1;
+                    return start + ' – ' + (start + 1);
+                }
+                function bpFormatDate(v) {
+                    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v || '');
+                    return m ? m[3] + '/' + m[2] + '/' + m[1] : (v || '');
+                }
+                // Signature d'un enseignant : carnet local (par nom), sinon signature reçue par synchronisation.
+                function bpSignatureForName(name) {
+                    const key = bpNorm(name);
+                    if (!key || key === 'non assigne') return '';
+                    const own = bpSafeImg((appState.signatureBook || {})[key]);
+                    if (own) return own;
+                    const t = (appState.teachers || []).find(t => bpNorm(t.name) === key || bpNorm(t.uniqueId) === key);
+                    return t ? bpSafeImg(t.signature) : '';
+                }
+                function bpHeadSignature() { return bpSafeImg(appState.school.headSignature); }
+                // Signature de la ligne SIGNATURE (modèles paysage)
+                function bpResolveSignature(cls) {
+                    const source = bpSignatureSource(cls);
+                    if (source === 'none') return { src: '', warn: '' };
+                    if (source === 'default') return { src: BP_DEFAULT_SIGNATURE, warn: 'Signature par défaut utilisée (démonstration).' };
+                    if (source === 'responsable') {
+                        const s = bpHeadSignature();
+                        return { src: s, warn: s ? '' : "Aucune signature du chef d'établissement enregistrée : la case restera vide." };
+                    }
+                    const s = bpSignatureForName(cls && cls.titulaire);
+                    return { src: s, warn: s ? '' : 'Aucune signature enregistrée pour le titulaire : la case restera vide.' };
+                }
+                // Signature de la colonne « signatures profs » (modèle avec repêchage) : une par cours
+                function bpCourseSignature(cls, crs) {
+                    const source = bpSignatureSource(cls);
+                    if (source === 'none') return { src: '', missing: '' };
+                    if (source === 'default') return { src: BP_DEFAULT_SIGNATURE, missing: '' };
+                    if (source === 'responsable') return { src: bpHeadSignature(), missing: '' };
+                    const name = (crs.titulaire && crs.titulaire !== 'Non assigné') ? crs.titulaire : (cls && cls.titulaire);
+                    const s = bpSignatureForName(name);
+                    return { src: s, missing: s ? '' : (name && name !== 'Non assigné' ? name : 'cours sans titulaire') };
+                }
+
+                // ---- Calculs ----
+                function bpNum(v) {
+                    if (v === '' || v === null || v === undefined) return null;
+                    const n = parseFloat(v);
+                    return isNaN(n) ? null : n;
+                }
+                function bpAcc() { return { v: 0, n: 0 }; }
+                function bpAdd(a, x) { if (x !== null && x !== undefined) { a.v += x; a.n++; } }
+                function bpFmt(x) { return Number.isInteger(x) ? String(x) : String(Math.round(x * 100) / 100); }
+                function bpShow(a) { return a.n > 0 ? bpFmt(a.v) : ''; }
+                function bpSum(arr) {
+                    let n = 0, v = 0;
+                    arr.forEach(x => { if (x !== null) { v += x; n++; } });
+                    return n ? v : null;
+                }
+                const BP_TOTAL_KEYS = ['p1', 'p2', 'ex1', 's1', 'p3', 'p4', 'ex2', 's2', 'tg'];
+
+                function bpCourseValues(studentId, crs) {
+                    const g = appState.grades[studentId + '_' + crs.id] || {};
+                    const v = { p1: bpNum(g.p1), p2: bpNum(g.p2), ex1: bpNum(g.ex1), p3: bpNum(g.p3), p4: bpNum(g.p4), ex2: bpNum(g.ex2) };
+                    v.s1 = bpSum([v.p1, v.p2, v.ex1]);
+                    v.s2 = bpSum([v.p3, v.p4, v.ex2]);
+                    v.tg = bpSum([v.s1, v.s2]);
+                    return v;
+                }
+                function bpStudentTotals(studentId, classCourses) {
+                    const t = {};
+                    BP_TOTAL_KEYS.forEach(k => t[k] = bpAcc());
+                    classCourses.forEach(crs => {
+                        const v = bpCourseValues(studentId, crs);
+                        BP_TOTAL_KEYS.forEach(k => bpAdd(t[k], v[k]));
+                    });
+                    return t;
+                }
+                function bpNewGroup() {
+                    const g = { maxP: 0, maxEx: 0, maxTot: 0, maxTG: 0 };
+                    BP_TOTAL_KEYS.forEach(k => g[k] = bpAcc());
+                    return g;
+                }
+                function bpRankNum(key, student, classStudents, allTotals) {
+                    const me = allTotals[student.id][key];
+                    if (me.n === 0) return 0;
+                    let better = 0;
+                    classStudents.forEach(o => { const t = allTotals[o.id][key]; if (o.id !== student.id && t.n > 0 && t.v > me.v) better++; });
+                    return better + 1;
+                }
+                function bpRankText(key, student, classStudents, allTotals) {
+                    const rank = bpRankNum(key, student, classStudents, allTotals);
+                    if (!rank) return '';
+                    const suffix = rank === 1 ? (student.sexe === 'F' ? 'ère' : 'er') : 'ème';
+                    return safeHTML(rank) + '<sup>' + suffix + '</sup> / ' + safeHTML(classStudents.length);
+                }
+                function bpRankShort(key, student, classStudents, allTotals) {
+                    const rank = bpRankNum(key, student, classStudents, allTotals);
+                    if (!rank) return '';
+                    return safeHTML(rank) + (rank === 1 ? (student.sexe === 'F' ? 'ère' : 'er') : 'è');
+                }
+
+                // ---- Construction d'une page de bulletin (HTML) ----
+                // Ordre des colonnes (identique au bulletin Excel de l'école) :
+                // MAX période | 1è P | 2è P | EXAM | MAX EXAM | TOT. SEM | MAX SEM  (x2 semestres)  | TOTAL GEN | MAX GEN
+                const BP_COLS = [
+                    { k: 'max1' }, { k: 'p1' }, { k: 'p2' }, { k: 'ex1' }, { k: 'mex1' }, { k: 's1' }, { k: 'msem1' },
+                    { k: 'max2', sep: true }, { k: 'p3' }, { k: 'p4' }, { k: 'ex2' }, { k: 'mex2' }, { k: 's2' }, { k: 'msem2' },
+                    { k: 'tg', sep: true }, { k: 'mtg' }
+                ];
+                const BP_MAX_KEYS = ['max1', 'max2', 'mex1', 'mex2', 'msem1', 'msem2', 'mtg'];
+                const BP_GRADE_KEYS = ['p1', 'p2', 'ex1', 'p3', 'p4', 'ex2'];
+                // clé de colonne -> maximum correspondant
+                const BP_MAX_OF = { p1: 'max1', p2: 'max1', ex1: 'mex1', s1: 'msem1', p3: 'max2', p4: 'max2', ex2: 'mex2', s2: 'msem2', tg: 'mtg' };
+
+                function bpMaxesOf(G) {
+                    return { max1: G.maxP, max2: G.maxP, mex1: G.maxEx, mex2: G.maxEx, msem1: G.maxTot, msem2: G.maxTot, mtg: G.maxTG };
+                }
+
+                function bpBuildPage(student, opts) {
+                    const editable = !!(opts && opts.editable);
+                    const school = appState.school || {};
+                    const cls = appState.classes.find(c => c.id === student.classId);
+                    const model = bpClassModel(cls);
+                    const M = BULLETIN_MODELS[model];
+                    const isRep = M.repechage;
+                    const classStudents = appState.students.filter(s => s.classId === student.classId);
+                    const classCourses = appState.courses.filter(c => c.classId === student.classId);
+                    const allTotals = {};
+                    classStudents.forEach(s => allTotals[s.id] = bpStudentTotals(s.id, classCourses));
+                    const mine = allTotals[student.id];
+
+                    if (!appState.behaviour) appState.behaviour = {};
+                    if (!appState.behaviour[student.id]) {
+                        appState.behaviour[student.id] = {
+                            app: { p1: 'TB', p2: 'TB', ex1: 'TB', totS1: 'TB', p3: 'TB', p4: 'TB', ex2: 'TB', totS2: 'TB', tg: 'TB' },
+                            cond: { p1: 'B', p2: 'B', ex1: 'B', totS1: 'B', p3: 'B', p4: 'B', ex2: 'B', totS2: 'B', tg: 'B' }
+                        };
+                    }
+                    const beh = appState.behaviour[student.id];
+                    if (!appState.repechage) appState.repechage = {};
+
+                    const sig = bpResolveSignature(cls);
+                    const sigImg = sig.src ? '<img class="bp-sign-img" src="' + safeHTML(sig.src) + '" alt="">' : '';
+                    const seal = bpSafeImg(school.seal);
+                    const sealImg = seal ? '<img class="bp-seal-img" src="' + safeHTML(seal) + '" alt="">' : '';
+                    let headSig = bpSafeImg(school.headSignature);
+                    if (!headSig && bpSignatureSource(cls) === 'default') headSig = BP_DEFAULT_SIGNATURE;
+                    const headSigImg = headSig ? '<img class="bp-foot-sign" src="' + safeHTML(headSig) + '" alt="">' : '';
+                    const armoiries = bpSafeImg(school.armoiries);
+                    const year = school.schoolYear || bpDefaultSchoolYear();
+                    const titleClass = ((cls && cls.bulletinTitle) || (cls && cls.name) || '').toUpperCase();
+                    const sepCls = c => c.sep ? ' bp-sep' : '';
+                    const failCls = (value, max) => (isRep && value !== null && max > 0 && value < max / 2) ? ' bp-fail' : '';
+
+                    // Groupes : domaines > sous-domaines > cours
+                    const cats = (cls && cls.categories && cls.categories.length) ? cls.categories.slice() : ['Général'];
+                    const known = new Set(cats.map(bpNorm));
+                    const others = classCourses.filter(c => !known.has(bpNorm(c.category)));
+                    const domains = cats.map(cat => ({ label: cat, courses: classCourses.filter(c => bpNorm(c.category) === bpNorm(cat)) }));
+                    if (others.length) domains.push({ label: 'Autres cours', courses: others });
+
+                    // Une ligne à partir de fonctions de rendu des cellules (une par colonne)
+                    const rowOf = (cls_, nameCell, cellFn, tailCells) => '<tr class="' + cls_ + '">' + nameCell + BP_COLS.map(cellFn).join('') + (tailCells || '') + '</tr>';
+                    const plain = (c, inner, extra) => '<td class="' + (extra || '') + sepCls(c) + '">' + inner + '</td>';
+                    const dark = c => '<td class="bp-black' + sepCls(c) + '"></td>';
+                    const repDark = isRep ? '<td colspan="2" class="bp-black bp-sep"></td>' : '';
+                    const fullSpan = 17;
+
+                    const gradeCell = (c, key, value, max) => {
+                        const txt = value === null ? '' : bpFmt(value);
+                        if (!editable) return plain(c, safeHTML(txt), failCls(value, max).trim());
+                        return '<td contenteditable="true" inputmode="decimal" class="bp-edit bp-grade' + failCls(value, max) + '" data-student="' + safeHTML(student.id) + '" data-key="' + safeHTML(key) + '" data-field="' + c.k + '" data-max="' + safeHTML(max) + '">' + safeHTML(txt) + '</td>';
+                    };
+
+                    const grand = bpNewGroup();
+                    let body = '';
+                    const missingSig = new Set();
+
+                    domains.forEach(dom => {
+                        if (!dom.courses.length) return;
+                        body += '<tr><td colspan="' + fullSpan + '" class="bp-domain">' + safeHTML(dom.label) + '</td>' + repDark + '</tr>';
+                        const subLabels = [];
+                        dom.courses.forEach(c => { const s = (c.subCategory || '').trim(); if (!subLabels.includes(s)) subLabels.push(s); });
+                        subLabels.forEach(sub => {
+                            if (sub) body += '<tr><td colspan="' + fullSpan + '" class="bp-sub">' + safeHTML(sub) + '</td>' + repDark + '</tr>';
+                            const grp = bpNewGroup();
+                            dom.courses.filter(c => (c.subCategory || '').trim() === sub).forEach(crs => {
+                                const mPer = bpNum(crs.maxPer) || 0, mEx = mPer * 2, mTot = mPer * 4, mTG = mTot * 2;
+                                const v = bpCourseValues(student.id, crs);
+                                const key = student.id + '_' + crs.id;
+                                [grp, grand].forEach(G => {
+                                    G.maxP += mPer; G.maxEx += mEx; G.maxTot += mTot; G.maxTG += mTG;
+                                    BP_TOTAL_KEYS.forEach(k => bpAdd(G[k], v[k]));
+                                });
+                                const mx = { max1: mPer, max2: mPer, mex1: mEx, mex2: mEx, msem1: mTot, msem2: mTot, mtg: mTG };
+                                let tail = '';
+                                if (isRep) {
+                                    const rep = bpNum(appState.repechage[key]);
+                                    const repTxt = rep === null ? '' : bpFmt(rep);
+                                    tail = (editable
+                                        ? '<td contenteditable="true" inputmode="decimal" class="bp-edit bp-rep bp-sep" data-student="' + safeHTML(student.id) + '" data-key="' + safeHTML(key) + '">' + safeHTML(repTxt) + '</td>'
+                                        : '<td class="bp-sep">' + safeHTML(repTxt) + '</td>');
+                                    const cs = bpCourseSignature(cls, crs);
+                                    if (cs.missing) missingSig.add(cs.missing);
+                                    tail += '<td class="bp-sigcell">' + (cs.src ? '<img class="bp-sign-img" src="' + safeHTML(cs.src) + '" alt="">' : '') + '</td>';
+                                }
+                                body += rowOf('bp-course', '<td class="bp-name">' + safeHTML(crs.name) + '</td>', c => {
+                                    if (c.k in mx) return plain(c, safeHTML(mx[c.k]), 'bp-max');
+                                    if (BP_GRADE_KEYS.includes(c.k)) return gradeCell(c, key, v[c.k], mx[BP_MAX_OF[c.k]]);
+                                    return plain(c, v[c.k] === null ? '' : bpFmt(v[c.k]), 'bp-calc' + failCls(v[c.k], mx[BP_MAX_OF[c.k]]));
+                                }, tail);
+                            });
+                            const gm = bpMaxesOf(grp);
+                            body += rowOf('bp-subtotal', '<td class="bp-name">Sous-Total</td>', c => {
+                                if (c.k in gm) return plain(c, safeHTML(gm[c.k]), 'bp-max');
+                                return plain(c, safeHTML(bpShow(grp[c.k])), failCls(grp[c.k].n ? grp[c.k].v : null, gm[BP_MAX_OF[c.k]]).trim());
+                            }, isRep ? '<td class="bp-sep"></td><td></td>' : '');
+                        });
+                    });
+
+                    // ---- Lignes de synthèse ----
+                    const gm = bpMaxesOf(grand);
+                    const pctOf = k => (mine[k].n > 0 && gm[BP_MAX_OF[k]] > 0) ? (Math.round(mine[k].v / gm[BP_MAX_OF[k]] * 1000) / 10) + '%' : '';
+                    const pctRaw = k => (mine[k].n > 0 && gm[BP_MAX_OF[k]] > 0) ? (Math.round(mine[k].v / gm[BP_MAX_OF[k]] * 1000) / 10) : '';
+                    const rankTxt = k => bpRankShort(k, student, classStudents, allTotals);
+                    const behMap = { p1: 'p1', p2: 'p2', ex1: 'ex1', p3: 'p3', p4: 'p4', ex2: 'ex2', s1: 'totS1', s2: 'totS2', tg: 'tg' };
+                    const behEditable = isRep ? ['p1', 'p2', 's1', 'p3', 'p4', 's2', 'tg'] : ['p1', 'p2', 'ex1', 'p3', 'p4', 'ex2'];
+                    const behDarkKeys = isRep ? ['ex1', 'ex2'] : [];
+                    const behCell = (type, c) => {
+                        const f = behMap[c.k];
+                        const val = (beh[type] && beh[type][f]) || '';
+                        if (editable && behEditable.includes(c.k)) {
+                            return '<td contenteditable="true" class="bp-edit bp-beh' + sepCls(c) + '" data-student="' + safeHTML(student.id) + '" data-type="' + type + '" data-field="' + f + '">' + safeHTML(val) + '</td>';
+                        }
+                        return plain(c, safeHTML(val), ['s1', 's2', 'tg'].includes(c.k) ? 'bp-calc' : '');
+                    };
+                    const isMaxCol = c => BP_MAX_KEYS.includes(c.k);
+                    const nameCellOf = t => '<td class="bp-name">' + t + '</td>';
+
+                    if (isRep) {
+                        // Comme sur le bulletin Excel : MAXIMA GENERAUX porte les maxima (cases grises) ET les totaux de l'élève
+                        const passBlock = '<td colspan="2" rowspan="6" class="bp-passblock bp-sep">Passe &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(1)<br>Double &nbsp;&nbsp;&nbsp;(1)<br>A échoué &nbsp;(1)<br><br>Le.../.../20...<br><span>LE CHEF<br>D\'ÉTABLISSEMENT</span></td>';
+                        body += rowOf('bp-sum bp-maxrow', nameCellOf('MAXIMA GENERAUX'), c => isMaxCol(c) ? plain(c, safeHTML(gm[c.k]), 'bp-max') : plain(c, safeHTML(bpShow(mine[c.k])), 'bp-strong' + failCls(mine[c.k].n ? mine[c.k].v : null, gm[BP_MAX_OF[c.k]])), passBlock);
+                        body += rowOf('bp-sum', nameCellOf('Pourcentage'), c => isMaxCol(c) ? dark(c) : plain(c, safeHTML(pctRaw(c.k)), 'bp-strong'));
+                        body += rowOf('bp-sum', nameCellOf('Place/ ' + classStudents.length + ' élèves'), c => isMaxCol(c) ? dark(c) : plain(c, rankTxt(c.k), 'bp-strong'));
+                        body += rowOf('bp-sum', nameCellOf('Application'), c => (isMaxCol(c) || behDarkKeys.includes(c.k)) ? dark(c) : behCell('app', c));
+                        body += rowOf('bp-sum', nameCellOf('Conduite'), c => (isMaxCol(c) || behDarkKeys.includes(c.k)) ? dark(c) : behCell('cond', c));
+                        body += rowOf('bp-sum bp-parentrow', nameCellOf('Signature parent d\'élève'), c => (isMaxCol(c) || behDarkKeys.includes(c.k)) ? dark(c) : plain(c, ''));
+                    } else {
+                        body += rowOf('bp-sum', nameCellOf('MAXIMA GÉNÉRAUX'), c => isMaxCol(c) ? plain(c, safeHTML(gm[c.k]), 'bp-calc') : plain(c, ''));
+                        body += rowOf('bp-sum', nameCellOf('TOTAUX'), c => isMaxCol(c) ? dark(c) : plain(c, safeHTML(bpShow(mine[c.k])), 'bp-calc'));
+                        body += rowOf('bp-sum', nameCellOf('POURCENTAGE'), c => isMaxCol(c) ? dark(c) : plain(c, safeHTML(pctOf(c.k))));
+                        body += rowOf('bp-sum', nameCellOf('PLACE/ ' + classStudents.length + ' ÉLÈVES'), c => isMaxCol(c) ? dark(c) : plain(c, rankTxt(c.k)));
+                        body += rowOf('bp-sum', nameCellOf('APPLICATION'), c => isMaxCol(c) ? dark(c) : behCell('app', c));
+                        body += rowOf('bp-sum', nameCellOf('CONDUITE'), c => isMaxCol(c) ? dark(c) : behCell('cond', c));
+                        body += '<tr class="bp-sigrow"><td class="bp-name"><strong>SIGNATURE</strong></td>' +
+                            '<td colspan="3">' + sigImg + '</td><td colspan="4">' + sigImg + '</td>' +
+                            '<td colspan="3" class="bp-sep">' + sigImg + '</td><td colspan="4">' + sigImg + '</td><td colspan="2" class="bp-sep"></td></tr>';
+                    }
+
+                    const widths = isRep
+                        ? [39, 7.5, 8, 8, 8.5, 7.5, 10, 8.5, 7.5, 8, 8, 8.5, 7.5, 10, 8.5, 9.5, 8.5, 6, 13]
+                        : [25.5, 7, 7.5, 7.5, 8, 7, 9, 8, 7, 7.5, 7.5, 8, 7, 9, 8, 9.5, 8];
+                    const colgroup = '<colgroup>' + widths.map(w => '<col style="width:' + w + 'mm">').join('') + '</colgroup>';
+                    const thead = '<thead>' +
+                        '<tr><th rowspan="3" class="bp-th-name">BRANCHES</th><th colspan="7">PREMIER SEMESTRE</th><th colspan="7" class="bp-sep">SECOND SEMESTRE</th><th rowspan="2" class="bp-sep">TOTAL</th><th rowspan="2">MAX</th>' + (isRep ? '<th colspan="2" class="bp-sep bp-small">EXA DE REPÊCHAGE</th>' : '') + '</tr>' +
+                        '<tr><th rowspan="2">MAX Pér.</th><th colspan="2">Trav. Jour</th><th rowspan="2">EXAM (1)</th><th rowspan="2">MAX EXAM</th><th rowspan="2">TOT. 1er SEM</th><th rowspan="2">MAX 1SEM</th>' +
+                        '<th rowspan="2" class="bp-sep">MAX Pér.</th><th colspan="2">Trav. Jour</th><th rowspan="2">EXAM (2)</th><th rowspan="2">MAX EXAM</th><th rowspan="2">TOT. 2è SEM</th><th rowspan="2">MAX 2SEM</th>' +
+                        (isRep ? '<th rowspan="2" class="bp-sep">%</th><th rowspan="2">signatures profs</th>' : '') + '</tr>' +
+                        '<tr><th>1è P</th><th>2è P</th><th>3è P</th><th>4è P</th><th class="bp-sep">GEN</th><th>GEN</th></tr></thead>';
+
+                    const dots = '................................';
+                    const fullName = (student.name + ' ' + (student.postname || '') + ' ' + (student.prename || '')).replace(/\s+/g, ' ').trim().toUpperCase();
+                    const bornTxt = (student.bornWhere || '') + (student.bornDate ? ' le ' + bpFormatDate(student.bornDate) : '');
+                    const head = '<div class="bp-head">' + BP_FLAG_SVG +
+                        '<div class="bp-head-title">RÉPUBLIQUE DÉMOCRATIQUE DU CONGO<br>MINISTÈRE DE L\'ÉDUCATION NATIONALE ET NOUVELLE CITOYENNETÉ</div>' +
+                        (armoiries ? '<img class="bp-armoiries" src="' + safeHTML(armoiries) + '" alt="">' : '<div class="bp-armoiries-empty"></div>') + '</div>';
+                    const titleBar = '<div class="bp-title">BULLETIN DE LA ' + safeHTML(titleClass) + ' <span>ANNÉE SCOLAIRE ' + safeHTML(year) + '</span></div>';
+                    const table = '<table class="bp-table">' + colgroup + thead + '<tbody>' + body + '</tbody></table>';
+
+                    let warnMissing = '';
+                    if (isRep && missingSig.size && bpSignatureSource(cls) === 'titulaire') warnMissing = Array.from(missingSig).join(', ');
+                    const page = (inner, extraAttr) => '<div class="bp-page" data-model="' + model + '" data-missing="' + safeHTML(warnMissing) + '"' + (extraAttr || '') + '>' + inner + '</div>';
+
+                    if (isRep) {
+                        const info = '<div class="bp-info bp-info-rep">' +
+                            '<div class="bp-info-col"><div>VILLE : <strong>' + safeHTML((school.city || '').toUpperCase()) + '</strong></div>' +
+                            '<div>COMMUNE/TER. (1) : <strong>' + safeHTML((school.commune || '').toUpperCase()) + '</strong></div>' +
+                            '<div>ÉCOLE : <strong>' + safeHTML((school.name || '').toUpperCase()) + '</strong></div>' +
+                            '<div>CODE : ' + renderDigitBoxes(school.code) + '</div></div>' +
+                            '<div class="bp-info-col bp-info-right"><div>ÉLÈVE : <strong>' + safeHTML(fullName) + '</strong> &nbsp; SEXE : <strong>' + safeHTML(student.sexe || '') + '</strong></div>' +
+                            '<div>NÉ(E) À : <strong>' + safeHTML(bornTxt) + '</strong></div>' +
+                            '<div>CLASSE : <strong>' + safeHTML(cls ? cls.name : '') + '</strong></div>' +
+                            '<div>N° PERM. : ' + renderDigitBoxes(student.permi || '') + '</div></div></div>';
+                        const decision = '<div class="bp-decision">' +
+                            '<div>1. L\'élève ne pourra passer dans la classe supérieure s\'il n\'a pas subi avec succès un examen de repêchage en :</div>' +
+                            '<div class="bp-dotline"></div><div class="bp-dotline"></div>' +
+                            '<div class="bp-decision-grid"><div>' +
+                            '<div>2. L\'élève passe dans la classe supérieure (1)</div><div>3. L\'élève double sa classe (1)</div>' +
+                            '<div>4. L\'élève a échoué et est réorienté vers (1)</div><div>5. Signature de l\'élève</div></div>' +
+                            '<div class="bp-decision-mid">Fait à ' + safeHTML(school.city || '................') + ', le ......../......../20........<br>Sceau de l\'école<br>' + sealImg + '</div>' +
+                            '<div class="bp-decision-right"><strong>RESPONSABLE DE L\'ÉTABLISSEMENT</strong><br>' + headSigImg + '<br><strong>' + safeHTML(school.headName || '') + '</strong></div></div>' +
+                            '<div class="bp-decision-notes"><div>(1) Biffer la mention inutile</div>' +
+                            '<div><strong>Note importante : le bulletin est sans valeur s\'il est raturé ou surchargé</strong></div>' +
+                            '<div><strong>Interdiction formelle de reproduire ce bulletin sous peine des sanctions prévues par la loi</strong></div></div></div>';
+                        return page(head + '<div class="bp-idbar"><span>N° ID :</span>' + renderDigitBoxes(school.id) + '</div>' +
+                            '<div class="bp-province">PROVINCE ÉDUCATIONNELLE : <strong>' + safeHTML((school.province || 'SUD-KIVU').toUpperCase()) + '</strong></div>' +
+                            info + titleBar + table + decision);
+                    }
+
+                    // ---- Modèles paysage : colonne principale + panneau latéral ----
+                    let side = '';
+                    if (M.examEtat) {
+                        side += '<div class="bp-box"><div class="bp-box-title">EXAMEN D\'ÉTAT</div>' +
+                            '<table class="bp-side-table"><thead><tr><th></th><th>Points Obt.</th><th>MAX</th></tr></thead>' +
+                            '<tbody><tr><td>MEC</td><td></td><td></td></tr><tr><td>%</td><td></td><td></td></tr></tbody></table>' +
+                            '<div style="line-height:1.5;">Pour le contrôle le ................<br><strong>Nom et signature du Chef de centre</strong><br>' + dots + '<br>' + dots + '</div>' +
+                            '<div style="margin-top:1.5mm;">Code du Centre<div class="bp-code-boxes"><span></span><span></span><span></span><span></span><span></span></div></div></div>';
+                        side += '<div class="bp-box" style="flex:1;"><div class="bp-box-title">RÉSULTAT FINAL</div>' +
+                            '<div style="line-height:1.7;">Diplôme (1)<br>Avec ........... %<br>A échoué (1)<br><br>Verser le témoignage<br>' + dots + '<br><br>Le ......../......../20........<br><strong>Le Chef d\'établissement</strong></div>' +
+                            '<div class="bp-side-sign">' + headSigImg + '<br>Sceau de l\'école<br>' + sealImg + '</div></div>';
+                    } else {
+                        side += '<div class="bp-box" style="flex:1;"><div class="bp-box-title">RÉSULTAT DE L\'ANNÉE</div>' +
+                            '<div style="line-height:1.8;">Pourcentage : <strong>' + safeHTML(pctOf('tg') || '........ %') + '</strong><br>Place : <strong>' + (rankTxt('tg') || '........') + '</strong><br><br>' +
+                            'Décision du conseil de classe :<br>' + dots + '<br>' + dots + '<br><br>Le ......../......../20........<br><strong>Le Chef d\'établissement</strong></div>' +
+                            '<div class="bp-side-sign">' + headSigImg + '<br>Sceau de l\'école<br>' + sealImg + '</div></div>';
+                    }
+                    const info = '<div class="bp-info">' +
+                        '<div>ÉDUCATION PROVINCIALE : <strong>' + safeHTML((school.province || 'SUD-KIVU').toUpperCase()) + '</strong></div>' +
+                        '<div>ÉLÈVE : <strong>' + safeHTML(fullName) + '</strong></div>' +
+                        '<div>VILLE : <strong>' + safeHTML((school.city || '').toUpperCase()) + '</strong></div>' +
+                        '<div>SEXE : <strong>' + safeHTML(student.sexe || '') + '</strong></div>' +
+                        '<div>COMMUNE/TER : <strong>' + safeHTML((school.commune || '').toUpperCase()) + '</strong></div>' +
+                        '<div>NÉ(E) À : <strong>' + safeHTML((student.bornWhere || '').toUpperCase()) + '</strong> LE <strong>' + safeHTML(bpFormatDate(student.bornDate)) + '</strong></div>' +
+                        '<div>ÉCOLE : <strong>' + safeHTML((school.name || '').toUpperCase()) + '</strong></div>' +
+                        '<div>CLASSE : <strong>' + safeHTML(cls ? cls.name.toUpperCase() : '') + '</strong></div>' +
+                        '<div>CODE : ' + renderDigitBoxes(school.code) + '</div>' +
+                        '<div>N° PERM. : ' + renderDigitBoxes(student.permi || '') + '</div></div>';
+                    return page(head + '<div class="bp-body"><div class="bp-main">' +
+                        '<div class="bp-idbar"><span>N° ID :</span>' + renderDigitBoxes(school.id) + '</div>' + info + titleBar + table +
+                        '<div class="bp-foot-date">Fait à ' + safeHTML(school.city || '................') + ', le ......../......../20........</div>' +
+                        '<div class="bp-foot"><div>Signature de l\'élève</div><div>Sceau de l\'école' + sealImg + '</div>' +
+                        '<div>Le Chef d\'Établissement,<br><strong>Nom et Signature</strong>' + headSigImg + '<span>' + safeHTML(school.headName || '') + '</span></div></div>' +
+                        '<div class="bp-notes"><span>(1) Biffer la mention inutile</span><span>Note importante : Le bulletin est sans valeur s\'il est raturé ou surchargé</span><span><strong>IGE/PS/010</strong></span></div>' +
+                        '</div><div class="bp-side">' + side + '</div></div>');
+                }
+
+                // ---- Affichage à l'écran ----
+                function bpFitScreen() {
+                    const frame = document.getElementById('bulletinScreenFrame');
+                    const page = frame && frame.querySelector('.bp-page');
+                    if (!frame || !page) return;
+                    const fw = frame.clientWidth;
+                    if (!fw) return;
+                    const s = Math.min(1, fw / page.offsetWidth);
+                    page.style.transformOrigin = 'top left';
+                    page.style.transform = s < 1 ? 'scale(' + s + ')' : '';
+                    page.style.margin = s < 1 ? '0' : '0 auto';
+                    frame.style.height = Math.ceil(page.offsetHeight * s) + 'px';
+                }
+
+                function bpSyncToolbar(cls) {
+                    const set = (id, v) => { const e = document.getElementById(id); if (e) e.value = v; };
+                    set('bpModelSelect', bpClassModel(cls));
+                    set('bpSignatureSelect', bpSignatureSource(cls));
+                    set('bpPaperSelect', bpPaper());
+                    const warn = document.getElementById('bpWarn');
+                    if (!warn) return;
+                    const page = document.querySelector('#officialBulletinArea .bp-page');
+                    const missing = page ? page.getAttribute('data-missing') : '';
+                    if (cls && BULLETIN_MODELS[bpClassModel(cls)].repechage) {
+                        if (bpSignatureSource(cls) === 'default') warn.textContent = 'Signature par défaut utilisée (démonstration).';
+                        else warn.textContent = missing ? 'Signature manquante pour : ' + missing + ' (la case restera vide).' : '';
+                    } else {
+                        warn.textContent = cls ? bpResolveSignature(cls).warn : '';
+                    }
+                }
+
+                window.renderOfficialBulletin = function(studentId) {
+                    const student = appState.students.find(s => s.id === studentId);
+                    const area = document.getElementById('officialBulletinArea');
+                    if (!student || !area) return;
+                    const cls = appState.classes.find(c => c.id === student.classId);
+                    area.innerHTML = bpBuildPage(student, { editable: true });
+                    bpSyncToolbar(cls);
+                    bpFitScreen();
+                };
+
+                // ---- Impression (A4 / A3, orientation selon le modèle) ----
+                function bpPaper() { return appState.printSettings && appState.printSettings.paper === 'A3' ? 'A3' : 'A4'; }
+                function bpOrientationOf(classId) {
+                    const cls = appState.classes.find(c => c.id === classId);
+                    return BULLETIN_MODELS[bpClassModel(cls)].orientation;
+                }
+                function bpSheetDims(orientation) {
+                    const a3 = bpPaper() === 'A3';
+                    if (orientation === 'portrait') return a3 ? { w: 285, h: 408 } : { w: 198, h: 284 };
+                    return a3 ? { w: 408, h: 284 } : { w: 285, h: 197 };
+                }
+                function bpApplyPageStyle(orientation) {
+                    let st = document.getElementById('bpPageStyle');
+                    if (!st) { st = document.createElement('style'); st.id = 'bpPageStyle'; document.head.appendChild(st); }
+                    st.textContent = '@page { size: ' + bpPaper() + ' ' + orientation + '; margin: 6mm; }';
+                }
+                function bpBuildSheets(studentIds, orientation) {
+                    const dims = bpSheetDims(orientation);
+                    const container = document.createElement('div');
+                    container.id = 'pdfExportContainer';
+                    container.style.cssText = 'position:fixed;left:-20000px;top:0;';
+                    studentIds.forEach(id => {
+                        const st = appState.students.find(s => s.id === id);
+                        if (!st) return;
+                        const sheet = document.createElement('div');
+                        sheet.className = 'print-sheet';
+                        sheet.style.width = dims.w + 'mm';
+                        sheet.style.height = dims.h + 'mm';
+                        sheet.innerHTML = bpBuildPage(st, { editable: false });
+                        container.appendChild(sheet);
+                    });
+                    document.body.appendChild(container);
+                    container.querySelectorAll('.print-sheet').forEach(sheet => {
+                        const page = sheet.querySelector('.bp-page');
+                        const pw = page.offsetWidth, ph = page.offsetHeight;
+                        const s = Math.min(sheet.clientWidth / pw, sheet.clientHeight / ph);
+                        page.style.position = 'absolute';
+                        page.style.left = '50%';
+                        page.style.top = '0';
+                        page.style.marginLeft = (-pw / 2) + 'px';
+                        page.style.transformOrigin = 'top center';
+                        page.style.transform = 'scale(' + s + ')';
+                    });
+                    return container;
+                }
+                function bpPrint(ids, classId) {
+                    if (!ids.length) return alert("Aucun élève à imprimer.");
+                    const old = document.getElementById('pdfExportContainer');
+                    if (old) old.remove();
+                    const orientation = bpOrientationOf(classId);
+                    bpApplyPageStyle(orientation);
+                    bpBuildSheets(ids, orientation);
+                    document.body.classList.add('bp-printing');
+                    const done = () => {
+                        document.body.classList.remove('bp-printing');
+                        const c = document.getElementById('pdfExportContainer');
+                        if (c) c.remove();
+                        window.removeEventListener('afterprint', done);
+                    };
+                    window.addEventListener('afterprint', done);
+                    setTimeout(() => window.print(), 150);
+                }
+                window.printStudentBulletin = function() {
+                    const st = appState.students.find(s => s.id === activeStudentId);
+                    bpPrint(st ? [st.id] : [], st ? st.classId : activeClassId);
+                };
+                window.printClassBulletins = function() {
+                    bpPrint(appState.students.filter(s => s.classId === activeClassId).map(s => s.id), activeClassId);
+                };
+                window.exportClassBulletinsPDF = function() {
+                    try {
+                        if (!localStorage.getItem('bp_pdf_hint_seen')) {
+                            localStorage.setItem('bp_pdf_hint_seen', '1');
+                            alert("Dans la fenêtre d'impression, choisissez « Enregistrer au format PDF » comme imprimante. L'orientation paysage et le format sont déjà réglés.");
+                        }
+                    } catch (e) { /* stockage indisponible */ }
+                    window.printClassBulletins();
+                };
+
+                // ---- Paramètres : identité, sceau, signatures ----
+                const BP_IMAGE_SLOTS = [
+                    { key: 'seal', label: "SCEAU DE L'ÉCOLE", maxW: 500, maxH: 500 },
+                    { key: 'headSignature', label: "SIGNATURE DU CHEF D'ÉTABLISSEMENT", maxW: 700, maxH: 300 },
+                    { key: 'armoiries', label: 'ARMOIRIES (EN-TÊTE)', maxW: 400, maxH: 400 }
+                ];
+                function bpImageSlotHTML(target, label, src) {
+                    const safe = bpSafeImg(src);
+                    return '<div style="border:1px solid var(--border-color); border-radius:8px; padding:0.7rem; display:flex; flex-direction:column; gap:0.5rem;">' +
+                        '<strong style="font-size:0.75rem;">' + safeHTML(label) + '</strong>' +
+                        '<div style="height:70px; display:flex; align-items:center; justify-content:center; background:#fff; border:1px dashed #94a3b8; border-radius:6px;">' +
+                        (safe ? '<img src="' + safeHTML(safe) + '" alt="" style="max-height:64px; max-width:100%;">' : '<small style="color:#64748b;">Aucune image</small>') + '</div>' +
+                        '<div style="display:flex; gap:0.4rem; flex-wrap:wrap;">' +
+                        '<button type="button" class="btn-primary" style="padding:0.25rem 0.6rem; font-size:0.75rem;" data-bp-target="' + safeHTML(target) + '" data-bp-action="camera">📷 Photo</button>' +
+                        '<button type="button" class="btn-secondary" style="padding:0.25rem 0.6rem; font-size:0.75rem;" data-bp-target="' + safeHTML(target) + '" data-bp-action="file">🖼️ Fichier</button>' +
+                        (safe ? '<button type="button" class="btn-secondary" style="padding:0.25rem 0.6rem; font-size:0.75rem; background:#dc2626; color:#fff;" data-bp-target="' + safeHTML(target) + '" data-bp-action="clear">Supprimer</button>' : '') +
+                        '</div></div>';
+                }
+                function bpSetImage(target, dataUrl) {
+                    if (target.startsWith('school:')) {
+                        const key = target.slice(7);
+                        if (dataUrl) appState.school[key] = dataUrl; else delete appState.school[key];
+                    } else if (target.startsWith('teacher:')) {
+                        const key = target.slice(8);
+                        if (!appState.signatureBook) appState.signatureBook = {};
+                        if (dataUrl) appState.signatureBook[key] = dataUrl;
+                        else {
+                            delete appState.signatureBook[key];
+                            (appState.teachers || []).forEach(t => { if (bpNorm(t.name) === key || bpNorm(t.uniqueId) === key) delete t.signature; });
+                        }
+                    }
+                    saveState();
+                    bpRenderIdentityCard();
+                    if (activeStudentId && appState.students.some(s => s.id === activeStudentId)) window.renderOfficialBulletin(activeStudentId);
+                }
+                function bpAllTeacherNames() {
+                    const seen = {}, out = [];
+                    const add = n => { const key = bpNorm(n); if (!key || key === 'non assigne' || seen[key]) return; seen[key] = 1; out.push({ key, name: n }); };
+                    appState.classes.forEach(c => add(c.titulaire));
+                    appState.courses.forEach(c => add(c.titulaire));
+                    (appState.teachers || []).forEach(t => add(t.name));
+                    return out;
+                }
+                async function bpHandleImageAction(target, action) {
+                    if (action === 'clear') return bpSetImage(target, null);
+                    const slot = BP_IMAGE_SLOTS.find(s => 'school:' + s.key === target);
+                    const opts = slot ? { maxW: slot.maxW, maxH: slot.maxH } : { maxW: 700, maxH: 300 };
+                    const file = await bpPickImage(action === 'camera');
+                    if (!file) return;
+                    try {
+                        bpSetImage(target, await bpProcessImage(file, opts));
+                    } catch (e) {
+                        alert(e.message || "Impossible de traiter l'image.");
+                    }
+                }
+                function bpRenderIdentityCard() {
+                    const card = document.getElementById('identityCard');
+                    if (!card) return;
+                    const school = appState.school;
+                    const map = { idSchoolYear: school.schoolYear || bpDefaultSchoolYear(), idProvince: school.province || '', idCity: school.city || '', idCommune: school.commune || '', idSchoolName: school.name || '', idHeadName: school.headName || '' };
+                    Object.keys(map).forEach(id => { const e = document.getElementById(id); if (e && document.activeElement !== e) e.value = map[id]; });
+                    const ro = document.getElementById('idReadonly');
+                    if (ro) ro.textContent = 'ID ' + (school.id || '-') + ' · Code ' + (school.code || '-');
+                    const imgs = document.getElementById('identityImages');
+                    if (imgs) imgs.innerHTML = BP_IMAGE_SLOTS.map(s => bpImageSlotHTML('school:' + s.key, s.label, school[s.key])).join('');
+                    const tit = document.getElementById('identityTitulaires');
+                    if (tit) {
+                        const names = bpAllTeacherNames();
+                        tit.innerHTML = names.length
+                            ? '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:0.8rem;">' + names.map(n => bpImageSlotHTML('teacher:' + n.key, n.name, bpSignatureForName(n.name))).join('') + '</div>'
+                            : '<small>Aucun enseignant pour le moment.</small>';
+                    }
+                }
+
+                // ---- Fenêtre « Éditer la classe » ----
                 window.openEditClassModal = function() {
                     const cls = appState.classes.find(c => c.id === activeClassId);
                     if (!cls) return alert("Veuillez d'abord sélectionner une classe.");
@@ -1863,6 +2686,10 @@ function jsArg(value) {
                     editingClassId = cls.id;
                     document.getElementById('name-added-class').value = cls.name;
                     document.getElementById('name-titulaire-added-class').value = cls.titulaire;
+                    document.getElementById('class-bulletin-model').value = bpClassModel(cls);
+                    document.getElementById('class-bulletin-title').value = cls.bulletinTitle || '';
+                    document.getElementById('class-signature-source').value = bpSignatureSource(cls);
+                    document.getElementById('class-autocourses').checked = false;
 
                     const container = document.getElementById('categoriesContainer');
                     container.innerHTML = '';
@@ -1879,322 +2706,121 @@ function jsArg(value) {
                     renderinterface('ajouter_classe');
                 };
 
-                window.renderOfficialBulletin = function(studentId) {
-            const student = appState.students.find(s => s.id === studentId);
-            if (!student) return;
-
-            const currentClass = appState.classes.find(c => c.id === student.classId);
-            const classStudents = appState.students.filter(s => s.classId === student.classId);
-            const classCourses = appState.courses.filter(c => c.classId === student.classId);
-            const totalStudentsCount = classStudents.length;
-
-            // 1. En-tête administratif
-            document.getElementById('digitIdBox').innerHTML = renderDigitBoxes(appState.school.id);
-            document.getElementById('digitCodeBox').innerHTML = renderDigitBoxes(appState.school.code);
-            document.getElementById('digitPermiBox').innerHTML = renderDigitBoxes(student.permi || "000000000000");
-
-            document.getElementById('bProv').textContent = appState.school.province || 'SUD-KIVU';
-            document.getElementById('bStudentFullName').textContent = `${student.name} ${student.postname} ${student.prename}`.toUpperCase();
-            document.getElementById('bStudentSexe').textContent = student.sexe;
-            document.getElementById('bStudentBornWhere').textContent = (student.bornWhere || 'BUKAVU').toUpperCase();
-            document.getElementById('bStudentBornDate').textContent = student.bornDate || '-';
-            document.getElementById('bStudentClass').textContent = currentClass ? currentClass.name : '';
-            document.getElementById('bTitleClass').textContent = currentClass ? currentClass.name.toUpperCase() : '';
-
-            // 2. Calcul automatique du Rang (Places)
-            function calculateClassRanks() {
-                const studentTotals = classStudents.map(st => {
-                    let p1 = 0, p2 = 0, ex1 = 0, totS1 = 0, p3 = 0, p4 = 0, ex2 = 0, totS2 = 0, tg = 0;
-                    classCourses.forEach(crs => {
-                        const g = appState.grades[`${st.id}_${crs.id}`] || { p1: 0, p2: 0, ex1: 0, p3: 0, p4: 0, ex2: 0 };
-                        const vP1 = parseFloat(g.p1) || 0, vP2 = parseFloat(g.p2) || 0, vEx1 = parseFloat(g.ex1) || 0;
-                        const vP3 = parseFloat(g.p3) || 0, vP4 = parseFloat(g.p4) || 0, vEx2 = parseFloat(g.ex2) || 0;
-                        const s1 = vP1 + vP2 + vEx1;
-                        const s2 = vP3 + vP4 + vEx2;
-                        
-                        p1 += vP1; p2 += vP2; ex1 += vEx1; totS1 += s1;
-                        p3 += vP3; p4 += vP4; ex2 += vEx2; totS2 += s2;
-                        tg += (s1 + s2);
-                    });
-                    return { id: st.id, sexe: st.sexe, p1, p2, ex1, totS1, p3, p4, ex2, totS2, tg };
-                });
-
-                const getRank = (key, sexe) => {
-                    const sorted = [...studentTotals].sort((a, b) => b[key] - a[key]);
-                    const rank = sorted.findIndex(s => s.id === studentId) + 1;
-                    const suffix = (rank === 1) ? (sexe === 'F' ? 'ère' : 'er') : 'ème';
-                    return `${safeHTML(rank)}<sup>${safeHTML(suffix)}</sup> / ${safeHTML(totalStudentsCount)}`;
-                };
-
-                return {
-                    p1: getRank('p1', student.sexe),
-                    p2: getRank('p2', student.sexe),
-                    ex1: getRank('ex1', student.sexe),
-                    totS1: getRank('totS1', student.sexe),
-                    p3: getRank('p3', student.sexe),
-                    p4: getRank('p4', student.sexe),
-                    ex2: getRank('ex2', student.sexe),
-                    totS2: getRank('totS2', student.sexe),
-                    tg: getRank('tg', student.sexe)
-                };
-            }
-
-            const ranks = calculateClassRanks();
-
-            // 3. Comportements (Application / Conduite)
-            if (!appState.behaviour) appState.behaviour = {};
-            if (!appState.behaviour[studentId]) {
-                appState.behaviour[studentId] = {
-                    app: { p1: 'TB', p2: 'TB', ex1: 'TB', totS1: 'TB', p3: 'TB', p4: 'TB', ex2: 'TB', totS2: 'TB', tg: 'TB' },
-                    cond: { p1: 'B', p2: 'B', ex1: 'B', totS1: 'B', p3: 'B', p4: 'B', ex2: 'B', totS2: 'B', tg: 'B' }
-                };
-            }
-            const beh = appState.behaviour[studentId];
-
-            // 4. Traitement des Domaines & Sous-totaux
-            const tbody = document.getElementById('bulletinTableBody');
-            tbody.innerHTML = '';
-
-            const categories = currentClass && currentClass.categories ? currentClass.categories : ['Général'];
-            
-            let grandMaxP1 = 0, grandMaxP2 = 0, grandMaxEx1 = 0, grandMaxS1 = 0;
-            let grandMaxP3 = 0, grandMaxP4 = 0, grandMaxEx2 = 0, grandMaxS2 = 0, grandMaxTG = 0;
-
-            let grandTotP1 = 0, grandTotP2 = 0, grandTotEx1 = 0, grandTotS1 = 0;
-            let grandTotP3 = 0, grandTotP4 = 0, grandTotEx2 = 0, grandTotS2 = 0, grandTotTG = 0;
-
-            categories.forEach(cat => {
-                const catCourses = classCourses.filter(c => c.category === cat);
-                if (catCourses.length > 0) {
-                    const trCat = document.createElement('tr');
-                    trCat.innerHTML = `<td colspan="15" class="cat-header">${safeHTML(cat.toUpperCase())}</td>`;
-                    tbody.appendChild(trCat);
-
-                    let subMaxP1 = 0, subMaxP2 = 0, subMaxEx1 = 0, subMaxS1 = 0;
-                    let subMaxP3 = 0, subMaxP4 = 0, subMaxEx2 = 0, subMaxS2 = 0, subMaxTG = 0;
-
-                    let subTotP1 = 0, subTotP2 = 0, subTotEx1 = 0, subTotS1 = 0;
-                    let subTotP3 = 0, subTotP4 = 0, subTotEx2 = 0, subTotS2 = 0, subTotTG = 0;
-
-                    catCourses.forEach(crs => {
-                        const gradeKey = `${student.id}_${crs.id}`;
-                        const g = appState.grades[gradeKey] || { p1: 0, p2: 0, ex1: 0, p3: 0, p4: 0, ex2: 0 };
-                        
-                        const mPer = parseFloat(crs.maxPer) || 0;
-                        const mEx = mPer * 2;
-                        const mS1 = (mPer * 2) + mEx;
-                        const mS2 = mS1;
-                        const mTG = mS1 + mS2;
-
-                        const vP1 = parseFloat(g.p1) || 0, vP2 = parseFloat(g.p2) || 0, vEx1 = parseFloat(g.ex1) || 0;
-                        const vP3 = parseFloat(g.p3) || 0, vP4 = parseFloat(g.p4) || 0, vEx2 = parseFloat(g.ex2) || 0;
-
-                        const tS1 = vP1 + vP2 + vEx1;
-                        const tS2 = vP3 + vP4 + vEx2;
-                        const tg = tS1 + tS2;
-
-                        subMaxP1 += mPer; subMaxP2 += mPer; subMaxEx1 += mEx; subMaxS1 += mS1;
-                        subMaxP3 += mPer; subMaxP4 += mPer; subMaxEx2 += mEx; subMaxS2 += mS2; subMaxTG += mTG;
-
-                        subTotP1 += vP1; subTotP2 += vP2; subTotEx1 += vEx1; subTotS1 += tS1;
-                        subTotP3 += vP3; subTotP4 += vP4; subTotEx2 += vEx2; subTotS2 += tS2; subTotTG += tg;
-
-                        const tr = document.createElement('tr');
-                        tr.innerHTML = `
-                            <td class="course-name" style="text-align:left;">${safeHTML(crs.name)}</td>
-                            <td>${safeHTML(mPer)}</td>
-                            <td contenteditable="true" class="edit-grade" data-key="${safeHTML(gradeKey)}" data-field="p1">${safeHTML(g.p1)}</td>
-                            <td contenteditable="true" class="edit-grade" data-key="${safeHTML(gradeKey)}" data-field="p2">${safeHTML(g.p2)}</td>
-                            <td>${safeHTML(mEx)}</td>
-                            <td contenteditable="true" class="edit-grade" data-key="${safeHTML(gradeKey)}" data-field="ex1">${safeHTML(g.ex1)}</td>
-                            <td class="calc-cell">${safeHTML(tS1)}</td>
-                            <td>${safeHTML(mPer)}</td>
-                            <td contenteditable="true" class="edit-grade" data-key="${safeHTML(gradeKey)}" data-field="p3">${safeHTML(g.p3)}</td>
-                            <td contenteditable="true" class="edit-grade" data-key="${safeHTML(gradeKey)}" data-field="p4">${safeHTML(g.p4)}</td>
-                            <td>${safeHTML(mEx)}</td>
-                            <td contenteditable="true" class="edit-grade" data-key="${safeHTML(gradeKey)}" data-field="ex2">${safeHTML(g.ex2)}</td>
-                            <td class="calc-cell">${safeHTML(tS2)}</td>
-                            <td class="calc-cell">${safeHTML(mTG)}</td>
-                            <td class="calc-cell" style="font-weight:bold;">${safeHTML(tg)}</td>
-                        `;
-                        tbody.appendChild(tr);
-                    });
-
-                    // Ligne de Sous-Total du Domaine
-                    const trSub = document.createElement('tr');
-                    trSub.className = "subtotal-row";
-                    trSub.innerHTML = `
-                        <td class="course-name" style="text-align:left;"><strong>Sous-Total</strong></td>
-                        <td><strong>${safeHTML(subMaxP1)}</strong></td>
-                        <td><strong>${safeHTML(subTotP1)}</strong></td>
-                        <td><strong>${safeHTML(subTotP2)}</strong></td>
-                        <td><strong>${safeHTML(subMaxEx1)}</strong></td>
-                        <td><strong>${safeHTML(subTotEx1)}</strong></td>
-                        <td class="calc-cell"><strong>${safeHTML(subTotS1)} / ${safeHTML(subMaxS1)}</strong></td>
-                        <td><strong>${safeHTML(subMaxP3)}</strong></td>
-                        <td><strong>${safeHTML(subTotP3)}</strong></td>
-                        <td><strong>${safeHTML(subTotP4)}</strong></td>
-                        <td><strong>${safeHTML(subMaxEx2)}</strong></td>
-                        <td><strong>${safeHTML(subTotEx2)}</strong></td>
-                        <td class="calc-cell"><strong>${safeHTML(subTotS2)} / ${safeHTML(subMaxS2)}</strong></td>
-                        <td class="calc-cell"><strong>${safeHTML(subMaxTG)}</strong></td>
-                        <td class="calc-cell"><strong>${safeHTML(subTotTG)}</strong></td>
-                    `;
-                    tbody.appendChild(trSub);
-
-                    grandMaxP1 += subMaxP1; grandMaxP2 += subMaxP2; grandMaxEx1 += subMaxEx1; grandMaxS1 += subMaxS1;
-                    grandMaxP3 += subMaxP3; grandMaxP4 += subMaxP4; grandMaxEx2 += subMaxEx2; grandMaxS2 += subMaxS2; grandMaxTG += subMaxTG;
-
-                    grandTotP1 += subTotP1; grandTotP2 += subTotP2; grandTotEx1 += subTotEx1; grandTotS1 += subTotS1;
-                    grandTotP3 += subTotP3; grandTotP4 += subTotP4; grandTotEx2 += subTotEx2; grandTotS2 += subTotS2; grandTotTG += subTotTG;
+                // ---- Édition des cases du bulletin (validation à la sortie de la case) ----
+                function bpCommitCell(cell) {
+                    const sid = cell.getAttribute('data-student');
+                    if (cell.classList.contains('bp-grade')) {
+                        const key = cell.getAttribute('data-key'), field = cell.getAttribute('data-field');
+                        const max = parseFloat(cell.getAttribute('data-max'));
+                        const raw = cell.textContent.trim().replace(',', '.');
+                        if (!appState.grades[key]) appState.grades[key] = {};
+                        if (raw === '') {
+                            delete appState.grades[key][field];
+                        } else {
+                            const val = parseFloat(raw);
+                            if (isNaN(val) || val < 0) alert('Note invalide.');
+                            else if (max > 0 && val > max) alert('La note ne peut pas dépasser ' + max + '.');
+                            else appState.grades[key][field] = val;
+                        }
+                    } else if (cell.classList.contains('bp-rep')) {
+                        const key = cell.getAttribute('data-key');
+                        const raw = cell.textContent.trim().replace(',', '.');
+                        if (!appState.repechage) appState.repechage = {};
+                        if (raw === '') delete appState.repechage[key];
+                        else {
+                            const val = parseFloat(raw);
+                            if (isNaN(val) || val < 0 || val > 100) alert('Pourcentage invalide (entre 0 et 100).');
+                            else appState.repechage[key] = val;
+                        }
+                    } else if (cell.classList.contains('bp-beh')) {
+                        const type = cell.getAttribute('data-type'), field = cell.getAttribute('data-field');
+                        if (appState.behaviour && appState.behaviour[sid]) appState.behaviour[sid][type][field] = cell.textContent.trim().toUpperCase().slice(0, 10);
+                    } else return;
+                    saveState();
+                    window.renderOfficialBulletin(sid);
                 }
-            });
 
-            // 5. Synthèses et Pourcentages
-            const pctP1 = grandMaxP1 > 0 ? ((grandTotP1 / grandMaxP1) * 100).toFixed(1) : "0.0";
-            const pctP2 = grandMaxP2 > 0 ? ((grandTotP2 / grandMaxP2) * 100).toFixed(1) : "0.0";
-            const pctEx1 = grandMaxEx1 > 0 ? ((grandTotEx1 / grandMaxEx1) * 100).toFixed(1) : "0.0";
-            const pctS1 = grandMaxS1 > 0 ? ((grandTotS1 / grandMaxS1) * 100).toFixed(1) : "0.0";
+                document.addEventListener('DOMContentLoaded', () => {
+                    if (!appState.school.schoolYear) appState.school.schoolYear = bpDefaultSchoolYear();
+                    if (!appState.printSettings) appState.printSettings = { paper: 'A4' };
 
-            const pctP3 = grandMaxP3 > 0 ? ((grandTotP3 / grandMaxP3) * 100).toFixed(1) : "0.0";
-            const pctP4 = grandMaxP4 > 0 ? ((grandTotP4 / grandMaxP4) * 100).toFixed(1) : "0.0";
-            const pctEx2 = grandMaxEx2 > 0 ? ((grandTotEx2 / grandMaxEx2) * 100).toFixed(1) : "0.0";
-            const pctS2 = grandMaxS2 > 0 ? ((grandTotS2 / grandMaxS2) * 100).toFixed(1) : "0.0";
-            const pctTG = grandMaxTG > 0 ? ((grandTotTG / grandMaxTG) * 100).toFixed(1) : "0.0";
+                    const area = document.getElementById('officialBulletinArea');
+                    if (area) {
+                        area.addEventListener('focusout', e => { if (e.target.closest && e.target.closest('.bp-edit')) bpCommitCell(e.target.closest('.bp-edit')); });
+                        area.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.closest && e.target.closest('.bp-edit')) { e.preventDefault(); e.target.blur(); } });
+                    }
+                    const frame = document.getElementById('bulletinScreenFrame');
+                    if (frame && window.ResizeObserver) {
+                        let lastW = 0;
+                        new ResizeObserver(() => { if (frame.clientWidth !== lastW) { lastW = frame.clientWidth; bpFitScreen(); } }).observe(frame);
+                    }
+                    window.addEventListener('resize', bpFitScreen);
 
-            // Mise à jour du panneau latéral droit
-            document.getElementById('sideFinalPct').textContent = `${pctTG} %`;
+                    const onSelect = (id, fn) => { const e = document.getElementById(id); if (e) e.addEventListener('change', () => fn(e.value)); };
+                    const refresh = () => { saveState(); if (activeStudentId) window.renderOfficialBulletin(activeStudentId); };
+                    onSelect('bpModelSelect', v => { const c = appState.classes.find(x => x.id === activeClassId); if (c && BULLETIN_MODELS[v]) { c.bulletinModel = v; refresh(); } });
+                    onSelect('bpSignatureSelect', v => { const c = appState.classes.find(x => x.id === activeClassId); if (c && BP_SIGNATURE_SOURCES.includes(v)) { c.signatureSource = v; refresh(); } });
+                    onSelect('bpPaperSelect', v => { appState.printSettings.paper = v === 'A3' ? 'A3' : 'A4'; saveState(); });
 
-            const summaryHTML = `
-                <tr class="summary-row main-max-row">
-                    <td class="course-name" style="text-align:left;">MAXIMA GÉNÉRAUX</td>
-                    <td>${safeHTML(grandMaxP1)}</td><td>-</td><td>-</td><td>${safeHTML(grandMaxEx1)}</td><td>-</td><td class="calc-cell">${safeHTML(grandMaxS1)}</td>
-                    <td>${safeHTML(grandMaxP3)}</td><td>-</td><td>-</td><td>${safeHTML(grandMaxEx2)}</td><td>-</td><td class="calc-cell">${safeHTML(grandMaxS2)}</td>
-                    <td class="calc-cell">${safeHTML(grandMaxTG)}</td><td>-</td>
-                </tr>
-                <tr class="summary-row">
-                    <td class="course-name" style="text-align:left;">TOTAUX OBTENUS</td>
-                    <td class="black-cell"></td><td>${safeHTML(grandTotP1)}</td><td>${safeHTML(grandTotP2)}</td><td class="black-cell"></td><td>${safeHTML(grandTotEx1)}</td><td class="calc-cell">${safeHTML(grandTotS1)}</td>
-                    <td class="black-cell"></td><td>${safeHTML(grandTotP3)}</td><td>${safeHTML(grandTotP4)}</td><td class="black-cell"></td><td>${safeHTML(grandTotEx2)}</td><td class="calc-cell">${safeHTML(grandTotS2)}</td>
-                    <td class="black-cell"></td><td class="calc-cell" style="font-weight:800;">${safeHTML(grandTotTG)}</td>
-                </tr>
-                <tr class="summary-row">
-                    <td class="course-name" style="text-align:left;">POURCENTAGE</td>
-                    <td class="black-cell"></td><td>${safeHTML(pctP1)}%</td><td>${safeHTML(pctP2)}%</td><td class="black-cell"></td><td>${safeHTML(pctEx1)}%</td><td class="calc-cell">${safeHTML(pctS1)}%</td>
-                    <td class="black-cell"></td><td>${safeHTML(pctP3)}%</td><td>${safeHTML(pctP4)}%</td><td class="black-cell"></td><td>${safeHTML(pctEx2)}%</td><td class="calc-cell">${safeHTML(pctS2)}%</td>
-                    <td class="black-cell"></td><td class="calc-cell" style="font-weight:800; color:var(--primary-color);">${safeHTML(pctTG)}%</td>
-                </tr>
-                <tr class="summary-row">
-                    <td class="course-name" style="text-align:left;">PLACE / NBRE ÉLÈVES</td>
-                    <td class="black-cell"></td><td>${safeHTML(ranks.p1)}</td><td>${safeHTML(ranks.p2)}</td><td class="black-cell"></td><td>${safeHTML(ranks.ex1)}</td><td class="calc-cell">${safeHTML(ranks.totS1)}</td>
-                    <td class="black-cell"></td><td>${safeHTML(ranks.p3)}</td><td>${safeHTML(ranks.p4)}</td><td class="black-cell"></td><td>${safeHTML(ranks.ex2)}</td><td class="calc-cell">${safeHTML(ranks.totS2)}</td>
-                    <td class="black-cell"></td><td class="calc-cell" style="font-weight:800;">${safeHTML(ranks.tg)}</td>
-                </tr>
-                <tr class="summary-row">
-                    <td class="course-name" style="text-align:left;">APPLICATION</td>
-                    <td class="black-cell"></td>
-                    <td contenteditable="true" class="edit-beh" data-type="app" data-field="p1">${safeHTML(beh.app.p1)}</td>
-                    <td contenteditable="true" class="edit-beh" data-type="app" data-field="p2">${safeHTML(beh.app.p2)}</td>
-                    <td class="black-cell"></td>
-                    <td contenteditable="true" class="edit-beh" data-type="app" data-field="ex1">${safeHTML(beh.app.ex1)}</td>
-                    <td class="calc-cell">${safeHTML(beh.app.totS1)}</td>
-                    <td class="black-cell"></td>
-                    <td contenteditable="true" class="edit-beh" data-type="app" data-field="p3">${safeHTML(beh.app.p3)}</td>
-                    <td contenteditable="true" class="edit-beh" data-type="app" data-field="p4">${safeHTML(beh.app.p4)}</td>
-                    <td class="black-cell"></td>
-                    <td contenteditable="true" class="edit-beh" data-type="app" data-field="ex2">${safeHTML(beh.app.ex2)}</td>
-                    <td class="calc-cell">${safeHTML(beh.app.totS2)}</td>
-                    <td class="black-cell"></td><td class="calc-cell">${safeHTML(beh.app.tg)}</td>
-                </tr>
-                <tr class="summary-row">
-                    <td class="course-name" style="text-align:left;">CONDUITE</td>
-                    <td class="black-cell"></td>
-                    <td contenteditable="true" class="edit-beh" data-type="cond" data-field="p1">${safeHTML(beh.cond.p1)}</td>
-                    <td contenteditable="true" class="edit-beh" data-type="cond" data-field="p2">${safeHTML(beh.cond.p2)}</td>
-                    <td class="black-cell"></td>
-                    <td contenteditable="true" class="edit-beh" data-type="cond" data-field="ex1">${safeHTML(beh.cond.ex1)}</td>
-                    <td class="calc-cell">${safeHTML(beh.cond.totS1)}</td>
-                    <td class="black-cell"></td>
-                    <td contenteditable="true" class="edit-beh" data-type="cond" data-field="p3">${safeHTML(beh.cond.p3)}</td>
-                    <td contenteditable="true" class="edit-beh" data-type="cond" data-field="p4">${safeHTML(beh.cond.p4)}</td>
-                    <td class="black-cell"></td>
-                    <td contenteditable="true" class="edit-beh" data-type="cond" data-field="ex2">${safeHTML(beh.cond.ex2)}</td>
-                    <td class="calc-cell">${safeHTML(beh.cond.totS2)}</td>
-                    <td class="black-cell"></td><td class="calc-cell">${safeHTML(beh.cond.tg)}</td>
-                </tr>
-                <tr class="summary-row">
-                    <td class="course-name" style="text-align:left;">SIGNATURES TITULAIRE</td>
-                    <td class="black-cell"></td><td></td><td></td><td class="black-cell"></td><td></td><td class="calc-cell"></td>
-                    <td class="black-cell"></td><td></td><td></td><td class="black-cell"></td><td></td><td class="calc-cell"></td>
-                    <td class="black-cell"></td><td class="calc-cell"></td>
-                </tr>
-            `;
-
-            tbody.insertAdjacentHTML('beforeend', summaryHTML);
-
-            // Écouteurs pour l'édition dynamique
-            tbody.querySelectorAll('.edit-grade').forEach(cell => {
-                cell.addEventListener('input', () => {
-                    const key = cell.getAttribute('data-key');
-                    const field = cell.getAttribute('data-field');
-                    const val = parseFloat(cell.textContent) || 0;
-
-                    if (!appState.grades[key]) appState.grades[key] = { p1: 0, p2: 0, ex1: 0, p3: 0, p4: 0, ex2: 0 };
-                    appState.grades[key][field] = val;
-                    saveState();
-                    renderOfficialBulletin(studentId);
+                    const card = document.getElementById('identityCard');
+                    if (card) {
+                        const fields = { idSchoolYear: 'schoolYear', idProvince: 'province', idCity: 'city', idCommune: 'commune', idSchoolName: 'name', idHeadName: 'headName' };
+                        Object.keys(fields).forEach(id => {
+                            const e = document.getElementById(id);
+                            if (e) e.addEventListener('input', () => { appState.school[fields[id]] = e.value.trim(); refresh(); });
+                        });
+                        card.addEventListener('click', e => {
+                            const b = e.target.closest('[data-bp-target]');
+                            if (b) bpHandleImageAction(b.getAttribute('data-bp-target'), b.getAttribute('data-bp-action'));
+                        });
+                        document.querySelectorAll('.nav-btn[data-target="section-settings"]').forEach(b => b.addEventListener('click', bpRenderIdentityCard));
+                        bpRenderIdentityCard();
+                    }
                 });
-            });
 
-            tbody.querySelectorAll('.edit-beh').forEach(cell => {
-                cell.addEventListener('input', () => {
-                    const type = cell.getAttribute('data-type');
-                    const field = cell.getAttribute('data-field');
-                    const val = cell.textContent.trim().toUpperCase();
+                // ---- Champs propres à PrimeInk : conservés quand « Charger les données de l'école » remplace l'état ----
+                function bpSnapshotLocalOnly() {
+                    const s = appState;
+                    const classNameById = {};
+                    s.classes.forEach(c => classNameById[c.id] = c.name);
+                    const school = {};
+                    ['seal', 'headSignature', 'armoiries', 'headName', 'schoolYear'].forEach(k => { if (s.school && s.school[k]) school[k] = s.school[k]; });
+                    return {
+                        school,
+                        classes: s.classes.map(c => ({ id: c.id, name: c.name, bulletinModel: c.bulletinModel, bulletinTitle: c.bulletinTitle, signatureSource: c.signatureSource })),
+                        signatureBook: s.signatureBook, repechage: s.repechage,
+                        courses: s.courses.filter(c => c.subCategory).map(c => ({ id: c.id, name: c.name, className: classNameById[c.classId], subCategory: c.subCategory })),
+                        signatures: (s.teachers || []).filter(t => t.signature).map(t => ({ uniqueId: t.uniqueId, signature: t.signature })),
+                        printSettings: s.printSettings
+                    };
+                }
+                function bpRestoreLocalOnly(ns, snap) {
+                    if (!ns.school) ns.school = {};
+                    Object.keys(snap.school).forEach(k => { if (!ns.school[k]) ns.school[k] = snap.school[k]; });
+                    (ns.classes || []).forEach(c => {
+                        const old = snap.classes.find(o => o.id === c.id) || snap.classes.find(o => o.name === c.name);
+                        if (!old) return;
+                        ['bulletinModel', 'bulletinTitle', 'signatureSource'].forEach(k => { if (old[k] !== undefined && c[k] === undefined) c[k] = old[k]; });
+                    });
+                    const nameOfClass = {};
+                    (ns.classes || []).forEach(c => nameOfClass[c.id] = c.name);
+                    (ns.courses || []).forEach(c => {
+                        if (c.subCategory) return;
+                        const old = snap.courses.find(o => o.id === c.id) || snap.courses.find(o => o.name === c.name && o.className === nameOfClass[c.classId]);
+                        if (old) c.subCategory = old.subCategory;
+                    });
+                    (ns.teachers || []).forEach(t => {
+                        const old = snap.signatures.find(o => o.uniqueId === t.uniqueId);
+                        if (old && !t.signature) t.signature = old.signature;
+                    });
+                    if (!ns.printSettings && snap.printSettings) ns.printSettings = snap.printSettings;
+                    ['signatureBook', 'repechage'].forEach(k => {
+                        if (!snap[k]) return;
+                        if (!ns[k]) ns[k] = {};
+                        Object.keys(snap[k]).forEach(id => { if (ns[k][id] === undefined) ns[k][id] = snap[k][id]; });
+                    });
+                }
 
-                    appState.behaviour[studentId][type][field] = val;
-                    saveState();
-                });
-            });
-        };
-
-        window.exportClassBulletinsPDF = function() {
-            const students = appState.students.filter(s => s.classId === activeClassId);
-            if (students.length === 0) return alert("Aucun élève dans cette classe à exporter.");
-
-            const exportContainer = document.createElement('div');
-            exportContainer.id = 'pdfExportContainer';
-            exportContainer.style.width = '210mm';
-            exportContainer.style.position = 'absolute';
-            exportContainer.style.left = '-9999px';
-            document.body.appendChild(exportContainer);
-
-            students.forEach((student, index) => {
-                window.renderOfficialBulletin(student.id);
-                const bulletinClone = document.getElementById('officialBulletinArea').cloneNode(true);
-                bulletinClone.removeAttribute('id');
-                if (index < students.length - 1) bulletinClone.classList.add('page-break');
-                exportContainer.appendChild(bulletinClone);
-            });
-
-            window.renderOfficialBulletin(activeStudentId);
-
-            const currentClass = appState.classes.find(c => c.id === activeClassId);
-            const opt = {
-                margin:       [0, 0, 0, 0],
-                filename:     `Bulletins_${currentClass ? currentClass.name.replace(/\s+/g, '_') : 'Classe'}.pdf`,
-                image:        { type: 'jpeg', quality: 0.98 },
-                html2canvas:  { scale: 2, useCORS: true, logging: false },
-                jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
-            };
-
-            html2pdf().set(opt).from(exportContainer).save().then(() => {
-                document.body.removeChild(exportContainer);
-            }).catch(err => {
-                console.error("Erreur d'exportation PDF:", err);
-                if (document.getElementById('pdfExportContainer')) document.body.removeChild(exportContainer);
-            });
-        };
 
         // GESTION DU REGISTRE DES ENSEIGNANTS (Paramètres)
         function renderTeachersTable() {
@@ -2463,11 +3089,16 @@ function jsArg(value) {
                 const titulaire = document.getElementById('name-titulaire-added-class').value.trim();
                 const catInputs = document.querySelectorAll('.category-input');
                 const categories = Array.from(catInputs).map(i => i.value.trim()).filter(v => v !== '');
+                const model = document.getElementById('class-bulletin-model').value;
+                const bulletinTitle = document.getElementById('class-bulletin-title').value.trim();
+                const signatureSource = document.getElementById('class-signature-source').value;
+                const autoCourses = document.getElementById('class-autocourses').checked;
 
                 if (!className) return alert('Veuillez entrer un nom de classe.');
 
+                let cls;
                 if (editingClassId) {
-                    const cls = appState.classes.find(c => c.id === editingClassId);
+                    cls = appState.classes.find(c => c.id === editingClassId);
                     if (cls) {
                         cls.name = className;
                         cls.titulaire = titulaire || 'Non assigné';
@@ -2475,17 +3106,35 @@ function jsArg(value) {
                     }
                     editingClassId = null;
                 } else {
-                    const newClass = {
+                    cls = {
                         id: 'c_' + Date.now(),
                         name: className,
                         titulaire: titulaire || 'Non assigné',
                         categories: categories.length > 0 ? categories : ['Général']
                     };
-                    appState.classes.push(newClass);
+                    appState.classes.push(cls);
                 }
+
+                if (cls) {
+                    cls.bulletinModel = BULLETIN_MODELS[model] ? model : 'classink';
+                    cls.bulletinTitle = bulletinTitle;
+                    cls.signatureSource = BP_SIGNATURE_SOURCES.includes(signatureSource) ? signatureSource : 'titulaire';
+                    if (autoCourses) {
+                        const added = bpAutoAddModelCourses(cls);
+                        alert(added + " cours ajouté(s) pour le modèle officiel (les cours déjà présents n'ont pas été modifiés).");
+                    }
+                }
+
+                // Remise à zéro des champs pour la prochaine classe
+                document.getElementById('class-bulletin-model').value = 'classink';
+                document.getElementById('class-bulletin-title').value = '';
+                document.getElementById('class-signature-source').value = 'titulaire';
+                document.getElementById('class-autocourses').checked = false;
+                document.querySelector('#interface-classe h3').textContent = 'Ajouter une Classe';
 
                 saveState();
                 renderClassesTable();
+                if (cls && cls.id === activeClassId) loadClassData(activeClassId);
                 renderinterface('ajouter_classe');
             });
 
@@ -2521,17 +3170,19 @@ function jsArg(value) {
                 const maxPer = parseFloat(document.getElementById('max-per-cours').value) || 40;
                 const titulaire = document.getElementById('name-titulaire-added-cours').value.trim();
                 const category = document.getElementById('choix-categorie').value;
+                const subCategory = document.getElementById('sub-category-cours').value.trim();
 
                 if (!name) return alert('Veuillez entrer le nom du cours.');
 
                 const newCourse = {
                     id: 'k_' + Date.now(),
                     classId: activeClassId,
-                    name, maxPer, category,
+                    name, maxPer, category, subCategory,
                     titulaire: titulaire || 'Non assigné'
                 };
 
                 appState.courses.push(newCourse);
+                document.getElementById('sub-category-cours').value = '';
                 saveState();
                 loadClassData(activeClassId);
                 renderinterface('ajouter_cours');
@@ -2694,7 +3345,7 @@ function jsArg(value) {
         async function fetchIntranetAverages() {
             try {
                 // Lecture NON destructive : /api/intranet/fetch marque les mises à jour comme lues, on ne l'utilise pas ici
-                let response = await fetch(`${INTRANET_URL}/api/primenet/sync`, { signal: AbortSignal.timeout(4000) });
+                let response = await fetch(`${INTRANET_URL}/api/primenet/sync`, { headers: cloudAuthHeaders(), signal: AbortSignal.timeout(4000) });
                 if (!response.ok) return; // 404 = aucun enseignant n'a encore envoyé de données
                 let result = await response.json();
                 let snapshot = JSON.stringify(result.data || {});
@@ -2706,7 +3357,7 @@ function jsArg(value) {
                     renderOfficialBulletin(activeStudentId);
                 }
             } catch (error) {
-                console.log("Recherche du serveur local...");
+                // serveur local introuvable pour l'instant : nouvel essai au prochain cycle
             }
         }
 
@@ -2725,33 +3376,34 @@ function jsArg(value) {
         // Vérifier l'Intranet toutes les 10 secondes
         setInterval(fetchIntranetAverages, 10000);
 
-        // 2. Écoute de la commande secrète (Internet Cloud)
-        async function checkCryptLockdown(schoolName) {
+        // 2. Contrôle de l'état de l'école auprès du serveur : suspension ou licence expirée
+        async function checkSchoolStatus() {
+            const schoolId = appState && appState.school && appState.school.id;
+            if (!schoolId) return;
             try {
-                let response = await fetch(`${CLOUD_URL}/api/cloud/${schoolName}/status`);
-                if (response.ok) {
-                    let data = await response.json();
-                    if (data.locked === true) {
-                        executeLockdownProtocol();
-                    }
+                const response = await fetch(`${API_BASE_URL}/api/cloud/${encodeURIComponent(schoolId)}/status`, { signal: AbortSignal.timeout(6000) });
+                if (!response.ok) return;
+                const data = await response.json();
+                if (data.locked !== true) return;
+                if (data.reason === 'expired') {
+                    blockSoftwareForActivation("La licence de l'école a expiré. Saisissez un code de renouvellement.");
+                } else {
+                    blockSoftwareSuspended("Ce compte est suspendu par l'administrateur ClassNet. Contactez ClassNet pour le réactiver.");
                 }
-            } catch (error) {
-                console.log("Mode hors-ligne, aucune restriction Cloud détectée.");
-            }
+            } catch (error) { /* hors ligne : aucune restriction connue */ }
         }
 
-        function executeLockdownProtocol() {
-            // Remplace tout le contenu du body par un écran noir de restriction
-            document.body.innerHTML = `
-                <div style="background-color: black; color: red; height: 100vh; display: flex; align-items: center; justify-content: center; flex-direction: column;">
-                    <h1>ACCÈS RESTREINT PAR CRYPT</h1>
-                    <p>Le système ClassNet P a été verrouillé par l'administrateur.</p>
-                </div>
-            `;
+        function blockSoftwareSuspended(message) {
+            const lockOverlay = document.getElementById('lock-screen-overlay');
+            if (!lockOverlay) return;
+            lockOverlay.classList.remove('hidden');
+            const lockBox = lockOverlay.querySelector('.lock-box');
+            if (lockBox) lockBox.innerHTML = `<div class="lock-icon">⛔</div><h3>Accès suspendu</h3><p style="color: var(--danger-color);">${safeHTML(message)}</p>`;
         }
 
-        // Vérifier le statut Cloud toutes les 30 secondes
-        setInterval(() => checkCryptLockdown("NomDeL_Ecole_Actuelle"), 30000);
+        // Vérifier l'état de l'école après le démarrage, puis chaque minute
+        setTimeout(checkSchoolStatus, 3000);
+        setInterval(checkSchoolStatus, 60000);
 
         // Navigation spécifique pour l'interface Tools
         const toolNavBtns = document.querySelectorAll('.main-navbar .nav-btn[data-target="section-about"]');
@@ -3254,8 +3906,8 @@ function updateScheduleResultTables(joursCount, heuresCount) {
         };
 
         // SUPPRESSION DE COURS
-        window.deleteCourse = function(courseId) {
-            if (confirm("Voulez-vous vraiment supprimer ce cours ?")) {
+        window.deleteCourse = async function(courseId) {
+            if (await showCustomConfirm("Voulez-vous vraiment supprimer ce cours ?")) {
                 appState.courses = appState.courses.filter(c => c.id !== courseId);
                 saveState();
                 renderClassDetails(activeClassId);
@@ -3393,6 +4045,15 @@ function updateScheduleResultTables(joursCount, heuresCount) {
                 });
             }
             
+            // Signatures des enseignants (envoyées par ClassInk, disponibles après la mise à jour des serveurs)
+            if (mergedData.signatures && typeof mergedData.signatures === 'object') {
+                Object.keys(mergedData.signatures).forEach(tId => {
+                    const teacher = appState.teachers.find(t => t.uniqueId === tId);
+                    const img = bpSafeImg(mergedData.signatures[tId]);
+                    if (teacher && img) teacher.signature = img;
+                });
+            }
+
             // Mise à jour des notes et moyennes récupérées
             if (mergedData.moyenne_classe) {
                 if (!appState.grades) appState.grades = {};
@@ -3500,9 +4161,11 @@ function updateScheduleResultTables(joursCount, heuresCount) {
                     if (result.token) {
                         try { localStorage.setItem('primeink_cloud_token', result.token); } catch (e) { /* stockage indisponible */ }
                     }
+                    const bpLocalOnly = bpSnapshotLocalOnly();
                     appState = result.data;
+                    bpRestoreLocalOnly(appState, bpLocalOnly);
                     saveState();
-                    alert("✅ Base de données de l'école chargée avec succès !");
+                    await showCustomAlert("✅ Base de données de l'école chargée avec succès !");
                     location.reload(); // Recharge pour appliquer le nouvel état
                 } else {
                     alert("❌ " + (result.detail || result.message || "Impossible de charger les données."));
@@ -3631,7 +4294,7 @@ function updateScheduleResultTables(joursCount, heuresCount) {
         }
         // END removeDoubleCreatedEntries
 
-        function offerDuplicateCleanup() {
+        async function offerDuplicateCleanup() {
             try {
                 const preview = removeDoubleCreatedEntries(appState, true);
                 const r = preview.removed;
@@ -3639,7 +4302,7 @@ function updateScheduleResultTables(joursCount, heuresCount) {
                 const message = "Doublons détectés (créés par l'ancien bug d'enregistrement) :\n"
                     + "- " + r.classes + " classe(s)\n- " + r.students + " élève(s)\n- " + r.courses + " cours\n\n"
                     + "Les supprimer maintenant ?\n(Seuls les doublons sans notes ni données liées sont supprimés.)";
-                if (!confirm(message)) return;
+                if (!(await showCustomConfirm(message, "Doublons détectés"))) return;
                 removeDoubleCreatedEntries(appState, false);
                 saveState();
                 if (typeof renderClassesTable === 'function') renderClassesTable();
@@ -3647,7 +4310,7 @@ function updateScheduleResultTables(joursCount, heuresCount) {
                     renderClassDetails(activeClassId);
                 }
             } catch (e) {
-                console.error('Nettoyage des doublons ignoré :', e);
+                // nettoyage des doublons ignoré : sans conséquence pour l'utilisateur
             }
         }
 
@@ -3656,7 +4319,6 @@ function updateScheduleResultTables(joursCount, heuresCount) {
             offerDuplicateCleanup();
         });
 
-        console.log(defaultState)
 
 // Ajout dynamique de tranches horaires qui se suivent
 window.addTimeSlotRow = function() {
