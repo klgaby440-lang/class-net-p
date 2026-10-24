@@ -703,7 +703,6 @@ class LoginSchema(BaseModel):
     password: str
 
 class CodeVerifySchema(BaseModel):
-    identifier: Optional[str] = None   # ancien champ, conservé pour ne rien casser
     school_id: Optional[str] = None    # champ réellement envoyé par PrimeInk
     code: str
 
