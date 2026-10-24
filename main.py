@@ -2137,14 +2137,24 @@ def sync_primenet(payload: dict, db: Session = Depends(get_db), claims: dict = D
         course_obj.sub_category = clean_text(crs.get("subCategory"), 160)
 
     # 4. Synchronisation des élèves
+# 4. Synchronisation des élèves (sécurisée contre les doublons de numéros permanents)
     students_payload = payload.get("students", [])
+    seen_permanents = set()
+    
     for st in students_payload:
         st_id = st.get("id")
         if not st_id: continue
         
+        permi = str(st.get("permi") or "").strip() or st_id
+        # Si le numéro permanent existe déjà dans ce lot de données, on le rend unique pour éviter la collision
+        if permi in seen_permanents:
+            permi = f"{permi}_{st_id}"
+        seen_permanents.add(permi)
+
+        # Recherche par ID d'élève ou par numéro permanent existant dans l'école
         student_obj = db.query(SchoolStudentInformation).filter(
-            SchoolStudentInformation.id == st_id, 
-            SchoolStudentInformation.school_id == school_id
+            SchoolStudentInformation.school_id == school_id,
+            (SchoolStudentInformation.id == st_id) | (SchoolStudentInformation.student_n_permanent == permi)
         ).first()
         
         if not student_obj:
@@ -2157,7 +2167,7 @@ def sync_primenet(payload: dict, db: Session = Depends(get_db), claims: dict = D
         student_obj.student_sexe = st.get("sexe", "M")
         student_obj.student_born_date = st.get("bornDate", "")
         student_obj.student_born_place = st.get("bornWhere", "")
-        student_obj.student_n_permanent = st.get("permi") or st_id
+        student_obj.student_n_permanent = permi
         student_obj.class_id = st.get("classId")
 
     # 5. Rapprochement des enseignants
