@@ -6,15 +6,19 @@ from email.mime.text import MIMEText
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
 import httpx
-from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, status, Header
+from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, status, Header, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, EmailStr
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, Text, JSON, Float, text, func
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, Text, JSON, Float, text, func, UniqueConstraint, CheckConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session, relationship
 import random
 import re
+from classnet_common import (
+    PERIODS, CONDUCT_KINDS, CONDUCT_MAX_LEN, SIGNER_ROLES, ACCESS_AUDIENCES, MATCH_METHODS, sql_in,
+    validate_conduct_value, normalize_name, name_tokens_key,
+)
 
 import os
 import httpx
@@ -343,7 +347,10 @@ engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
-ADMIN_EMAIL = "klgaby440@gmail.com" # Ton adresse pour recevoir les codes
+ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "klgaby440@gmail.com")  # adresse qui reçoit les codes (définir ADMIN_EMAIL sur Render)
+# Clé réservée à l'administrateur ClassNet. Sans elle, la création d'école, la génération de codes
+# et le verrouillage d'une école sont impossibles (routes fermées).
+ADMIN_API_KEY = os.getenv("ADMIN_API_KEY", "")
 
 # ---------------------------------------------------------
 # 2. MODÈLES DE BASE DE DONNÉES ENRICHIS
@@ -372,6 +379,14 @@ class SchoolInformation(Base):
     pass_word = Column(String, nullable=False)
     licence_date = Column(String, default="2026-12-31")
     is_locked = Column(Boolean, default=False)
+    # Identité du bulletin (réglée dans PrimeInk) : conservée ici pour survivre à un changement d'appareil
+    province = Column(String, nullable=True)
+    head_name = Column(String, nullable=True)
+    school_year = Column(String, nullable=True)
+    seal = Column(Text, nullable=True)            # sceau de l'école (image)
+    head_signature = Column(Text, nullable=True)  # signature du chef d'établissement (image)
+    armoiries = Column(Text, nullable=True)
+    pn_extra = Column(JSON, nullable=True)        # réglages PrimeInk : signatureBook, repechage, printSettings, behaviour
 
     classes = relationship("ClasseInformation", back_populates="school")
     students = relationship("SchoolStudentInformation", back_populates="school")
@@ -392,6 +407,7 @@ class Teacher(Base):
     status = Column(String, default="Actif")
     school_id = Column(String, ForeignKey("school_information.school_id"), nullable=True)
     llink_preferences = Column(Text, nullable=True)
+    signature = Column(Text, nullable=True)  # photo de la signature, prise dans ClassInk
 
     school = relationship("SchoolInformation", back_populates="teachers")
     quizzes = relationship("QuizBank", back_populates="teacher")
@@ -403,6 +419,11 @@ class ClasseInformation(Base):
     class_name = Column(String, nullable=False)
     titulaire_name = Column(String, nullable=True)
     domaines = Column(JSON, nullable=True)
+    conduite_enabled = Column(Boolean, nullable=False, default=False, server_default="false")  # option par classe (étape 4)
+    bulletin_type_id = Column(Integer, ForeignKey("bulletin_types.id"), nullable=True)  # NULL = bulletin standard
+    bulletin_model = Column(String(20), nullable=True)      # classink | ige010 | repechage
+    bulletin_title = Column(String, nullable=True)
+    signature_source = Column(String(20), nullable=True)    # titulaire | responsable | default | none
     school = relationship("SchoolInformation", back_populates="classes")
     students = relationship("SchoolStudentInformation", back_populates="classe")
     courses = relationship("CourseInformation", back_populates="classe")
@@ -416,6 +437,7 @@ class CourseInformation(Base):
     max_per = Column(Float, nullable=False, default=40.0)
     category = Column(String, nullable=False)
     titulaire_name = Column(String, nullable=True)
+    sub_category = Column(String, nullable=True)
     school = relationship("SchoolInformation", back_populates="courses")
     classe = relationship("ClasseInformation", back_populates="courses")
 
@@ -500,6 +522,106 @@ class PrimeNetPayload(Base):
         server_default=func.now(), 
         onupdate=func.now()
     )
+
+# ---------------------------------------------------------
+# MODÈLE COMMUN (étape 3) : types de bulletin, conduite, signatures, accès aux notes, liens d'élèves.
+# Les valeurs autorisées viennent de classnet_common.py : ne pas les recopier ici.
+# ---------------------------------------------------------
+class BulletinType(Base):
+    __tablename__ = "bulletin_types"
+    __table_args__ = (UniqueConstraint("school_id", "code", name="uq_bulletin_type_school_code"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    school_id = Column(String, ForeignKey("school_information.school_id"), index=True, nullable=False)
+    code = Column(String(30), nullable=False)
+    label = Column(String, nullable=False)
+    # {"periods": [...], "show_application": bool, "show_conduite": bool, "signatures": [...]}
+    # à valider avec classnet_common.validate_bulletin_config avant écriture
+    config = Column(JSON, nullable=False, default=dict)
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class StudentConduct(Base):
+    """Application / Conduite : une ligne par (élève, nature, période). Les totaux ne sont pas stockés."""
+    __tablename__ = "student_conduct"
+    __table_args__ = (
+        UniqueConstraint("school_id", "student_id", "kind", "period", name="uq_conduct_student_kind_period"),
+        CheckConstraint(sql_in("kind", CONDUCT_KINDS), name="ck_conduct_kind"),
+        CheckConstraint(sql_in("period", PERIODS), name="ck_conduct_period"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    school_id = Column(String, ForeignKey("school_information.school_id"), index=True, nullable=False)
+    student_id = Column(String, ForeignKey("school_student_informations.id"), index=True, nullable=False)
+    kind = Column(String(4), nullable=False)
+    period = Column(String(3), nullable=False)
+    value = Column(String(CONDUCT_MAX_LEN), nullable=False)
+    updated_by = Column(String, nullable=True)  # e-mail de l'enseignant ou school_id
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class BulletinSignature(Base):
+    """
+    Signature d'un bulletin. student_id vide = signature valable pour toute la classe ;
+    period vide = signature valable pour toute l'année. L'unicité n'est pas imposée par la base
+    (NULL distincts en PostgreSQL) : les routes doivent mettre à jour la ligne existante au lieu d'en ajouter.
+    """
+    __tablename__ = "bulletin_signatures"
+    __table_args__ = (
+        CheckConstraint(sql_in("signer_role", SIGNER_ROLES), name="ck_signature_role"),
+        CheckConstraint(sql_in("period", PERIODS, allow_null=True), name="ck_signature_period"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    school_id = Column(String, ForeignKey("school_information.school_id"), index=True, nullable=False)
+    class_id = Column(String, ForeignKey("classe_informations.id"), index=True, nullable=False)
+    student_id = Column(String, ForeignKey("school_student_informations.id"), index=True, nullable=True)
+    signer_role = Column(String(30), nullable=False)
+    period = Column(String(3), nullable=True)
+    signer_name = Column(String, nullable=True)
+    signature_data = Column(Text, nullable=True)  # image encodée (facultative) ; vide = simple mention du nom
+    signed_by = Column(String, nullable=True)
+    signed_at = Column(DateTime, default=datetime.utcnow)
+
+
+class GradeAccessRule(Base):
+    """
+    Règle d'accès aux notes, appliquée côté serveur. class_id vide = toute l'école, period vide = toutes
+    les périodes. Choix de la règle applicable : classnet_common.resolve_grade_access (étape 6).
+    """
+    __tablename__ = "grade_access_rules"
+    __table_args__ = (
+        CheckConstraint(sql_in("audience", ACCESS_AUDIENCES), name="ck_access_audience"),
+        CheckConstraint(sql_in("period", PERIODS, allow_null=True), name="ck_access_period"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    school_id = Column(String, ForeignKey("school_information.school_id"), index=True, nullable=False)
+    class_id = Column(String, ForeignKey("classe_informations.id"), index=True, nullable=True)
+    period = Column(String(3), nullable=True)
+    audience = Column(String(10), nullable=False)
+    is_allowed = Column(Boolean, nullable=False)
+    reason = Column(Text, nullable=True)
+    updated_by = Column(String, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class StudentLink(Base):
+    """Relie l'id d'élève d'un enseignant ClassInk (STU-...) à l'élève de l'école (celui de PrimeInk)."""
+    __tablename__ = "student_links"
+    __table_args__ = (
+        UniqueConstraint("school_id", "teacher_email", "classink_student_id", name="uq_student_link"),
+        CheckConstraint(sql_in("match_method", MATCH_METHODS), name="ck_link_method"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    school_id = Column(String, ForeignKey("school_information.school_id"), index=True, nullable=False)
+    teacher_email = Column(String, index=True, nullable=False)
+    classink_student_id = Column(String, nullable=False)
+    student_id = Column(String, ForeignKey("school_student_informations.id"), index=True, nullable=False)
+    match_method = Column(String(12), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 Base.metadata.create_all(bind=engine)
 
@@ -627,6 +749,7 @@ def _env_int(name: str, default: int) -> int:
 
 TEACHER_TOKEN_TTL = _env_int("TEACHER_TOKEN_DAYS", 14) * 86400
 SCHOOL_TOKEN_TTL = _env_int("SCHOOL_TOKEN_HOURS", 12) * 3600
+LICENCE_GRACE_DAYS = _env_int("LICENCE_GRACE_DAYS", 7)  # jours de tolérance après la date de fin de licence
 OTP_MAX_ATTEMPTS = 5
 
 
@@ -720,6 +843,7 @@ class AttemptLimiter:
 
 LOGIN_LIMITER = AttemptLimiter(max_attempts=5, window_seconds=900)       # 5 échecs / 15 min
 OTP_REQUEST_LIMITER = AttemptLimiter(max_attempts=5, window_seconds=3600)  # 5 demandes de code / heure
+CODE_LIMITER = AttemptLimiter(max_attempts=10, window_seconds=900)          # 10 codes de licence faux / 15 min / adresse
 
 
 def get_bearer_claims(authorization: Optional[str] = Header(None)) -> dict:
@@ -749,6 +873,54 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def require_admin(x_admin_key: Optional[str] = Header(None)) -> bool:
+    """Réservé à l'administrateur ClassNet : en-tête X-Admin-Key égal à la variable ADMIN_API_KEY."""
+    if not ADMIN_API_KEY:
+        raise HTTPException(status_code=503, detail="Administration désactivée : définissez ADMIN_API_KEY sur le serveur.")
+    if not x_admin_key or not hmac.compare_digest(x_admin_key.encode("utf-8"), ADMIN_API_KEY.encode("utf-8")):
+        raise HTTPException(status_code=403, detail="Clé d'administration invalide.")
+    return True
+
+
+LICENCE_MESSAGES = {
+    "locked": "Ce compte est suspendu par l'administrateur ClassNet. Contactez ClassNet pour le réactiver.",
+    "expired": "La licence de l'école a expiré. Saisissez un code de renouvellement ou contactez ClassNet.",
+}
+
+
+def licence_state(school) -> dict:
+    """État d'une école : {'locked': bool, 'reason': '' | 'locked' | 'expired', 'licence_date': str}."""
+    if school is None:
+        return {"locked": False, "reason": "", "licence_date": ""}
+    licence_date = school.licence_date or ""
+    if school.is_locked:
+        return {"locked": True, "reason": "locked", "licence_date": licence_date}
+    try:
+        end = datetime.strptime(licence_date[:10], "%Y-%m-%d").date() + timedelta(days=LICENCE_GRACE_DAYS)
+        if datetime.utcnow().date() > end:
+            return {"locked": True, "reason": "expired", "licence_date": licence_date}
+    except ValueError:
+        pass  # date illisible : on ne bloque pas par erreur
+    return {"locked": False, "reason": "", "licence_date": licence_date}
+
+
+def require_active_school(claims: dict = Depends(require_school), db: Session = Depends(get_db)) -> dict:
+    """Comme require_school, mais refuse une école suspendue ou dont la licence a expiré."""
+    school = db.query(SchoolInformation).filter(SchoolInformation.school_id == claims.get("school_id")).first()
+    state = licence_state(school)
+    if state["locked"]:
+        raise HTTPException(status_code=403, detail=LICENCE_MESSAGES[state["reason"]])
+    return claims
+
+
+def teacher_school_block(db: Session, teacher) -> Optional[str]:
+    """Message de refus si l'école de l'enseignant est suspendue ou expirée, sinon None."""
+    if not teacher or not teacher.school_id:
+        return None
+    state = licence_state(db.query(SchoolInformation).filter(SchoolInformation.school_id == teacher.school_id).first())
+    return LICENCE_MESSAGES[state["reason"]] if state["locked"] else None
 
 def generate_20_char_code() -> str:
     # 62 caractères ^ 20 = ~119 bits d'entropie
@@ -797,22 +969,31 @@ with engine.connect() as conn:
     conn.execute(text("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS status VARCHAR DEFAULT 'Actif';"))
     conn.execute(text("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS teacher_code VARCHAR(50);"))
     conn.execute(text("ALTER TABLE school_information ADD COLUMN IF NOT EXISTS email TEXT;"))
-
-    # 1. Colonnes de otp_codes (identifier + compteur d'essais de l'étape 2)
     conn.execute(text("ALTER TABLE otp_codes ADD COLUMN IF NOT EXISTS identifier VARCHAR;"))
+    # 1. S'assurer que la colonne identifier existe
+    conn.execute(text("ALTER TABLE otp_codes ADD COLUMN IF NOT EXISTS identifier VARCHAR;"))
+    
+    # 2. Supprimer la contrainte NOT NULL de l'ancienne colonne 'email'
+    conn.execute(text("ALTER TABLE otp_codes ALTER COLUMN email DROP NOT NULL;"))
+    
+    # 3. Récupérer les anciennes données si nécessaire
+    conn.execute(text("UPDATE otp_codes SET identifier = email WHERE identifier IS NULL AND email IS NOT NULL;"))
     conn.execute(text("ALTER TABLE otp_codes ADD COLUMN IF NOT EXISTS attempts INTEGER DEFAULT 0;"))
-
-    # 2. Ancienne colonne 'email' : uniquement si elle existe (vieille base)
-    check_email_col = conn.execute(text("""
-        SELECT column_name
-        FROM information_schema.columns
-        WHERE table_name='otp_codes' AND column_name='email';
-    """)).fetchone()
-
-    if check_email_col:
-        conn.execute(text("ALTER TABLE otp_codes ALTER COLUMN email DROP NOT NULL;"))
-        conn.execute(text("UPDATE otp_codes SET identifier = email WHERE identifier IS NULL AND email IS NOT NULL;"))
-
+    # Modèle commun (étape 3) : la table bulletin_types est déjà créée par create_all ci-dessus
+    conn.execute(text("ALTER TABLE classe_informations ADD COLUMN IF NOT EXISTS conduite_enabled BOOLEAN NOT NULL DEFAULT FALSE;"))
+    conn.execute(text("ALTER TABLE classe_informations ADD COLUMN IF NOT EXISTS bulletin_type_id INTEGER REFERENCES bulletin_types(id);"))
+    conn.execute(text("ALTER TABLE school_information ADD COLUMN IF NOT EXISTS province VARCHAR;"))
+    conn.execute(text("ALTER TABLE school_information ADD COLUMN IF NOT EXISTS head_name VARCHAR;"))
+    conn.execute(text("ALTER TABLE school_information ADD COLUMN IF NOT EXISTS school_year VARCHAR;"))
+    conn.execute(text("ALTER TABLE school_information ADD COLUMN IF NOT EXISTS seal TEXT;"))
+    conn.execute(text("ALTER TABLE school_information ADD COLUMN IF NOT EXISTS head_signature TEXT;"))
+    conn.execute(text("ALTER TABLE school_information ADD COLUMN IF NOT EXISTS armoiries TEXT;"))
+    conn.execute(text("ALTER TABLE school_information ADD COLUMN IF NOT EXISTS pn_extra JSON;"))
+    conn.execute(text("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS signature TEXT;"))
+    conn.execute(text("ALTER TABLE classe_informations ADD COLUMN IF NOT EXISTS bulletin_model VARCHAR(20);"))
+    conn.execute(text("ALTER TABLE classe_informations ADD COLUMN IF NOT EXISTS bulletin_title VARCHAR;"))
+    conn.execute(text("ALTER TABLE classe_informations ADD COLUMN IF NOT EXISTS signature_source VARCHAR(20);"))
+    conn.execute(text("ALTER TABLE course_informations ADD COLUMN IF NOT EXISTS sub_category VARCHAR;"))
     conn.commit()
 
 # ---------------------------------------------------------
@@ -961,7 +1142,8 @@ def verify_teacher_register(data: OTPVerifySchema, db: Session = Depends(get_db)
     return {"status": True, "message": "Compte enseignant créé avec succès !"}
 
 @app.post("/api/auth/school/register")
-def register_school(data: SchoolRegisterSchema, db: Session = Depends(get_db)):
+def register_school(data: SchoolRegisterSchema, db: Session = Depends(get_db), _admin: bool = Depends(require_admin)):
+    """Création d'un compte d'école : réservée à l'administrateur ClassNet (en-tête X-Admin-Key)."""
     if db.query(SchoolInformation).filter(SchoolInformation.school_id == data.school_id).first():
         return {"status": False, "message": "École déjà existante."}
     school_fields = data.dict()
@@ -1002,6 +1184,10 @@ def login_teacher(data: LoginSchema, db: Session = Depends(get_db)):
         LOGIN_LIMITER.record(limiter_key)
         return {"status": False, "message": "Identifiants incorrects."}
     LOGIN_LIMITER.reset(limiter_key)
+
+    blocked = teacher_school_block(db, teacher)
+    if blocked:
+        return {"status": False, "locked": True, "message": blocked}
 
     if not is_password_hashed(teacher.password):
         teacher.password = hash_password(data.password)  # migration silencieuse de l'ancien format en clair
@@ -1133,6 +1319,10 @@ def login_school(data: LoginSchema, db: Session = Depends(get_db)):
         return {"status": False, "message": "Identifiants incorrects."}
     LOGIN_LIMITER.reset(limiter_key)
 
+    state = licence_state(school)
+    if state["locked"]:
+        return {"status": False, "locked": True, "reason": state["reason"], "message": LICENCE_MESSAGES[state["reason"]]}
+
     if not is_password_hashed(school.pass_word):
         school.pass_word = hash_password(data.password)  # migration silencieuse de l'ancien format en clair
         db.commit()
@@ -1144,7 +1334,10 @@ def login_school(data: LoginSchema, db: Session = Depends(get_db)):
             "id": c.id,
             "name": c.class_name,
             "titulaire": c.titulaire_name or "",
-            "categories": c.domaines if isinstance(c.domaines, list) else []
+            "categories": c.domaines if isinstance(c.domaines, list) else [],
+            "bulletinModel": c.bulletin_model or "classink",
+            "bulletinTitle": c.bulletin_title or "",
+            "signatureSource": c.signature_source or "titulaire"
         })
 
     # 2. Chargement des élèves
@@ -1174,7 +1367,8 @@ def login_school(data: LoginSchema, db: Session = Depends(get_db)):
             "maxPer": float(crs.max_per),
             "category": crs.category,
             "classId": crs.class_id,
-            "titulaire": crs.titulaire_name or ""
+            "titulaire": crs.titulaire_name or "",
+            "subCategory": crs.sub_category or ""
         })
 
     # 4. Chargement des enseignants
@@ -1184,7 +1378,8 @@ def login_school(data: LoginSchema, db: Session = Depends(get_db)):
             "uniqueId": t.teacher_code or f"prof_{t.id}",
             "name": t.full_name,
             "subject": t.subject or "",
-            "status": t.status or "Actif"
+            "status": t.status or "Actif",
+            "signature": clean_image(t.signature) or ""
         })
 
     # 5. Chargement des notes (TeacherEvaluation)
@@ -1225,6 +1420,14 @@ def login_school(data: LoginSchema, db: Session = Depends(get_db)):
             "horaire": {"config": {}, "profsDispo": [], "generatedSchedules": []}
         }
     }
+
+    # Identité du bulletin et réglages conservés (sceau, signatures, conduite vérifiée...)
+    for key, attr in (("province", "province"), ("headName", "head_name"), ("schoolYear", "school_year"),
+                      ("seal", "seal"), ("headSignature", "head_signature"), ("armoiries", "armoiries")):
+        value = getattr(school, attr)
+        if value:
+            primenet_state["school"][key] = value
+    primenet_state.update(school_state_extras(db, school))
 
     return {"status": True, "data": primenet_state,
             "token": create_token({"role": "school", "school_id": school.school_id}, SCHOOL_TOKEN_TTL)}
@@ -1280,10 +1483,9 @@ async def send_email_via_resend(to_email: str, subject: str, html_body: str) -> 
         return False
         
 @app.post("/api/admin/codes/generate")
-def generate_and_send_code(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    """Génère un code de 20 caractères et l'envoie réellement par e-mail à l'administrateur."""
+def generate_and_send_code(background_tasks: BackgroundTasks, db: Session = Depends(get_db), _admin: bool = Depends(require_admin)):
+    """Génère un code de 20 caractères et l'envoie par e-mail à l'administrateur (réservé à l'administrateur)."""
     new_code = generate_20_char_code()
-    print(f"🔑 [ADMIN CODE GENERATED] : {new_code}")
     
     # 1. Sauvegarde en base de données
     db.add(AccessCode(code=new_code))
@@ -1312,12 +1514,56 @@ def generate_and_send_code(background_tasks: BackgroundTasks, db: Session = Depe
         "message": f"Code généré avec succès et envoyé à l'adresse {ADMIN_EMAIL}."
     }
 
+class LockdownSchema(BaseModel):
+    target: str          # identifiant (school_id) de l'école
+    status: str          # "LOCKED" ou "UNLOCKED"
+
+
+@app.post("/api/admin/lockdown")
+def admin_lockdown(data: LockdownSchema, db: Session = Depends(get_db), _admin: bool = Depends(require_admin)):
+    """Suspend ou réactive une école (réservé à l'administrateur)."""
+    school = db.query(SchoolInformation).filter(SchoolInformation.school_id == data.target).first()
+    if not school:
+        return {"status": False, "message": "École introuvable."}
+    wanted = data.status.strip().upper()
+    if wanted not in ("LOCKED", "UNLOCKED"):
+        return {"status": False, "message": "Statut inconnu : utilisez LOCKED ou UNLOCKED."}
+    school.is_locked = (wanted == "LOCKED")
+    db.commit()
+    return {"status": True, "message": "École " + ("suspendue." if school.is_locked else "réactivée.")}
+
+
+@app.get("/api/admin/schools")
+def admin_list_schools(db: Session = Depends(get_db), _admin: bool = Depends(require_admin)):
+    """Liste des écoles avec leur état de licence (réservé à l'administrateur)."""
+    rows = []
+    for s in db.query(SchoolInformation).order_by(SchoolInformation.id).all():
+        st = licence_state(s)
+        rows.append({"school_id": s.school_id, "name": s.name_school, "city": s.city, "licence_date": s.licence_date,
+                     "is_locked": bool(s.is_locked), "state": st["reason"] or "ok"})
+    return {"status": True, "data": rows}
+
+
+@app.get("/api/cloud/{school_id}/status")
+def cloud_school_status(school_id: str, db: Session = Depends(get_db)):
+    """État public minimal d'une école, consulté par PrimeInk : suspendue ou licence expirée ?"""
+    st = licence_state(db.query(SchoolInformation).filter(SchoolInformation.school_id == school_id).first())
+    return {"locked": st["locked"], "reason": st["reason"], "licence_date": st["licence_date"]}
+
+
 @app.post("/api/admin/codes/verify")
-def verify_and_cycle_code(data: CodeVerifySchema, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+def verify_and_cycle_code(data: CodeVerifySchema, background_tasks: BackgroundTasks, request: Request, db: Session = Depends(get_db)):
     """Vérifie, détruit, génère un nouveau et renvoie expiration ou échec."""
+    client_ip = (request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+                 or (request.client.host if request.client else "inconnu"))
+    limiter_key = "code:" + client_ip
+    if CODE_LIMITER.is_blocked(limiter_key):
+        return JSONResponse(status_code=429, content={"status": False, "message": "Trop de codes incorrects. Réessayez dans 15 minutes."})
     code_record = db.query(AccessCode).filter(AccessCode.code == data.code).first()
     if not code_record:
+        CODE_LIMITER.record(limiter_key)
         return {"status": False, "code": "0000"}
+    CODE_LIMITER.reset(limiter_key)
     
     db.delete(code_record)
     new_code = generate_20_char_code()
@@ -1363,11 +1609,25 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
     teacher = db.query(Teacher).filter(Teacher.email == email).first()
     if not teacher:
         return {"status": False, "message": "Enseignant non trouvé."}
+    blocked = teacher_school_block(db, teacher)
+    if blocked:
+        raise HTTPException(status_code=403, detail=blocked)
 
     students_dict = payload.get("students", {})
     courses_dict = payload.get("courses", {})
     evaluations_dict = payload.get("evaluations", {})
     grades_dict = payload.get("grades", {})
+
+    # Signature de l'enseignant (photo prise dans ClassInk)
+    if "signature" in user_data and clean_image(user_data.get("signature")):
+        teacher.signature = clean_image(user_data.get("signature"))
+
+    # Conduite : seulement pour la classe dont il se déclare titulaire, et acceptée si l'école confirme qu'il l'est
+    conduct_report = None
+    declared_class = str(user_data.get("titulaireOf") or "").strip()
+    conduct_payload = payload.get("conduct") if isinstance(payload.get("conduct"), dict) else {}
+    if declared_class and isinstance(conduct_payload.get(declared_class), dict):
+        conduct_report = store_conduct(db, teacher, declared_class, students_dict.get(declared_class, []), conduct_payload[declared_class])
 
     # --- 1. Indexation & Validation des Élèves ---
     student_lookup = {}  # { student_id: {"name": ..., "class": ...} }
@@ -1543,11 +1803,288 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
     return {
         "status": True,
         "message": f"Synchronisation terminée avec succès. {updates_count} notes validées.",
-        "warnings_or_errors": errors
+        "warnings_or_errors": errors,
+        "conduct": conduct_report
     }
 
+
+# ---------------------------------------------------------
+# ÉTAPE 4 : réglages PrimeInk conservés sur le serveur, signatures, conduite vérifiée
+# ---------------------------------------------------------
+IMAGE_DATAURL_RE = re.compile(r"^data:image/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$")
+MAX_IMAGE_CHARS = 450000
+BULLETIN_MODELS = ("classink", "ige010", "repechage")
+SIGNATURE_SOURCES = ("titulaire", "responsable", "default", "none")
+PN_EXTRA_KEYS = ("signatureBook", "repechage", "printSettings", "behaviour")
+PERIOD_TO_KEY = {"P1": "p1", "P2": "p2", "EX1": "ex1", "P3": "p3", "P4": "p4", "EX2": "ex2"}
+
+
+def clean_image(value):
+    """Renvoie l'image si c'est une image raster (data URL) valide et assez légère, sinon None."""
+    if isinstance(value, str) and len(value) <= MAX_IMAGE_CHARS and IMAGE_DATAURL_RE.match(value):
+        return value
+    return None
+
+
+def clean_text(value, max_len=200):
+    return str(value).strip()[:max_len] if value is not None else ""
+
+
+def clean_pn_extra(extra):
+    """Ne garde que les réglages PrimeInk connus, avec des tailles raisonnables."""
+    out = {}
+    if not isinstance(extra, dict):
+        return out
+    book = extra.get("signatureBook")
+    if isinstance(book, dict):
+        out["signatureBook"] = {clean_text(k, 120): v for k, v in list(book.items())[:300] if clean_image(v)}
+    for key in ("repechage", "behaviour"):
+        value = extra.get(key)
+        if isinstance(value, dict) and len(json.dumps(value)) < 2000000:
+            out[key] = value
+    settings = extra.get("printSettings")
+    if isinstance(settings, dict):
+        out["printSettings"] = {"paper": "A3" if settings.get("paper") == "A3" else "A4"}
+    return out
+
+
+def merge_pn_extra(school, extra):
+    """Fusionne les réglages reçus avec ceux déjà enregistrés (les valeurs reçues l'emportent)."""
+    if not extra:
+        return
+    merged = dict(school.pn_extra or {})
+    for key, value in extra.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = {**merged[key], **value}
+        else:
+            merged[key] = value
+    school.pn_extra = merged
+
+
+def apply_school_settings(school, data, allow_clear=False):
+    """Applique l'identité du bulletin. allow_clear=True : une valeur vide efface (sceau, signature, armoiries)."""
+    if not isinstance(data, dict):
+        return
+    for attr, key, size in (("province", "province", 120), ("head_name", "headName", 160), ("school_year", "schoolYear", 30)):
+        if key in data:
+            setattr(school, attr, clean_text(data.get(key), size))
+    for attr, key in (("seal", "seal"), ("head_signature", "headSignature"), ("armoiries", "armoiries")):
+        if key not in data:
+            continue
+        value = data.get(key)
+        if value in (None, ""):
+            if allow_clear:
+                setattr(school, attr, None)
+        elif clean_image(value):
+            setattr(school, attr, clean_image(value))
+
+
+def school_state_extras(db, school):
+    """Réglages à renvoyer à PrimeInk : identité du bulletin, carnets de signatures, conduite vérifiée."""
+    extra = dict(school.pn_extra or {})
+    behaviour = {k: v for k, v in (extra.get("behaviour") or {}).items()}
+    for sid, kinds in build_verified_behaviour(db, school.school_id).items():
+        entry = behaviour.setdefault(sid, {"app": {}, "cond": {}})
+        for kind, periods in kinds.items():
+            entry.setdefault(kind, {}).update(periods)
+    out = {}
+    for key in ("signatureBook", "repechage", "printSettings"):
+        if key in extra:
+            out[key] = extra[key]
+    if behaviour:
+        out["behaviour"] = behaviour
+    return out
+
+
+def teacher_is_titulaire(teacher, classe) -> bool:
+    """Vrai si l'enseignant est le titulaire enregistré de la classe (nom, code ou e-mail)."""
+    titulaire = normalize_name(classe.titulaire_name or "")
+    if not titulaire:
+        return False
+    candidates = {normalize_name(teacher.full_name or ""), normalize_name(teacher.teacher_code or ""), normalize_name(teacher.email or "")}
+    candidates.discard("")
+    return titulaire in candidates
+
+
+def find_class_by_name(db, school_id, class_name):
+    wanted = normalize_name(class_name)
+    for c in db.query(ClasseInformation).filter(ClasseInformation.school_id == school_id).all():
+        if normalize_name(c.class_name) == wanted:
+            return c
+    return None
+
+
+def resolve_student(db, school_id, classe, teacher_email, classink_student_id, classink_student_name):
+    """Retrouve l'élève de l'école correspondant à un élève de ClassInk (lien enregistré, sinon rapprochement par nom)."""
+    link = db.query(StudentLink).filter(
+        StudentLink.school_id == school_id, StudentLink.teacher_email == teacher_email,
+        StudentLink.classink_student_id == classink_student_id).first()
+    if link:
+        return link.student_id
+    wanted = name_tokens_key(classink_student_name)
+    if not wanted:
+        return None
+    matches = []
+    for s in db.query(SchoolStudentInformation).filter(
+            SchoolStudentInformation.school_id == school_id, SchoolStudentInformation.class_id == classe.id).all():
+        full = name_tokens_key(" ".join(x for x in (s.student_name, s.student_post_name, s.student_pre_name) if x))
+        short = name_tokens_key(" ".join(x for x in (s.student_name, s.student_post_name) if x))
+        if wanted in (full, short):
+            matches.append(s)
+    if len(matches) == 1:
+        db.add(StudentLink(school_id=school_id, teacher_email=teacher_email, classink_student_id=classink_student_id,
+                           student_id=matches[0].id, match_method="name"))
+        return matches[0].id
+    return None
+
+
+def store_conduct(db, teacher, class_name, students, conduct_by_student):
+    """Enregistre la conduite d'une classe, SEULEMENT si l'enseignant est le titulaire enregistré de cette classe."""
+    report = {"accepted": 0, "rejected": []}
+    if not teacher.school_id:
+        report["rejected"].append({"reason": "Enseignant non rattaché à une école."})
+        return report
+    classe = find_class_by_name(db, teacher.school_id, class_name)
+    if not classe:
+        report["rejected"].append({"reason": "Classe introuvable dans PrimeInk : « " + clean_text(class_name, 80) + " »."})
+        return report
+    if not teacher_is_titulaire(teacher, classe):
+        report["rejected"].append({"reason": "Vous n'êtes pas le titulaire enregistré de cette classe."})
+        return report
+    names = {str(s.get("id")): str(s.get("name", "")) for s in (students or []) if isinstance(s, dict)}
+    for classink_id, kinds in (conduct_by_student or {}).items():
+        if not isinstance(kinds, dict):
+            continue
+        student_id = resolve_student(db, teacher.school_id, classe, teacher.email, str(classink_id), names.get(str(classink_id), ""))
+        if not student_id:
+            report["rejected"].append({"studentId": str(classink_id), "reason": "Élève introuvable dans PrimeInk."})
+            continue
+        for kind in CONDUCT_KINDS:
+            for period, value in (kinds.get(kind) or {}).items():
+                if period not in PERIODS or validate_conduct_value(value):
+                    report["rejected"].append({"studentId": str(classink_id), "reason": "Valeur ou période invalide (" + clean_text(period, 10) + ")."})
+                    continue
+                clean_value = value.strip().upper()[:CONDUCT_MAX_LEN]
+                row = db.query(StudentConduct).filter(
+                    StudentConduct.school_id == teacher.school_id, StudentConduct.student_id == student_id,
+                    StudentConduct.kind == kind, StudentConduct.period == period).first()
+                if row:
+                    row.value = clean_value
+                    row.updated_by = teacher.email
+                else:
+                    db.add(StudentConduct(school_id=teacher.school_id, student_id=student_id, kind=kind, period=period,
+                                          value=clean_value, updated_by=teacher.email))
+                report["accepted"] += 1
+    db.commit()
+    return report
+
+
+def build_verified_behaviour(db, school_id):
+    """Conduite déjà vérifiée (venant des titulaires), au format PrimeInk : { élève: { app: { p1: 'E' }, cond: {...} } }."""
+    out = {}
+    for row in db.query(StudentConduct).filter(StudentConduct.school_id == school_id).all():
+        key = PERIOD_TO_KEY.get(row.period)
+        if key and row.kind in CONDUCT_KINDS:
+            out.setdefault(row.student_id, {"app": {}, "cond": {}})[row.kind][key] = row.value
+    return out
+
+
+def build_signature_map(db, school_id):
+    """Signatures des enseignants de l'école, par identifiant PrimeInk (teacher_code)."""
+    out = {}
+    for t in db.query(Teacher).filter(Teacher.school_id == school_id).all():
+        img = clean_image(t.signature)
+        if img:
+            out[t.teacher_code or f"prof_{t.id}"] = img
+    return out
+
+
+@app.put("/api/school/settings")
+def update_school_settings(payload: dict, db: Session = Depends(get_db), claims: dict = Depends(require_active_school)):
+    """Identité du bulletin : province, année scolaire, chef d'établissement, sceau, signature, armoiries."""
+    school = db.query(SchoolInformation).filter(SchoolInformation.school_id == claims.get("school_id")).first()
+    if not school:
+        return {"status": False, "message": "École introuvable."}
+    for key in ("seal", "headSignature", "armoiries"):
+        if payload.get(key) not in (None, "") and not clean_image(payload.get(key)):
+            return {"status": False, "message": "Image invalide ou trop lourde (" + key + ")."}
+    apply_school_settings(school, payload, allow_clear=True)
+    merge_pn_extra(school, clean_pn_extra(payload))
+    db.commit()
+    return {"status": True, "message": "Réglages de l'école enregistrés."}
+
+
+@app.put("/api/classes/{class_id}/bulletin")
+def update_class_bulletin(class_id: str, payload: dict, db: Session = Depends(get_db), claims: dict = Depends(require_active_school)):
+    """Type de bulletin d'une classe, intitulé et choix de la signature."""
+    classe = db.query(ClasseInformation).filter(ClasseInformation.id == class_id, ClasseInformation.school_id == claims.get("school_id")).first()
+    if not classe:
+        raise HTTPException(status_code=404, detail="Classe introuvable.")
+    model = payload.get("bulletinModel")
+    if model is not None:
+        if model not in BULLETIN_MODELS:
+            return {"status": False, "message": "Type de bulletin inconnu."}
+        classe.bulletin_model = model
+    source = payload.get("signatureSource")
+    if source is not None:
+        if source not in SIGNATURE_SOURCES:
+            return {"status": False, "message": "Choix de signature inconnu."}
+        classe.signature_source = source
+    if "bulletinTitle" in payload:
+        classe.bulletin_title = clean_text(payload.get("bulletinTitle"), 160)
+    db.commit()
+    return {"status": True, "message": "Bulletin de la classe enregistré."}
+
+
+@app.put("/api/teacher/signature")
+def update_teacher_signature(payload: dict, db: Session = Depends(get_db), claims: dict = Depends(require_teacher)):
+    """Photo de signature de l'enseignant (prise dans ClassInk). signature = null pour la supprimer."""
+    teacher = db.query(Teacher).filter(Teacher.email == claims.get("email")).first()
+    if not teacher:
+        return {"status": False, "message": "Enseignant non trouvé."}
+    value = payload.get("signature")
+    if value in (None, ""):
+        teacher.signature = None
+    elif clean_image(value):
+        teacher.signature = clean_image(value)
+    else:
+        return {"status": False, "message": "Image invalide ou trop lourde."}
+    db.commit()
+    return {"status": True, "message": "Signature enregistrée."}
+
+
+@app.post("/api/conduct/submit")
+def submit_conduct(payload: dict, db: Session = Depends(get_db), claims: dict = Depends(require_teacher)):
+    """Conduite d'une classe pour une période. Refusée si l'enseignant n'est pas le titulaire de la classe."""
+    teacher = db.query(Teacher).filter(Teacher.email == claims.get("email")).first()
+    if not teacher:
+        return {"status": False, "message": "Enseignant non trouvé."}
+    if str(payload.get("teacherEmail") or "").strip().lower() != claims.get("email"):
+        raise HTTPException(status_code=403, detail="Ce jeton ne correspond pas à l'enseignant indiqué.")
+    blocked = teacher_school_block(db, teacher)
+    if blocked:
+        raise HTTPException(status_code=403, detail=blocked)
+    period = payload.get("period")
+    entries = payload.get("entries")
+    if period not in PERIODS or not isinstance(entries, list):
+        return {"status": False, "message": "Période ou liste d'élèves invalide."}
+    conduct, students = {}, []
+    for e in entries[:2000]:
+        if not isinstance(e, dict) or not e.get("studentId"):
+            continue
+        students.append({"id": e["studentId"], "name": e.get("studentName", "")})
+        kinds = {"app": {}, "cond": {}}
+        for kind, field in (("app", "app"), ("cond", "cond")):
+            if str(e.get(field) or "").strip():
+                kinds[kind][period] = e.get(field)
+        conduct[str(e["studentId"])] = kinds
+    report = store_conduct(db, teacher, str(payload.get("className") or ""), students, conduct)
+    return {"status": report["accepted"] > 0 or not report["rejected"], "accepted": report["accepted"],
+            "rejected": report["rejected"], "message": "" if report["accepted"] else "Aucune conduite acceptée."}
+
+
 @app.post("/api/sync/primenet")
-def sync_primenet(payload: dict, db: Session = Depends(get_db), claims: dict = Depends(require_school)):
+def sync_primenet(payload: dict, db: Session = Depends(get_db), claims: dict = Depends(require_active_school)):
     """Reçoit la DB PrimeNet (ClassNet P) et met à jour l'ensemble des données de l'école."""
     school_data = payload.get("school", {})
     # Récupère 'id' ou 'school_id' pour éviter les incompatibilités de nom de clé
@@ -1564,6 +2101,7 @@ def sync_primenet(payload: dict, db: Session = Depends(get_db), claims: dict = D
     if school_data.get("code"): school.code = school_data.get("code")
     if school_data.get("city"): school.city = school_data.get("city")
     if school_data.get("commune"): school.commune = school_data.get("commune")
+    apply_school_settings(school, school_data)
 
     # 2. Synchronisation des classes
     classes_payload = payload.get("classes", [])
@@ -1583,6 +2121,9 @@ def sync_primenet(payload: dict, db: Session = Depends(get_db), claims: dict = D
         classe_obj.class_name = c.get("name", "")
         classe_obj.titulaire_name = c.get("titulaire", "")
         classe_obj.domaines = c.get("categories", [])
+        if c.get("bulletinModel") in BULLETIN_MODELS: classe_obj.bulletin_model = c.get("bulletinModel")
+        if "bulletinTitle" in c: classe_obj.bulletin_title = clean_text(c.get("bulletinTitle"), 160)
+        if c.get("signatureSource") in SIGNATURE_SOURCES: classe_obj.signature_source = c.get("signatureSource")
 
     # 3. Synchronisation des cours
     courses_payload = payload.get("courses", [])
@@ -1604,6 +2145,7 @@ def sync_primenet(payload: dict, db: Session = Depends(get_db), claims: dict = D
         course_obj.category = crs.get("category", "")
         course_obj.titulaire_name = crs.get("titulaire", "")
         course_obj.class_id = crs.get("classId")
+        course_obj.sub_category = clean_text(crs.get("subCategory"), 160)
 
     # 4. Synchronisation des élèves
     students_payload = payload.get("students", [])
@@ -1680,6 +2222,7 @@ def sync_primenet(payload: dict, db: Session = Depends(get_db), claims: dict = D
         if "p4" in eval_scores and eval_scores["p4"] is not None: eval_obj.p4 = float(eval_scores["p4"])
         if "ex2" in eval_scores and eval_scores["ex2"] is not None: eval_obj.ex2 = float(eval_scores["ex2"])
 
+    merge_pn_extra(school, clean_pn_extra({k: payload.get(k) for k in PN_EXTRA_KEYS}))
     db.commit()
     return {"status": True, "message": "Synchronisation PrimeNet de l'école effectuée avec succès."}
 # ---------------------------------------------------------
@@ -1715,7 +2258,7 @@ def get_teacher_info(identifier: str, db: Session = Depends(get_db), claims: dic
 
 
 @app.get("/api/primenet/sync/{school_id}")
-def get_primenet_data(school_id: str, db: Session = Depends(get_db), claims: dict = Depends(require_school)):
+def get_primenet_data(school_id: str, db: Session = Depends(get_db), claims: dict = Depends(require_active_school)):
     """
     Récupère et fusionne les données de tous les enseignants d'une école spécifique
     pour les envoyer à PrimeNet.
@@ -1726,7 +2269,9 @@ def get_primenet_data(school_id: str, db: Session = Depends(get_db), claims: dic
     # 1. Récupérer tous les payloads enregistrés pour cette école
     school_payloads = db.query(PrimeNetPayload).filter(PrimeNetPayload.school_id == school_id).all()
     
-    if not school_payloads:
+    signatures_map = build_signature_map(db, school_id)
+    verified_behaviour = build_verified_behaviour(db, school_id)
+    if not school_payloads and not signatures_map and not verified_behaviour:
         raise HTTPException(status_code=404, detail="Aucune donnée trouvée pour cette école ou identifiant non enregistré.")
     
     # 2. Structure globale fusionnée à renvoyer à PrimeNet
@@ -1804,6 +2349,8 @@ def get_primenet_data(school_id: str, db: Session = Depends(get_db), claims: dic
     merged_data["classes"] = list(merged_data["classes"])
     merged_data["date_presence"] = list(merged_data["date_presence"])
     
+    merged_data["signatures"] = signatures_map
+    merged_data["conduct"] = verified_behaviour
     return {
         "status": True,
         "message": "Données PrimeNet récupérées avec succès.",
@@ -1812,7 +2359,7 @@ def get_primenet_data(school_id: str, db: Session = Depends(get_db), claims: dic
 
 
 @app.post("/api/schedule/generate")
-def generate_optimized_schedule(payload: ScheduleGenerationRequest, claims: dict = Depends(require_school)):
+def generate_optimized_schedule(payload: ScheduleGenerationRequest, claims: dict = Depends(require_active_school)):
     """
     Endpoint FastAPI pour la génération d'horaires scolaires avec prise en charge
     des troncs communs, préférences et évitement des dernières heures.
@@ -1821,67 +2368,76 @@ def generate_optimized_schedule(payload: ScheduleGenerationRequest, claims: dict
     return engine.generate()
 
 @app.post("/api/mixage/generate")
-def generate_exam_mixage(payload: dict, db: Session = Depends(get_db), claims: dict = Depends(require_school)):
+def generate_exam_mixage(payload: dict, db: Session = Depends(get_db), claims: dict = Depends(require_active_school)):
     """
-    Route FastAPI pour le mixage des examens anti-triche.
-    Utilise le moteur ExamMixerEngine et s'adapte au format d'entrée/sortie requis.
+    Mixage des examens anti-triche (moteur ExamMixerEngine).
+    Entrée : { school_id?, target_classes: [id de classe], rooms: [{id, nom, places, rangees, bancs}],
+               supervisors: [{name}], exemplaires: n, students?: [{id, name, postname, classId}] }
+    Les élèves sont ceux envoyés par PrimeInk ; à défaut, ceux de la base du serveur.
     """
-    school_id = payload.get("school_id")
-    if school_id and school_id != claims.get("school_id"):
+    school_id = payload.get("school_id") or claims.get("school_id")
+    if school_id != claims.get("school_id"):
         raise HTTPException(status_code=403, detail="Accès refusé aux données d'une autre école.")
-    target_classes = payload.get("target_classes", [])
-    rooms = payload.get("rooms", [])
-    
-    # 1. Récupération des élèves concernés depuis la base de données pour les classes cibles
-    db_students = db.query(SchoolStudentInformation).filter(
-        SchoolStudentInformation.school_id == school_id,
-        SchoolStudentInformation.class_id.in_(target_classes)
-    ).all()
+    target_classes = [str(c) for c in (payload.get("target_classes") or [])][:100]
+    rooms = [r for r in (payload.get("rooms") or []) if isinstance(r, dict)][:60]
+    if not target_classes or not rooms:
+        return {"success": False, "message": "Choisissez au moins une classe et une salle.", "seating_plans": []}
 
-    # Transformation au format attendu par le moteur
-    students_list = [
-        {
-            "id": s.id,
-            "name": s.student_name,
-            "postname": s.student_post_name,
-            "classId": s.class_id
-        }
-        for s in db_students
-    ]
+    sent = payload.get("students")
+    if isinstance(sent, list) and sent:
+        students_list = [
+            {"id": str(s.get("id")), "name": str(s.get("name", "")), "postname": str(s.get("postname", "")), "classId": str(s.get("classId"))}
+            for s in sent if isinstance(s, dict) and str(s.get("classId")) in target_classes
+        ][:5000]
+    else:
+        db_students = db.query(SchoolStudentInformation).filter(
+            SchoolStudentInformation.school_id == school_id,
+            SchoolStudentInformation.class_id.in_(target_classes)
+        ).all()
+        students_list = [
+            {"id": s.id, "name": s.student_name, "postname": s.student_post_name or "", "classId": s.class_id}
+            for s in db_students
+        ]
+    if not students_list:
+        return {"success": False, "message": "Aucun élève dans les classes choisies.", "seating_plans": []}
 
-    # 2. Exécution du moteur de mixage
     mixer_result = ExamMixerEngine.mix_students_and_assign_seats(students_list, rooms)
 
-    # 3. Adaptation de la sortie au format exact attendu par ton client
-    formatted_seating_plans = []
-    supervisor_name = payload.get("supervisors", [{}])[0].get("name", "Surveillant")
+    supervisors = [str(s.get("name", "")).strip() for s in (payload.get("supervisors") or []) if isinstance(s, dict) and str(s.get("name", "")).strip()]
+    try:
+        n_variants = max(1, min(int(payload.get("exemplaires", 1)), 5))
+    except (TypeError, ValueError):
+        n_variants = 1
 
-    for room_res in mixer_result.get("result", []):
+    formatted_seating_plans = []
+    seat_index = 0
+    for room_index, room_res in enumerate(mixer_result.get("result", [])):
         benches_list = []
-        # Regroupement par banc (ou conversion du plan de salle)
         for seat in room_res.get("seating_plan", []):
             benches_list.append({
                 "bench_number": seat["banc"],
                 "row": seat["rangee"],
                 "student_left": {
-                    "id": seat["student_exam_id"], # Ou l'ID réel selon le besoin
+                    "id": seat["student_exam_id"],
                     "name": seat["student_name"],
                     "class": seat["original_class"],
-                    "variant_code": "A"
+                    "variant_code": chr(65 + (seat_index % n_variants))   # A, B, C... : deux voisins n'ont pas le même sujet
                 },
-                "student_right": None # Géré automatiquement si tu veux placer 2 élèves par banc
+                "student_right": None
             })
-
+            seat_index += 1
         formatted_seating_plans.append({
             "room_name": room_res["room_name"],
-            "supervisor": supervisor_name,
+            "supervisor": supervisors[room_index % len(supervisors)] if supervisors else "Surveillant",
             "benches": benches_list
         })
 
     return {
         "success": True,
         "allocation_id": f"mix_{datetime.utcnow().strftime('%Y_%m_%d_%H%M')}",
-        "seating_plans": formatted_seating_plans
+        "seating_plans": formatted_seating_plans,
+        "total_mixed": mixer_result.get("total_mixed", 0),
+        "unassigned_students": mixer_result.get("unassigned_students", 0)
     }
 
 # ==============================================================================================================================================================
