@@ -94,6 +94,7 @@
         .bottom-nav button[data-target="view-llink"]::before { content: '🤖'; }
         .bottom-nav button[data-target="view-interrogations"]::before { content: '📝'; }
         .bottom-nav button[data-target="view-settings"]::before { content: '⚙️'; }
+        .bottom-nav button[data-target="view-conduite"]::before { content: '🧭'; }
 
         /* --- VIEWS --- */
         .view-section { display: none; padding: 15px; animation: fadeIn 0.3s ease-in-out; }
@@ -608,6 +609,35 @@
         </div>
     </main>
 
+    <!-- SECTION : CONDUITE ET APPLICATION (réservée au titulaire de la classe) -->
+    <main id="view-conduite" class="view-section">
+        <div class="card">
+            <h3 style="color: var(--primary); margin-bottom: 8px;">🧭 Conduite et Application — <span id="conduite-class-label"></span></h3>
+            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">Seul le titulaire de la classe saisit l'Application et la Conduite de ses élèves. PrimeInk vérifie que ces données viennent bien du titulaire avant de les mettre sur les bulletins.</p>
+            <div class="form-inline">
+                <div class="form-group">
+                    <label>PÉRIODE</label>
+                    <select id="conduite-period" onchange="renderConduiteList()">
+                        <option value="P1">1ère période (P1)</option>
+                        <option value="P2">2ème période (P2)</option>
+                        <option value="EX1">Examens du 1er semestre (EX1)</option>
+                        <option value="P3">3ème période (P3)</option>
+                        <option value="P4">4ème période (P4)</option>
+                        <option value="EX2">Examens du 2ème semestre (EX2)</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        <div class="card">
+            <div id="conduite-list-container"></div>
+            <datalist id="conduite-suggestions"><option value="E"></option><option value="TB"></option><option value="B"></option></datalist>
+            <div style="display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap;">
+                <button class="btn-primary" style="flex: 2;" onclick="saveConduite()">💾 Enregistrer la conduite</button>
+            </div>
+            <p id="conduite-status" style="font-size: 12px; color: var(--text-muted); margin-top: 10px;"></p>
+        </div>
+    </main>
+
     <!-- SECTION 3 : LLINK AI -->
     <main id="view-llink" class="view-section">
         <div class="llink-container" style="display: flex; flex-direction: column; height: calc(100vh - 140px); gap: 10px;">
@@ -750,6 +780,30 @@
 
         </div>
 
+        <div class="card" id="titulaire-card">
+            <h3 style="color: var(--primary); margin-bottom: 8px;">Mon rôle de titulaire</h3>
+            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">Le titulaire représente une classe et est le seul à saisir la conduite de ses élèves. Indiquez ici la classe dont vous êtes titulaire : l'onglet « Conduite » apparaît. L'école vérifiera que vous êtes bien le titulaire de cette classe.</p>
+            <div class="form-group">
+                <label>JE SUIS TITULAIRE DE LA CLASSE</label>
+                <select id="titulaire-class-select"></select>
+            </div>
+            <button class="btn-primary" onclick="saveTitulaire()">Enregistrer</button>
+        </div>
+
+        <div class="card" id="signature-card">
+            <h3 style="color: var(--primary); margin-bottom: 8px;">Ma signature pour les bulletins</h3>
+            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">Photographiez votre signature sur une feuille blanche bien éclairée. Le fond est retiré automatiquement. Elle sera envoyée avec vos notes et servira à compléter les bulletins des cours dont vous êtes titulaire.</p>
+            <div style="height: 90px; display: flex; align-items: center; justify-content: center; background: #fff; border: 1px dashed #94a3b8; border-radius: 8px; margin-bottom: 12px;">
+                <span id="signature-empty" style="color: #64748b; font-size: 13px;">Aucune signature enregistrée</span>
+                <img id="signature-preview" alt="Ma signature" style="display: none; max-height: 80px; max-width: 100%;">
+            </div>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <button class="btn-primary" onclick="captureSignature(true)">📷 Prendre une photo</button>
+                <button class="btn-action" onclick="captureSignature(false)">🖼️ Choisir une image</button>
+                <button class="btn-action" id="signature-delete-btn" style="display: none; color: var(--danger); border-color: var(--danger);" onclick="deleteSignature()">Supprimer</button>
+            </div>
+        </div>
+
         <div class="card">
             <h3 style="color: var(--primary); margin-bottom: 15px;">Personnalisation Llink AI</h3>
             
@@ -805,6 +859,7 @@
         <button class="nav-btn" data-target="view-presence">Présences</button>
         <button class="nav-btn" data-target="view-llink">Llink</button>
         <button class="nav-btn" data-target="view-interrogations">Quiz</button>
+        <button class="nav-btn" id="nav-conduite" data-target="view-conduite" style="display: none;">Conduite</button>
         <button class="nav-btn" data-target="view-settings">Réglages</button>
     </nav>
 
@@ -829,6 +884,17 @@
             <h3 id="custom-alert-title" style="margin-bottom: 10px; color: var(--primary);">Notification ClassNet</h3>
             <p id="custom-alert-label" style="font-size: 0.9rem; color: var(--text-main); margin-bottom: 15px;"></p>
             <button class="btn-primary" id="custom-alert-ok" style="width: 100%;">Ok</button>
+        </div>
+    </div>
+
+    <div id="custom-confirm-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3 id="custom-confirm-title" style="margin-bottom: 10px; color: var(--primary);">Confirmation</h3>
+            <p id="custom-confirm-label" style="font-size: 0.9rem; color: var(--text-main); margin-bottom: 15px; white-space: pre-wrap;"></p>
+            <div style="display: flex; gap: 10px;">
+                <button class="btn-secondary" id="custom-confirm-cancel" style="flex: 1;">Annuler</button>
+                <button class="btn-primary" id="custom-confirm-ok" style="flex: 1;">Confirmer</button>
+            </div>
         </div>
     </div>
 
@@ -988,11 +1054,7 @@ async function search_version(url, version_actuelle) {
         
         if (data && data.status === true) {
             if (version_actuelle !== data.latest_version) {
-                if (typeof showCustomAlert === 'function') {
-                    await showCustomAlert("📢 Une nouvelle version est disponible. Rendez-vous sur CRYPT Store pour la télécharger.");
-                } else {
-                    console.log("Une nouvelle version est disponible.");
-                }
+                await showCustomAlert("📢 Une nouvelle version est disponible. Rendez-vous sur CRYPT Store pour la télécharger.");
             }
         }
     } catch (err) {
@@ -1068,7 +1130,7 @@ function imprimerDocument(htmlContent) {
         printIframe.contentWindow.focus();
         printIframe.contentWindow.print();
       } catch (err) {
-        console.error("Erreur lors du déclenchement de l'impression :", err);
+        showCustomAlert("Impossible de lancer l'impression. Réessayez ou utilisez l'export PDF.");
       }
     }, 250);
   };
@@ -1118,7 +1180,7 @@ async function exporterPDF(doc, filename = "interrogation.pdf") {
       }
       return;
     } catch (err) {
-      console.error("Échec de l'export via l'API native Tauri, tentative par Blob :", err);
+      // l'export natif a échoué : on tente l'export par Blob ci-dessous
     }
   }
 
@@ -1173,7 +1235,7 @@ const defaultDB = {
 /* ==========================================================================
    SUPPRESSION D'UNE CLASSE
    ========================================================================== */
-function deleteClass(classNameToDelete) {
+async function deleteClass(classNameToDelete) {
     const targetClass = classNameToDelete || activeClass;
 
     if (!targetClass) {
@@ -1181,7 +1243,7 @@ function deleteClass(classNameToDelete) {
         return;
     }
 
-    const confirmDelete = confirm(`⚠️ Es-tu sûr de vouloir supprimer la classe "${targetClass}" ?\n\nToutes les données associées (élèves, cours, évaluations et présences) seront définitivement effacées.`);
+    const confirmDelete = await showCustomConfirm(`⚠️ Es-tu sûr de vouloir supprimer la classe "${targetClass}" ?\n\nToutes les données associées (élèves, cours, évaluations et présences) seront définitivement effacées.`);
     if (!confirmDelete) return;
 
     // 1. Retrait de la liste des classes
@@ -1191,6 +1253,8 @@ function deleteClass(classNameToDelete) {
     delete db.courses[targetClass];
     delete db.students[targetClass];
     delete db.evaluations[targetClass];
+    if (db.conduct) delete db.conduct[targetClass];
+    if (db.user.titulaireOf === targetClass) db.user.titulaireOf = '';
 
     // 3. Nettoyage de l'historique des présences
     if (db.presences && Array.isArray(db.presences)) {
@@ -1211,6 +1275,7 @@ function deleteClass(classNameToDelete) {
 let db = JSON.parse(localStorage.getItem(DB_KEY)) || defaultDB;
 
 function saveDB() {
+    if (typeof updateConduiteNav === 'function') updateConduiteNav();
     localStorage.setItem(DB_KEY, JSON.stringify(db));
 }
 
@@ -1275,6 +1340,13 @@ function cloudAuthHeaders() {
     return headers;
 }
 
+// Copie des données sans le mot de passe de l'enseignant : le serveur n'en a pas besoin pour synchroniser.
+function withoutSecrets(data) {
+    const copy = JSON.parse(JSON.stringify(data));
+    if (copy && copy.user) delete copy.user.password;
+    return copy;
+}
+
 // BEGIN mergeServerDataIntoLocal
 // Fusion NON destructive : la réponse du serveur ne remplace jamais ce qui existe déjà en local
 // (le serveur reconstruit l'état uniquement à partir des notes déjà synchronisées).
@@ -1285,6 +1357,7 @@ function mergeServerDataIntoLocal(local, server) {
 
     // Identité : le serveur fait foi, le local garde ses champs supplémentaires
     merged.user = { ...(local.user || {}), ...(server.user || {}) };
+    if (local.user && local.user.signature && !(merged.user && merged.user.signature)) merged.user.signature = local.user.signature; // le serveur actuel ne renvoie pas encore la signature
 
     // Liste de classes : union sans doublon
     merged.classes = Array.from(new Set([...(local.classes || []), ...(server.classes || [])]));
@@ -1325,6 +1398,12 @@ function mergeServerDataIntoLocal(local, server) {
         : { ...(local.grades || {}), ...(server.grades || {}) };
 
     merged.courseMax = { ...(server.courseMax || {}), ...(local.courseMax || {}) };
+    const conduct = {};
+    new Set([...Object.keys(local.conduct || {}), ...Object.keys(server.conduct || {})]).forEach(cls => {
+        conduct[cls] = { ...((server.conduct || {})[cls] || {}), ...((local.conduct || {})[cls] || {}) };
+    });
+    merged.conduct = conduct;
+    merged.conductMeta = { ...(server.conductMeta || {}), ...(local.conductMeta || {}) };
     merged.presences = (local.presences && local.presences.length) ? local.presences : (server.presences || []);
 
     const seenQuiz = new Set();
@@ -1481,9 +1560,9 @@ async function handleRegisterVerify() {
     }
 }
 
-document.getElementById('btn-login-header').addEventListener('click', () => {
+document.getElementById('btn-login-header').addEventListener('click', async () => {
     if (db.user.isLoggedIn) {
-        if (confirm("Voulez-vous vous déconnecter ?")) {
+        if (await showCustomConfirm("Voulez-vous vous déconnecter ?")) {
             db.user.isLoggedIn = false;
             try { localStorage.removeItem('classink_cloud_token'); } catch (e) { /* stockage indisponible */ }
             saveDB();
@@ -1920,8 +1999,8 @@ function updateStudentName(studentId, newName) {
     }
 }
 
-function removeStudent(studentId) {
-    if (confirm("⚠️ Voulez-vous vraiment supprimer cet élève de la classe ?")) {
+async function removeStudent(studentId) {
+    if (await showCustomConfirm("⚠️ Voulez-vous vraiment supprimer cet élève de la classe ?")) {
         db.students[activeClass] = db.students[activeClass].filter(s => s.id !== studentId);
         saveDB();
         renderEditStudentsList();
@@ -2404,8 +2483,8 @@ async function postDataWithFallback(endpoint, payload) {
         try {
             const response = await fetch(`${baseUrl}${endpoint}`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
+                headers: cloudAuthHeaders(),
+                body: JSON.stringify(withoutSecrets(payload)),
                 signal: controller.signal
             });
 
@@ -2416,7 +2495,7 @@ async function postDataWithFallback(endpoint, payload) {
             }
         } catch (error) {
             clearTimeout(timeoutId);
-            console.warn(`Échec de connexion vers ${baseUrl} :`, error.name === 'AbortError' ? 'Timeout dépassé' : error.message);
+            // serveur local injoignable : on essaie l'adresse suivante
         }
     }
 
@@ -2475,7 +2554,7 @@ async function syncWithCloud() {
         const response = await fetch(`${targetUrl}/api/sync/classnet-app`, {
             method: 'POST',
             headers: cloudAuthHeaders(),
-            body: JSON.stringify(db)
+            body: JSON.stringify(withoutSecrets(db))
         });
 
         if (response.status === 401 || response.status === 403) {
@@ -2539,17 +2618,331 @@ navBtns.forEach(btn => {
     });
 });
 
-document.getElementById('btn-header-settings').addEventListener('click', () => {
+// Ce bouton n'existe plus dans l'en-tête : sans cette vérification, le script s'arrêtait ici
+// et tout le code situé après ne s'exécutait jamais.
+const btnHeaderSettings = document.getElementById('btn-header-settings');
+if (btnHeaderSettings) btnHeaderSettings.addEventListener('click', () => {
     navBtns.forEach(b => b.classList.remove('active'));
     views.forEach(v => v.classList.remove('active'));
     document.getElementById('view-settings').classList.add('active');
+    renderSignaturePreview();
 });
+navBtns.forEach(b => { if (b.getAttribute('data-target') === 'view-settings') b.addEventListener('click', () => { renderSignaturePreview(); renderTitulaireCard(); }); });
+navBtns.forEach(b => { if (b.getAttribute('data-target') === 'view-conduite') b.addEventListener('click', renderConduiteList); });
+
+
+// ============================================================
+// SIGNATURE DE L'ENSEIGNANT (photo détourée, envoyée avec les notes)
+// ============================================================
+const SIGNATURE_MAX_DATAURL = 350000;
+
+function signatureCutBackground(canvas, ctx, w, h) {
+    const imgData = ctx.getImageData(0, 0, w, h);
+    const d = imgData.data;
+    const hist = new Array(256).fill(0);
+    for (let i = 0; i < d.length; i += 4) hist[Math.round(0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2])]++;
+    const total = w * h;
+    let sum = 0;
+    for (let t = 0; t < 256; t++) sum += t * hist[t];
+    let sumB = 0, wB = 0, best = -1, thr = 128;
+    for (let t = 0; t < 256; t++) {
+        wB += hist[t];
+        if (!wB) continue;
+        const wF = total - wB;
+        if (!wF) break;
+        sumB += t * hist[t];
+        const mB = sumB / wB, mF = (sum - sumB) / wF;
+        const between = wB * wF * (mB - mF) * (mB - mF);
+        if (between > best) { best = between; thr = t; }
+    }
+    const lo = Math.max(0, thr - 35);
+    const hi = Math.max(lo + 1, Math.min(255, thr + 10));
+    let minX = w, minY = h, maxX = -1, maxY = -1;
+    for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+            const i = (y * w + x) * 4;
+            const lum = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+            const a = lum <= lo ? 255 : (lum >= hi ? 0 : Math.round(255 * (hi - lum) / (hi - lo)));
+            d[i + 3] = a;
+            if (a > 40) { if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; }
+        }
+    }
+    if (maxX < 0) throw new Error("Aucune encre détectée : refaites la photo sur une feuille blanche, bien éclairée.");
+    ctx.putImageData(imgData, 0, 0);
+    const pad = 4;
+    minX = Math.max(0, minX - pad); minY = Math.max(0, minY - pad);
+    maxX = Math.min(w - 1, maxX + pad); maxY = Math.min(h - 1, maxY + pad);
+    const cw = maxX - minX + 1, ch = maxY - minY + 1;
+    const out = document.createElement('canvas');
+    out.width = cw; out.height = ch;
+    out.getContext('2d').drawImage(canvas, minX, minY, cw, ch, 0, 0, cw, ch);
+    return out;
+}
+
+async function processSignatureFile(file) {
+    if (!file || !/^image\//.test(file.type)) throw new Error("Ce fichier n'est pas une image.");
+    const url = URL.createObjectURL(file);
+    let img;
+    try {
+        img = await new Promise((res, rej) => {
+            const i = new Image();
+            i.onload = () => res(i);
+            i.onerror = () => rej(new Error("Image illisible."));
+            i.src = url;
+        });
+    } finally { URL.revokeObjectURL(url); }
+    let scale = Math.min(1, 700 / img.naturalWidth, 300 / img.naturalHeight);
+    let out = '';
+    for (let attempt = 0; attempt < 4; attempt++) {
+        const w = Math.max(1, Math.round(img.naturalWidth * scale));
+        const h = Math.max(1, Math.round(img.naturalHeight * scale));
+        let canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        ctx.drawImage(img, 0, 0, w, h);
+        canvas = signatureCutBackground(canvas, ctx, w, h);
+        out = canvas.toDataURL('image/png');
+        if (out.length <= SIGNATURE_MAX_DATAURL) return out;
+        scale *= 0.7;
+    }
+    if (out.length > 900000) throw new Error("Image trop lourde : reprenez la photo de plus loin.");
+    return out;
+}
+
+function renderSignaturePreview() {
+    const img = document.getElementById('signature-preview');
+    if (!img) return;
+    const sig = db.user && typeof db.user.signature === 'string' && /^data:image\/(png|jpeg|webp|gif);base64,/.test(db.user.signature) ? db.user.signature : '';
+    img.style.display = sig ? 'block' : 'none';
+    if (sig) img.src = sig;
+    document.getElementById('signature-empty').style.display = sig ? 'none' : 'block';
+    document.getElementById('signature-delete-btn').style.display = sig ? 'inline-block' : 'none';
+}
+
+function captureSignature(camera) {
+    const inp = document.createElement('input');
+    inp.type = 'file';
+    inp.accept = 'image/*';
+    if (camera) inp.setAttribute('capture', 'environment');
+    inp.onchange = async () => {
+        const file = inp.files && inp.files[0];
+        if (!file) return;
+        try {
+            db.user.signature = await processSignatureFile(file);
+            db.pendingCommits++;
+            saveDB();
+            renderSignaturePreview();
+            await showCustomAlert("Signature enregistrée. Elle sera envoyée avec vos prochaines notes.");
+        } catch (e) {
+            await showCustomAlert(e.message || "Impossible de traiter l'image.");
+        }
+    };
+    inp.click();
+}
+
+async function deleteSignature() {
+    const answer = await showCustomPrompt("Pour supprimer votre signature, tapez OUI :");
+    if (!answer || answer.trim().toUpperCase() !== 'OUI') return;
+    delete db.user.signature;
+    db.pendingCommits++;
+    saveDB();
+    renderSignaturePreview();
+}
+document.addEventListener('DOMContentLoaded', renderSignaturePreview);
+
+
+// ============================================================
+// CONDUITE ET APPLICATION : saisie réservée au titulaire de la classe
+// ============================================================
+// Données locales :
+//   db.user.titulaireOf = "3ème Scientifique"   (classe dont l'enseignant se déclare titulaire, une seule)
+//   db.conduct = { "<classe>": { "<idÉlève>": { app: { P1: "E", ... }, cond: { P1: "TB", ... } } } }
+// Ces deux champs partent avec les notes (Push On). Le serveur et PrimeInk vérifient que l'envoi vient bien
+// du titulaire de la classe : la déclaration faite ici n'est qu'une demande, pas une preuve.
+const CONDUCT_PERIODS = ["P1", "P2", "EX1", "P3", "P4", "EX2"];
+const CONDUCT_MAX_LEN = 10;                       // même limite que le serveur (classnet_common.CONDUCT_MAX_LEN)
+const CLOUD_API_URL = "https://class-net-p.onrender.com";
+const CONDUCT_SERVER_READY = false;               // passera à true quand la route /api/conduct/submit existera
+
+function getTitulaireClass() {
+    const cls = db.user && db.user.titulaireOf;
+    return (cls && Array.isArray(db.classes) && db.classes.includes(cls)) ? cls : "";
+}
+
+function updateConduiteNav() {
+    const btn = document.getElementById('nav-conduite');
+    if (!btn) return;
+    const isTitulaire = !!getTitulaireClass();
+    btn.style.display = isTitulaire ? '' : 'none';
+    const view = document.getElementById('view-conduite');
+    if (!isTitulaire && view && view.classList.contains('active')) {
+        view.classList.remove('active');
+        btn.classList.remove('active');
+        document.getElementById('view-notes').classList.add('active');
+        const notesBtn = document.querySelector('.bottom-nav .nav-btn[data-target="view-notes"]');
+        if (notesBtn) notesBtn.classList.add('active');
+    }
+}
+
+function renderTitulaireCard() {
+    const select = document.getElementById('titulaire-class-select');
+    if (!select) return;
+    const current = getTitulaireClass();
+    select.innerHTML = '';
+    const none = document.createElement('option');
+    none.value = '';
+    none.textContent = "— Je ne suis titulaire d'aucune classe —";
+    select.appendChild(none);
+    (db.classes || []).forEach(name => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        select.appendChild(opt);
+    });
+    select.value = current;
+}
+
+async function saveTitulaire() {
+    const select = document.getElementById('titulaire-class-select');
+    const chosen = select ? select.value : '';
+    if ((db.user.titulaireOf || '') === chosen) {
+        await showCustomAlert("Aucun changement.");
+        return;
+    }
+    db.user.titulaireOf = chosen;
+    db.pendingCommits++;
+    saveDB();
+    updateConduiteNav();
+    renderConduiteList();
+    await showCustomAlert(chosen
+        ? "Vous êtes déclaré titulaire de « " + chosen + " ». L'onglet Conduite est disponible. L'école vérifiera cette information."
+        : "Vous n'êtes plus déclaré titulaire d'une classe.");
+}
+
+function defaultConduitePeriod() {
+    const visible = CONDUCT_PERIODS.filter(p => db.periodVisibility && db.periodVisibility[p]);
+    return visible.length ? visible[visible.length - 1] : "P1";
+}
+
+function renderConduiteList() {
+    const container = document.getElementById('conduite-list-container');
+    if (!container) return;
+    const cls = getTitulaireClass();
+    document.getElementById('conduite-class-label').textContent = cls;
+    const select = document.getElementById('conduite-period');
+    if (!select.dataset.ready) { select.value = defaultConduitePeriod(); select.dataset.ready = '1'; }
+    if (!cls) {
+        container.innerHTML = '<p style="color: var(--text-muted);">Indiquez d\'abord votre classe dans Réglages › Mon rôle de titulaire.</p>';
+        return;
+    }
+    const period = select.value;
+    const students = (db.students && db.students[cls]) || [];
+    if (!students.length) {
+        container.innerHTML = '<p style="color: var(--text-muted);">Aucun élève dans cette classe pour le moment.</p>';
+        return;
+    }
+    const data = (db.conduct && db.conduct[cls]) || {};
+    const input = (studentId, kind) => {
+        const value = (((data[studentId] || {})[kind]) || {})[period] || '';
+        return '<input type="text" class="conduite-input" list="conduite-suggestions" maxlength="' + CONDUCT_MAX_LEN + '" ' +
+            'data-student="' + safeAttr(studentId) + '" data-kind="' + kind + '" value="' + safeAttr(value) + '" ' +
+            'style="width: 90px; text-align: center; text-transform: uppercase;">';
+    };
+    container.innerHTML = '<table style="width: 100%; border-collapse: collapse;"><thead><tr>' +
+        '<th style="text-align: left; padding: 6px;">Élève</th><th>Application</th><th>Conduite</th></tr></thead><tbody>' +
+        students.map(s => '<tr style="border-top: 1px solid var(--border-color);"><td style="padding: 6px;">' + safeText(s.name) + '</td>' +
+            '<td style="text-align: center;">' + input(s.id, 'app') + '</td><td style="text-align: center;">' + input(s.id, 'cond') + '</td></tr>').join('') +
+        '</tbody></table>';
+    const status = document.getElementById('conduite-status');
+    const last = (db.conductMeta && db.conductMeta[cls] && db.conductMeta[cls][period]) || '';
+    status.textContent = last ? 'Dernier enregistrement pour cette période : ' + last : 'Rien enregistré pour cette période.';
+}
+
+function safeText(value) {
+    return String(value == null ? '' : value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function safeAttr(value) {
+    return safeText(value).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+async function saveConduite() {
+    const cls = getTitulaireClass();
+    if (!cls) {
+        await showCustomAlert("Seul le titulaire d'une classe peut saisir la conduite. Indiquez votre classe dans Réglages.");
+        return;
+    }
+    const period = document.getElementById('conduite-period').value;
+    if (!CONDUCT_PERIODS.includes(period)) return;
+    if (!db.conduct) db.conduct = {};
+    if (!db.conduct[cls]) db.conduct[cls] = {};
+    const known = new Set(((db.students && db.students[cls]) || []).map(s => s.id));
+    document.querySelectorAll('#conduite-list-container .conduite-input').forEach(inp => {
+        const studentId = inp.getAttribute('data-student');
+        const kind = inp.getAttribute('data-kind');
+        if (!known.has(studentId) || (kind !== 'app' && kind !== 'cond')) return;
+        const value = inp.value.trim().toUpperCase().slice(0, CONDUCT_MAX_LEN);
+        const entry = db.conduct[cls][studentId] = db.conduct[cls][studentId] || { app: {}, cond: {} };
+        if (!entry[kind]) entry[kind] = {};
+        if (value) entry[kind][period] = value; else delete entry[kind][period];
+    });
+    if (!db.conductMeta) db.conductMeta = {};
+    if (!db.conductMeta[cls]) db.conductMeta[cls] = {};
+    db.conductMeta[cls][period] = new Date().toLocaleString('fr-FR');
+    db.pendingCommits++;
+    saveDB();
+    renderConduiteList();
+    await showCustomAlert("Conduite enregistrée pour " + period + ". Elle sera envoyée avec vos notes (Push On).");
+}
+
+// ---- Communication avec le serveur (prête ; l'envoi direct sera activé avec la mise à jour du serveur) ----
+// Contrat attendu de la future route  POST {CLOUD_API_URL}/api/conduct/submit  (jeton enseignant obligatoire) :
+//   corps    : voir buildConductSubmission()
+//   le serveur refuse l'envoi si l'enseignant du jeton n'est pas le titulaire de cette classe dans l'école,
+//   puis répond { status: true, accepted: n, rejected: [{ studentId, reason }] }.
+function buildConductSubmission(period) {
+    const cls = getTitulaireClass();
+    if (!cls || !CONDUCT_PERIODS.includes(period)) return null;
+    const data = (db.conduct && db.conduct[cls]) || {};
+    const valueOf = (studentId, kind) => (((data[studentId] || {})[kind]) || {})[period] || '';
+    return {
+        version: 1,
+        teacherEmail: db.user.email,
+        school: db.user.school,
+        schoolCode: db.user.schoolCode || '',
+        className: cls,
+        period: period,
+        entries: ((db.students && db.students[cls]) || []).map(s => ({
+            studentId: s.id, studentName: s.name, app: valueOf(s.id, 'app'), cond: valueOf(s.id, 'cond')
+        })),
+        sentAt: new Date().toISOString()
+    };
+}
+
+async function submitConductToServer(period) {
+    const submission = buildConductSubmission(period);
+    if (!submission) return { ok: false, message: "Vous n'êtes titulaire d'aucune classe." };
+    if (!CONDUCT_SERVER_READY) {
+        return { ok: false, pending: true, message: "L'envoi direct n'est pas encore actif : la conduite partira avec vos notes (Push On)." };
+    }
+    try {
+        const response = await fetch(CLOUD_API_URL + '/api/conduct/submit', {
+            method: 'POST', headers: cloudAuthHeaders(), body: JSON.stringify(submission)
+        });
+        if (response.status === 401 || response.status === 403) {
+            return { ok: false, message: "Envoi refusé : session expirée ou vous n'êtes pas le titulaire enregistré de cette classe." };
+        }
+        const result = await response.json();
+        return { ok: !!result.status, accepted: result.accepted || 0, rejected: result.rejected || [], message: result.message || '' };
+    } catch (e) {
+        return { ok: false, message: "Serveur injoignable. Réessayez avec une connexion internet." };
+    }
+}
 
 async function regenerateCryptoID() {
     const name = document.getElementById('setting-user-name').value;
     const school = document.getElementById('setting-school-id').value;
     
-    if (confirm("Voulez-vous générer une nouvelle clé d'identification cryptographique ?")) {
+    if (await showCustomConfirm("Voulez-vous générer une nouvelle clé d'identification cryptographique ?")) {
         const newID = await generateSecureTeacherID(name, school);
         db.user.id = newID;
         document.getElementById('setting-user-id').value = newID;
@@ -2573,8 +2966,8 @@ function exportDatabaseJSON() {
     downloadAnchor.remove();
 }
 
-function resetAppDatabase() {
-    if (confirm("⚠️ ATTENTION : Cela effacera l'intégralité des élèves, notes, présences et quiz enregistrés sur cet appareil. Continuer ?")) {
+async function resetAppDatabase() {
+    if (await showCustomConfirm("⚠️ ATTENTION : Cela effacera l'intégralité des élèves, notes, présences et quiz enregistrés sur cet appareil. Continuer ?")) {
         localStorage.removeItem(DB_KEY);
         location.reload();
     }
@@ -2617,8 +3010,8 @@ async function postDataWithFallback(endpoint, payload) {
         try {
             const response = await fetch(`${baseUrl}${endpoint}`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
+                headers: cloudAuthHeaders(),
+                body: JSON.stringify(withoutSecrets(payload)),
                 signal: controller.signal
             });
 
@@ -2897,8 +3290,8 @@ function renderQuizList() {
 }
 
 // 6. Suppression d'un Quiz
-function deleteQuiz(quizId) {
-    if (confirm("Supprimer définitivement cette interrogation de la banque ?")) {
+async function deleteQuiz(quizId) {
+    if (await showCustomConfirm("Supprimer définitivement cette interrogation de la banque ?")) {
         db.quizzes = db.quizzes.filter(q => q.id !== quizId);
         saveDB();
         renderQuizList();
@@ -2956,7 +3349,7 @@ function importDatabaseJSON(event) {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = function(e) {
+    reader.onload = async function(e) {
         try {
             const importedDB = JSON.parse(e.target.result);
             
@@ -2966,7 +3359,7 @@ function importDatabaseJSON(event) {
                 return;
             }
 
-            if (confirm("⚠️ Souhaitez-vous remplacer la base de données actuelle par cette sauvegarde ?")) {
+            if (await showCustomConfirm("⚠️ Souhaitez-vous remplacer la base de données actuelle par cette sauvegarde ?")) {
                 db = importedDB;
                 saveDB();
                 location.reload(); // Rechargement pour réinitialiser l'UI
@@ -3000,7 +3393,7 @@ const SERVER_CONFIG = {
             const res = await fetch(`${this.intranetMDNS}/api/ping`, { signal: AbortSignal.timeout(2000) });
             if (res.ok) return this.intranetMDNS;
         } catch (e) {
-            console.warn("⚠️ mDNS non résolu, basculement sur l'IP de secours...");
+            // nom mDNS non résolu : on bascule sur l'adresse IP de secours
             try {
                 // Tentative 2 : Fallback IP
                 const resFallback = await fetch(`${this.fallbackIP}/api/ping`, { signal: AbortSignal.timeout(2000) });
@@ -3036,46 +3429,13 @@ function logGradeChange(studentId, courseId, period, value) {
     localStorage.setItem('classnet_app_db', JSON.stringify(appState));
 }
 
-// --- COMMANDE SECRÈTE DE VERROUILLAGE ---
-let keyBuffer = "";
-document.addEventListener('keydown', (e) => {
-    // Si l'utilisateur tape dans un input, on ignore
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-    
-    keyBuffer += e.key.toUpperCase();
-    if (keyBuffer.length > 15) keyBuffer = keyBuffer.slice(-15); // Garde les 15 dernières touches
-    
-    if (keyBuffer.includes("BLOCKCRYPT")) {
-        triggerAdminLock();
-        keyBuffer = ""; // Réinitialise
-    }
-});
-
-async function triggerAdminLock() {
-    const confirmLock = prompt("⚠️ PROTOCOLE DE SÉCURITÉ ACTIVÉ. Entrez le code de désactivation :");
-    if (confirmLock === "Genesis") {
-        alert(`🚨 Verrouillage du réseau de l'école ${db.user.school} en cours de transmission...`);
-        
-        try {
-            // Envoi de la commande d'arrêt au serveur Python / ClassNet P
-            await fetch(`${SERVER_CONFIG.getInternetUrl(db.user.school)}/api/admin/lockdown`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ target: db.user.school, status: "LOCKED" })
-            });
-            alert("✅ ClassNet P a été bloqué pour cette école.");
-        } catch (error) {
-            console.error("Erreur de verrouillage", error);
-        }
-    } else {
-        alert("❌ Code incorrect.");
-    }
-}
+// Le verrouillage d'une école se fait uniquement depuis le serveur (route d'administration protégée par une clé) :
+// aucune commande secrète n'est cachée dans l'application.
 
 // (Ancienne version de verifyAndSaveProfile supprimée : elle était remplacée par la version asynchrone plus bas
 // et remettait le mot de passe local à « 123456 » avant de le demander.)
 
-function updateActiveClassName() {
+async function updateActiveClassName() {
     const newName = document.getElementById('edit-class-name').value.trim();
     if (!newName || newName === activeClass) return;
     if (db.classes.includes(newName)) {
@@ -3083,7 +3443,7 @@ function updateActiveClassName() {
         return;
     }
     
-    const confirmChange = confirm(`⚠️ Renommer "${activeClass}" en "${newName}" ? Toutes les données liées seront transférées.`);
+    const confirmChange = await showCustomConfirm(`⚠️ Renommer "${activeClass}" en "${newName}" ? Toutes les données liées seront transférées.`);
     if (!confirmChange) return;
     
     // 1. Mise à jour de la liste principale
@@ -3094,6 +3454,9 @@ function updateActiveClassName() {
     db.courses[newName] = db.courses[activeClass]; delete db.courses[activeClass];
     db.students[newName] = db.students[activeClass]; delete db.students[activeClass];
     db.evaluations[newName] = db.evaluations[activeClass]; delete db.evaluations[activeClass];
+    if (db.conduct && db.conduct[activeClass]) { db.conduct[newName] = db.conduct[activeClass]; delete db.conduct[activeClass]; }
+    if (db.conductMeta && db.conductMeta[activeClass]) { db.conductMeta[newName] = db.conductMeta[activeClass]; delete db.conductMeta[activeClass]; }
+    if (db.user.titulaireOf === activeClass) db.user.titulaireOf = newName;
     
     // 3. Mise à jour des clés combinées (Filtres et Maximas)
     if (db.activeCourseFilter && db.activeCourseFilter[activeClass]) {
@@ -3294,7 +3657,39 @@ function loadTheme() {
 /**
  * Affiche une alerte / notification dans la console visuelle du système
  */
+let __alertChain = Promise.resolve();
 function showCustomAlert(message, title = "Notification ClassNet") {
+    const result = __alertChain.then(() => __showAlertNow(message, title));
+    __alertChain = result.catch(() => {});
+    return result;
+}
+
+// Les anciens alert("...") du code passent par la même fenêtre, l'un après l'autre.
+window.alert = function(message) { showCustomAlert(String(message)); };
+
+// Remplace confirm() : renvoie une promesse (true si l'utilisateur confirme)
+function showCustomConfirm(message, title = "Confirmation") {
+    return new Promise((resolve) => {
+        const modal = document.getElementById('custom-confirm-modal');
+        const okBtn = document.getElementById('custom-confirm-ok');
+        const cancelBtn = document.getElementById('custom-confirm-cancel');
+        document.getElementById('custom-confirm-title').textContent = title;
+        document.getElementById('custom-confirm-label').textContent = message;
+        modal.classList.add('active');
+        const finish = (value) => {
+            modal.classList.remove('active');
+            okBtn.removeEventListener('click', onOk);
+            cancelBtn.removeEventListener('click', onCancel);
+            resolve(value);
+        };
+        const onOk = () => finish(true);
+        const onCancel = () => finish(false);
+        okBtn.addEventListener('click', onOk);
+        cancelBtn.addEventListener('click', onCancel);
+    });
+}
+
+function __showAlertNow(message, title) {
     return new Promise((resolve) => {
         const modal = document.getElementById('custom-alert-modal');
         const titleEl = document.getElementById('custom-alert-title');
@@ -3391,7 +3786,7 @@ function testSchoolBell() {
         osc.start();
         osc.stop(audioCtx.currentTime + 1.5);
     } catch(e) {
-        console.log("Audio non supporté");
+        // pas de son disponible : sans conséquence
     }
 }
 
