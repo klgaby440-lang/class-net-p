@@ -4793,6 +4793,14 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
         }
     });
 });
+
+// Fonction manquante appelée lors du succès de l'activation
+function updateExpirationLabel() {
+    const expLabel = document.getElementById('expirationStatusLabel');
+    if (expLabel && appState.expiration_date) {
+        expLabel.textContent = `Licence valide jusqu'au : ${appState.expiration_date}`;
+    }
+}
     </script>
 </body>
 </html>
