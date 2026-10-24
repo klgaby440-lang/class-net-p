@@ -969,33 +969,22 @@ with engine.connect() as conn:
     conn.execute(text("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS status VARCHAR DEFAULT 'Actif';"))
     conn.execute(text("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS teacher_code VARCHAR(50);"))
     conn.execute(text("ALTER TABLE school_information ADD COLUMN IF NOT EXISTS email TEXT;"))
-    conn.execute(text("ALTER TABLE otp_codes ADD COLUMN IF NOT EXISTS identifier VARCHAR;"))
-    # 1. S'assurer que la colonne identifier existe
+    
+    # S'assurer que la colonne identifier existe dans otp_codes
     conn.execute(text("ALTER TABLE otp_codes ADD COLUMN IF NOT EXISTS identifier VARCHAR;"))
     
-    # 2. Supprimer la contrainte NOT NULL de l'ancienne colonne 'email'
-    conn.execute(text("ALTER TABLE otp_codes ALTER COLUMN email DROP NOT NULL;"))
+    # Vérification sécurisée avant d'altérer la colonne email si elle existe
+    conn.execute(text("""
+        DO $$ 
+        BEGIN 
+            IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='otp_codes' and column_name='email') THEN
+                ALTER TABLE otp_codes ALTER COLUMN email DROP NOT NULL;
+            END IF;
+        END $$;
+    """))
     
-    # 3. Récupérer les anciennes données si nécessaire
-    conn.execute(text("UPDATE otp_codes SET identifier = email WHERE identifier IS NULL AND email IS NOT NULL;"))
     conn.execute(text("ALTER TABLE otp_codes ADD COLUMN IF NOT EXISTS attempts INTEGER DEFAULT 0;"))
-    # Modèle commun (étape 3) : la table bulletin_types est déjà créée par create_all ci-dessus
-    conn.execute(text("ALTER TABLE classe_informations ADD COLUMN IF NOT EXISTS conduite_enabled BOOLEAN NOT NULL DEFAULT FALSE;"))
-    conn.execute(text("ALTER TABLE classe_informations ADD COLUMN IF NOT EXISTS bulletin_type_id INTEGER REFERENCES bulletin_types(id);"))
-    conn.execute(text("ALTER TABLE school_information ADD COLUMN IF NOT EXISTS province VARCHAR;"))
-    conn.execute(text("ALTER TABLE school_information ADD COLUMN IF NOT EXISTS head_name VARCHAR;"))
-    conn.execute(text("ALTER TABLE school_information ADD COLUMN IF NOT EXISTS school_year VARCHAR;"))
-    conn.execute(text("ALTER TABLE school_information ADD COLUMN IF NOT EXISTS seal TEXT;"))
-    conn.execute(text("ALTER TABLE school_information ADD COLUMN IF NOT EXISTS head_signature TEXT;"))
-    conn.execute(text("ALTER TABLE school_information ADD COLUMN IF NOT EXISTS armoiries TEXT;"))
-    conn.execute(text("ALTER TABLE school_information ADD COLUMN IF NOT EXISTS pn_extra JSON;"))
-    conn.execute(text("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS signature TEXT;"))
-    conn.execute(text("ALTER TABLE classe_informations ADD COLUMN IF NOT EXISTS bulletin_model VARCHAR(20);"))
-    conn.execute(text("ALTER TABLE classe_informations ADD COLUMN IF NOT EXISTS bulletin_title VARCHAR;"))
-    conn.execute(text("ALTER TABLE classe_informations ADD COLUMN IF NOT EXISTS signature_source VARCHAR(20);"))
-    conn.execute(text("ALTER TABLE course_informations ADD COLUMN IF NOT EXISTS sub_category VARCHAR;"))
     conn.commit()
-
 # ---------------------------------------------------------
 # 5. INITIALISATION FASTAPI
 # ---------------------------------------------------------
