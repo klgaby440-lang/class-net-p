@@ -2548,14 +2548,14 @@ def seed_initial_test_data():
         teacher = db.query(Teacher).filter(Teacher.email == SEED_TEACHER_EMAIL).first()
         if not teacher:
             db.add(Teacher(
-                full_name="Prof. Kabila Test",
+                full_name="Prof. Kabiya Test",
                 email=SEED_TEACHER_EMAIL,
                 school_name="ÉCOLE DE TEST CLASSNET",
                 password="12345678",
                 phone_number="+243810000000",
                 age=32,
-                teacher_code="PROF_TEST_001",
-                school_id=SEED_SCHOOL_IDS[-1],
+                teacher_code="PROF_TEST_bylh12",
+                school_id="63017630129000686",
                 status="Actif"
             ))
             if not env_teacher_pw:
