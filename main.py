@@ -1019,6 +1019,23 @@ with engine.connect() as conn:
             END IF;
         END $$;
     """))
+    conn.execute(text("""
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = current_schema()
+                  AND table_name = 'school_information'
+                  AND column_name = 'pn_extra'
+                  AND data_type IN ('text', 'character varying')
+            ) THEN
+                ALTER TABLE school_information
+                ALTER COLUMN pn_extra TYPE JSON
+                USING NULLIF(BTRIM(pn_extra), '')::json;
+            END IF;
+        END $$;
+        """))
     
     conn.execute(text("ALTER TABLE otp_codes ADD COLUMN IF NOT EXISTS attempts INTEGER DEFAULT 0;"))
     conn.commit()
