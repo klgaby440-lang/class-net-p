@@ -977,6 +977,9 @@ with engine.connect() as conn:
     conn.execute(text("ALTER TABLE school_information ADD COLUMN IF NOT EXISTS armoiries TEXT;"))
     conn.execute(text("ALTER TABLE school_information ADD COLUMN IF NOT EXISTS pn_extra TEXT;"))
     conn.execute(text("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS signature TEXT;"))
+    conn.execute(text("""
+    ALTER TABLE course_informations
+    ADD COLUMN IF NOT EXISTS sub_category VARCHAR;"""))
     # Mise à jour des colonnes manquantes de classe_informations
     conn.execute(text("""
         ALTER TABLE classe_informations
