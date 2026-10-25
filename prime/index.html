@@ -4416,8 +4416,19 @@ function updateScheduleResultTables(joursCount, heuresCount) {
             const schoolId = appState.school.id;
             try {
                 const response = await fetch(`${API_BASE_URL}/api/primenet/sync/${schoolId}`, { headers: cloudAuthHeaders() });
-                if (response.status === 401 || response.status === 403) {
-                    throw new Error("Session absente ou expirée : rechargez d'abord les données de l'école avec le mot de passe.");
+                const rawResponse = await response.json().catch(() => ({}));
+
+                if (!response.ok) {
+                    console.error("[ERREUR API]", {
+                        status: response.status,
+                        response: rawResponse
+                    });
+                
+                    throw new Error(
+                        rawResponse.detail ||
+                        rawResponse.message ||
+                        `Erreur HTTP ${response.status}`
+                    );
                 }
                 if (!response.ok) throw new Error("Erreur de connexion au serveur.");
                 
@@ -4446,9 +4457,26 @@ function updateScheduleResultTables(joursCount, heuresCount) {
                     headers: cloudAuthHeaders(),
                     body: JSON.stringify(appState)
                 });
-                if (response.status === 401 || response.status === 403) {
-                    alert("🔒 Session absente ou expirée : rechargez d'abord les données de l'école avec le mot de passe.");
+                const res = await response.json().catch(() => ({}));
+
+                if (!response.ok) {
+                    console.error("[ERREUR API]", {
+                        status: response.status,
+                        response: res
+                    });
+                
+                    alert(
+                        `Erreur HTTP ${response.status}\n` +
+                        (res.detail || res.message || JSON.stringify(res))
+                    );
+                
                     return;
+                }
+                
+                if (res.status) {
+                    alert("✅ " + res.message);
+                } else {
+                    alert("❌ " + (res.message || JSON.stringify(res)));
                 }
                 const res = await response.json();
                 if (res.status) {
