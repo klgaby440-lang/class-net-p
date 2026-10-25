@@ -977,6 +977,32 @@ with engine.connect() as conn:
     conn.execute(text("ALTER TABLE school_information ADD COLUMN IF NOT EXISTS armoiries TEXT;"))
     conn.execute(text("ALTER TABLE school_information ADD COLUMN IF NOT EXISTS pn_extra TEXT;"))
     conn.execute(text("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS signature TEXT;"))
+    # Mise à jour des colonnes manquantes de classe_informations
+    conn.execute(text("""
+        ALTER TABLE classe_informations
+        ADD COLUMN IF NOT EXISTS conduite_enabled
+        BOOLEAN NOT NULL DEFAULT FALSE;
+    """))
+    
+    conn.execute(text("""
+        ALTER TABLE classe_informations
+        ADD COLUMN IF NOT EXISTS bulletin_type_id INTEGER;
+    """))
+    
+    conn.execute(text("""
+        ALTER TABLE classe_informations
+        ADD COLUMN IF NOT EXISTS bulletin_model VARCHAR(20);
+    """))
+    
+    conn.execute(text("""
+        ALTER TABLE classe_informations
+        ADD COLUMN IF NOT EXISTS bulletin_title VARCHAR;
+    """))
+    
+    conn.execute(text("""
+        ALTER TABLE classe_informations
+        ADD COLUMN IF NOT EXISTS signature_source VARCHAR(20);
+    """))
     
     # S'assurer que la colonne identifier existe dans otp_codes
     conn.execute(text("ALTER TABLE otp_codes ADD COLUMN IF NOT EXISTS identifier VARCHAR;"))
