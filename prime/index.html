@@ -4430,9 +4430,6 @@ function updateScheduleResultTables(joursCount, heuresCount) {
                         `Erreur HTTP ${response.status}`
                     );
                 }
-                if (!response.ok) throw new Error("Erreur de connexion au serveur.");
-                
-                const rawResponse = await response.json();
                 // Le serveur renvoie { status, message, data: {...} } : on déballe l'enveloppe
                 const mergedData = rawResponse.data || rawResponse;
                 
@@ -4477,12 +4474,6 @@ function updateScheduleResultTables(joursCount, heuresCount) {
                     alert("✅ " + res.message);
                 } else {
                     alert("❌ " + (res.message || JSON.stringify(res)));
-                }
-                const res = await response.json();
-                if (res.status) {
-                    alert("✅ " + res.message);
-                } else {
-                    alert("❌ Échec de la synchronisation.");
                 }
             } catch (err) {
                 alert("❌ Erreur lors de l'envoi vers le serveur : " + err.message);
