@@ -2480,7 +2480,7 @@ def generate_exam_mixage(payload: dict, db: Session = Depends(get_db), claims: d
 from sqlalchemy.orm import Session
 
 SEED_SCHOOL_IDS = ["63017630129000686"]
-SEED_TEACHER_EMAIL = "prof.kabila@gmail.com"
+SEED_TEACHER_EMAIL = "prof.kabiya@gmail.com"
 OLD_DEFAULT_SCHOOL_PASSWORD = "123456"
 OLD_DEFAULT_TEACHER_PASSWORD = "profpassword123"
 
@@ -2551,7 +2551,7 @@ def seed_initial_test_data():
                 full_name="Prof. Kabila Test",
                 email=SEED_TEACHER_EMAIL,
                 school_name="ÉCOLE DE TEST CLASSNET",
-                password=hash_password(teacher_pw),
+                password="12345678",
                 phone_number="+243810000000",
                 age=32,
                 teacher_code="PROF_TEST_001",
