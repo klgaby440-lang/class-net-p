@@ -2499,7 +2499,7 @@ def seed_initial_test_data():
             if not school:
                 db.add(SchoolInformation(
                     school_id=school_id,
-                    bulletin_seq_id=f"SEQ_TEST_00{index}",
+                    bulletin_seq_id=f"SEQ_TEST_00{h1864}",
                     code="630119",
                     name_school="ÉCOLE DE TEST CLASSNET",
                     city="BUKAVU",
