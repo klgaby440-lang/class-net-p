@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PrimeInk — Fiches interactives et bulletins | CRYPT Enterprise</title>
+    <title>PrimeInk — Saisie des notes type Excel | CRYPT Enterprise</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg width='1024' height='1024' viewBox='0 0 1024 1024' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3ClinearGradient id='bg' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%230F2040'/%3E%3Cstop offset='100%25' stop-color='%230A1628'/%3E%3C/linearGradient%3E%3ClinearGradient id='accent' x1='0%25' y1='0%25' x2='100%25' y2='0%25'%3E%3Cstop offset='0%25' stop-color='%233B82F6'/%3E%3Cstop offset='100%25' stop-color='%2306B6D4'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='1024' height='1024' rx='200' fill='url(%23bg)'/%3E%3Cg transform='translate(512,512) scale(1.1) translate(-280,-320)'%3E%3Crect x='60' y='40' width='340' height='480' rx='12' fill='none' stroke='white' stroke-width='14' stroke-linecap='round'/%3E%3Cline x1='60' y1='520' x2='400' y2='520' stroke='white' stroke-width='14' stroke-linecap='round'/%3E%3Cpath d='M 60 280 Q 220 280 360 520' fill='none' stroke='white' stroke-width='18' stroke-linecap='round'/%3E%3Cpath d='M 60 380 Q 170 380 260 520' fill='none' stroke='white' stroke-width='18' stroke-linecap='round'/%3E%3Cpath d='M 60 470 A 70 70 0 0 1 130 520 L 60 520 Z' fill='white'/%3E%3Cpath d='M 60 280 Q 220 280 360 520' fill='none' stroke='url(%23accent)' stroke-width='18' stroke-linecap='round' opacity='0.9'/%3E%3Cg transform='translate(460, 40)'%3E%3Crect x='0' y='40' width='28' height='400' rx='6' fill='none' stroke='white' stroke-width='10'/%3E%3Cpath d='M 0 40 L 14 0 L 28 40 Z' fill='none' stroke='white' stroke-width='10' stroke-linejoin='round'/%3E%3Crect x='0' y='440' width='28' height='28' rx='4' fill='%233B82F6'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <style> 
@@ -1050,9 +1050,13 @@ body {
 @media print { .bp-input.bp-place-summary { background: transparent !important; outline: none !important; border-bottom-color: #000; } }
 .fiche-grade-input { width: 4.5rem; max-width: 100%; min-width: 3.2rem; padding: 0.35rem 0.25rem; border: 1px solid var(--border-color); border-radius: 5px; text-align: center; font: inherit; color: var(--text-primary); background: #fffdf2; }
 .fiche-grade-input:focus { outline: 2px solid var(--primary-color); outline-offset: 0; background: #fff; }
-.fiche-grade-input:invalid { border-color: var(--danger-color); background: #fff1f2; }
+.fiche-grade-input:invalid, .fiche-grade-input[aria-invalid="true"] { border-color: var(--danger-color); background: #fff1f2; }
+.bp-input[aria-invalid="true"] { background: #fee2e2 !important; outline: 0.35mm solid #dc2626; }
 .fiche-total-missing { color: #b45309; font-weight: 600; }
-@media (max-width: 900px) { #view-fiches .detail-display-area { overflow-x: auto; } #view-fiches .data-table { min-width: 820px; } }
+.fiche-entry-hint, .bp-autosave-hint { color: var(--text-secondary); font-size: 0.76rem; display: flex; align-items: center; gap: 0.35rem; }
+.fiche-entry-hint { margin: 0.2rem 0 0.65rem; }
+.bp-autosave-hint { margin-left: auto; }
+@media (max-width: 900px) { #view-fiches .detail-display-area { overflow-x: auto; } #view-fiches .data-table { min-width: 820px; } .bp-autosave-hint { margin-left: 0; width: 100%; } }
 
     </style>
 </head>
@@ -1228,6 +1232,7 @@ body {
                     </label>
                     <button class="btn-primary" onclick="printStudentBulletin()">🖨️ Imprimer cet élève</button>
                     <button class="btn-primary" onclick="printClassBulletins()" style="background-color: #16a34a;">🖨️ Imprimer la classe</button>
+                    <span class="bp-autosave-hint" title="Les cases sont sauvegardées automatiquement sur cet appareil.">✓ Sauvegarde automatique · Flèches pour naviguer</span>
                     <span class="bp-warn" id="bpWarn"></span>
                 </div>
                 <div class="bp-screen-frame" id="bulletinScreenFrame">
@@ -1251,6 +1256,7 @@ body {
                 <div class="course-header-banner">
                     <h3>Titulaire : <span id="currentCourseTitulaire">-</span> | Cours : <span id="currentCourseName">-</span></h3>
                 </div>
+                <div class="fiche-entry-hint">✓ Chaque note valide est enregistrée automatiquement · Flèches pour changer de cellule · Entrée pour descendre</div>
                 <table class="data-table">
                     <thead>
                         <tr>
@@ -2424,8 +2430,16 @@ window.alert = function(message) { showCustomAlert(message); };
                     });
                     // ---- Lignes de synthèse ----
                     const gm = bpMaxesOf(grand);
-                    const pctOf = k => (mine[k].n > 0 && gm[BP_MAX_OF[k]] > 0) ? (Math.round(mine[k].v / gm[BP_MAX_OF[k]] * 1000) / 10) + '%' : '';
-                    const pctRaw = k => (mine[k].n > 0 && gm[BP_MAX_OF[k]] > 0) ? (Math.round(mine[k].v / gm[BP_MAX_OF[k]] * 1000) / 10) : '';
+                    // Un pourcentage global n'est fiable que si la colonne correspondante
+                    // contient une note pour TOUS les cours de l'élève. Pour s1/s2/tg,
+                    // bpStudentTotals impose déjà que chaque période + examen soit présent
+                    // dans chaque cours avant de compter le total dérivé.
+                    const hasCompleteColumn = k => classCourses.length > 0 &&
+                        mine[k] && mine[k].n === classCourses.length;
+                    const pctOf = k => (hasCompleteColumn(k) && gm[BP_MAX_OF[k]] > 0)
+                        ? (Math.round(mine[k].v / gm[BP_MAX_OF[k]] * 1000) / 10) + '%' : '';
+                    const pctRaw = k => (hasCompleteColumn(k) && gm[BP_MAX_OF[k]] > 0)
+                        ? (Math.round(mine[k].v / gm[BP_MAX_OF[k]] * 1000) / 10) : '';
                     const rankTxt = k => safeHTML(bpPlaceValue(k, student, classStudents, allTotals));
                     const placeInput = (key, type) => {
                         const value = bpPlaceValue(key, student, classStudents, allTotals);
@@ -2600,6 +2614,13 @@ window.alert = function(message) { showCustomAlert(message); };
                     bpDisplayedClassId = student.classId;
                     bpRendering = true;
                     area.innerHTML = bpBuildPage(student, { editable: true });
+                    const editableInputs = Array.from(area.querySelectorAll('.bp-input'));
+                    editableInputs.forEach((input, index) => {
+                        input.dataset.bpNavIndex = String(index);
+                        input.dataset.lastValid = input.value;
+                        input.dataset.initial = input.value;
+                        input.dataset.dirty = '';
+                    });
                     bpRendering = false;
                     bpSyncToolbar(cls);
                     bpFitScreen();
@@ -2868,56 +2889,127 @@ window.alert = function(message) { showCustomAlert(message); };
                     renderinterface('ajouter_classe');
                 };
 
-                // ---- Édition des cases du bulletin (validation à la sortie de la case) ----
+                // ---- Saisie de type tableur : sauvegarde immédiate et navigation aux flèches ----
                 let bpRendering = false;
-                // Valide la saisie d'une case <input>. Renvoie l'élève concerné si une donnée a changé, sinon null.
-                function bpCommitCell(input) {
-                    if (bpRendering) return null;
-                    const sid = input.getAttribute('data-student');
-                    const raw = (input.value || '').trim().replace(',', '.');
-                    if (raw === (input.getAttribute('data-initial') || '').trim().replace(',', '.')) return null;
-                    input.setAttribute('data-initial', input.value);
-                    if (input.classList.contains('bp-grade')) {
-                        const key = input.getAttribute('data-key'), field = input.getAttribute('data-field');
-                        const max = parseFloat(input.getAttribute('data-max'));
-                        if (!appState.grades[key]) appState.grades[key] = {};
-                        if (raw === '') {
-                            delete appState.grades[key][field];
-                        } else {
-                            const val = Number(raw);
-                            if (isNaN(val) || val < 0) alert('Note invalide : saisissez un nombre.');
-                            else if (max > 0 && val > max) alert('La note ne peut pas dépasser ' + max + '.');
-                            else appState.grades[key][field] = val;
+
+                // Déplace le curseur vers la cellule éditable voisine dans le même tableau.
+                // Les cellules calculées/non éditables sont ignorées horizontalement.
+                function findEditableGridNeighbor(input, direction, selector, container) {
+                    const table = input && input.closest ? input.closest('table') : null;
+                    const row = input && input.closest ? input.closest('tr') : null;
+                    const cell = input && input.closest ? input.closest('td, th') : null;
+                    if (!table || !row || !cell) {
+                        // Certains champs du bulletin (ex. place annuelle) sont dans le panneau latéral, hors tableau.
+                        const all = Array.from((container || document).querySelectorAll(selector));
+                        const index = all.indexOf(input);
+                        if (index < 0) return null;
+                        const step = direction === 'ArrowLeft' || direction === 'ArrowUp' ? -1 : 1;
+                        return all[index + step] || null;
+                    }
+                    const rows = Array.from(table.rows);
+                    const rowIndex = rows.indexOf(row);
+                    const columnIndex = cell.cellIndex;
+                    if (rowIndex < 0) return null;
+
+                    if (direction === 'ArrowLeft' || direction === 'ArrowRight') {
+                        const step = direction === 'ArrowLeft' ? -1 : 1;
+                        for (let c = columnIndex + step; c >= 0 && c < row.cells.length; c += step) {
+                            const candidate = row.cells[c].querySelector(selector);
+                            if (candidate) return candidate;
                         }
+                        return null;
+                    }
+
+                    if (direction === 'ArrowUp' || direction === 'ArrowDown') {
+                        const step = direction === 'ArrowUp' ? -1 : 1;
+                        for (let r = rowIndex + step; r >= 0 && r < rows.length; r += step) {
+                            const candidateCell = rows[r].cells[columnIndex];
+                            const candidate = candidateCell ? candidateCell.querySelector(selector) : null;
+                            if (candidate) return candidate;
+                        }
+                    }
+                    return null;
+                }
+
+                function bpPersistCellInput(input) {
+                    if (!input || bpRendering) return false;
+                    const sid = input.getAttribute('data-student');
+                    const rawText = (input.value || '').trim();
+                    const raw = rawText.replace(',', '.');
+                    let error = '';
+
+                    if (input.classList.contains('bp-grade')) {
+                        const max = Number(input.getAttribute('data-max'));
+                        const value = rawText === '' ? null : Number(raw);
+                        if (rawText !== '' && (!Number.isFinite(value) || value < 0)) error = 'Saisissez un nombre positif ou nul.';
+                        else if (rawText !== '' && max > 0 && value > max) error = 'La note ne peut pas dépasser ' + max + '.';
+                        if (error) {
+                            input.setAttribute('aria-invalid', 'true');
+                            input.title = error;
+                            return false;
+                        }
+                        const key = input.getAttribute('data-key'), field = input.getAttribute('data-field');
+                        if (!appState.grades) appState.grades = {};
+                        if (!appState.grades[key]) appState.grades[key] = {};
+                        if (rawText === '') delete appState.grades[key][field];
+                        else appState.grades[key][field] = value;
                     } else if (input.classList.contains('bp-rep')) {
+                        const value = rawText === '' ? null : Number(raw);
+                        if (rawText !== '' && (!Number.isFinite(value) || value < 0 || value > 100)) {
+                            input.setAttribute('aria-invalid', 'true');
+                            input.title = 'Pourcentage attendu entre 0 et 100.';
+                            return false;
+                        }
                         const key = input.getAttribute('data-key');
                         if (!appState.repechage) appState.repechage = {};
-                        if (raw === '') delete appState.repechage[key];
-                        else {
-                            const val = Number(raw);
-                            if (isNaN(val) || val < 0 || val > 100) alert('Pourcentage invalide (entre 0 et 100).');
-                            else appState.repechage[key] = val;
-                        }
+                        if (rawText === '') delete appState.repechage[key];
+                        else appState.repechage[key] = value;
                     } else if (input.classList.contains('bp-place')) {
                         if (!appState.bulletinPlaces) appState.bulletinPlaces = {};
                         const field = input.getAttribute('data-field');
                         if (!appState.bulletinPlaces[sid]) appState.bulletinPlaces[sid] = {};
-                        // Une valeur vide reste vide au lieu de recalculer automatiquement le rang.
-                        appState.bulletinPlaces[sid][field] = String(input.value || '').trim().slice(0, 15);
+                        appState.bulletinPlaces[sid][field] = rawText.slice(0, 15);
                     } else if (input.classList.contains('bp-beh')) {
                         const type = input.getAttribute('data-type'), field = input.getAttribute('data-field');
                         if (!appState.behaviour) appState.behaviour = {};
                         const entry = appState.behaviour[sid] = appState.behaviour[sid] || { app: {}, cond: {} };
                         if (!entry[type]) entry[type] = {};
-                        const value = (input.value || '').trim().toUpperCase().slice(0, 10);
+                        const value = rawText.toUpperCase().slice(0, 10);
                         if (value) entry[type][field] = value; else delete entry[type][field];
                     } else {
-                        return null;
+                        return false;
                     }
+
+                    input.removeAttribute('aria-invalid');
+                    input.dataset.lastValid = input.value;
+                    input.dataset.dirty = '1';
+                    saveState(); // Sauvegarde dès la frappe, sans attendre Entrée ni la sortie de la cellule.
+                    return true;
+                }
+
+                // À la sortie de la cellule, on valide la dernière valeur et on recalcule les totaux/rangs.
+                function bpCommitCell(input) {
+                    if (bpRendering || !input || !input.classList || !input.classList.contains('bp-input')) return null;
+                    const sid = input.getAttribute('data-student');
+                    const original = (input.getAttribute('data-initial') || '').trim();
+                    const current = (input.value || '').trim();
+                    const pending = input.dataset.dirty === '1' || current.replace(',', '.') !== original.replace(',', '.');
+                    if (!pending) return null;
+
+                    const valid = bpPersistCellInput(input);
+                    if (!valid) {
+                        input.value = input.dataset.lastValid !== undefined ? input.dataset.lastValid : original;
+                        input.removeAttribute('aria-invalid');
+                    }
+                    input.setAttribute('data-initial', input.value);
+                    input.dataset.dirty = '';
                     saveState();
-                    window.renderOfficialBulletin(sid);
-                    if (typeof window.refreshCurrentFicheNotes === 'function') window.refreshCurrentFicheNotes();
-                    return sid;
+                    if (appState.students.some(student => student.id === sid)) {
+                        window.renderOfficialBulletin(sid);
+                        if (typeof window.refreshCurrentFicheNotes === 'function') window.refreshCurrentFicheNotes();
+                        return sid;
+                    }
+                    return null;
                 }
 
                 document.addEventListener('DOMContentLoaded', () => {
@@ -2926,29 +3018,42 @@ window.alert = function(message) { showCustomAlert(message); };
 
                     const area = document.getElementById('officialBulletinArea');
                     if (area) {
+                        // Enregistrement local à chaque frappe valide, sans redessiner le bulletin sous le curseur.
+                        area.addEventListener('input', e => {
+                            const input = e.target;
+                            if (input.classList && input.classList.contains('bp-input')) bpPersistCellInput(input);
+                        });
                         area.addEventListener('focusout', e => {
                             const input = e.target;
                             if (!input.classList || !input.classList.contains('bp-input')) return;
                             const next = e.relatedTarget;
-                            const target = next && next.classList && next.classList.contains('bp-input')
-                                ? { student: next.dataset.student, key: next.dataset.key || '', type: next.dataset.type || '', field: next.dataset.field || '', rep: next.classList.contains('bp-rep') }
-                                : null;
-                            if (!bpCommitCell(input) || !target) return;
-                            // le bulletin a été redessiné : on remet le curseur dans la case que l'utilisateur visait
-                            const again = Array.from(area.querySelectorAll('.bp-input')).find(i => i.dataset.student === target.student
-                                && (i.dataset.key || '') === target.key && (i.dataset.type || '') === target.type
-                                && (i.dataset.field || '') === target.field && i.classList.contains('bp-rep') === target.rep);
-                            if (again) { again.focus(); again.select(); }
+                            const targetIndex = next && next.classList && next.classList.contains('bp-input')
+                                ? next.dataset.bpNavIndex : null;
+                            if (!bpCommitCell(input) || targetIndex === null || targetIndex === undefined) return;
+                            // Attendre la fin du transfert de focus vers l'ancien nœud, retiré pendant le recalcul.
+                            // Puis retrouver la cellule correspondante dans le bulletin reconstruit.
+                            const restoreFocus = () => {
+                                const again = Array.from(area.querySelectorAll('.bp-input')).find(i => i.dataset.bpNavIndex === String(targetIndex));
+                                if (again) { again.focus(); if (typeof again.select === 'function') again.select(); }
+                            };
+                            if (typeof window.requestAnimationFrame === 'function') window.requestAnimationFrame(restoreFocus);
+                            else setTimeout(restoreFocus, 0);
                         });
-                        // Entrée : case suivante de la même colonne
+                        // Les flèches déplacent la sélection d'une cellule à l'autre. Entrée descend d'une ligne.
                         area.addEventListener('keydown', e => {
                             const input = e.target;
-                            if (e.key !== 'Enter' || !input.classList || !input.classList.contains('bp-input')) return;
+                            if (!input.classList || !input.classList.contains('bp-input')) return;
+                            let direction = e.key;
+                            if (direction === 'Enter') direction = 'ArrowDown';
+                            if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(direction)) return;
+                            // Gauche/droite conservent le déplacement du curseur tant qu'il n'est pas au bord du texte.
+                            if (direction === 'ArrowLeft' && input.selectionStart > 0 && input.selectionStart !== null) return;
+                            if (direction === 'ArrowRight' && input.selectionEnd < input.value.length && input.selectionEnd !== null) return;
+                            const nextInput = findEditableGridNeighbor(input, direction, 'input.bp-input', area);
                             e.preventDefault();
-                            const same = Array.from(area.querySelectorAll('.bp-input')).filter(i => (i.dataset.field || '') === (input.dataset.field || '')
-                                && (i.dataset.type || '') === (input.dataset.type || '') && i.classList.contains('bp-rep') === input.classList.contains('bp-rep'));
-                            const nextInput = same[same.indexOf(input) + 1];
-                            if (nextInput) nextInput.focus(); else input.blur();
+                            if (!nextInput) return;
+                            nextInput.focus();
+                            if (typeof nextInput.select === 'function') nextInput.select();
                         });
                     }
                     const frame = document.getElementById('bulletinScreenFrame');
@@ -3346,10 +3451,11 @@ async function bpPushClassBulletin(cls) {
                     const max = Number(input.dataset.max) || 0;
                     if (raw !== '' && (number === null || number < 0 || (max > 0 && number > max))) {
                         input.setCustomValidity(max > 0 ? `Saisir un nombre entre 0 et ${max}.` : 'Saisir un nombre supérieur ou égal à 0.');
-                        input.reportValidity();
+                        input.setAttribute('aria-invalid', 'true');
                         return;
                     }
                     input.setCustomValidity('');
+                    input.removeAttribute('aria-invalid');
                     const key = input.dataset.gradeKey;
                     const field = input.dataset.field;
                     if (!appState.grades) appState.grades = {};
@@ -3370,11 +3476,13 @@ async function bpPushClassBulletin(cls) {
                     if (raw !== '' && (number === null || number < 0 || (max > 0 && number > max))) {
                         input.value = input.dataset.lastValid || '';
                         input.setCustomValidity('');
+                        input.removeAttribute('aria-invalid');
                         input.dispatchEvent(new Event('input', { bubbles: true }));
                         alert(max > 0 ? `Note invalide : saisissez une valeur de 0 à ${max}.` : 'Note invalide : saisissez un nombre positif ou nul.');
                         return;
                     }
                     input.setCustomValidity('');
+                    input.removeAttribute('aria-invalid');
                     input.dataset.lastValid = raw;
                     saveState();
                     updateFicheTotalsRow(input.closest('tr'), input.dataset.studentId, course);
@@ -3386,14 +3494,19 @@ async function bpPushClassBulletin(cls) {
                     renderCourseStats(course.classId, course.id);
                 };
 
-                // Entrée passe à la case suivante de la fiche.
+                // Navigation de type Excel : gauche/droite entre les notes d'un élève,
+                // haut/bas dans la même colonne. Entrée descend également d'une ligne.
                 tbody.onkeydown = event => {
                     const input = event.target.closest('input.fiche-grade-input');
-                    if (!input || event.key !== 'Enter') return;
-                    event.preventDefault();
-                    const inputs = Array.from(tbody.querySelectorAll('input.fiche-grade-input'));
-                    const next = inputs[inputs.indexOf(input) + 1];
-                    if (next) next.focus(); else input.blur();
+                    if (!input) return;
+                    let direction = event.key;
+                    if (direction === 'Enter') direction = 'ArrowDown';
+                    if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(direction)) return;
+                    const next = findEditableGridNeighbor(input, direction, 'input.fiche-grade-input', tbody);
+                    event.preventDefault(); // Empêche les flèches de modifier la valeur native d'un input number.
+                    if (!next) return;
+                    next.focus();
+                    if (next.type !== 'number' && typeof next.select === 'function') next.select();
                 };
             }
 
