@@ -4034,7 +4034,7 @@ async function bpPushClassBulletin(cls) {
             if(!select || !select.value) return;
             const classId = select.value;
 
-            const students = appState.students.filter(s => s.classId === classId);
+            const students = getSortedStudentsByClass(classId);
             const courses = appState.courses.filter(c => c.classId === classId);
 
             const container = document.getElementById('presEleveCoursesContainer');
@@ -4717,7 +4717,7 @@ function updateScheduleResultTables(joursCount, heuresCount) {
                 if (typeof window.loadClassData === 'function') window.loadClassData(classId);
             } else if (appState.classes.length) {
                 activeClassId = appState.classes[0].id;
-                const firstStudent = appState.students.find(st => st.classId === activeClassId);
+                const firstStudent = getSortedStudentsByClass(activeClassId)[0];
                 activeStudentId = firstStudent ? firstStudent.id : '';
                 if (typeof window.loadClassData === 'function') window.loadClassData(activeClassId);
             } else {
@@ -4872,7 +4872,7 @@ function updateScheduleResultTables(joursCount, heuresCount) {
             if (appState.repechage) Object.keys(appState.repechage).forEach(k => { if (k.startsWith(`${studentId}_`)) delete appState.repechage[k]; });
             if (appState.tools?.presences?.students) appState.tools.presences.students = appState.tools.presences.students.filter(p => p.studentId !== studentId);
             if (activeStudentId === studentId) {
-                const replacement = appState.students.find(st => st.classId === classId);
+                const replacement = getSortedStudentsByClass(classId)[0];
                 activeStudentId = replacement ? replacement.id : '';
             }
             saveState();
