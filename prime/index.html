@@ -937,7 +937,7 @@ body {
 .bp-screen-wrap { flex: 1; min-width: 0; }
 .bp-screen-frame { position: relative; overflow: hidden; background: #fff; }
 
-.bp-page { width: 198mm; box-sizing: border-box; margin: 0 !important; padding: 2mm !important; border: 1.2px solid #000 !important; outline: 1px solid #000; outline-offset: -1.2px; background: #fff; color: #000; font-family: Arial, Helvetica, sans-serif; font-size: 6.4pt; line-height: 1.15; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.bp-page { width: 198mm; box-sizing: border-box; margin: 0 !important; padding: 2mm !important; border: 0.35mm solid #000 !important; outline: none !important; background: #fff; color: #000; font-family: Arial, Helvetica, sans-serif; font-size: 6.4pt; line-height: 1.15; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 .bp-page * { box-sizing: border-box; }
 .bp-head { display: flex; align-items: center; justify-content: space-between; border-bottom: 0.4mm solid #000; padding-bottom: 1mm; margin-bottom: 1mm; }
 .bp-head-title { text-align: center; font-weight: bold; font-size: 8.5pt; line-height: 1.2; }
@@ -989,7 +989,7 @@ body {
 .print-sheet:last-child { page-break-after: auto; break-after: auto; }
 
 /* --- Modèle humanités avec repêchage (A4 portrait, pleine largeur) --- */
-.bp-page[data-model="repechage"] .bp-table { width: 192mm; }
+.bp-page[data-model="repechage"] .bp-table { width: 192mm; margin-left: auto; margin-right: auto; }
 .bp-page[data-model="repechage"] .digit-box { border-color: #5aa02c; }
 .bp-sep { border-left-width: 0.7mm !important; }
 .bp-page[data-model="repechage"] .bp-table td.bp-max { background: #aeaaaa; font-weight: bold; }
@@ -1008,7 +1008,7 @@ body {
 .bp-info-rep .bp-info-col { flex: 1; padding: 1.2mm 1.5mm; display: flex; flex-direction: column; align-items: flex-start; gap: 1mm; }
 .bp-info-rep .bp-info-right { border-left: 0.6mm solid #000; }
 .bp-info-rep .bp-info-col > div { display: flex; align-items: center; gap: 1mm; min-height: 4.2mm; }
-.bp-portrait .bp-title { background: #e7e6e6; margin: 0; padding: 1.2mm 2mm; display: flex; justify-content: space-between; font-size: 8.5pt; border: 0.25mm solid #000; border-top: none; }
+.bp-page[data-model="repechage"] .bp-title { background: #fff; margin: 0; padding: 1.2mm 2mm; display: flex; justify-content: space-between; font-size: 8.5pt; border: 0.25mm solid #000; border-top: none; }
 .bp-title span { margin-left: 8mm; }
 .bp-decision { border: 0.25mm solid #000; margin-top: 1mm; padding: 1.5mm 2mm; font-size: 7pt; font-weight: bold; }
 .bp-dotline { border-bottom: 0.25mm dotted #000; height: 5mm; }
@@ -2503,7 +2503,7 @@ window.alert = function(message) { showCustomAlert(message); };
 
                     let warnMissing = '';
                     if (isRep && missingSig.size && bpSignatureSource(cls) === 'titulaire') warnMissing = Array.from(missingSig).join(', ');
-                    const page = (inner, extraAttr) => '<div class="bp-page" style="margin:0 !important;padding:2mm !important;border:1.2px solid #000 !important;outline:1px solid #000;outline-offset:-1.2px;" data-model="' + model + '" data-missing="' + safeHTML(warnMissing) + '"' + (extraAttr || '') + '>' + inner + '</div>';
+                    const page = (inner, extraAttr) => '<div class="bp-page" style="margin:0 !important;padding:2mm !important;border:0.35mm solid #000 !important;outline:none !important;" data-model="' + model + '" data-missing="' + safeHTML(warnMissing) + '"' + (extraAttr || '') + '>' + inner + '</div>';
 
                     if (isRep) {
                         const info = '<div class="bp-info bp-info-rep">' +
