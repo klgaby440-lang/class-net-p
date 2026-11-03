@@ -1718,6 +1718,13 @@ function onPresenceClassChange() {
     renderAttendanceList();
 }
 
+function getSortedClassStudents(className) {
+    return [...((db.students && db.students[className]) || [])].sort((a, b) =>
+        String(a.name || '').localeCompare(String(b.name || ''), 'fr', { sensitivity: 'base', numeric: true }) ||
+        String(a.id || '').localeCompare(String(b.id || ''))
+    );
+}
+
 function addStudentFromForm() {
     const studentName = document.getElementById('input-student-name').value.trim();
     const selectedClass = document.getElementById('select-student-class').value;
@@ -1735,7 +1742,9 @@ function addStudentFromForm() {
     if (!db.students[selectedClass]) db.students[selectedClass] = [];
     db.students[selectedClass].push(newStudent);
 
-    document.getElementById('input-student-name').value = '';
+    const studentNameInput = document.getElementById('input-student-name');
+    studentNameInput.value = '';
+    studentNameInput.focus();
     saveDB();
     renderGradesTables();
     renderAttendanceList();
@@ -1789,7 +1798,7 @@ function renderGradesTables() {
     // 3. Recherche élève
     const searchInput = document.getElementById('grades-filter-search');
     const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : '';
-    const students = db.students[activeClass] || [];
+    const students = getSortedClassStudents(activeClass);
     const filteredStudents = students.filter(st => st.name.toLowerCase().includes(searchTerm));
 
     const periods = ["P1", "P2", "EX1", "P3", "P4", "EX2"];
@@ -1808,7 +1817,7 @@ function renderGradesTables() {
 
         let tableHTML = `
             <div class="card-header-toggle">
-                <h4 style="color: var(--primary);">${periodLabels[pKey]} <small style="font-weight:normal; color:var(--text-muted);">(${safeHTML(selectedCourse)})</small></h4>
+                <h4 style="color: var(--primary);">${periodLabels[pKey]} <small style="font-weight:normal; color:var(--text-muted);">(${safeHTML(selectedCourse)}) · Barème : ${safeHTML(pKey)}/${safeHTML(currentMaxBulletin)}</small></h4>
                 <button class="btn-action" onclick="togglePeriodVisibility(${jsArg(pKey)})">
                     ${isVisible === 'block' ? '👁️ Masquer' : '👁️ Afficher'}
                 </button>
@@ -1962,7 +1971,7 @@ function closeEditStudentsModal() {
 function renderEditStudentsList() {
     const container = document.getElementById('edit-students-list');
     const searchTerm = (document.getElementById('edit-student-search')?.value || '').toLowerCase().trim();
-    const students = db.students[activeClass] || [];
+    const students = getSortedClassStudents(activeClass);
 
     const filtered = students.filter(st => st.name.toLowerCase().includes(searchTerm));
 
@@ -1996,6 +2005,7 @@ function updateStudentName(studentId, newName) {
     if (student) {
         student.name = newName.trim();
         saveDB();
+        renderEditStudentsList();
     }
 }
 
@@ -2018,7 +2028,7 @@ function renderCourseSummarySheet() {
     const classCourses = db.courses[activeClass] || [];
     const selectedCourse = (db.activeCourseFilter && db.activeCourseFilter[activeClass]) || classCourses[0] || '';
     const maxBulletin = (db.courseMax && db.courseMax[`${activeClass}_${selectedCourse}`]) || 100;
-    const students = db.students[activeClass] || [];
+    const students = getSortedClassStudents(activeClass);
     const periods = ["P1", "P2", "EX1", "P3", "P4", "EX2"];
 
     // Constantes pour les maximas conformément aux normes pédagogiques
@@ -2224,7 +2234,7 @@ function renderAttendanceList() {
         return;
     }
 
-    let students = db.students[selectedClass];
+    let students = getSortedClassStudents(selectedClass);
 
     // Filtrage par nom d'élève
     if (filterSearch) {
@@ -2301,7 +2311,7 @@ function exportPresenceToPDF() {
         return;
     }
 
-    const students = db.students[selectedClass] || [];
+    const students = getSortedClassStudents(selectedClass);
     if (students.length === 0) {
         alert("⚠️ Aucun élève enregistre dans cette classe.");
         return;
@@ -2419,7 +2429,7 @@ function saveAttendanceSession() {
         return;
     }
 
-    const students = db.students[selectedClass] || [];
+    const students = getSortedClassStudents(selectedClass);
     let savedCount = 0;
 
     students.forEach(st => {
@@ -2836,7 +2846,7 @@ function renderConduiteList() {
         return;
     }
     const period = select.value;
-    const students = (db.students && db.students[cls]) || [];
+    const students = getSortedClassStudents(cls);
     if (!students.length) {
         container.innerHTML = '<p style="color: var(--text-muted);">Aucun élève dans cette classe pour le moment.</p>';
         return;
@@ -2911,7 +2921,7 @@ function buildConductSubmission(period) {
         schoolCode: db.user.schoolCode || '',
         className: cls,
         period: period,
-        entries: ((db.students && db.students[cls]) || []).map(s => ({
+        entries: getSortedClassStudents(cls).map(s => ({
             studentId: s.id, studentName: s.name, app: valueOf(s.id, 'app'), cond: valueOf(s.id, 'cond')
         })),
         sentAt: new Date().toISOString()

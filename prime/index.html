@@ -2773,7 +2773,7 @@ window.alert = function(message) { showCustomAlert(message); };
                     alert("Choisissez d'abord une classe.");
                 };
                 window.printClassBulletins = function() {
-                    bpPrint(appState.students.filter(s => s.classId === activeClassId).map(s => s.id), activeClassId);
+                    bpPrint(getSortedStudentsByClass(activeClassId).map(s => s.id), activeClassId);
                 };
                 window.exportClassBulletinsPDF = function() {
                     try {
@@ -3284,19 +3284,32 @@ async function bpPushClassBulletin(cls) {
                 });
             }
 
+                    function getSortedStudentsByClass(classId) {
+                return appState.students
+                    .filter(st => st.classId === classId)
+                    .sort((a, b) => {
+                        const nameA = [a.name, a.postname, a.prename].map(v => String(v || '').trim()).filter(Boolean).join(' ');
+                        const nameB = [b.name, b.postname, b.prename].map(v => String(v || '').trim()).filter(Boolean).join(' ');
+                        return nameA.localeCompare(nameB, 'fr', { sensitivity: 'base', numeric: true }) ||
+                            String(a.id || '').localeCompare(String(b.id || ''));
+                    });
+            }
+
                     // Et sécurise le début de loadClassData() :
             function loadClassData(classId) {
                 const studentList = document.getElementById('studentListSidebar');
                 if (!studentList) return; // Bloque la tentative d'écriture si l'élément n'existe pas
                         studentList.innerHTML = '';
                         
-                        const students = appState.students.filter(s => s.classId === classId);
-                
-                students.forEach((st, idx) => {
+                        const students = getSortedStudentsByClass(classId);
+                if (students.length > 0 && !students.some(s => s.id === activeStudentId)) {
+                    activeStudentId = students[0].id;
+                }
+
+                students.forEach(st => {
                     const btn = document.createElement('button');
-                    btn.className = `list-item ${st.id === activeStudentId || idx === 0 ? 'active' : ''}`;
+                    btn.className = `list-item ${st.id === activeStudentId ? 'active' : ''}`;
                     btn.textContent = `${st.name} ${st.postname} ${st.prename}`;
-                    if (idx === 0 && !students.some(s => s.id === activeStudentId)) activeStudentId = st.id;
                     btn.addEventListener('click', () => {
                         document.querySelectorAll('#studentListSidebar .list-item').forEach(b => b.classList.remove('active'));
                         btn.classList.add('active');
@@ -3406,8 +3419,25 @@ async function bpPushClassBulletin(cls) {
 
                 const maxPer = Number(course.maxPer) || 0;
                 const maxExam = maxPer * 2;
+                const maxSemester = maxPer * 4;
                 const maxTG = maxPer * 8;
-                const students = appState.students.filter(st => st.classId === course.classId);
+                const tableHead = tbody.closest('table')?.querySelector('thead');
+                if (tableHead) {
+                    tableHead.innerHTML = `
+                        <tr>
+                            <th>NOM DE L'ÉLÈVE</th>
+                            <th>P1 / ${safeHTML(ficheFmt(maxPer))}</th>
+                            <th>P2 / ${safeHTML(ficheFmt(maxPer))}</th>
+                            <th>EX1 / ${safeHTML(ficheFmt(maxExam))}</th>
+                            <th>TOT S1 / ${safeHTML(ficheFmt(maxSemester))}</th>
+                            <th>P3 / ${safeHTML(ficheFmt(maxPer))}</th>
+                            <th>P4 / ${safeHTML(ficheFmt(maxPer))}</th>
+                            <th>EX2 / ${safeHTML(ficheFmt(maxExam))}</th>
+                            <th>TOT S2 / ${safeHTML(ficheFmt(maxSemester))}</th>
+                            <th>T.G. / ${safeHTML(ficheFmt(maxTG))}</th>
+                        </tr>`;
+                }
+                const students = getSortedStudentsByClass(course.classId);
                 const inputFields = [
                     { key: 'p1', max: maxPer, label: 'Points P1' },
                     { key: 'p2', max: maxPer, label: 'Points P2' },
@@ -3544,7 +3574,7 @@ async function bpPushClassBulletin(cls) {
                 const course = appState.courses.find(c => c.id === courseId);
                 if (!course) return;
 
-                const students = appState.students.filter(st => st.classId === classId);
+                const students = getSortedStudentsByClass(classId);
                 const tbody = document.getElementById('statsTableBody');
                 tbody.innerHTML = '';
 
@@ -3673,9 +3703,16 @@ async function bpPushClassBulletin(cls) {
                 };
 
                 appState.students.push(newStudent);
+                activeStudentId = newStudent.id;
                 saveState();
                 loadClassData(activeClassId);
-                renderinterface('ajouter_eleve');
+
+                ['name-student', 'post-name-student', 'pre-name-student', 'sexe-student',
+                    'born-date-student', 'born-where-student', 'number-permi-student'].forEach(fieldId => {
+                    const field = document.getElementById(fieldId);
+                    if (field) field.value = '';
+                });
+                document.getElementById('name-student').focus();
             });
 
             document.getElementById('saveCourseBtn').addEventListener('click', () => {
@@ -3997,7 +4034,7 @@ async function bpPushClassBulletin(cls) {
             if(!select || !select.value) return;
             const classId = select.value;
 
-            const students = appState.students.filter(s => s.classId === classId);
+            const students = getSortedStudentsByClass(classId);
             const courses = appState.courses.filter(c => c.classId === classId);
 
             const container = document.getElementById('presEleveCoursesContainer');
@@ -4680,7 +4717,7 @@ function updateScheduleResultTables(joursCount, heuresCount) {
                 if (typeof window.loadClassData === 'function') window.loadClassData(classId);
             } else if (appState.classes.length) {
                 activeClassId = appState.classes[0].id;
-                const firstStudent = appState.students.find(st => st.classId === activeClassId);
+                const firstStudent = getSortedStudentsByClass(activeClassId)[0];
                 activeStudentId = firstStudent ? firstStudent.id : '';
                 if (typeof window.loadClassData === 'function') window.loadClassData(activeClassId);
             } else {
@@ -4771,7 +4808,7 @@ function updateScheduleResultTables(joursCount, heuresCount) {
             const list = overlay?.querySelector('#manageStudentsList');
             if (!list) return;
             const q = (overlay.querySelector('#manageStudentsSearch')?.value || '').toLowerCase().trim();
-            const students = appState.students.filter(st => st.classId === classId &&
+            const students = getSortedStudentsByClass(classId).filter(st =>
                 `${st.name || ''} ${st.postname || ''} ${st.prename || ''}`.toLowerCase().includes(q));
             if (!students.length) {
                 list.innerHTML = '<p style="padding:1rem;text-align:center;color:var(--text-secondary);">Aucun élève trouvé pour cette recherche.</p>';
@@ -4835,7 +4872,7 @@ function updateScheduleResultTables(joursCount, heuresCount) {
             if (appState.repechage) Object.keys(appState.repechage).forEach(k => { if (k.startsWith(`${studentId}_`)) delete appState.repechage[k]; });
             if (appState.tools?.presences?.students) appState.tools.presences.students = appState.tools.presences.students.filter(p => p.studentId !== studentId);
             if (activeStudentId === studentId) {
-                const replacement = appState.students.find(st => st.classId === classId);
+                const replacement = getSortedStudentsByClass(classId)[0];
                 activeStudentId = replacement ? replacement.id : '';
             }
             saveState();
@@ -5041,7 +5078,7 @@ function updateScheduleResultTables(joursCount, heuresCount) {
         // Chargement d'une classe dans l'interface détaillée
         function renderClassDetails(classId) {
             if (typeof window.loadClassData === 'function') return window.loadClassData(classId);   // version complète : cours, élèves, bulletin
-            const classStudents = appState.students.filter(s => s.classId === classId);
+            const classStudents = getSortedStudentsByClass(classId);
             const sidebar = document.getElementById('studentListSidebar');
             if (!sidebar) return;
             sidebar.innerHTML = '';
