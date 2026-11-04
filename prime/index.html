@@ -1273,6 +1273,7 @@ body {
                     <thead>
                         <tr>
                             <th>NOM DE L'ÉLÈVE</th>
+                            <th>NOTES</th>
                             <th>P1</th>
                             <th>P2</th>
                             <th>EX1</th>
@@ -3472,7 +3473,7 @@ async function bpPushClassBulletin(cls) {
                     };
                     tr.innerHTML = `
                         <td>${safeHTML(name)}</td>
-                        <td><button type="button" class="student-note-access-placeholder" disabled title="Commande prévue dans une prochaine version">Bloquer / afficher</button></td>
+                        <td><button type="button" class="student-note-access-placeholder" disabled title="Commande prévue dans une prochaine version">Bloquer / afficher les notes</button></td>
                         ${gradeInput(inputFields[0])}
                         ${gradeInput(inputFields[1])}
                         ${gradeInput(inputFields[2])}
