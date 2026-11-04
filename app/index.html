@@ -137,6 +137,7 @@
         .btn-primary { background-color: var(--primary); color: white; flex: 1; }
         .btn-secondary { background-color: var(--success); color: white; flex: 1; }
         .btn-action { background-color: var(--bg-color); color: var(--text-main); border: 1px solid var(--border-color); }
+.student-note-access-placeholder { padding: 5px 7px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-color); color: var(--text-muted); font-size: 0.72rem; white-space: nowrap; cursor: not-allowed; opacity: 0.65; }
 
         /* --- FORMS --- */
         .form-group { margin-bottom: 12px; }
@@ -376,7 +377,7 @@
     <div class="splash-container">
         <div class="splash-logo-wrapper">
             <div class="splash-logo-ring"></div>
-            <!-- Logo Vectoriel Officiel ClassNet -->
+            <!-- Logo Vectoriel Officiel ClassInk -->
             <svg class="splash-logo-icon" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <defs>
                     <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -399,7 +400,7 @@
                 </g>
             </svg>
         </div>
-        <div class="splash-title">CLASSNET</div>
+        <div class="splash-title">CLASSINK</div>
         <div class="splash-subtitle">Propulsé par CRYPT Neural Engine</div>
     </div>
 </div>
@@ -484,7 +485,7 @@
                     <input type="text" id="reg-otp-code" placeholder="123456" maxlength="6" style="text-align: center; letter-spacing: 4px; font-weight: bold; font-size: 1.2rem;">
                 </div>
                 <div style="display: flex; gap: 10px; margin-top: 20px;">
-                    <span>En cliquant sur <strong>Valider mon compte</strong>, vous reconnaissez avoir lu et accepté la <a href="https://class-net-p.vercel.app/confidentialite" target="_blank" rel="noopener noreferrer">politique de confidentialité</a> de CRYPT Entreprise pour ClassNet.</span>
+                    <span>En cliquant sur <strong>Valider mon compte</strong>, vous reconnaissez avoir lu et accepté la <a href="https://class-net-p.vercel.app/confidentialite" target="_blank" rel="noopener noreferrer">politique de confidentialité</a> de CRYPT Entreprise pour ClassInk.</span>
                 </div>
                 <div style="display: flex; gap: 10px; margin-top: 20px;">
                     <button class="btn-action" style="flex:1;" onclick="switchAuthSubView('register')">Modifier infos</button>
@@ -842,7 +843,7 @@
         </div>
 
         <div class="app-info">
-            <p><strong>ClassNet App</strong> - Version 2.1.30245 (Build Cryptographique)</p>
+            <p><strong>ClassInk</strong> - Version 2.1.30245 (Build Cryptographique)</p>
             <p>Site officiel : <a href="https://klgaby440-lang.github.io/class-net/" target="_blank" style="color: var(--primary);">klgaby440-lang.github.io/classnet</a></p>
             <p style="margin-top: 8px; color: var(--primary); font-weight: bold;">Developped by CRYPT Entreprise ⚡</p>
         </div>
@@ -881,7 +882,7 @@
     <!-- MODAL DE REMPLACEMENT DE CONSOLE.LOG() ET ALERT() -->
     <div id="custom-alert-modal" class="modal-overlay">
         <div class="modal-content">
-            <h3 id="custom-alert-title" style="margin-bottom: 10px; color: var(--primary);">Notification ClassNet</h3>
+            <h3 id="custom-alert-title" style="margin-bottom: 10px; color: var(--primary);">Notification ClassInk</h3>
             <p id="custom-alert-label" style="font-size: 0.9rem; color: var(--text-main); margin-bottom: 15px;"></p>
             <button class="btn-primary" id="custom-alert-ok" style="width: 100%;">Ok</button>
         </div>
@@ -1095,7 +1096,7 @@ function imprimerDocument(htmlContent) {
     <html>
       <head>
         <meta charset="utf-8">
-        <title>Impression ClassNet</title>
+        <title>Impression ClassInk</title>
         <style>
           @page {
             margin: 10mm;
@@ -1826,7 +1827,7 @@ function renderGradesTables() {
                 <table>
                     <thead>
                         <tr>
-                            <th>Nom de l'Élève</th>`;
+                            <th>Nom de l'Élève</th><th>Notes</th>`;
         
         // 📅 Affichage conditionnel de la date sous le titre du devoir
         evals.forEach(ev => {
@@ -1840,13 +1841,13 @@ function renderGradesTables() {
         </tr></thead><tbody>`;
 
         if (filteredStudents.length === 0) {
-            tableHTML += `<tr><td colspan="${evals.length + 3}" style="text-align:center; color: var(--text-muted); padding: 12px;">🔍 Aucun élève ne correspond à "${safeHTML(searchTerm)}"</td></tr>`;
+            tableHTML += `<tr><td colspan="${evals.length + 4}" style="text-align:center; color: var(--text-muted); padding: 12px;">🔍 Aucun élève ne correspond à "${safeHTML(searchTerm)}"</td></tr>`;
         } else {
             filteredStudents.forEach(st => {
                 let total = 0;
                 let maxTotal = 0;
 
-                tableHTML += `<tr><td><strong>${safeHTML(st.name)}</strong></td>`;
+                tableHTML += `<tr><td><strong>${safeHTML(st.name)}</strong></td><td><button type="button" class="student-note-access-placeholder" disabled title="Commande prévue dans une prochaine version">Bloquer / afficher</button></td>`;
 
                 evals.forEach(ev => {
                     const gradeKey = `${st.id}_${ev.id}`;
@@ -2355,7 +2356,7 @@ function exportPresenceToPDF() {
         // En-tête du document PDF
         doc.setFontSize(16);
         doc.setTextColor(37, 99, 235); // Couleur Primaire ClassNet (#2563EB)
-        doc.text("RAPPORT DE PRÉSENCE - CLASSNET APP", 14, 18);
+        doc.text("RAPPORT DE PRÉSENCE - CLASSINK", 14, 18);
 
         doc.setFontSize(10);
         doc.setTextColor(80);
@@ -2970,7 +2971,7 @@ function exportDatabaseJSON() {
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(db, null, 2));
     const downloadAnchor = document.createElement('a');
     downloadAnchor.setAttribute("href", dataStr);
-    downloadAnchor.setAttribute("download", `classnet_backup_${new Date().toISOString().substring(0,10)}.json`);
+    downloadAnchor.setAttribute("download", `classink_backup_${new Date().toISOString().substring(0,10)}.json`);
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
@@ -3541,7 +3542,7 @@ function showCustomPrompt(message, defaultValue = '') {
     });
 }
 
-function showCustomAlert(message, title = "ClassNet App") {
+function showCustomAlert(message, title = "ClassInk") {
     return new Promise((resolve) => {
         const modal = document.getElementById('custom-alert-modal');
         const label = document.getElementById('custom-alert-label');
@@ -3668,7 +3669,7 @@ function loadTheme() {
  * Affiche une alerte / notification dans la console visuelle du système
  */
 let __alertChain = Promise.resolve();
-function showCustomAlert(message, title = "Notification ClassNet") {
+function showCustomAlert(message, title = "Notification ClassInk") {
     const result = __alertChain.then(() => __showAlertNow(message, title));
     __alertChain = result.catch(() => {});
     return result;
@@ -3765,7 +3766,7 @@ function showCustomPrompt(message, defaultValue = "", title = "Saisie requise") 
 /**
  * Console du système pour intercepter et afficher les erreurs/logs dans la modale
  */
-function systemLog(message, type = 'info', title = 'Console ClassNet') {
+function systemLog(message, type = 'info', title = 'Console ClassInk') {
     const prefix = type === 'error' ? '❌ Erreur Système : ' : (type === 'warn' ? '⚠️ Avertissement : ' : 'ℹ️ ');
     return showCustomAlert(`${prefix}${message}`, title);
 }
