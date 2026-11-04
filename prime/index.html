@@ -359,6 +359,18 @@ body {
     font-size: 0.8rem;
 }
 
+.student-note-access-placeholder:disabled {
+    padding: 0.35rem 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--bg-main);
+    color: var(--text-secondary);
+    font-size: 0.72rem;
+    white-space: nowrap;
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
 .bulletin-sheet {
     background: #fff;
     color: #000;
@@ -1065,7 +1077,7 @@ body {
 
     <!-- Barre de navigation principale (Haut) -->
     <nav class="main-navbar">
-        <div class="brand-logo">ClassNet <span>P</span></div>
+        <div class="brand-logo">PrimeInk</div>
         <div class="nav-links">
             <button class="nav-btn active" data-target="section-classes">CLASSES</button>
             <button class="nav-btn" data-target="section-about">TOOLS</button>
@@ -1093,14 +1105,14 @@ body {
 
             <div class="llink-chat-box" id="llinkChatBox">
                 <div class="chat-message ai">
-                    <p>Bonjour ! Je suis Llink. Comment puis-je t'aider dans la gestion des points ou des enseignants de ClassNet P aujourd'hui ? 🚀</p>
+                    <p>Bonjour ! Je suis Llink. Comment puis-je t'aider dans la gestion des points ou des enseignants de PrimeInk aujourd'hui ? 🚀</p>
                 </div>
             </div>
 
             <div class="llink-input-container" style="display: flex; flex-direction: column; gap: 0.5rem; background: var(--bg-main); padding: 0.8rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
                 <textarea id="llinkInput" placeholder="Pose ta question ou demande une analyse à Llink..." class="llink-input" style="width: 100%; min-height: 48px; border: none; outline: none; background: transparent; color: var(--text-primary); resize: none; font-size: 0.95rem;"></textarea>
                 <div class="llink-input-actions" style="display: flex; justify-content: space-between; align-items: center;">
-                    <span style="font-size: 0.75rem; font-weight: 700; color: var(--text-secondary);">Source : <code>classnet_p</code></span>
+                    <span style="font-size: 0.75rem; font-weight: 700; color: var(--text-secondary);">Source : <code>PrimeInk</code></span>
                     <button class="btn-primary" id="llinkSendBtn" style="display: flex; align-items: center; gap: 0.4rem;">
                         <span>Envoyer</span> ⚡
                     </button>
@@ -1350,17 +1362,17 @@ body {
                     </select>
                 </div>
                 <div class="about-card">
-                    <h2>À Propos de ClassNet P</h2>
+                    <h2>À Propos de PrimeInk</h2>
                     <p class="about-desc">
-                        ClassNet P est un logiciel développé par <strong>CRYPT Enterprise</strong>, conçu pour s'interconnecter avec ClassNet App afin d'automatiser et de sécuriser la gestion des cotations, des fiches de points et de l'impression des bulletins scolaires en RDC.
+                        PrimeInk est un logiciel développé par <strong>CRYPT Enterprise</strong>, conçu pour s'interconnecter avec ClassInk afin d'automatiser et de sécuriser la gestion des cotations, des fiches de points et de l'impression des bulletins scolaires en RDC.
                     </p>
                     <button class="btn-secondary tutorial-toggle-btn" id="tutorialBtn">Tutoriel d'utilisation ▾</button>
                     <div class="tutorial-content hidden" id="tutorialContent">
-                        <p>💡 <em>Guide rapide :</em> Sélectionnez une classe dans le menu principal pour afficher ses bulletins et fiches de notes. Utilisez la synchronisation Intranet pour recevoir les notes saisies par les enseignants via ClassNet App sans nécessiter de connexion Internet.</p>
+                        <p>💡 <em>Guide rapide :</em> Sélectionnez une classe dans le menu principal pour afficher ses bulletins et fiches de notes. Utilisez la synchronisation Intranet pour recevoir les notes saisies par les enseignants via ClassInk sans nécessiter de connexion Internet.</p>
                     </div>
                     <div class="about-meta">
                         <span><strong>Version :</strong> 1.3.0</span>
-                        <span><strong>Compatibilité ClassNet App :</strong> v1.0.2 à v1.3.0</span>
+                        <span><strong>Compatibilité ClassInk :</strong> v1.0.2 à v1.3.0</span>
                         <span><strong>Support CRYPT Enterprise :</strong> +243 895 281 304</span>
                     </div>
                 </div>
@@ -1409,7 +1421,7 @@ body {
                     <div class="form-group"><label>CODE DE L'ÉCOLE</label><input type="text" class="form-control" id="idSchoolCode" placeholder="Ex : 63017"></div>
                     <div class="form-group"><label>NOM DU CHEF D'ÉTABLISSEMENT</label><input type="text" class="form-control" id="idHeadName" placeholder="Nom et postnom"></div>
                 </div>
-                <p style="font-size: 0.78rem; color: var(--text-secondary); margin: 0.2rem 0 1rem;">Identifiant unique de l'école attribué par ClassNet : <strong id="idReadonly">-</strong></p>
+                <p style="font-size: 0.78rem; color: var(--text-secondary); margin: 0.2rem 0 1rem;">Identifiant unique de l'école attribué par ClassInk : <strong id="idReadonly">-</strong></p>
                 <div id="identityImages" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1.2rem;"></div>
                 <h2 style="font-size: 0.95rem;">SIGNATURES DES ENSEIGNANTS</h2>
                 <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.6rem;">Une signature par enseignant (titulaires de classes et de cours). Chaque enseignant pourra aussi enregistrer la sienne depuis ClassInk : elle arrivera ici après la mise à jour des serveurs.</p>
@@ -1420,7 +1432,7 @@ body {
             <div class="settings-card" style="grid-column: 1 / -1;">
                 <h2>GESTION DES ENSEIGNANTS DE L'ÉCOLE (INSPIRÉ v1.1.0)</h2>
                 <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">
-                    Regroupez les enseignants au sein de votre établissement en saisissant leur <strong>Identifiant Unique ClassNet</strong>.
+                    Regroupez les enseignants au sein de votre établissement en saisissant leur <strong>Identifiant Unique ClassInk</strong>.
                 </p>
                 <div style="display: flex; gap: 0.8rem; margin-bottom: 1.2rem;">
                     <input type="text" id="teacherUniqueIdInput" class="form-control" placeholder="Entrez l'identifiant unique du professeur (Ex: prof_63011_mwamba)" style="flex: 1;">
@@ -1687,7 +1699,7 @@ body {
     <div id="lock-screen-overlay" class="lock-overlay">
         <div class="lock-box">
             <div class="lock-icon">🔒</div>
-            <h3>ClassNet P Verrouillé</h3>
+            <h3>PrimeInk verrouillé</h3>
             <p>Entrez votre mot de passe pour continuer :</p>
             <input type="password" id="lockPasswordInput" class="form-control lock-input" placeholder="••••••••">
             <button class="btn-primary" id="unlockBtn">Déverrouiller</button>
@@ -1852,7 +1864,7 @@ function __showDialog(kind, message, title, defaultValue) {
     __dialogQueue = result.catch(() => {});
     return result;
 }
-function showCustomAlert(message, title = 'ClassNet P') { return __showDialog('alert', String(message), title); }
+function showCustomAlert(message, title = 'PrimeInk') { return __showDialog('alert', String(message), title); }
 function showCustomPrompt(message, defaultValue = '', title = 'Saisie requise') { return __showDialog('prompt', String(message), title, defaultValue); }
 function showCustomConfirm(message, title = 'Confirmation') { return __showDialog('confirm', String(message), title); }
 window.alert = function(message) { showCustomAlert(message); };
@@ -3426,6 +3438,7 @@ async function bpPushClassBulletin(cls) {
                     tableHead.innerHTML = `
                         <tr>
                             <th>NOM DE L'ÉLÈVE</th>
+                            <th>NOTES</th>
                             <th>P1 / ${safeHTML(ficheFmt(maxPer))}</th>
                             <th>P2 / ${safeHTML(ficheFmt(maxPer))}</th>
                             <th>EX1 / ${safeHTML(ficheFmt(maxExam))}</th>
@@ -3459,6 +3472,7 @@ async function bpPushClassBulletin(cls) {
                     };
                     tr.innerHTML = `
                         <td>${safeHTML(name)}</td>
+                        <td><button type="button" class="student-note-access-placeholder" disabled title="Commande prévue dans une prochaine version">Bloquer / afficher</button></td>
                         ${gradeInput(inputFields[0])}
                         ${gradeInput(inputFields[1])}
                         ${gradeInput(inputFields[2])}
@@ -3938,7 +3952,7 @@ async function bpPushClassBulletin(cls) {
                 if (data.reason === 'expired') {
                     blockSoftwareForActivation("La licence de l'école a expiré. Saisissez un code de renouvellement.");
                 } else {
-                    blockSoftwareSuspended("Ce compte est suspendu par l'administrateur ClassNet. Contactez ClassNet pour le réactiver.");
+                    blockSoftwareSuspended("Ce compte est suspendu par l'administrateur de ClassInk. Contactez l'équipe de votre établissement pour le réactiver.");
                 }
             } catch (error) { /* hors ligne : aucune restriction connue */ }
         }
@@ -5235,7 +5249,7 @@ function updateScheduleResultTables(joursCount, heuresCount) {
         async function loadSchoolData() {
             let schoolId = appState.school.id;
             if (!schoolId) {
-                schoolId = (await showCustomPrompt("Saisissez l'identifiant de l'école (communiqué par ClassNet) :", "", "Connexion à l'école")) || "";
+                schoolId = (await showCustomPrompt("Saisissez l'identifiant de l'école (communiqué par ClassInk) :", "", "Connexion à l'école")) || "";
                 if (!schoolId) return;
             }
             const password = document.getElementById('appPasswordInput')?.value || "";
@@ -5304,7 +5318,7 @@ function updateScheduleResultTables(joursCount, heuresCount) {
                 if (expLabel) expLabel.textContent = `Licence valide jusqu'au : ${appState.expiration_date}`;
                 
                 if (today > appState.expiration_date) {
-                    blockSoftwareForActivation("Votre licence ClassNet P / PrimeNet a expiré. Veuillez entrer un nouveau code d'activation CRYPT.");
+                    blockSoftwareForActivation("Votre licence PrimeInk a expiré. Veuillez entrer un nouveau code d'activation CRYPT.");
                 }
             } else {
                 if (expLabel) expLabel.textContent = "Aucun code d'activation enregistré.";
@@ -5324,7 +5338,7 @@ function updateScheduleResultTables(joursCount, heuresCount) {
                         <div class="form-group">
                             <input type="text" id="lockActivationInput" class="form-control" placeholder="Entrez le code CRYPT">
                         </div>
-                        <button class="btn-primary" onclick="verifyActivationFromLock()">Activer ClassNet P</button>
+                        <button class="btn-primary" onclick="verifyActivationFromLock()">Activer PrimeInk</button>
                         <span class="brand-tagline">Engineered by CRYPT Enterprise</span>
                     `;
                 }
