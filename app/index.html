@@ -1847,7 +1847,7 @@ function renderGradesTables() {
                 let total = 0;
                 let maxTotal = 0;
 
-                tableHTML += `<tr><td><strong>${safeHTML(st.name)}</strong></td><td><button type="button" class="student-note-access-placeholder" disabled title="Commande prévue dans une prochaine version">Bloquer / afficher</button></td>`;
+                tableHTML += `<tr><td><strong>${safeHTML(st.name)}</strong></td><td><button type="button" class="student-note-access-placeholder" disabled title="Commande prévue dans une prochaine version">Bloquer / afficher les notes</button></td>`;
 
                 evals.forEach(ev => {
                     const gradeKey = `${st.id}_${ev.id}`;
