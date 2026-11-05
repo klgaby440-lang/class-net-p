@@ -1922,7 +1922,7 @@ window.alert = function(message) { showCustomAlert(message); };
             return String(value == null ? '' : value)
                 .normalize('NFC')
                 .trim()
-                .replace(/\\s+/g, ' ');
+                .replace(/\s+/g, ' ');
         }
 
         // Trie les élèves dans la base elle-même, classe par classe.
