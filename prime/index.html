@@ -5369,10 +5369,12 @@ function updateScheduleResultTables(joursCount, heuresCount) {
         }
 
         function excelParseJsonCell(value, fallback) {
-            if (value === '' || value === null || value === undefined ||
+            if (value === null || value === undefined ||
                 value === '[Donnée conservée dans la sauvegarde complète]') return fallback;
             if (typeof value !== 'string') return value;
-            try { return JSON.parse(value); } catch (e) { return value; }
+            const text = value.trim();
+            if (!text.startsWith('{') && !text.startsWith('[')) return value;
+            try { return JSON.parse(text); } catch (e) { return value; }
         }
 
         function primeInkMakeSheet(XLSX, rows, widths) {
@@ -5542,8 +5544,9 @@ function updateScheduleResultTables(joursCount, heuresCount) {
             schoolRows.forEach(row => {
                 const key = String(row.Clé || '').trim();
                 if (!key) return;
-                const parsed = excelParseJsonCell(row.Valeur, undefined);
-                if (parsed !== undefined) school[key] = parsed;
+                const rawValue = row.Valeur;
+                if (rawValue === '[Donnée conservée dans la sauvegarde complète]') return;
+                school[key] = excelParseJsonCell(rawValue, '');
             });
             restoredState.school = school;
 
@@ -5552,11 +5555,14 @@ function updateScheduleResultTables(joursCount, heuresCount) {
                 const id = String(row.id || '').trim();
                 if (!id) return null;
                 const old = previousClasses.get(id) || {};
+                const parsedCategories = excelParseJsonCell(row.categories, []);
+                const categories = Array.isArray(parsedCategories) ? parsedCategories :
+                    String(parsedCategories || '').split(/[;,]/).map(value => value.trim()).filter(Boolean);
                 return Object.assign({}, old, {
                     id,
                     name: String(row.name || ''),
                     titulaire: String(row.titulaire || ''),
-                    categories: excelParseJsonCell(row.categories, []),
+                    categories,
                     bulletinModel: String(row.bulletinModel || old.bulletinModel || 'classink'),
                     bulletinTitle: String(row.bulletinTitle || ''),
                     signatureSource: String(row.signatureSource || old.signatureSource || 'titulaire')
@@ -5674,6 +5680,9 @@ function updateScheduleResultTables(joursCount, heuresCount) {
             if (!file) return;
 
             try {
+                if (!/\.(xlsx|xls|xlsm)$/i.test(file.name || '')) {
+                    throw new Error('Sélectionnez un fichier Excel (.xlsx, .xls ou .xlsm).');
+                }
                 if (file.size > 50 * 1024 * 1024) {
                     throw new Error('Le fichier dépasse 50 Mo. Réduisez sa taille ou utilisez une sauvegarde plus récente.');
                 }
@@ -5737,7 +5746,7 @@ function updateScheduleResultTables(joursCount, heuresCount) {
                 }
 
                 const importedSchoolId = String(appState.school && appState.school.id || '');
-                if (previousSchoolId && importedSchoolId && previousSchoolId !== importedSchoolId) {
+                if (previousSchoolId !== importedSchoolId) {
                     try { localStorage.removeItem('primeink_cloud_token'); } catch (e) { /* stockage indisponible */ }
                 }
 
