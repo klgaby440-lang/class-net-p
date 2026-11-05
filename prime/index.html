@@ -5409,7 +5409,6 @@ function updateScheduleResultTables(joursCount, heuresCount) {
             try {
                 const XLSX = await ensurePrimeInkXlsx();
                 sortStudentsAlphabetically(appState);
-                saveState();
 
                 const stateJson = JSON.stringify(appState);
                 if (!stateJson) throw new Error("La base de données est vide ou impossible à sérialiser.");
