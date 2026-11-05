@@ -1918,9 +1918,61 @@ window.alert = function(message) { showCustomAlert(message); };
         let activeStudentId = '';
         let editingClassId = null;
 
+        function normalizeStudentSortValue(value) {
+            return String(value == null ? '' : value)
+                .normalize('NFC')
+                .trim()
+                .replace(/\\s+/g, ' ');
+        }
+
+        // Trie les élèves dans la base elle-même, classe par classe.
+        // L'ordre des classes reste celui déjà enregistré ; dans chaque classe,
+        // on compare Nom, puis Postnom, puis Prénom (français, accents ignorés).
+        function sortStudentsAlphabetically(state = appState) {
+            if (!state || typeof state !== 'object') return;
+            if (!Array.isArray(state.students)) state.students = [];
+
+            const classOrder = new Map(
+                (Array.isArray(state.classes) ? state.classes : [])
+                    .map((cls, index) => [String((cls && cls.id) || ''), index])
+            );
+
+            state.students.sort((a, b) => {
+                const classA = String((a && a.classId) || '');
+                const classB = String((b && b.classId) || '');
+                const indexA = classOrder.has(classA) ? classOrder.get(classA) : Number.MAX_SAFE_INTEGER;
+                const indexB = classOrder.has(classB) ? classOrder.get(classB) : Number.MAX_SAFE_INTEGER;
+
+                if (indexA !== indexB) return indexA - indexB;
+                if (indexA === Number.MAX_SAFE_INTEGER && classA !== classB) {
+                    const classCompare = classA.localeCompare(classB, 'fr', { sensitivity: 'base', numeric: true });
+                    if (classCompare) return classCompare;
+                }
+
+                for (const field of ['name', 'postname', 'prename']) {
+                    const valueA = normalizeStudentSortValue(a && a[field]);
+                    const valueB = normalizeStudentSortValue(b && b[field]);
+                    const comparison = valueA.localeCompare(valueB, 'fr', {
+                        sensitivity: 'base',
+                        numeric: true,
+                        ignorePunctuation: true
+                    });
+                    if (comparison) return comparison;
+                }
+
+                return String((a && a.id) || '').localeCompare(String((b && b.id) || ''), 'fr', { numeric: true });
+            });
+        }
+
         function saveState() {
+            sortStudentsAlphabetically(appState);
             localStorage.setItem('classnet_p_db', JSON.stringify(appState));
         }
+
+        // Migration automatique : réorganise aussi les élèves des anciennes bases locales.
+        // Cette sauvegarde intervient dès le démarrage, sans toucher aux notes ni aux identifiants.
+        sortStudentsAlphabetically(appState);
+        saveState();
 
         // Retire les données de démonstration des anciennes versions (classes, élèves, cours, notes et enseignants fictifs),
         // seulement si elles n'ont pas été modifiées. Les vraies données ne sont jamais touchées.
@@ -3298,14 +3350,10 @@ async function bpPushClassBulletin(cls) {
             }
 
                     function getSortedStudentsByClass(classId) {
-                return appState.students
-                    .filter(st => st.classId === classId)
-                    .sort((a, b) => {
-                        const nameA = [a.name, a.postname, a.prename].map(v => String(v || '').trim()).filter(Boolean).join(' ');
-                        const nameB = [b.name, b.postname, b.prename].map(v => String(v || '').trim()).filter(Boolean).join(' ');
-                        return nameA.localeCompare(nameB, 'fr', { sensitivity: 'base', numeric: true }) ||
-                            String(a.id || '').localeCompare(String(b.id || ''));
-                    });
+                // L'ordre est déjà normalisé dans appState.students ; on le réapplique
+                // par sécurité avant chaque liste, au cas où une synchronisation l'aurait changé.
+                sortStudentsAlphabetically(appState);
+                return appState.students.filter(st => st.classId === classId);
             }
 
                     // Et sécurise le début de loadClassData() :
@@ -5226,6 +5274,8 @@ function updateScheduleResultTables(joursCount, heuresCount) {
         // 2. Fonction pour sauvegarder toute la base de données en ligne
         async function saveDatabaseOnline() {
             try {
+                // Envoyer également la version alphabétiquement normalisée de la base.
+                saveState();
                 const response = await fetch(`${API_BASE_URL}/api/sync/primenet`, {
                     method: 'POST',
                     headers: cloudAuthHeaders(),
