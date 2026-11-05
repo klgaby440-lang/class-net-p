@@ -5506,7 +5506,11 @@ function updateScheduleResultTables(joursCount, heuresCount) {
 
                 // Sauvegarde exacte de toute la base, découpée pour respecter la limite de taille d'une cellule Excel.
                 const chunkSize = 28000;
-                const chunks = stateJson.match(new RegExp('[\\\\s\\\\S]{1,' + chunkSize + '}', 'g')) || ['{}'];
+                const chunks = [];
+                for (let offset = 0; offset < stateJson.length; offset += chunkSize) {
+                    chunks.push(stateJson.slice(offset, offset + chunkSize));
+                }
+                if (!chunks.length) chunks.push('{}');
                 const backupRows = [['PRIMEINK_BACKUP', '1'], ['PARTIE', 'JSON']];
                 chunks.forEach((chunk, index) => backupRows.push([index, chunk]));
                 const backupSheet = primeInkMakeSheet(XLSX, backupRows, [12, 55]);
