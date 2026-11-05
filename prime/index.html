@@ -1340,6 +1340,26 @@ body {
                 </div>
 
                 <div class="form-group" style="margin-top: 1rem; border-top: 1px solid var(--border-color); padding-top: 0.8rem;">
+                    <label>SAUVEGARDE ET RESTAURATION EXCEL</label>
+                    <p style="font-size:0.82rem; color:var(--text-secondary); margin:0.25rem 0 0.7rem;">
+                        Exportez les élèves, classes, cours, enseignants, notes et réglages dans un classeur Excel.
+                        Vous pourrez ensuite le modifier et le réimporter.
+                    </p>
+                    <div style="display:flex; flex-direction:column; gap:0.5rem;">
+                        <button type="button" class="btn-primary" style="background-color:#15803d;" onclick="exportPrimeInkDatabaseExcel()">
+                            📥 Exporter la base de données en Excel
+                        </button>
+                        <button type="button" class="btn-secondary" onclick="document.getElementById('primeInkExcelImportInput').click()">
+                            📤 Charger les données d'un fichier Excel
+                        </button>
+                        <input type="file" id="primeInkExcelImportInput" accept=".xlsx,.xls,.xlsm" style="display:none;" onchange="handlePrimeInkExcelImport(this)">
+                    </div>
+                    <small id="primeInkExcelStatus" style="display:block; margin-top:0.55rem; color:var(--text-secondary);" aria-live="polite">
+                        Format recommandé : fichier .xlsx exporté par PrimeInk.
+                    </small>
+                </div>
+
+                <div class="form-group" style="margin-top: 1rem; border-top: 1px solid var(--border-color); padding-top: 0.8rem;">
                     <label>ACTIVATION & LICENCE CRYPT</label>
                     <div style="display: flex; gap: 0.5rem;">
                         <input type="text" id="activationCodeInput" class="form-control" placeholder="Entrez le code CRYPT">
@@ -5295,6 +5315,446 @@ function updateScheduleResultTables(joursCount, heuresCount) {
                 alert("❌ Erreur lors de l'envoi vers le serveur : " + err.message);
             }
         }
+
+        // ---------------------------------------------------------------------------
+        // SAUVEGARDE EXCEL PRIMEINK
+        // Le classeur comprend des feuilles lisibles et une feuille technique masquée
+        // qui garantit la restauration complète des données propres à PrimeInk.
+        // ---------------------------------------------------------------------------
+        let primeInkXlsxLoading = null;
+
+        function ensurePrimeInkXlsx() {
+            if (window.XLSX && typeof window.XLSX.read === 'function' && window.XLSX.utils) {
+                return Promise.resolve(window.XLSX);
+            }
+            if (primeInkXlsxLoading) return primeInkXlsxLoading;
+
+            primeInkXlsxLoading = new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
+                script.async = true;
+                script.onload = () => {
+                    if (window.XLSX && window.XLSX.utils) resolve(window.XLSX);
+                    else reject(new Error("La bibliothèque Excel n'a pas pu être initialisée."));
+                };
+                script.onerror = () => reject(new Error("Impossible de télécharger le module Excel. Vérifiez votre connexion Internet et réessayez."));
+                document.head.appendChild(script);
+            }).catch(error => {
+                primeInkXlsxLoading = null;
+                throw error;
+            });
+            return primeInkXlsxLoading;
+        }
+
+        function setPrimeInkExcelStatus(message, isError) {
+            const el = document.getElementById('primeInkExcelStatus');
+            if (!el) return;
+            el.textContent = message;
+            el.style.color = isError ? 'var(--danger-color)' : 'var(--text-secondary)';
+        }
+
+        function excelCellValue(value) {
+            if (value === null || value === undefined) return '';
+            if (value instanceof Date) return value.toISOString().slice(0, 10);
+            if (typeof value === 'object') {
+                try {
+                    const json = JSON.stringify(value);
+                    return json.length > 30000 ? '[Donnée conservée dans la sauvegarde complète]' : json;
+                } catch (e) {
+                    return '[Donnée conservée dans la sauvegarde complète]';
+                }
+            }
+            const text = String(value);
+            return text.length > 30000 ? '[Donnée conservée dans la sauvegarde complète]' : value;
+        }
+
+        function excelParseJsonCell(value, fallback) {
+            if (value === '' || value === null || value === undefined ||
+                value === '[Donnée conservée dans la sauvegarde complète]') return fallback;
+            if (typeof value !== 'string') return value;
+            try { return JSON.parse(value); } catch (e) { return value; }
+        }
+
+        function primeInkMakeSheet(XLSX, rows, widths) {
+            const sheet = XLSX.utils.aoa_to_sheet(rows);
+            if (widths) sheet['!cols'] = widths.map(w => ({ wch: w }));
+            if (rows.length > 1) {
+                const lastCol = XLSX.utils.encode_col(Math.max(0, (rows[0] || []).length - 1));
+                sheet['!autofilter'] = { ref: 'A1:' + lastCol + rows.length };
+            }
+            return sheet;
+        }
+
+        function primeInkReadSheetRows(XLSX, workbook, name) {
+            const sheet = workbook.Sheets[name];
+            if (!sheet) throw new Error('La feuille « ' + name + ' » est absente du fichier.');
+            return XLSX.utils.sheet_to_json(sheet, { defval: '', raw: true });
+        }
+
+        function primeInkUniqueIdRows(rows, label) {
+            const ids = new Set();
+            rows.forEach((row, index) => {
+                const id = String(row.id || '').trim();
+                if (!id) throw new Error(label + ' : identifiant manquant à la ligne ' + (index + 2) + '.');
+                if (ids.has(id)) throw new Error(label + ' : identifiant en double « ' + id + ' ».');
+                ids.add(id);
+            });
+            return ids;
+        }
+
+        window.exportPrimeInkDatabaseExcel = async function() {
+            setPrimeInkExcelStatus('Préparation du classeur Excel…', false);
+            try {
+                const XLSX = await ensurePrimeInkXlsx();
+                sortStudentsAlphabetically(appState);
+                saveState();
+
+                const stateJson = JSON.stringify(appState);
+                if (!stateJson) throw new Error("La base de données est vide ou impossible à sérialiser.");
+
+                const workbook = XLSX.utils.book_new();
+                workbook.Props = {
+                    Title: 'Sauvegarde complète PrimeInk',
+                    Subject: 'Base de données scolaire PrimeInk',
+                    Author: 'CRYPT Enterprise',
+                    CreatedDate: new Date()
+                };
+
+                // Identité et informations de l'école
+                const schoolRows = [['Clé', 'Valeur']];
+                Object.keys(appState.school || {}).forEach(key => {
+                    schoolRows.push([key, excelCellValue(appState.school[key])]);
+                });
+                XLSX.utils.book_append_sheet(workbook, primeInkMakeSheet(XLSX, schoolRows, [24, 54]), 'École');
+
+                // Classes
+                const classRows = [['id', 'name', 'titulaire', 'categories', 'bulletinModel', 'bulletinTitle', 'signatureSource']];
+                (appState.classes || []).forEach(cls => classRows.push([
+                    cls.id || '', cls.name || '', cls.titulaire || '',
+                    JSON.stringify(cls.categories || []), cls.bulletinModel || '',
+                    cls.bulletinTitle || '', cls.signatureSource || ''
+                ]));
+                XLSX.utils.book_append_sheet(workbook, primeInkMakeSheet(XLSX, classRows, [26, 32, 28, 34, 20, 34, 20]), 'Classes');
+
+                // Élèves
+                const studentById = new Map();
+                const studentRows = [['id', 'classId', 'name', 'postname', 'prename', 'sexe', 'bornDate', 'bornWhere', 'permi']];
+                (appState.students || []).forEach(st => {
+                    studentById.set(String(st.id), st);
+                    studentRows.push([
+                        st.id || '', st.classId || '', st.name || '', st.postname || '',
+                        st.prename || '', st.sexe || '', st.bornDate || '',
+                        st.bornWhere || '', st.permi || ''
+                    ]);
+                });
+                XLSX.utils.book_append_sheet(workbook, primeInkMakeSheet(XLSX, studentRows, [26, 26, 24, 24, 24, 10, 16, 26, 20]), 'Élèves');
+
+                // Cours
+                const courseById = new Map();
+                const courseRows = [['id', 'classId', 'name', 'maxPer', 'category', 'titulaire', 'subCategory']];
+                (appState.courses || []).forEach(course => {
+                    courseById.set(String(course.id), course);
+                    courseRows.push([
+                        course.id || '', course.classId || '', course.name || '',
+                        Number(course.maxPer) || 0, course.category || '',
+                        course.titulaire || '', course.subCategory || ''
+                    ]);
+                });
+                XLSX.utils.book_append_sheet(workbook, primeInkMakeSheet(XLSX, courseRows, [26, 26, 30, 12, 22, 26, 24]), 'Cours');
+
+                // Enseignants
+                const teacherRows = [['uniqueId', 'name', 'subject', 'status']];
+                (appState.teachers || []).forEach(teacher => teacherRows.push([
+                    teacher.uniqueId || '', teacher.name || '', teacher.subject || '', teacher.status || ''
+                ]));
+                XLSX.utils.book_append_sheet(workbook, primeInkMakeSheet(XLSX, teacherRows, [32, 30, 26, 18]), 'Enseignants');
+
+                // Notes : une ligne par couple élève/cours
+                const gradeRows = [['studentId', 'studentName', 'classId', 'courseId', 'courseName', 'p1', 'p2', 'ex1', 'p3', 'p4', 'ex2']];
+                Object.keys(appState.grades || {}).forEach(gradeKey => {
+                    const separator = gradeKey.lastIndexOf('_');
+                    if (separator < 1) return;
+                    const studentId = gradeKey.slice(0, separator);
+                    const courseId = gradeKey.slice(separator + 1);
+                    const student = studentById.get(studentId);
+                    const course = courseById.get(courseId);
+                    const grade = appState.grades[gradeKey] || {};
+                    gradeRows.push([
+                        studentId,
+                        student ? [student.name, student.postname, student.prename].filter(Boolean).join(' ') : '',
+                        student ? student.classId || '' : '',
+                        courseId,
+                        course ? course.name || '' : '',
+                        excelCellValue(grade.p1), excelCellValue(grade.p2),
+                        excelCellValue(grade.ex1), excelCellValue(grade.p3),
+                        excelCellValue(grade.p4), excelCellValue(grade.ex2)
+                    ]);
+                });
+                XLSX.utils.book_append_sheet(workbook, primeInkMakeSheet(XLSX, gradeRows, [28, 34, 26, 28, 30, 12, 12, 12, 12, 12, 12]), 'Notes');
+
+                // Résumé des réglages supplémentaires ; leur contenu exact est conservé dans la feuille masquée.
+                const knownSections = new Set(['school', 'classes', 'students', 'courses', 'teachers', 'grades']);
+                const otherRows = [['Rubrique', 'Type', 'Taille / aperçu']];
+                Object.keys(appState).filter(key => !knownSections.has(key)).forEach(key => {
+                    let json = '';
+                    try { json = JSON.stringify(appState[key]); } catch (e) { json = ''; }
+                    otherRows.push([key, Array.isArray(appState[key]) ? 'Liste' : typeof appState[key], json.length + ' caractères']);
+                });
+                XLSX.utils.book_append_sheet(workbook, primeInkMakeSheet(XLSX, otherRows, [30, 16, 22]), 'Autres données');
+
+                // Sauvegarde exacte de toute la base, découpée pour respecter la limite de taille d'une cellule Excel.
+                const chunkSize = 28000;
+                const chunks = stateJson.match(new RegExp('[\\\\s\\\\S]{1,' + chunkSize + '}', 'g')) || ['{}'];
+                const backupRows = [['PRIMEINK_BACKUP', '1'], ['PARTIE', 'JSON']];
+                chunks.forEach((chunk, index) => backupRows.push([index, chunk]));
+                const backupSheet = primeInkMakeSheet(XLSX, backupRows, [12, 55]);
+                XLSX.utils.book_append_sheet(workbook, backupSheet, '_PrimeInk_Backup');
+
+                workbook.Workbook = workbook.Workbook || {};
+                workbook.Workbook.Sheets = workbook.SheetNames.map(name => ({
+                    name: name,
+                    Hidden: name === '_PrimeInk_Backup' ? 1 : 0
+                }));
+
+                const date = new Date().toISOString().slice(0, 10);
+                const schoolName = String((appState.school && appState.school.name) || 'Ecole')
+                    .normalize('NFD').replace(/[\\u0300-\\u036f]/g, '')
+                    .replace(/[^A-Za-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || 'Ecole';
+                XLSX.writeFile(workbook, 'PrimeInk_' + schoolName + '_' + date + '.xlsx', { compression: true });
+                setPrimeInkExcelStatus('Export Excel terminé. Conservez ce fichier dans un endroit sûr.', false);
+            } catch (error) {
+                console.error('[PrimeInk Excel Export]', error);
+                setPrimeInkExcelStatus(error.message || "Échec de l'export Excel.", true);
+                await showCustomAlert(error.message || "Impossible d'exporter la base en Excel.", 'Export Excel');
+            }
+        };
+
+        function primeInkRestoreVisibleWorkbookSheets(XLSX, workbook, restoredState) {
+            const schoolRows = primeInkReadSheetRows(XLSX, workbook, 'École');
+            const classRows = primeInkReadSheetRows(XLSX, workbook, 'Classes');
+            const studentRows = primeInkReadSheetRows(XLSX, workbook, 'Élèves');
+            const courseRows = primeInkReadSheetRows(XLSX, workbook, 'Cours');
+            const teacherRows = primeInkReadSheetRows(XLSX, workbook, 'Enseignants');
+            const gradeRows = primeInkReadSheetRows(XLSX, workbook, 'Notes');
+
+            // École : les valeurs structurées en JSON sont lues comme telles.
+            const school = Object.assign({}, restoredState.school || {});
+            schoolRows.forEach(row => {
+                const key = String(row.Clé || '').trim();
+                if (!key) return;
+                const parsed = excelParseJsonCell(row.Valeur, undefined);
+                if (parsed !== undefined) school[key] = parsed;
+            });
+            restoredState.school = school;
+
+            const previousClasses = new Map((restoredState.classes || []).map(item => [String(item.id), item]));
+            const classes = classRows.map(row => {
+                const id = String(row.id || '').trim();
+                if (!id) return null;
+                const old = previousClasses.get(id) || {};
+                return Object.assign({}, old, {
+                    id,
+                    name: String(row.name || ''),
+                    titulaire: String(row.titulaire || ''),
+                    categories: excelParseJsonCell(row.categories, []),
+                    bulletinModel: String(row.bulletinModel || old.bulletinModel || 'classink'),
+                    bulletinTitle: String(row.bulletinTitle || ''),
+                    signatureSource: String(row.signatureSource || old.signatureSource || 'titulaire')
+                });
+            }).filter(Boolean);
+            primeInkUniqueIdRows(classes, 'Classes');
+            restoredState.classes = classes;
+
+            const previousStudents = new Map((restoredState.students || []).map(item => [String(item.id), item]));
+            const students = studentRows.map(row => {
+                const id = String(row.id || '').trim();
+                if (!id) return null;
+                const old = previousStudents.get(id) || {};
+                return Object.assign({}, old, {
+                    id,
+                    classId: String(row.classId || ''),
+                    name: String(row.name || ''),
+                    postname: String(row.postname || ''),
+                    prename: String(row.prename || ''),
+                    sexe: String(row.sexe || old.sexe || ''),
+                    bornDate: row.bornDate instanceof Date ? row.bornDate.toISOString().slice(0, 10) : String(row.bornDate || ''),
+                    bornWhere: String(row.bornWhere || ''),
+                    permi: String(row.permi || '')
+                });
+            }).filter(Boolean);
+            primeInkUniqueIdRows(students, 'Élèves');
+            restoredState.students = students;
+
+            const previousCourses = new Map((restoredState.courses || []).map(item => [String(item.id), item]));
+            const courses = courseRows.map(row => {
+                const id = String(row.id || '').trim();
+                if (!id) return null;
+                const old = previousCourses.get(id) || {};
+                const maxPer = row.maxPer === '' || row.maxPer === null ? old.maxPer : Number(row.maxPer);
+                return Object.assign({}, old, {
+                    id,
+                    classId: String(row.classId || ''),
+                    name: String(row.name || ''),
+                    maxPer: Number.isFinite(maxPer) ? maxPer : 0,
+                    category: String(row.category || ''),
+                    titulaire: String(row.titulaire || ''),
+                    subCategory: String(row.subCategory || '')
+                });
+            }).filter(Boolean);
+            primeInkUniqueIdRows(courses, 'Cours');
+            restoredState.courses = courses;
+
+            const previousTeachers = new Map((restoredState.teachers || []).map(item => [String(item.uniqueId), item]));
+            const teachers = teacherRows.map(row => {
+                const uniqueId = String(row.uniqueId || '').trim();
+                if (!uniqueId) return null;
+                const old = previousTeachers.get(uniqueId) || {};
+                return Object.assign({}, old, {
+                    uniqueId,
+                    name: String(row.name || ''),
+                    subject: String(row.subject || ''),
+                    status: String(row.status || old.status || 'Actif')
+                });
+            }).filter(Boolean);
+            const teacherIds = new Set();
+            teachers.forEach(t => {
+                if (teacherIds.has(t.uniqueId)) throw new Error('Enseignants : identifiant en double « ' + t.uniqueId + ' ».');
+                teacherIds.add(t.uniqueId);
+            });
+            restoredState.teachers = teachers;
+
+            const grades = {};
+            const gradeKeys = new Set();
+            gradeRows.forEach(row => {
+                const studentId = String(row.studentId || '').trim();
+                const courseId = String(row.courseId || '').trim();
+                if (!studentId || !courseId) return;
+                const key = studentId + '_' + courseId;
+                if (gradeKeys.has(key)) throw new Error('Notes : le couple élève/cours apparaît plusieurs fois (' + key + ').');
+                gradeKeys.add(key);
+                const old = (restoredState.grades && restoredState.grades[key]) || {};
+                const grade = Object.assign({}, old);
+                ['p1', 'p2', 'ex1', 'p3', 'p4', 'ex2'].forEach(field => {
+                    const value = row[field];
+                    if (value === '' || value === null || value === undefined) delete grade[field];
+                    else grade[field] = typeof value === 'number' ? value : Number.isFinite(Number(value)) ? Number(value) : value;
+                });
+                if (Object.keys(grade).length) grades[key] = grade;
+            });
+            restoredState.grades = grades;
+            return restoredState;
+        }
+
+        function validatePrimeInkImportedState(state) {
+            if (!state || typeof state !== 'object' || Array.isArray(state)) {
+                throw new Error('Le fichier ne contient pas une base PrimeInk valide.');
+            }
+            if (!state.school || typeof state.school !== 'object' ||
+                !Array.isArray(state.classes) || !Array.isArray(state.students) ||
+                !Array.isArray(state.courses) || !Array.isArray(state.teachers) ||
+                !state.grades || typeof state.grades !== 'object' || Array.isArray(state.grades)) {
+                throw new Error('La structure de la base est incomplète. Utilisez un fichier exporté par PrimeInk.');
+            }
+            primeInkUniqueIdRows(state.classes, 'Classes');
+            primeInkUniqueIdRows(state.students, 'Élèves');
+            primeInkUniqueIdRows(state.courses, 'Cours');
+            const teacherIds = new Set();
+            state.teachers.forEach(teacher => {
+                const id = String(teacher && teacher.uniqueId || '').trim();
+                if (!id) throw new Error('Enseignant sans identifiant unique.');
+                if (teacherIds.has(id)) throw new Error('Identifiant enseignant en double : ' + id);
+                teacherIds.add(id);
+            });
+            return state;
+        }
+
+        window.handlePrimeInkExcelImport = async function(input) {
+            const file = input && input.files && input.files[0];
+            if (input) input.value = '';
+            if (!file) return;
+
+            try {
+                if (file.size > 50 * 1024 * 1024) {
+                    throw new Error('Le fichier dépasse 50 Mo. Réduisez sa taille ou utilisez une sauvegarde plus récente.');
+                }
+                setPrimeInkExcelStatus('Lecture et vérification du fichier Excel…', false);
+                const XLSX = await ensurePrimeInkXlsx();
+                const buffer = await file.arrayBuffer();
+                const workbook = XLSX.read(buffer, { type: 'array', cellFormula: false, cellDates: true });
+
+                const backupName = '_PrimeInk_Backup';
+                const backupSheet = workbook.Sheets[backupName];
+                if (!backupSheet) {
+                    throw new Error("Ce fichier ne contient pas la sauvegarde complète PrimeInk. Importez un classeur précédemment exporté depuis PrimeInk.");
+                }
+                const backupRows = XLSX.utils.sheet_to_json(backupSheet, { header: 1, defval: '', raw: true });
+                if (!backupRows[0] || backupRows[0][0] !== 'PRIMEINK_BACKUP' || String(backupRows[0][1]) !== '1') {
+                    throw new Error('Version de sauvegarde Excel non reconnue.');
+                }
+                const chunks = backupRows.slice(2)
+                    .filter(row => Array.isArray(row) && row.length > 1 && row[1] !== '')
+                    .sort((a, b) => Number(a[0]) - Number(b[0]));
+                if (!chunks.length || chunks.some((row, index) => Number(row[0]) !== index)) {
+                    throw new Error('La sauvegarde complète du classeur est incomplète ou endommagée.');
+                }
+
+                const stateJson = chunks.map(row => String(row[1])).join('');
+                let importedState;
+                try { importedState = JSON.parse(stateJson); }
+                catch (e) { throw new Error('Les données de sauvegarde ne peuvent pas être décodées. Le fichier est peut-être endommagé.'); }
+
+                validatePrimeInkImportedState(importedState);
+                importedState = primeInkRestoreVisibleWorkbookSheets(XLSX, workbook, importedState);
+                sortStudentsAlphabetically(importedState);
+                validatePrimeInkImportedState(importedState);
+
+                const studentCount = importedState.students.length;
+                const classCount = importedState.classes.length;
+                const courseCount = importedState.courses.length;
+                const gradeCount = Object.keys(importedState.grades).length;
+                const schoolName = importedState.school.name || importedState.school.id || 'École';
+                const confirmed = await showCustomConfirm(
+                    'Fichier : ' + file.name + '\\nÉtablissement : ' + schoolName +
+                    '\\nClasses : ' + classCount + ' · Élèves : ' + studentCount +
+                    ' · Cours : ' + courseCount + ' · Fiches de notes : ' + gradeCount +
+                    '\\n\\nLes tableaux visibles du fichier Excel seront importés. La base locale actuelle sera remplacée. ' +
+                    'Les données importées ne seront pas envoyées automatiquement au serveur.',
+                    'Confirmer l’importation Excel'
+                );
+                if (!confirmed) {
+                    setPrimeInkExcelStatus('Importation annulée. La base actuelle est conservée.', false);
+                    return;
+                }
+
+                const previousState = appState;
+                const previousSchoolId = String(previousState.school && previousState.school.id || '');
+                appState = importedState;
+                try {
+                    saveState();
+                } catch (storageError) {
+                    appState = previousState;
+                    throw new Error("Importation interrompue : le navigateur n'a pas pu enregistrer cette base (espace de stockage insuffisant). La base précédente est conservée.");
+                }
+
+                const importedSchoolId = String(appState.school && appState.school.id || '');
+                if (previousSchoolId && importedSchoolId && previousSchoolId !== importedSchoolId) {
+                    try { localStorage.removeItem('primeink_cloud_token'); } catch (e) { /* stockage indisponible */ }
+                }
+
+                setPrimeInkExcelStatus('Importation réussie. Rechargement de PrimeInk…', false);
+                await showCustomAlert(
+                    'Importation terminée. ' + studentCount + ' élève(s), ' + classCount +
+                    ' classe(s) et ' + courseCount + ' cours chargé(s). La base locale a été remplacée. ' +
+                    'Pour mettre à jour le serveur, utilisez ensuite « Save data base OnLine ».',
+                    'Import Excel terminé'
+                );
+                location.reload();
+            } catch (error) {
+                console.error('[PrimeInk Excel Import]', error);
+                setPrimeInkExcelStatus(error.message || "Échec de l'import Excel.", true);
+                await showCustomAlert(error.message || "Impossible d'importer ce fichier Excel.", 'Import Excel');
+            }
+        };
 
         // 3. Fonction pour charger les données complètes de l'école
         async function loadSchoolData() {
