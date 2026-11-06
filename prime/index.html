@@ -1067,6 +1067,23 @@ body {
 .fiche-total-missing { color: #b45309; font-weight: 600; }
 .fiche-entry-hint, .bp-autosave-hint { color: var(--text-secondary); font-size: 0.76rem; display: flex; align-items: center; gap: 0.35rem; }
 .fiche-entry-hint { margin: 0.2rem 0 0.65rem; }
+.fiche-photo-toolbar { display:flex; gap:0.75rem; align-items:center; justify-content:space-between; flex-wrap:wrap; margin:0.35rem 0 0.75rem; }
+.fiche-photo-controls { display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap; }
+.fiche-photo-status { display:block; margin:0.35rem 0 0.65rem; color:var(--text-secondary); font-size:0.78rem; }
+.primeink-fiche-modal { position:fixed; inset:0; z-index:1500; display:flex; align-items:center; justify-content:center; padding:1rem; background:rgba(15,23,42,.68); }
+.primeink-fiche-dialog { width:min(1100px,100%); max-height:92vh; overflow:auto; background:var(--bg-card); color:var(--text-primary); border:1px solid var(--border-color); border-radius:12px; padding:1rem; box-shadow:0 18px 60px #0005; }
+.primeink-fiche-dialog h3 { margin:0 0 .4rem; font-size:1.1rem; }
+.primeink-fiche-dialog p { margin:.25rem 0 .7rem; color:var(--text-secondary); font-size:.88rem; }
+.primeink-fiche-table-wrap { overflow:auto; max-height:52vh; border:1px solid var(--border-color); border-radius:8px; margin:.7rem 0; }
+.primeink-fiche-table { width:100%; min-width:850px; border-collapse:collapse; font-size:.82rem; }
+.primeink-fiche-table th,.primeink-fiche-table td { border-bottom:1px solid var(--border-color); padding:.45rem; text-align:center; }
+.primeink-fiche-table th { position:sticky; top:0; background:var(--bg-sidebar); color:white; z-index:1; }
+.primeink-fiche-table td:first-child { text-align:left; min-width:150px; }
+.primeink-fiche-table select { max-width:220px; min-width:160px; padding:.35rem; border:1px solid var(--border-color); border-radius:6px; background:var(--bg-main); color:var(--text-primary); }
+.primeink-fiche-warnings { background:rgba(217,119,6,.09); padding:.55rem .75rem; border-radius:7px; margin:.6rem 0; font-size:.82rem; }
+.primeink-fiche-actions { display:flex; gap:.6rem; flex-wrap:wrap; align-items:center; justify-content:space-between; margin-top:.75rem; }
+.primeink-fiche-actions-right { display:flex; gap:.5rem; flex-wrap:wrap; }
+.primeink-fiche-overwrite { display:flex; gap:.45rem; align-items:center; font-size:.85rem; }
 .bp-autosave-hint { margin-left: auto; }
 @media (max-width: 900px) { #view-fiches .detail-display-area { overflow-x: auto; } #view-fiches .data-table { min-width: 820px; } .bp-autosave-hint { margin-left: 0; width: 100%; } }
 
@@ -1268,7 +1285,14 @@ body {
                 <div class="course-header-banner">
                     <h3>Titulaire : <span id="currentCourseTitulaire">-</span> | Cours : <span id="currentCourseName">-</span></h3>
                 </div>
-                <div class="fiche-entry-hint">✓ Chaque note valide est enregistrée automatiquement · Flèches pour changer de cellule · Entrée pour descendre</div>
+                <div class="fiche-photo-toolbar">
+                    <div class="fiche-entry-hint">✓ Chaque note valide est enregistrée automatiquement · Flèches pour changer de cellule · Entrée pour descendre</div>
+                    <div class="fiche-photo-controls">
+                        <button type="button" class="btn-primary" onclick="openPrimeInkFichePhotoPicker()">📷 Remplir depuis une photo avec Llink</button>
+                        <input id="primeInkFichePhotoInput" type="file" accept="image/*" capture="environment" style="display:none" onchange="handlePrimeInkFichePhotoInput(this)">
+                    </div>
+                </div>
+                <small id="primeInkFichePhotoStatus" class="fiche-photo-status" aria-live="polite">La photo sera analysée par Llink ; vérifiez les notes avant leur enregistrement.</small>
                 <table class="data-table">
                     <thead>
                         <tr>
@@ -6105,5 +6129,308 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
     });
 });
     </script>
+
+<script id="primeink-fiche-photo-import">
+(() => {
+    const PRIMEINK_LLINK_API_URL = window.PRIMEINK_LLINK_API_URL || "https://llink-usz9.onrender.com";
+    const PRIMEINK_FICHE_FIELDS = ["p1", "p2", "ex1", "p3", "p4", "ex2"];
+    let primeInkPendingFicheExtraction = null;
+
+    function primeInkFicheStatus(message, isError = false) {
+        const status = document.getElementById("primeInkFichePhotoStatus");
+        if (status) {
+            status.textContent = message;
+            status.style.color = isError ? "#dc2626" : "var(--text-secondary)";
+        }
+    }
+
+    function primeInkFicheCurrentCourse() {
+        return (Array.isArray(appState.courses) ? appState.courses : [])
+            .find(course => String(course.id) === String(currentFicheCourseId));
+    }
+
+    function primeInkFicheStudentName(student) {
+        return [student.name, student.postname, student.prename]
+            .filter(value => String(value || "").trim())
+            .map(value => String(value).trim())
+            .join(" ");
+    }
+
+    window.openPrimeInkFichePhotoPicker = function() {
+        const course = primeInkFicheCurrentCourse();
+        if (!course) {
+            primeInkFicheStatus("Ouvrez d'abord une fiche de cours.", true);
+            return;
+        }
+        const students = getSortedStudentsByClass(course.classId);
+        if (!students.length) {
+            primeInkFicheStatus("Aucun élève n'est enregistré dans cette classe.", true);
+            return;
+        }
+        const input = document.getElementById("primeInkFichePhotoInput");
+        if (input) input.click();
+    };
+
+    function primeInkReadFileAsDataUrl(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onerror = () => reject(new Error("Impossible de lire cette photo sur l'appareil."));
+            reader.onload = () => resolve(String(reader.result || ""));
+            reader.readAsDataURL(file);
+        });
+    }
+
+    async function primeInkCompressFichePhoto(file) {
+        if (file.size <= 4_500_000) return primeInkReadFileAsDataUrl(file);
+        if (typeof URL === "undefined" || !URL.createObjectURL || typeof Image === "undefined") {
+            return primeInkReadFileAsDataUrl(file);
+        }
+        return new Promise((resolve, reject) => {
+            const objectUrl = URL.createObjectURL(file);
+            const image = new Image();
+            image.onerror = () => {
+                URL.revokeObjectURL(objectUrl);
+                reject(new Error("La photo ne peut pas être ouverte. Choisissez une image JPEG, PNG ou WebP."));
+            };
+            image.onload = () => {
+                try {
+                    const originalWidth = image.naturalWidth || image.width;
+                    const originalHeight = image.naturalHeight || image.height;
+                    const longest = Math.max(originalWidth, originalHeight);
+                    let scale = Math.min(1, 2800 / Math.max(1, longest));
+                    let dataUrl = "";
+                    for (let attempt = 0; attempt < 7; attempt++) {
+                        const width = Math.max(1, Math.round(originalWidth * scale));
+                        const height = Math.max(1, Math.round(originalHeight * scale));
+                        const canvas = document.createElement("canvas");
+                        canvas.width = width;
+                        canvas.height = height;
+                        const context = canvas.getContext("2d");
+                        if (!context) throw new Error("La compression d'image n'est pas disponible dans ce navigateur.");
+                        context.drawImage(image, 0, 0, width, height);
+                        const quality = Math.max(0.68, 0.9 - attempt * 0.035);
+                        dataUrl = canvas.toDataURL("image/jpeg", quality);
+                        const approximateBytes = Math.floor((dataUrl.length - dataUrl.indexOf(",") - 1) * 0.75);
+                        if (approximateBytes <= 5_600_000) break;
+                        scale *= 0.88;
+                    }
+                    URL.revokeObjectURL(objectUrl);
+                    if (!dataUrl || dataUrl.length < 40) throw new Error("La compression de la photo a échoué.");
+                    resolve(dataUrl);
+                } catch (error) {
+                    URL.revokeObjectURL(objectUrl);
+                    reject(error);
+                }
+            };
+            image.src = objectUrl;
+        });
+    }
+
+    function primeInkGetOrCreateReviewModal() {
+        let modal = document.getElementById("primeInkFichePhotoReview");
+        if (modal) return modal;
+        modal = document.createElement("div");
+        modal.id = "primeInkFichePhotoReview";
+        modal.className = "primeink-fiche-modal";
+        modal.style.display = "none";
+        modal.innerHTML = '<div class="primeink-fiche-dialog" role="dialog" aria-modal="true" aria-labelledby="primeInkFicheReviewTitle"></div>';
+        document.body.appendChild(modal);
+        modal.addEventListener("click", event => {
+            if (event.target === modal) closePrimeInkFicheReview();
+        });
+        return modal;
+    }
+
+    function primeInkDisplayScore(value) {
+        return value === null || value === undefined || value === "" ? "—" : safeHTML(String(value));
+    }
+
+    function showPrimeInkFicheReview(extraction, course, sourceName) {
+        const modal = primeInkGetOrCreateReviewModal();
+        const dialog = modal.querySelector(".primeink-fiche-dialog");
+        const roster = getSortedStudentsByClass(course.classId);
+        const rows = Array.isArray(extraction.students) ? extraction.students : [];
+        const validIds = new Set(roster.map(student => String(student.id)));
+        const options = roster.map(student => {
+            const id = String(student.id);
+            return '<option value="' + safeHTML(id) + '">' + safeHTML(primeInkFicheStudentName(student)) + '</option>';
+        }).join("");
+        const tableRows = rows.map((row, index) => {
+            const matchLabel = Math.round(Math.max(0, Math.min(1, Number(row.confidence) || 0)) * 100);
+            const selection = '<select data-primeink-student-row="' + index + '"><option value="">— Associer à un élève —</option>' +
+                options + '</select>';
+            const cells = PRIMEINK_FICHE_FIELDS.map(field => '<td>' + primeInkDisplayScore(row[field]) + '</td>').join("");
+            return '<tr><td><strong>' + safeHTML(row.student_name || "Nom non lu") + '</strong><br><small>Confiance : ' + matchLabel + '%</small>' +
+                (row.warning ? '<br><small>' + safeHTML(row.warning) + '</small>' : '') + '</td><td>' +
+                selection + '</td>' + cells + '</tr>';
+        }).join("");
+        const warnings = (Array.isArray(extraction.warnings) ? extraction.warnings : [])
+            .map(item => '<li>' + safeHTML(item) + '</li>').join("");
+        const schoolBits = [extraction.school_name, extraction.class_name || course.className, extraction.course_name || course.name, extraction.academic_year]
+            .filter(Boolean).map(safeHTML).join(" · ");
+
+        dialog.innerHTML = '<h3 id="primeInkFicheReviewTitle">Vérification des notes lues par Llink</h3>' +
+            '<p>' + safeHTML(sourceName || "Photo de fiche") + (schoolBits ? ' — ' + schoolBits : '') + '</p>' +
+            '<p>' + rows.length + ' ligne(s) détectée(s). Associez chaque ligne à un élève de la classe. Les cases illisibles restent vides.</p>' +
+            (warnings ? '<div class="primeink-fiche-warnings"><strong>À vérifier</strong><ul>' + warnings + '</ul></div>' : '') +
+            '<div class="primeink-fiche-table-wrap"><table class="primeink-fiche-table"><thead><tr><th>Nom lu sur la photo</th><th>Élève PrimeInk</th><th>P1</th><th>P2</th><th>EX1</th><th>P3</th><th>P4</th><th>EX2</th></tr></thead><tbody>' +
+            (tableRows || '<tr><td colspan="8">Aucune ligne d’élève détectée.</td></tr>') +
+            '</tbody></table></div>' +
+            '<div class="primeink-fiche-actions"><label class="primeink-fiche-overwrite"><input type="checkbox" id="primeInkFicheOverwrite"> Remplacer aussi les notes déjà saisies</label>' +
+            '<div class="primeink-fiche-actions-right"><button type="button" class="btn-secondary" onclick="closePrimeInkFicheReview()">Annuler</button>' +
+            '<button type="button" class="btn-primary" onclick="applyPrimeInkFicheExtraction()" ' + (rows.length ? "" : "disabled") + '>Appliquer les notes vérifiées</button></div></div>' +
+            '<p>Les changements ne seront enregistrés qu’après avoir appuyé sur « Appliquer ».</p>';
+
+        rows.forEach((row, index) => {
+            const select = dialog.querySelector('[data-primeink-student-row="' + index + '"]');
+            if (select && validIds.has(String(row.matched_student_id || ""))) {
+                select.value = String(row.matched_student_id);
+            }
+        });
+        modal.style.display = "flex";
+    }
+
+    window.closePrimeInkFicheReview = function() {
+        const modal = document.getElementById("primeInkFichePhotoReview");
+        if (modal) modal.style.display = "none";
+        primeInkPendingFicheExtraction = null;
+    };
+
+    window.handlePrimeInkFichePhotoInput = async function(input) {
+        const file = input && input.files && input.files[0];
+        if (input) input.value = "";
+        if (!file) return;
+        const course = primeInkFicheCurrentCourse();
+        if (!course) {
+            primeInkFicheStatus("Aucune fiche de cours n'est sélectionnée.", true);
+            return;
+        }
+        if (!String(file.type || "").startsWith("image/")) {
+            primeInkFicheStatus("Choisissez une image prise avec l'appareil photo ou depuis la galerie.", true);
+            return;
+        }
+        const classInfo = (Array.isArray(appState.classes) ? appState.classes : [])
+            .find(item => String(item.id) === String(course.classId));
+        const roster = getSortedStudentsByClass(course.classId).map(student => ({
+            student_id: String(student.id),
+            full_name: primeInkFicheStudentName(student)
+        })).filter(student => student.student_id && student.full_name);
+        if (!roster.length) {
+            primeInkFicheStatus("Impossible de trouver la liste des élèves de cette classe.", true);
+            return;
+        }
+
+        primeInkFicheStatus("Préparation de la photo puis envoi à Llink…");
+        try {
+            const imageBase64 = await primeInkCompressFichePhoto(file);
+            if (!imageBase64 || imageBase64.length > 8_100_000) {
+                throw new Error("La photo reste trop volumineuse après compression. Recadrez-la puis réessayez.");
+            }
+            primeInkFicheStatus("Llink analyse la fiche et lit les noms et les notes. Ne fermez pas cette page…");
+            const response = await fetch(PRIMEINK_LLINK_API_URL + "/api/primeink/fiche-extract", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({
+                    imageBase64,
+                    class_name: (classInfo && classInfo.name) || "",
+                    course_name: course.name || "",
+                    max_period_points: Number(course.maxPer) || 0,
+                    max_exam_points: (Number(course.maxPer) || 0) * 2,
+                    students: roster
+                })
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                const detail = typeof data.detail === "string" ? data.detail : "Erreur Llink HTTP " + response.status;
+                throw new Error(detail);
+            }
+            if (!data || data.document_type !== "fiche_notes") {
+                throw new Error("Llink ne reconnaît pas une fiche de notes sur cette photo. Essayez une photo mieux cadrée.");
+            }
+            primeInkPendingFicheExtraction = { extraction: data, courseId: String(course.id) };
+            showPrimeInkFicheReview(data, course, file.name);
+            primeInkFicheStatus("Analyse terminée : vérifiez les associations et les points avant de les appliquer.");
+        } catch (error) {
+            console.error("Erreur d'extraction de fiche PrimeInk :", error);
+            primeInkFicheStatus(error && error.message ? error.message : "Impossible d'analyser cette photo.", true);
+        }
+    };
+
+    window.applyPrimeInkFicheExtraction = function() {
+        if (!primeInkPendingFicheExtraction) return;
+        const pending = primeInkPendingFicheExtraction;
+        const course = (Array.isArray(appState.courses) ? appState.courses : [])
+            .find(item => String(item.id) === pending.courseId);
+        if (!course) {
+            closePrimeInkFicheReview();
+            primeInkFicheStatus("Le cours n'existe plus dans la base locale.", true);
+            return;
+        }
+        const dialog = document.querySelector("#primeInkFichePhotoReview .primeink-fiche-dialog");
+        const extraction = pending.extraction;
+        const overwrite = !!(dialog && dialog.querySelector("#primeInkFicheOverwrite") && dialog.querySelector("#primeInkFicheOverwrite").checked);
+        const rosterIds = new Set(getSortedStudentsByClass(course.classId).map(student => String(student.id)));
+        const seen = new Set();
+        let updated = 0;
+        let skippedExisting = 0;
+        let skippedUnmatched = 0;
+        let skippedInvalid = 0;
+
+        if (!appState.grades || typeof appState.grades !== "object") appState.grades = {};
+        (Array.isArray(extraction.students) ? extraction.students : []).forEach((row, index) => {
+            const select = dialog && dialog.querySelector('[data-primeink-student-row="' + index + '"]');
+            const studentId = String(select && select.value || "");
+            if (!studentId || !rosterIds.has(studentId) || seen.has(studentId)) {
+                skippedUnmatched++;
+                return;
+            }
+            seen.add(studentId);
+            const gradeKey = studentId + "_" + course.id;
+            const current = appState.grades[gradeKey] && typeof appState.grades[gradeKey] === "object"
+                ? Object.assign({}, appState.grades[gradeKey])
+                : {};
+            let changed = false;
+            PRIMEINK_FICHE_FIELDS.forEach(field => {
+                const value = row[field];
+                if (value === null || value === undefined || value === "") return;
+                const number = Number(value);
+                const maximum = field === "ex1" || field === "ex2" ? (Number(course.maxPer) || 0) * 2 : (Number(course.maxPer) || 0);
+                if (!Number.isFinite(number) || number < 0 || number > maximum) {
+                    skippedInvalid++;
+                    return;
+                }
+                const existing = current[field];
+                if (!overwrite && existing !== null && existing !== undefined && String(existing).trim() !== "") {
+                    skippedExisting++;
+                    return;
+                }
+                current[field] = number;
+                changed = true;
+            });
+            if (changed) {
+                appState.grades[gradeKey] = current;
+                updated++;
+            }
+        });
+
+        if (updated > 0) {
+            saveState();
+            renderFicheNotes(course);
+            if (typeof renderCourseStats === "function") renderCourseStats(course.classId, course.id);
+            if (typeof window.renderOfficialBulletin === "function" && typeof activeStudentId !== "undefined" && activeStudentId) {
+                window.renderOfficialBulletin(activeStudentId);
+            }
+        }
+        closePrimeInkFicheReview();
+        const summary = updated + " élève(s) mis à jour.";
+        const details = [
+            skippedUnmatched ? skippedUnmatched + " ligne(s) non associée(s)" : "",
+            skippedExisting ? skippedExisting + " note(s) déjà saisie(s) conservée(s)" : "",
+            skippedInvalid ? skippedInvalid + " note(s) hors barème ignorée(s)" : ""
+        ].filter(Boolean).join(" · ");
+        primeInkFicheStatus(updated ? summary + (details ? " " + details + "." : "") : "Aucune note n'a été modifiée. " + (details || "Associez les lignes à des élèves et vérifiez les points."), updated === 0);
+    };
+})();
+</script>
 </body>
 </html>
