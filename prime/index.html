@@ -1288,8 +1288,10 @@ body {
                 <div class="fiche-photo-toolbar">
                     <div class="fiche-entry-hint">✓ Chaque note valide est enregistrée automatiquement · Flèches pour changer de cellule · Entrée pour descendre</div>
                     <div class="fiche-photo-controls">
-                        <button type="button" class="btn-primary" onclick="openPrimeInkFichePhotoPicker()">📷 Remplir depuis une photo avec Llink</button>
-                        <input id="primeInkFichePhotoInput" type="file" accept="image/*" capture="environment" style="display:none" onchange="handlePrimeInkFichePhotoInput(this)">
+                        <label class="btn-primary" style="position:relative;display:inline-flex;align-items:center;justify-content:center;overflow:hidden;cursor:pointer;">
+                            <span>📷 Remplir depuis une photo avec Llink</span>
+                            <input id="primeInkFichePhotoInput" type="file" accept="image/jpeg,image/png,image/webp,image/*" capture="environment" aria-label="Prendre ou choisir une photo de fiche" onchange="handlePrimeInkFichePhotoInput(this)" style="position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;">
+                        </label>
                     </div>
                 </div>
                 <small id="primeInkFichePhotoStatus" class="fiche-photo-status" aria-live="polite">La photo sera analysée par Llink ; vérifiez les notes avant leur enregistrement.</small>
@@ -6181,9 +6183,12 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
     }
 
     async function primeInkCompressFichePhoto(file) {
-        if (file.size <= 4_500_000) return primeInkReadFileAsDataUrl(file);
+        const mime = String(file.type || "").toLowerCase();
+        const browserSupported = ["image/jpeg", "image/png", "image/webp"].includes(mime);
+        if (browserSupported && file.size <= 4_500_000) return primeInkReadFileAsDataUrl(file);
         if (typeof URL === "undefined" || !URL.createObjectURL || typeof Image === "undefined") {
-            return primeInkReadFileAsDataUrl(file);
+            if (browserSupported) return primeInkReadFileAsDataUrl(file);
+            throw new Error("Cette photo est dans un format non pris en charge. Choisissez une image JPG, PNG ou WebP.");
         }
         return new Promise((resolve, reject) => {
             const objectUrl = URL.createObjectURL(file);
@@ -6300,28 +6305,22 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
         const file = input && input.files && input.files[0];
         if (input) input.value = "";
         if (!file) return;
-        const course = primeInkFicheCurrentCourse();
-        if (!course) {
-            primeInkFicheStatus("Aucune fiche de cours n'est sélectionnée.", true);
-            return;
-        }
-        if (!String(file.type || "").startsWith("image/")) {
-            primeInkFicheStatus("Choisissez une image prise avec l'appareil photo ou depuis la galerie.", true);
-            return;
-        }
-        const classInfo = (Array.isArray(appState.classes) ? appState.classes : [])
-            .find(item => String(item.id) === String(course.classId));
-        const roster = getSortedStudentsByClass(course.classId).map(student => ({
-            student_id: String(student.id),
-            full_name: primeInkFicheStudentName(student)
-        })).filter(student => student.student_id && student.full_name);
-        if (!roster.length) {
-            primeInkFicheStatus("Impossible de trouver la liste des élèves de cette classe.", true);
-            return;
-        }
-
-        primeInkFicheStatus("Préparation de la photo puis envoi à Llink…");
+        primeInkFicheStatus("Photo sélectionnée. Préparation de l'analyse…");
         try {
+            const course = primeInkFicheCurrentCourse();
+            if (!course) throw new Error("Ouvrez d'abord une fiche de cours et sélectionnez un cours.");
+            if (!String(file.type || "").startsWith("image/")) {
+                throw new Error("Choisissez une photo ou une image depuis la galerie.");
+            }
+            const classInfo = (Array.isArray(appState.classes) ? appState.classes : [])
+                .find(item => String(item.id) === String(course.classId));
+            const roster = getSortedStudentsByClass(course.classId).map(student => ({
+                student_id: String(student.id),
+                full_name: primeInkFicheStudentName(student)
+            })).filter(student => student.student_id && student.full_name);
+            if (!roster.length) throw new Error("Impossible de trouver les élèves de cette classe.");
+
+            primeInkFicheStatus("Préparation de la photo puis envoi à Llink…");
             const imageBase64 = await primeInkCompressFichePhoto(file);
             if (!imageBase64 || imageBase64.length > 8_100_000) {
                 throw new Error("La photo reste trop volumineuse après compression. Recadrez-la puis réessayez.");
@@ -6352,7 +6351,8 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
             primeInkFicheStatus("Analyse terminée : vérifiez les associations et les points avant de les appliquer.");
         } catch (error) {
             console.error("Erreur d'extraction de fiche PrimeInk :", error);
-            primeInkFicheStatus(error && error.message ? error.message : "Impossible d'analyser cette photo.", true);
+            const message = error && error.message ? error.message : "Impossible d'analyser cette photo.";
+            primeInkFicheStatus(message + " Vérifiez votre connexion puis réessayez.", true);
         }
     };
 
