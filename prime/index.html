@@ -3466,6 +3466,84 @@ async function bpPushClassBulletin(cls) {
 
             let currentFicheCourseId = null;
 
+            // Pont contrôlé entre les fonctions internes des fiches et le module photo Llink.
+            // Ces fonctions vivent dans le bloc DOMContentLoaded et ne sont pas globales.
+            window.primeInkFichePhotoBridge = {
+                getCurrentCourse() {
+                    return (Array.isArray(appState.courses) ? appState.courses : [])
+                        .find(course => String(course.id) === String(currentFicheCourseId)) || null;
+                },
+                getCourse(courseId) {
+                    return (Array.isArray(appState.courses) ? appState.courses : [])
+                        .find(course => String(course.id) === String(courseId)) || null;
+                },
+                getClassName(courseId) {
+                    const course = this.getCourse(courseId);
+                    const cls = course && (Array.isArray(appState.classes) ? appState.classes : [])
+                        .find(item => String(item.id) === String(course.classId));
+                    return cls && cls.name ? String(cls.name) : "";
+                },
+                getStudents(courseId) {
+                    const course = this.getCourse(courseId);
+                    return course ? getSortedStudentsByClass(course.classId) : [];
+                },
+                applyGrades(courseId, rows, overwrite) {
+                    const course = this.getCourse(courseId);
+                    if (!course) throw new Error("Le cours n'existe plus dans la base locale.");
+                    const rosterIds = new Set(getSortedStudentsByClass(course.classId).map(student => String(student.id)));
+                    const seen = new Set();
+                    const result = { updated: 0, skippedExisting: 0, skippedUnmatched: 0, skippedInvalid: 0 };
+                    if (!appState.grades || typeof appState.grades !== "object") appState.grades = {};
+
+                    (Array.isArray(rows) ? rows : []).forEach(row => {
+                        const studentId = String(row && row.studentId || "");
+                        if (!studentId || !rosterIds.has(studentId) || seen.has(studentId)) {
+                            result.skippedUnmatched++;
+                            return;
+                        }
+                        seen.add(studentId);
+                        const gradeKey = studentId + "_" + course.id;
+                        const current = appState.grades[gradeKey] && typeof appState.grades[gradeKey] === "object"
+                            ? Object.assign({}, appState.grades[gradeKey])
+                            : {};
+                        let changed = false;
+                        ["p1", "p2", "ex1", "p3", "p4", "ex2"].forEach(field => {
+                            const value = row.grades && row.grades[field];
+                            if (value === null || value === undefined || value === "") return;
+                            const number = Number(value);
+                            const maximum = field === "ex1" || field === "ex2"
+                                ? (Number(course.maxPer) || 0) * 2
+                                : (Number(course.maxPer) || 0);
+                            if (!Number.isFinite(number) || number < 0 || number > maximum) {
+                                result.skippedInvalid++;
+                                return;
+                            }
+                            const existing = current[field];
+                            if (!overwrite && existing !== null && existing !== undefined && String(existing).trim() !== "") {
+                                result.skippedExisting++;
+                                return;
+                            }
+                            current[field] = number;
+                            changed = true;
+                        });
+                        if (changed) {
+                            appState.grades[gradeKey] = current;
+                            result.updated++;
+                        }
+                    });
+
+                    if (result.updated > 0) {
+                        saveState();
+                        renderFicheNotes(course);
+                        if (typeof renderCourseStats === "function") renderCourseStats(course.classId, course.id);
+                        if (typeof window.renderOfficialBulletin === "function" && activeStudentId) {
+                            window.renderOfficialBulletin(activeStudentId);
+                        }
+                    }
+                    return result;
+                }
+            };
+
             function ficheNum(value) {
                 if (value === '' || value === null || value === undefined) return null;
                 const raw = String(value).trim().replace(',', '.');
@@ -6146,9 +6224,14 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
         }
     }
 
+    function primeInkFicheBridge() {
+        const bridge = window.primeInkFichePhotoBridge;
+        if (!bridge) throw new Error("Les fiches PrimeInk ne sont pas encore initialisées. Rechargez la page.");
+        return bridge;
+    }
+
     function primeInkFicheCurrentCourse() {
-        return (Array.isArray(appState.courses) ? appState.courses : [])
-            .find(course => String(course.id) === String(currentFicheCourseId));
+        return primeInkFicheBridge().getCurrentCourse();
     }
 
     function primeInkFicheStudentName(student) {
@@ -6164,7 +6247,7 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
             primeInkFicheStatus("Ouvrez d'abord une fiche de cours.", true);
             return;
         }
-        const students = getSortedStudentsByClass(course.classId);
+        const students = primeInkFicheBridge().getStudents(course.id);
         if (!students.length) {
             primeInkFicheStatus("Aucun élève n'est enregistré dans cette classe.", true);
             return;
@@ -6312,9 +6395,8 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
             if (!String(file.type || "").startsWith("image/")) {
                 throw new Error("Choisissez une photo ou une image depuis la galerie.");
             }
-            const classInfo = (Array.isArray(appState.classes) ? appState.classes : [])
-                .find(item => String(item.id) === String(course.classId));
-            const roster = getSortedStudentsByClass(course.classId).map(student => ({
+            const bridge = primeInkFicheBridge();
+            const roster = bridge.getStudents(course.id).map(student => ({
                 student_id: String(student.id),
                 full_name: primeInkFicheStudentName(student)
             })).filter(student => student.student_id && student.full_name);
@@ -6331,7 +6413,7 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
                 headers: {"Content-Type": "application/json"},
                 body: JSON.stringify({
                     imageBase64,
-                    class_name: (classInfo && classInfo.name) || "",
+                    class_name: bridge.getClassName(course.id),
                     course_name: course.name || "",
                     max_period_points: Number(course.maxPer) || 0,
                     max_exam_points: (Number(course.maxPer) || 0) * 2,
@@ -6359,76 +6441,32 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
     window.applyPrimeInkFicheExtraction = function() {
         if (!primeInkPendingFicheExtraction) return;
         const pending = primeInkPendingFicheExtraction;
-        const course = (Array.isArray(appState.courses) ? appState.courses : [])
-            .find(item => String(item.id) === pending.courseId);
-        if (!course) {
-            closePrimeInkFicheReview();
-            primeInkFicheStatus("Le cours n'existe plus dans la base locale.", true);
-            return;
-        }
         const dialog = document.querySelector("#primeInkFichePhotoReview .primeink-fiche-dialog");
         const extraction = pending.extraction;
         const overwrite = !!(dialog && dialog.querySelector("#primeInkFicheOverwrite") && dialog.querySelector("#primeInkFicheOverwrite").checked);
-        const rosterIds = new Set(getSortedStudentsByClass(course.classId).map(student => String(student.id)));
-        const seen = new Set();
-        let updated = 0;
-        let skippedExisting = 0;
-        let skippedUnmatched = 0;
-        let skippedInvalid = 0;
-
-        if (!appState.grades || typeof appState.grades !== "object") appState.grades = {};
-        (Array.isArray(extraction.students) ? extraction.students : []).forEach((row, index) => {
-            const select = dialog && dialog.querySelector('[data-primeink-student-row="' + index + '"]');
-            const studentId = String(select && select.value || "");
-            if (!studentId || !rosterIds.has(studentId) || seen.has(studentId)) {
-                skippedUnmatched++;
-                return;
-            }
-            seen.add(studentId);
-            const gradeKey = studentId + "_" + course.id;
-            const current = appState.grades[gradeKey] && typeof appState.grades[gradeKey] === "object"
-                ? Object.assign({}, appState.grades[gradeKey])
-                : {};
-            let changed = false;
-            PRIMEINK_FICHE_FIELDS.forEach(field => {
-                const value = row[field];
-                if (value === null || value === undefined || value === "") return;
-                const number = Number(value);
-                const maximum = field === "ex1" || field === "ex2" ? (Number(course.maxPer) || 0) * 2 : (Number(course.maxPer) || 0);
-                if (!Number.isFinite(number) || number < 0 || number > maximum) {
-                    skippedInvalid++;
-                    return;
-                }
-                const existing = current[field];
-                if (!overwrite && existing !== null && existing !== undefined && String(existing).trim() !== "") {
-                    skippedExisting++;
-                    return;
-                }
-                current[field] = number;
-                changed = true;
+        try {
+            const rows = (Array.isArray(extraction.students) ? extraction.students : []).map((row, index) => {
+                const select = dialog && dialog.querySelector('[data-primeink-student-row="' + index + '"]');
+                const studentId = String(select && select.value || "");
+                const grades = {};
+                PRIMEINK_FICHE_FIELDS.forEach(field => { grades[field] = row[field]; });
+                return { studentId, grades };
             });
-            if (changed) {
-                appState.grades[gradeKey] = current;
-                updated++;
-            }
-        });
-
-        if (updated > 0) {
-            saveState();
-            renderFicheNotes(course);
-            if (typeof renderCourseStats === "function") renderCourseStats(course.classId, course.id);
-            if (typeof window.renderOfficialBulletin === "function" && typeof activeStudentId !== "undefined" && activeStudentId) {
-                window.renderOfficialBulletin(activeStudentId);
-            }
+            const result = primeInkFicheBridge().applyGrades(pending.courseId, rows, overwrite);
+            closePrimeInkFicheReview();
+            const summary = result.updated + " élève(s) mis à jour.";
+            const details = [
+                result.skippedUnmatched ? result.skippedUnmatched + " ligne(s) non associée(s)" : "",
+                result.skippedExisting ? result.skippedExisting + " note(s) déjà saisie(s) conservée(s)" : "",
+                result.skippedInvalid ? result.skippedInvalid + " note(s) hors barème ignorée(s)" : ""
+            ].filter(Boolean).join(" · ");
+            primeInkFicheStatus(result.updated
+                ? summary + (details ? " " + details + "." : "")
+                : "Aucune note n'a été modifiée. " + (details || "Associez les lignes aux élèves et vérifiez les points."),
+                result.updated === 0);
+        } catch (error) {
+            primeInkFicheStatus(error && error.message ? error.message : "Impossible d'appliquer les notes.", true);
         }
-        closePrimeInkFicheReview();
-        const summary = updated + " élève(s) mis à jour.";
-        const details = [
-            skippedUnmatched ? skippedUnmatched + " ligne(s) non associée(s)" : "",
-            skippedExisting ? skippedExisting + " note(s) déjà saisie(s) conservée(s)" : "",
-            skippedInvalid ? skippedInvalid + " note(s) hors barème ignorée(s)" : ""
-        ].filter(Boolean).join(" · ");
-        primeInkFicheStatus(updated ? summary + (details ? " " + details + "." : "") : "Aucune note n'a été modifiée. " + (details || "Associez les lignes à des élèves et vérifiez les points."), updated === 0);
     };
 })();
 </script>
