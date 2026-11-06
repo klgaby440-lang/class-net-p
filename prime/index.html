@@ -6336,7 +6336,7 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
     function showPrimeInkFicheReview(extraction, course, sourceName) {
         const modal = primeInkGetOrCreateReviewModal();
         const dialog = modal.querySelector(".primeink-fiche-dialog");
-        const roster = getSortedStudentsByClass(course.classId);
+        const roster = primeInkFicheBridge().getStudents(course.id);
         const rows = Array.isArray(extraction.students) ? extraction.students : [];
         const validIds = new Set(roster.map(student => String(student.id)));
         const options = roster.map(student => {
