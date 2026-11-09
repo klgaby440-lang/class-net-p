@@ -2281,13 +2281,14 @@ def store_school_class_catalog(db: Session, school: SchoolInformation, catalog: 
                 teacher.status = item["status"]
             linked_teachers.add(teacher.email)
 
-    # Associe aussi les comptes déjà créés qui ont indiqué le nom exact de cette école.
-    school_key = normalize_name(school.name_school or "")
-    if school_key:
-        for teacher in db.query(Teacher).filter(Teacher.school_id.is_(None)).all():
-            if normalize_name(teacher.school_name or "") == school_key:
-                teacher.school_id = school.school_id
-                linked_teachers.add(teacher.email)
+    # Associe aussi les anciens comptes dont le nom d'école contient une localisation,
+    # mais seulement si ce nom mène à une école unique.
+    for teacher in db.query(Teacher).filter(Teacher.school_id.is_(None)).all():
+        matched_school = find_registered_school_for_teacher(db, teacher.school_name or "")
+        if matched_school and matched_school.school_id == school.school_id:
+            teacher.school_id = school.school_id
+            teacher.school_name = school.name_school
+            linked_teachers.add(teacher.email)
 
     db.commit()
     return {
