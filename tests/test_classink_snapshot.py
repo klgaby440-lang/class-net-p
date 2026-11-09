@@ -1,4 +1,9 @@
+from pathlib import Path
 from types import SimpleNamespace
+import sys
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 
 import pytest
 from fastapi import HTTPException
