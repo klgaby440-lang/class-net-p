@@ -1,4 +1,5 @@
 import os
+import base64
 import secrets
 import string
 import smtplib
@@ -2309,16 +2310,53 @@ def store_school_class_catalog(db: Session, school: SchoolInformation, catalog: 
     }
 
 
+def teacher_matches_catalog_name(teacher, value: str) -> bool:
+    """Compare un titulaire de cours au compte enseignant (nom, code unique ou e-mail)."""
+    raw = str(value or "").strip()
+    if not raw:
+        return False
+    normalized = normalize_name(raw)
+    candidates = {
+        normalize_name(getattr(teacher, "full_name", "") or ""),
+        normalize_name(getattr(teacher, "teacher_code", "") or ""),
+        normalize_name(getattr(teacher, "email", "") or ""),
+    }
+    if normalized in candidates:
+        return True
+    return teacher_name_identity_key(raw) == teacher_name_identity_key(getattr(teacher, "full_name", "") or "")
+
+
 def compose_teacher_classroom_context(teacher, school, classes, students, courses) -> dict:
-    """Construit la base ClassInk partagée et les classes de titulaire officiellement reconnues."""
+    """
+    Construit uniquement le périmètre pédagogique du compte :
+    - classes où le professeur est titulaire ;
+    - classes où au moins un cours lui est attribué dans PrimeInk.
+    La liste des élèves est fournie pour ces classes ; le droit de modifier la conduite
+    reste indépendant et exclusivement vérifié par teacher_is_titulaire côté serveur.
+    """
     classes_by_id = {str(item.id): item for item in classes}
-    classes_by_name = {str(item.id): str(item.class_name) for item in classes}
-    students_by_class, courses_by_class, course_max = {}, {}, {}
-    for item in classes:
-        students_by_class.setdefault(item.class_name, [])
-        courses_by_class.setdefault(item.class_name, [])
+    assigned_course_class_ids = {
+        str(course.class_id)
+        for course in courses
+        if str(course.class_id or "") in classes_by_id
+        and teacher_matches_catalog_name(teacher, course.titulaire_name)
+    }
+    titular_classes = [item for item in classes if teacher_is_titulaire(teacher, item)]
+    titular_class_ids = {str(item.id) for item in titular_classes}
+    visible_classes = [
+        item for item in classes
+        if str(item.id) in titular_class_ids or str(item.id) in assigned_course_class_ids
+    ]
+    visible_ids = {str(item.id) for item in visible_classes}
+    class_names = {str(item.id): str(item.class_name) for item in visible_classes}
+
+    students_by_class = {item.class_name: [] for item in visible_classes}
+    courses_by_class = {item.class_name: [] for item in visible_classes}
+    course_max = {}
+    course_details_by_class = {item.class_name: [] for item in visible_classes}
+
     for item in students:
-        class_name = classes_by_name.get(str(item.class_id))
+        class_name = class_names.get(str(item.class_id))
         if not class_name:
             continue
         full_name = " ".join(part for part in (
@@ -2329,40 +2367,47 @@ def compose_teacher_classroom_context(teacher, school, classes, students, course
             "postname": item.student_post_name or "", "prename": item.student_pre_name or "",
             "sexe": item.student_sexe or "", "classId": item.class_id,
         })
+
     for item in courses:
-        class_name = classes_by_name.get(str(item.class_id))
+        class_name = class_names.get(str(item.class_id))
         if not class_name:
             continue
         values = courses_by_class.setdefault(class_name, [])
         if item.course_name not in values:
             values.append(item.course_name)
-        course_max[f"{class_name}_{item.course_name}"] = float(item.max_per or 40)
+        maximum = float(item.max_per or 40)
+        course_max[f"{class_name}_{item.course_name}"] = maximum
+        course_details_by_class.setdefault(class_name, []).append({
+            "id": item.id,
+            "name": item.course_name,
+            "maxPer": maximum,
+            "category": item.category or "",
+            "subCategory": item.sub_category or "",
+            "titulaire": item.titulaire_name or "",
+        })
 
-    titulaire_classes = [
-        item.class_name for item in classes
-        if teacher_is_titulaire(teacher, item)
-    ]
+    titulaire_classes = [item.class_name for item in titular_classes]
     classroom_rows = []
-    for item in classes:
+    for item in visible_classes:
         classroom_rows.append({
             "id": item.id,
             "name": item.class_name,
             "titulaire": item.titulaire_name or "",
-            "isTitulaire": teacher_is_titulaire(teacher, item),
+            "isTitulaire": str(item.id) in titular_class_ids,
             "students": students_by_class.get(item.class_name, []),
-            "courses": courses_by_class.get(item.class_name, []),
+            "courses": course_details_by_class.get(item.class_name, []),
         })
+
     return {
         "schoolId": school.school_id if school else "",
         "schoolName": school.name_school if school else (teacher.school_name or ""),
-        "classes": [item.class_name for item in classes],
+        "classes": [item.class_name for item in visible_classes],
         "students": students_by_class,
         "courses": courses_by_class,
         "courseMax": course_max,
         "titulaireClasses": titulaire_classes,
         "classrooms": classroom_rows,
     }
-
 
 def apply_teacher_classroom_context(state: dict, context: dict) -> dict:
     """Fusionne le catalogue de l'école dans le profil enseignant, sans effacer ses notes locales."""
@@ -2448,6 +2493,193 @@ def prepare_classroom_information(
         ),
         "counts": counts,
     }
+
+
+
+# ---------------------------------------------------------
+# EXTRACTION DE TABLEAUX DEPUIS UNE PHOTO (PrimeInk)
+# La clé Gemini reste côté serveur ; aucune clé IA n'est exposée au navigateur.
+# La réponse est uniquement une proposition à relire et valider avant import local.
+# ---------------------------------------------------------
+@app.post("/api/primenet/vision/parse")
+async def parse_primeink_photo(
+    payload: dict,
+    claims: dict = Depends(require_active_school),
+):
+    image_data = str(payload.get("imageDataUrl") or "")
+    import_type = str(payload.get("type") or "").strip().lower()
+    if import_type not in ("students", "bulletin"):
+        raise HTTPException(status_code=422, detail="Type d'extraction inconnu.")
+    if not image_data.startswith("data:image/") or "," not in image_data:
+        raise HTTPException(status_code=422, detail="Photo invalide ou absente.")
+    header, encoded = image_data.split(",", 1)
+    mime_match = re.match(r"^data:(image/(?:jpeg|png|webp));base64$", header, re.I)
+    if not mime_match:
+        raise HTTPException(status_code=415, detail="Formats acceptés : JPG, PNG ou WEBP.")
+    if len(encoded) > 7 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Photo trop volumineuse. Choisissez une image de moins de 5 Mo.")
+    try:
+        image_bytes = base64.b64decode(encoded, validate=True)
+    except Exception:
+        raise HTTPException(status_code=422, detail="Encodage de la photo invalide.")
+    if not image_bytes or len(image_bytes) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="La photo doit peser au maximum 5 Mo.")
+
+    api_key = os.getenv("GEMINI_API_KEY", "").strip()
+    if not api_key:
+        raise HTTPException(
+            status_code=503,
+            detail="L'analyse photo n'est pas encore configurée. Ajoutez GEMINI_API_KEY dans les variables du serveur ClassNet."
+        )
+    model = os.getenv("GEMINI_VISION_MODEL", "gemini-3.8-flash").strip() or "gemini-3.8-flash"
+
+    if import_type == "students":
+        prompt = (
+            "Lis cette photo d'une liste scolaire imprimée ou manuscrite. "
+            "Transcris uniquement les élèves réellement visibles. Les colonnes attendues sont Nom, Postnom, "
+            "Prénom (facultatif) et Sexe. Respecte l'ordre de la liste. N'invente jamais une lettre ou une personne. "
+            "Si une cellule est illisible ou absente, laisse le champ vide. "
+            "Le sexe doit être extrait uniquement d'une colonne/indication explicite M ou F : ne le déduis jamais du prénom. "
+            "Ignore les titres, totaux, signatures et lignes vides. Conserve l'orthographe visible."
+        )
+        response_schema = {
+            "type": "OBJECT",
+            "properties": {
+                "students": {
+                    "type": "ARRAY",
+                    "items": {
+                        "type": "OBJECT",
+                        "properties": {
+                            "name": {"type": "STRING"},
+                            "postname": {"type": "STRING"},
+                            "prename": {"type": "STRING"},
+                            "sexe": {"type": "STRING", "enum": ["M", "F", "INCONNU"]},
+                            "confidence": {"type": "NUMBER"},
+                        },
+                        "required": ["name", "postname", "prename", "sexe", "confidence"],
+                    },
+                },
+                "notes": {"type": "STRING"},
+            },
+            "required": ["students", "notes"],
+        }
+    else:
+        prompt = (
+            "Analyse cette photo d'un bulletin ou d'un tableau officiel de cours. "
+            "Reconstitue chaque cours une seule fois, en conservant l'ordre visuel. "
+            "Pour chaque cours, relève le nom exact, le maximum de points associé au cours, le domaine et le sous-domaine. "
+            "Les en-têtes/groupes visuels de la table peuvent s'appliquer aux lignes suivantes : propage-les uniquement "
+            "lorsque la mise en page le montre clairement. Ne confonds pas les maxima de période, de semestre et le total annuel. "
+            "Si plusieurs maxima apparaissent, choisis le maximum par période seulement lorsque la colonne/légende le précise ; "
+            "sinon mets maxPer à 0 et explique l'ambiguïté dans notes. Ne crée aucun cours absent de la photo. "
+            "Si un domaine ou sous-domaine n'est pas identifiable, laisse-le vide."
+        )
+        response_schema = {
+            "type": "OBJECT",
+            "properties": {
+                "courses": {
+                    "type": "ARRAY",
+                    "items": {
+                        "type": "OBJECT",
+                        "properties": {
+                            "name": {"type": "STRING"},
+                            "maxPer": {"type": "NUMBER"},
+                            "category": {"type": "STRING"},
+                            "subCategory": {"type": "STRING"},
+                            "confidence": {"type": "NUMBER"},
+                        },
+                        "required": ["name", "maxPer", "category", "subCategory", "confidence"],
+                    },
+                },
+                "notes": {"type": "STRING"},
+            },
+            "required": ["courses", "notes"],
+        }
+
+    request_body = {
+        "contents": [{
+            "role": "user",
+            "parts": [
+                {"text": prompt},
+                {"inlineData": {"mimeType": mime_match.group(1).lower(), "data": encoded}},
+            ],
+        }],
+        "generationConfig": {
+            "temperature": 0.1,
+            "maxOutputTokens": 8192,
+            "responseMimeType": "application/json",
+            "responseSchema": response_schema,
+        },
+    }
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(url, params={"key": api_key}, json=request_body)
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="L'analyse de la photo a pris trop de temps. Réessayez avec une photo plus nette.")
+    except httpx.HTTPError:
+        raise HTTPException(status_code=502, detail="Impossible de joindre le service d'analyse photo.")
+
+    if response.status_code >= 400:
+        try:
+            provider_message = response.json().get("error", {}).get("message", "")
+        except Exception:
+            provider_message = ""
+        if response.status_code == 429:
+            raise HTTPException(status_code=429, detail="Limite temporaire d'analyse atteinte. Réessayez plus tard.")
+        print(f"[PRIMEINK_VISION] Gemini HTTP {response.status_code}: {provider_message[:500]}")
+        raise HTTPException(status_code=502, detail="Le service d'analyse photo a refusé la demande. Vérifiez la clé et le modèle Gemini.")
+
+    try:
+        result = response.json()
+        parts = result["candidates"][0]["content"]["parts"]
+        raw_text = next(part["text"] for part in parts if isinstance(part, dict) and part.get("text"))
+        parsed = json.loads(raw_text)
+    except Exception:
+        raise HTTPException(status_code=502, detail="La réponse de l'analyse photo n'a pas pu être interprétée. Reprenez la photo.")
+
+    if import_type == "students":
+        clean_rows = []
+        for row in (parsed.get("students") or [])[:2000]:
+            if not isinstance(row, dict):
+                continue
+            name = clean_text(row.get("name"), 120)
+            postname = clean_text(row.get("postname"), 120)
+            prename = clean_text(row.get("prename"), 120)
+            if not (name or postname):
+                continue
+            sex = str(row.get("sexe") or "").strip().upper()
+            clean_rows.append({
+                "name": name, "postname": postname, "prename": prename,
+                "sexe": sex if sex in ("M", "F") else "",
+                "confidence": max(0.0, min(1.0, float(row.get("confidence") or 0))),
+            })
+        return {"status": True, "type": import_type, "students": clean_rows, "notes": clean_text(parsed.get("notes"), 500)}
+    else:
+        clean_rows = []
+        for row in (parsed.get("courses") or [])[:500]:
+            if not isinstance(row, dict):
+                continue
+            name = clean_text(row.get("name"), 160)
+            if not name:
+                continue
+            try:
+                maximum = float(row.get("maxPer") or 0)
+            except (TypeError, ValueError):
+                maximum = 0.0
+            if maximum < 0 or maximum > 100000:
+                maximum = 0.0
+            try:
+                confidence = max(0.0, min(1.0, float(row.get("confidence") or 0)))
+            except (TypeError, ValueError):
+                confidence = 0.0
+            clean_rows.append({
+                "name": name, "maxPer": maximum,
+                "category": clean_text(row.get("category"), 120),
+                "subCategory": clean_text(row.get("subCategory"), 160),
+                "confidence": confidence,
+            })
+        return {"status": True, "type": import_type, "courses": clean_rows, "notes": clean_text(parsed.get("notes"), 500)}
 
 
 @app.get("/api/teacher/classes")
