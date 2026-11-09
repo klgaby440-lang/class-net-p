@@ -3562,6 +3562,8 @@ async function bpPushClassBulletin(cls) {
                     if (!cls) throw new Error("La classe sélectionnée n'existe plus.");
                     const previousStudents = (Array.isArray(appState.students) ? appState.students : [])
                         .map(student => ({ ...student }));
+                    const previousActiveClassId = activeClassId;
+                    const previousActiveStudentId = activeStudentId;
                     if (!Array.isArray(appState.students)) appState.students = [];
                     const normalize = value => String(value || "").normalize("NFD")
                         .replace(/[\\u0300-\\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
@@ -3603,6 +3605,8 @@ async function bpPushClassBulletin(cls) {
                         activeStudentId = lastAdded.length ? lastAdded[lastAdded.length - 1].id : activeStudentId;
                         if (!saveState()) {
                             appState.students = previousStudents;
+                            activeClassId = previousActiveClassId;
+                            activeStudentId = previousActiveStudentId;
                             throw new Error("Les élèves n'ont pas été ajoutés : ce navigateur ne peut pas enregistrer les données localement. Ouvrez PrimeInk dans Chrome, Edge, Firefox ou Opera normal.");
                         }
                         loadClassData(cls.id);
@@ -3615,6 +3619,7 @@ async function bpPushClassBulletin(cls) {
                     if (!cls) throw new Error("La classe sélectionnée n'existe plus.");
                     const previousCourses = (Array.isArray(appState.courses) ? appState.courses : [])
                         .map(course => ({ ...course }));
+                    const previousActiveClassId = activeClassId;
                     const previousCategories = Array.isArray(cls.categories) ? cls.categories.slice() : [];
                     if (!Array.isArray(appState.courses)) appState.courses = [];
                     if (!Array.isArray(cls.categories)) cls.categories = [];
@@ -3666,6 +3671,7 @@ async function bpPushClassBulletin(cls) {
                         if (!saveState()) {
                             appState.courses = previousCourses;
                             cls.categories = previousCategories;
+                            activeClassId = previousActiveClassId;
                             throw new Error("Les cours n'ont pas été ajoutés : ce navigateur ne peut pas enregistrer les données localement. Ouvrez PrimeInk dans Chrome, Edge, Firefox ou Opera normal.");
                         }
                         loadClassData(cls.id);
