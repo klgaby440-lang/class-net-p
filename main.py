@@ -1917,7 +1917,16 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
     # On ne génère le format PrimeNet que si l'enseignant a été autorisé par la liste officielle de l'école
     if school_id and str(school_id).lower() != "indépendant":
         # Construction des listes et dictionnaires de base
-        classes_list = list(students_dict.keys())
+        classes_list = (
+            [str(class_name) for class_name in students_dict.keys()
+             if str(class_name) in teacher_allowed_classes
+             and normalize_name(class_name) in official_classes_by_name]
+            if verified_school_id else list(students_dict.keys())
+        )
+        effective_courses_dict = (
+            {class_name: sorted(assigned_courses_by_class.get(class_name, set())) for class_name in classes_list}
+            if verified_school_id else courses_dict
+        )
         presences_dict = payload.get("presences", {})
         if isinstance(presences_dict, dict):
             dates_presence = list(presences_dict.keys())
@@ -1932,15 +1941,15 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
         
         # Formatage des élèves : { "classe": ["Nom Post-nom", ...] }
         formatted_students = {}
-        for c_name, st_list in students_dict.items():
-            formatted_students[c_name] = [st.get("name", "") for st in st_list if st.get("name")]
+        for student_info in student_lookup.values():
+            formatted_students.setdefault(student_info["class"], []).append(student_info["name"])
             
         # Construction de la moyenne classe selon ta structure
         moyenne_classe = {}
         for c_name in classes_list:
             moyenne_classe[c_name] = {}
             # On récupère les cours de cette classe
-            c_courses = courses_dict.get(c_name, [])
+            c_courses = effective_courses_dict.get(c_name, [])
             for course in c_courses:
                 moyenne_classe[c_name][course] = {"P1": {}, "P2": {}, "EX1": {}, "P3": {}, "P4": {}, "EX2": {}}
                 
@@ -1966,7 +1975,7 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
             "teacher_id": teacher.email,
             "school_id": school_id,
             "classes": classes_list,
-            "cours": courses_dict,
+            "cours": effective_courses_dict,
             "date_presence": dates_presence,
             "students": formatted_students,
             "moyenne_classe": moyenne_classe,
