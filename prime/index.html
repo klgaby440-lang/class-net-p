@@ -3602,7 +3602,8 @@ async function bpPushClassBulletin(cls) {
                             id: "k_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 9),
                             classId: cls.id,
                             name,
-                            maxPer: 40,
+                            maxPer: Number.isFinite(Number(row && row.maxPer)) && Number(row.maxPer) > 0
+                                ? Number(row.maxPer) : 40,
                             category,
                             subCategory: subdomain,
                             titulaire: cls.titulaire || "Non assigné"
