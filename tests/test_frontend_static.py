@@ -131,7 +131,7 @@ class FrontendStaticTests(unittest.TestCase):
         source = (ROOT / "app/index.html").read_text(encoding="utf-8")
         self.assertIn('id="setting-teacher-access-code"', source)
         self.assertIn("async function copyTeacherAccessCode()", source)
-        self.assertIn("teacher_code", source.lower())
+        self.assertIn("(db.user && db.user.id)", source)
         self.assertIn("Communiquez votre identifiant ClassInk", source)
 
 
