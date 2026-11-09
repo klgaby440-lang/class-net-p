@@ -2027,12 +2027,28 @@ def school_state_extras(db, school):
     return out
 
 
+def teacher_name_identity_key(value: str) -> str:
+    """Clé de nom enseignant tolérant titres de civilité et ordre des noms."""
+    tokens = normalize_name(value or "").split()
+    titles = {"prof", "professeur", "monsieur", "madame", "mme", "mr", "m", "dr", "docteur"}
+    while tokens and tokens[0] in titles:
+        tokens.pop(0)
+    return " ".join(sorted(tokens))
+
+
 def teacher_is_titulaire(teacher, classe) -> bool:
-    """Vrai si l'enseignant est le titulaire enregistré de la classe (nom, code ou e-mail)."""
-    titulaire = normalize_name(classe.titulaire_name or "")
+    """Vrai si nom complet, code unique ou e-mail du titulaire correspondent au compte."""
+    titulaire_raw = str(classe.titulaire_name or "").strip()
+    titulaire = normalize_name(titulaire_raw)
     if not titulaire:
         return False
-    candidates = {normalize_name(teacher.full_name or ""), normalize_name(teacher.teacher_code or ""), normalize_name(teacher.email or "")}
+    teacher_name = normalize_name(teacher.full_name or "")
+    if teacher_name and teacher_name_identity_key(teacher.full_name or "") == teacher_name_identity_key(titulaire_raw):
+        return True
+    candidates = {
+        normalize_name(teacher.teacher_code or ""),
+        normalize_name(teacher.email or ""),
+    }
     candidates.discard("")
     return titulaire in candidates
 
