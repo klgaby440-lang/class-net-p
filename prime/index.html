@@ -3262,7 +3262,7 @@ async function bpServerCall(method, path, body) {
     const headers = cloudAuthHeaders();
     if (!headers['Authorization']) return { ok: false, offline: true };
     try {
-        const response = await fetch(API_BASE_URL + path, { method, headers, body: JSON.stringify(body), signal: AbortSignal.timeout(20000) });
+        const response = await window.primeInkFetchWithTimeout(API_BASE_URL + path, { method, headers, body: JSON.stringify(body) }, 20000);
         let data = {};
         try { data = await response.json(); } catch (e) { /* réponse sans détail */ }
         return { ok: response.ok && data.status !== false, status: response.status, message: data.message || data.detail || '' };
@@ -4256,7 +4256,7 @@ async function bpPushClassBulletin(cls) {
         async function fetchIntranetAverages() {
             try {
                 // Lecture NON destructive : /api/intranet/fetch marque les mises à jour comme lues, on ne l'utilise pas ici
-                let response = await fetch(`${INTRANET_URL}/api/primenet/sync`, { headers: cloudAuthHeaders(), signal: AbortSignal.timeout(4000) });
+                let response = await window.primeInkFetchWithTimeout(`${INTRANET_URL}/api/primenet/sync`, { headers: cloudAuthHeaders() }, 4000);
                 if (!response.ok) return; // 404 = aucun enseignant n'a encore envoyé de données
                 let result = await response.json();
                 let snapshot = JSON.stringify(result.data || {});
@@ -4292,7 +4292,7 @@ async function bpPushClassBulletin(cls) {
             const schoolId = appState && appState.school && appState.school.id;
             if (!schoolId) return;
             try {
-                const response = await fetch(`${API_BASE_URL}/api/cloud/${encodeURIComponent(schoolId)}/status`, { signal: AbortSignal.timeout(6000) });
+                const response = await window.primeInkFetchWithTimeout(`${API_BASE_URL}/api/cloud/${encodeURIComponent(schoolId)}/status`, {}, 6000);
                 if (!response.ok) return;
                 const data = await response.json();
                 if (data.locked !== true) return;
@@ -4595,11 +4595,10 @@ async function bpPushClassBulletin(cls) {
             if (capacity < students.length && !(await showCustomConfirm("Les salles n'offrent que " + capacity + " places pour " + students.length + " élèves. Continuer quand même ?", "Places insuffisantes"))) return;
             const exemplaires = Math.max(1, Math.min(5, parseInt(document.getElementById('mixExemplaires').value, 10) || 1));
             try {
-                const response = await fetch(API_BASE_URL + '/api/mixage/generate', {
+                const response = await window.primeInkFetchWithTimeout(API_BASE_URL + '/api/mixage/generate', {
                     method: 'POST', headers,
-                    body: JSON.stringify({ school_id: appState.school.id, target_classes: targetClasses, rooms, supervisors, exemplaires, students }),
-                    signal: AbortSignal.timeout(60000)
-                });
+                    body: JSON.stringify({ school_id: appState.school.id, target_classes: targetClasses, rooms, supervisors, exemplaires, students })
+                }, 60000);
                 if (!response.ok) return alert(await bpServerErrorMessage(response));
                 const result = await response.json();
                 if (!result.success) return alert(result.message || "Le mixage n'a pas pu être généré.");
@@ -4814,7 +4813,7 @@ window.updateHoraireStructure = function() {
             const collected = bpCollectSchedulePayload();
             if (collected.error) return alert(collected.error);
             try {
-                const response = await fetch(API_BASE_URL + '/api/schedule/generate', {
+                const response = await window.primeInkFetchWithTimeout(API_BASE_URL + '/api/schedule/generate', {
                     method: 'POST', headers,
                     body: JSON.stringify({
                         school_id: appState.school.id,
@@ -4822,9 +4821,8 @@ window.updateHoraireStructure = function() {
                         config: { jours_travail: collected.jours, heures_par_jour: collected.heures },
                         time_slots: collected.slots,
                         teachers: collected.teachers
-                    }),
-                    signal: AbortSignal.timeout(60000)
-                });
+                    })
+                }, 60000);
                 if (!response.ok) return alert(await bpServerErrorMessage(response));
                 const result = await response.json();
                 const names = {};
@@ -6020,10 +6018,10 @@ function updateScheduleResultTables(joursCount, heuresCount) {
                 const previousSchoolId = String(previousState.school && previousState.school.id || '');
                 appState = importedState;
                 try {
-                    saveState();
+                    if (!saveState()) throw new Error("Stockage local indisponible.");
                 } catch (storageError) {
                     appState = previousState;
-                    throw new Error("Importation interrompue : le navigateur n'a pas pu enregistrer cette base (espace de stockage insuffisant). La base précédente est conservée.");
+                    throw new Error("Importation interrompue : le navigateur ne peut pas enregistrer cette base. La base précédente est conservée.");
                 }
 
                 const importedSchoolId = String(appState.school && appState.school.id || '');
@@ -6067,10 +6065,15 @@ function updateScheduleResultTables(joursCount, heuresCount) {
                     if (result.token) {
                         try { localStorage.setItem('primeink_cloud_token', result.token); } catch (e) { /* stockage indisponible */ }
                     }
+                    const previousState = appState;
                     const bpLocalOnly = bpSnapshotLocalOnly();
                     appState = result.data;
                     bpRestoreLocalOnly(appState, bpLocalOnly);
-                    saveState();
+                    if (!saveState()) {
+                        appState = previousState;
+                        await showCustomAlert("La base a été reçue, mais ce navigateur ne peut pas la sauvegarder. Ouvrez PrimeInk avec Chrome, Edge, Firefox ou Opera normal avant de poursuivre.");
+                        return;
+                    }
                     await showCustomAlert("✅ Base de données de l'école chargée avec succès !");
                     location.reload(); // Recharge pour appliquer le nouvel état
                 } else {
