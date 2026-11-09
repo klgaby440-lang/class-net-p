@@ -6348,7 +6348,7 @@ function validatePendingDeliberationTransfers(studentId) {
         const next = current + delta;
         const maxEx2 = (Number(course.maxPer) || 0) * 2;
         if (next < -0.000001) {
-            return { ok: false, message: "Le transfert retirerait plus de points EX2 que le cours " + course.name + n'en possède." };
+            return { ok: false, message: "Le transfert retirerait plus de points EX2 que le cours " + course.name + " n'en possède." };
         }
         if (maxEx2 <= 0 || next > maxEx2 + 0.000001) {
             return { ok: false, message: "Le transfert ferait dépasser le maximum EX2 du cours " + course.name + "." };
