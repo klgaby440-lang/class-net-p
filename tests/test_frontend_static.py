@@ -111,6 +111,22 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn("page.style.transform = 'none';", source)
         self.assertNotIn("Math.min(sheet.clientWidth / pw, sheet.clientHeight / ph)", source)
 
+    def test_primeink_prepares_shared_class_catalog(self):
+        source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
+        self.assertIn('id="prepareClassInformationBtn"', source)
+        self.assertIn("async function prepareClassInformation()", source)
+        self.assertIn("/api/primenet/prepare-classes", source)
+        for field in ("classes:", "students:", "courses:", "teachers:"):
+            self.assertIn(field, source)
+
+    def test_classink_loads_official_school_classroom_and_titular_roles(self):
+        source = (ROOT / "app/index.html").read_text(encoding="utf-8")
+        self.assertIn("/api/teacher/classes", source)
+        self.assertIn("db.titulaireClasses", source)
+        self.assertIn("refreshTeacherClassroomData", source)
+        self.assertIn("merged.classrooms", source)
+        self.assertIn("allowed.includes(chosen)", source)
+
 
 if __name__ == "__main__":
     unittest.main()
