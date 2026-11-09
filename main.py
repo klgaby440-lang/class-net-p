@@ -2412,6 +2412,17 @@ def compose_teacher_classroom_context(teacher, school, classes, students, course
 def apply_teacher_classroom_context(state: dict, context: dict) -> dict:
     """Applique le périmètre scolaire autorisé sans réintroduire de classes locales étrangères."""
     state = dict(state or {})
+    # Un enseignant indépendant/non encore autorisé garde son espace local, mais
+    # aucune conduite n'est considérée comme vérifiée tant que l'école ne l'a pas rattaché.
+    if not context.get("schoolId"):
+        user = dict(state.get("user") or {})
+        user["schoolId"] = ""
+        user["titulaireOf"] = ""
+        user["titulaireClasses"] = []
+        state["user"] = user
+        state["titulaireClasses"] = []
+        state["classrooms"] = []
+        return state
     allowed_classes = [str(value) for value in (context.get("classes") or [])]
     allowed_set = set(allowed_classes)
     state["classes"] = allowed_classes
@@ -2507,7 +2518,7 @@ async def parse_primeink_photo(
 ):
     image_data = str(payload.get("imageDataUrl") or "")
     import_type = str(payload.get("type") or "").strip().lower()
-    if import_type not in ("students", "bulletin"):
+    if import_type not in ("students", "courses", "bulletin"):
         raise HTTPException(status_code=422, detail="Type d'extraction inconnu.")
     if not image_data.startswith("data:image/") or "," not in image_data:
         raise HTTPException(status_code=422, detail="Photo invalide ou absente.")
