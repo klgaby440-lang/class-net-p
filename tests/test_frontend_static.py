@@ -127,6 +127,13 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn("merged.classrooms", source)
         self.assertIn("allowed.includes(chosen)", source)
 
+    def test_classink_shows_teacher_code_for_school_linking(self):
+        source = (ROOT / "app/index.html").read_text(encoding="utf-8")
+        self.assertIn('id="setting-teacher-access-code"', source)
+        self.assertIn("async function copyTeacherAccessCode()", source)
+        self.assertIn("(db.user && db.user.id)", source)
+        self.assertIn("Communiquez votre identifiant ClassInk", source)
+
 
 if __name__ == "__main__":
     unittest.main()
