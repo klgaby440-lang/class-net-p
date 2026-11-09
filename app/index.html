@@ -756,6 +756,15 @@
             </div>
 
             <div class="form-group">
+                <label>IDENTIFIANT UNIQUE CLASSINK À COMMUNIQUER À L'ÉCOLE</label>
+                <div style="display:flex;gap:8px;">
+                    <input type="text" id="setting-teacher-access-code" readonly style="font-weight:700;background:rgba(0,0,0,0.05);">
+                    <button type="button" class="btn-secondary" onclick="copyTeacherAccessCode()">Copier</button>
+                </div>
+                <small style="display:block;margin-top:6px;color:var(--text-muted);">L'administration doit ajouter cet identifiant dans PrimeInk › Gestion des enseignants, puis préparer les informations des classes pour vous donner accès aux données de l'école.</small>
+            </div>
+
+            <div class="form-group">
                 <label>MOT DE PASSE DU COMPTE LOCAL</label>
                 <input type="password" id="setting-user-pass" value="123456">
             </div>
@@ -1364,11 +1373,41 @@ function initApp() {
     document.getElementById('setting-user-name').value = db.user.name;
     document.getElementById('setting-school-id').value = db.user.school;
     document.getElementById('setting-user-email').value = db.user.email || 'Non renseigné';
+    renderTeacherAccessCode();
 
     updateLoginHeaderButton();
     renderClassSelectors();
     renderGradesTables();
     renderAttendanceList();
+}
+
+function renderTeacherAccessCode() {
+    const input = document.getElementById('setting-teacher-access-code');
+    if (input) input.value = String((db.user && db.user.id) || 'Disponible après connexion');
+}
+
+async function copyTeacherAccessCode() {
+    const value = String((db.user && db.user.id) || '').trim();
+    if (!value) {
+        await showCustomAlert("Connectez-vous pour récupérer votre identifiant ClassInk.");
+        return;
+    }
+    const input = document.getElementById('setting-teacher-access-code');
+    try {
+        if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(value);
+        } else if (input) {
+            input.focus();
+            input.select();
+            if (!document.execCommand('copy')) throw new Error("Copie non disponible dans ce navigateur.");
+        } else {
+            throw new Error("Champ d'identifiant introuvable.");
+        }
+        await showCustomAlert("Identifiant ClassInk copié : " + value);
+    } catch (error) {
+        if (input) { input.focus(); input.select(); }
+        await showCustomAlert("Sélectionnez et copiez votre identifiant : " + value);
+    }
 }
 
 function updateLoginHeaderButton() {
@@ -1532,6 +1571,7 @@ async function handleLogin() {
             saveDB();
             
             updateLoginHeaderButton();
+            renderTeacherAccessCode();
             renderClassSelectors();
             renderGradesTables();
             renderTitulaireCard();
@@ -1544,7 +1584,7 @@ async function handleLogin() {
                 : " Aucun rôle de titulaire n'est encore associé à ce compte.";
             const schoolLinkNote = db.schoolId
                 ? ""
-                : " Votre compte n'est pas encore associé à une école. Vérifiez le nom de l'établissement indiqué lors de l'inscription.";
+                : " Pour recevoir les données de votre école, communiquez votre identifiant ClassInk (" + (db.user.id || "indisponible") + ") à l'administration afin qu'elle vous ajoute dans PrimeInk.";
             await showCustomAlert(`✅ Connexion réussie ! ${schoolClasses} classe(s) chargée(s) depuis l'école.${titularNote}${schoolLinkNote}`);
         } else {
             await showCustomAlert(`❌ Échec de connexion : ${result.message || 'Identifiants incorrects.'}`);
@@ -2880,7 +2920,7 @@ function renderTitulaireCard() {
         select.disabled = true;
         if (saveButton) saveButton.disabled = true;
         if (status) status.textContent = !(db.schoolId || (db.user && db.user.schoolId))
-            ? "Ce compte n'est pas encore associé à une école. Vérifiez le nom exact de l'établissement lors de l'inscription, puis reconnectez-vous."
+            ? "Compte non rattaché à l'école. Communiquez votre identifiant ClassInk (" + ((db.user && db.user.id) || "indisponible") + ") à l'administration ; elle devra l'ajouter dans PrimeInk puis préparer les informations des classes."
             : (db.user && db.user.isLoggedIn
                 ? "Aucune classe n'est actuellement enregistrée à votre nom comme titulaire. Demandez à l'administration de vérifier le titulaire dans PrimeInk, puis actualisez."
                 : "Connectez-vous à ClassInk pour recevoir vos classes et votre rôle depuis l'école.");
