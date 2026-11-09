@@ -1542,7 +1542,10 @@ async function handleLogin() {
             const titularNote = (db.titulaireClasses || []).length
                 ? " Vous êtes titulaire de : " + db.titulaireClasses.join(", ") + "."
                 : " Aucun rôle de titulaire n'est encore associé à ce compte.";
-            await showCustomAlert(`✅ Connexion réussie ! ${schoolClasses} classe(s) chargée(s) depuis l'école.${titularNote}`);
+            const schoolLinkNote = db.schoolId
+                ? ""
+                : " Votre compte n'est pas encore associé à une école. Vérifiez le nom de l'établissement indiqué lors de l'inscription.";
+            await showCustomAlert(`✅ Connexion réussie ! ${schoolClasses} classe(s) chargée(s) depuis l'école.${titularNote}${schoolLinkNote}`);
         } else {
             await showCustomAlert(`❌ Échec de connexion : ${result.message || 'Identifiants incorrects.'}`);
         }
@@ -2876,9 +2879,11 @@ function renderTitulaireCard() {
         select.value = '';
         select.disabled = true;
         if (saveButton) saveButton.disabled = true;
-        if (status) status.textContent = db.user && db.user.isLoggedIn
-            ? "Aucune classe n'est actuellement enregistrée à votre nom comme titulaire. Demandez à l'administration de vérifier le titulaire dans PrimeInk, puis actualisez."
-            : "Connectez-vous à ClassInk pour recevoir vos classes et votre rôle depuis l'école.";
+        if (status) status.textContent = !(db.schoolId || (db.user && db.user.schoolId))
+            ? "Ce compte n'est pas encore associé à une école. Vérifiez le nom exact de l'établissement lors de l'inscription, puis reconnectez-vous."
+            : (db.user && db.user.isLoggedIn
+                ? "Aucune classe n'est actuellement enregistrée à votre nom comme titulaire. Demandez à l'administration de vérifier le titulaire dans PrimeInk, puis actualisez."
+                : "Connectez-vous à ClassInk pour recevoir vos classes et votre rôle depuis l'école.");
         return;
     }
 
@@ -2931,6 +2936,9 @@ async function refreshTeacherClassroomData() {
             throw new Error(result.detail || result.message || ("Erreur serveur HTTP " + response.status));
         }
         const data = result.data;
+        if (!data.schoolId) {
+            throw new Error("Votre compte enseignant n'est pas encore associé à une école. Vérifiez le nom de l'établissement lors de l'inscription ou demandez à l'administration de l'associer.");
+        }
         const serverState = {
             classes: data.classes || [],
             students: data.students || {},
