@@ -783,12 +783,16 @@
 
         <div class="card" id="titulaire-card">
             <h3 style="color: var(--primary); margin-bottom: 8px;">Mon rôle de titulaire</h3>
-            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">Le titulaire représente une classe et est le seul à saisir la conduite de ses élèves. Indiquez ici la classe dont vous êtes titulaire : l'onglet « Conduite » apparaît. L'école vérifiera que vous êtes bien le titulaire de cette classe.</p>
+            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">PrimeInk transmet les classes et leurs titulaires au serveur de l'école. Après connexion, ClassInk affiche automatiquement les classes dont vous êtes officiellement titulaire, avec leurs élèves. Seul le titulaire enregistré peut saisir leur conduite.</p>
             <div class="form-group">
-                <label>JE SUIS TITULAIRE DE LA CLASSE</label>
+                <label>CLASSE(S) DONT JE SUIS TITULAIRE</label>
                 <select id="titulaire-class-select"></select>
+                <small id="titulaire-access-status" style="display:block;margin-top:8px;color:var(--text-muted);" aria-live="polite"></small>
             </div>
-            <button class="btn-primary" onclick="saveTitulaire()">Enregistrer</button>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <button class="btn-primary" id="save-titulaire-button" onclick="saveTitulaire()">Choisir ma classe</button>
+                <button class="btn-secondary" onclick="refreshTeacherClassroomData()">Actualiser les classes de l'école</button>
+            </div>
         </div>
 
         <div class="card" id="signature-card">
@@ -1470,6 +1474,13 @@ function mergeServerDataIntoLocal(local, server) {
     merged.conduct = conduct;
     merged.conductMeta = { ...(server.conductMeta || {}), ...(local.conductMeta || {}) };
     merged.presences = (local.presences && local.presences.length) ? local.presences : (server.presences || []);
+    // Les rôles de titulaire viennent du registre de l'école et font autorité sur l'auto-déclaration locale.
+    merged.titulaireClasses = Array.isArray(server.titulaireClasses)
+        ? server.titulaireClasses.slice()
+        : (Array.isArray(local.titulaireClasses) ? local.titulaireClasses.slice() : []);
+    merged.classrooms = Array.isArray(server.classrooms)
+        ? server.classrooms.slice()
+        : (Array.isArray(local.classrooms) ? local.classrooms.slice() : []);
 
     const seenQuiz = new Set();
     merged.quizzes = [];
@@ -1519,8 +1530,15 @@ async function handleLogin() {
             updateLoginHeaderButton();
             renderClassSelectors();
             renderGradesTables();
+            renderTitulaireCard();
+            updateConduiteNav();
+            renderConduiteList();
             closeLoginModal();
-            await showCustomAlert(`✅ Connexion réussie ! Bienvenue ${db.user.name}`);
+            const schoolClasses = (db.classes || []).length;
+            const titularNote = (db.titulaireClasses || []).length
+                ? " Vous êtes titulaire de : " + db.titulaireClasses.join(", ") + "."
+                : " Aucun rôle de titulaire n'est encore associé à ce compte.";
+            await showCustomAlert(`✅ Connexion réussie ! ${schoolClasses} classe(s) chargée(s) depuis l'école.${titularNote}`);
         } else {
             await showCustomAlert(`❌ Échec de connexion : ${result.message || 'Identifiants incorrects.'}`);
         }
@@ -2834,24 +2852,47 @@ function updateConduiteNav() {
 function renderTitulaireCard() {
     const select = document.getElementById('titulaire-class-select');
     if (!select) return;
+    const allowed = Array.isArray(db.titulaireClasses) ? db.titulaireClasses : [];
     const current = getTitulaireClass();
+    const status = document.getElementById('titulaire-access-status');
+    const saveButton = document.getElementById('save-titulaire-button');
     select.innerHTML = '';
-    const none = document.createElement('option');
-    none.value = '';
-    none.textContent = "— Je ne suis titulaire d'aucune classe —";
-    select.appendChild(none);
-    (db.classes || []).forEach(name => {
-        const opt = document.createElement('option');
-        opt.value = name;
-        opt.textContent = name;
-        select.appendChild(opt);
+
+    if (!allowed.length) {
+        const none = document.createElement('option');
+        none.value = '';
+        none.textContent = "Aucune classe titulaire attribuée";
+        select.appendChild(none);
+        select.value = '';
+        select.disabled = true;
+        if (saveButton) saveButton.disabled = true;
+        if (status) status.textContent = db.user && db.user.isLoggedIn
+            ? "Aucune classe n'est actuellement enregistrée à votre nom comme titulaire. Demandez à l'administration de vérifier le titulaire dans PrimeInk, puis actualisez."
+            : "Connectez-vous à ClassInk pour recevoir vos classes et votre rôle depuis l'école.";
+        return;
+    }
+
+    allowed.forEach(name => {
+        const option = document.createElement('option');
+        option.value = name;
+        option.textContent = name;
+        select.appendChild(option);
     });
-    select.value = current;
+    select.disabled = allowed.length <= 1;
+    select.value = allowed.includes(current) ? current : allowed[0];
+    if (db.user) db.user.titulaireOf = select.value;
+    if (saveButton) saveButton.disabled = allowed.length <= 1;
+    if (status) status.textContent = allowed.length + " classe(s) titulaire confirmée(s) par le registre de l'école. Les élèves sont chargés automatiquement.";
 }
 
 async function saveTitulaire() {
     const select = document.getElementById('titulaire-class-select');
     const chosen = select ? select.value : '';
+    const allowed = Array.isArray(db.titulaireClasses) ? db.titulaireClasses : [];
+    if (!chosen || !allowed.includes(chosen)) {
+        await showCustomAlert("Vous ne pouvez choisir que les classes qui vous sont attribuées comme titulaire par l'école.");
+        return;
+    }
     if ((db.user.titulaireOf || '') === chosen) {
         await showCustomAlert("Aucun changement.");
         return;
@@ -2861,9 +2902,54 @@ async function saveTitulaire() {
     saveDB();
     updateConduiteNav();
     renderConduiteList();
-    await showCustomAlert(chosen
-        ? "Vous êtes déclaré titulaire de « " + chosen + " ». L'onglet Conduite est disponible. L'école vérifiera cette information."
-        : "Vous n'êtes plus déclaré titulaire d'une classe.");
+    await showCustomAlert("Votre classe titulaire active est maintenant « " + chosen + " ».");
+}
+
+async function refreshTeacherClassroomData() {
+    const status = document.getElementById('titulaire-access-status');
+    const headers = cloudAuthHeaders();
+    if (!db.user || !db.user.isLoggedIn || !headers.Authorization) {
+        await showCustomAlert("Connectez-vous d'abord à votre compte enseignant.");
+        return;
+    }
+    if (status) status.textContent = "Récupération des classes, élèves et cours de l'école…";
+    try {
+        const response = await fetch(CLOUD_API_URL + '/api/teacher/classes', { headers });
+        let result = {};
+        try { result = await response.json(); } catch (e) { /* réponse invalide */ }
+        if (!response.ok || result.status !== true || !result.data) {
+            throw new Error(result.detail || result.message || ("Erreur serveur HTTP " + response.status));
+        }
+        const data = result.data;
+        const serverState = {
+            classes: data.classes || [],
+            students: data.students || {},
+            courses: data.courses || {},
+            courseMax: data.courseMax || {},
+            titulaireClasses: data.titulaireClasses || [],
+            classrooms: data.classrooms || [],
+            schoolId: data.schoolId || '',
+            user: {
+                ...db.user,
+                school: data.schoolName || db.user.school || '',
+                schoolId: data.schoolId || '',
+                titulaireClasses: data.titulaireClasses || [],
+                titulaireOf: (data.titulaireClasses || [])[0] || ''
+            }
+        };
+        db = mergeServerDataIntoLocal(db, serverState);
+        saveDB();
+        renderClassSelectors();
+        renderGradesTables();
+        renderTitulaireCard();
+        updateConduiteNav();
+        renderConduiteList();
+        if (status) status.textContent = "Informations de l'école actualisées : " + (data.classes || []).length + " classe(s).";
+        await showCustomAlert("Les classes, élèves et cours de l'école ont été actualisés.", "Synchronisation terminée");
+    } catch (error) {
+        if (status) status.textContent = "Échec de l'actualisation : " + (error.message || "Erreur réseau");
+        await showCustomAlert("Impossible de charger les classes de l'école : " + (error.message || "Erreur réseau"));
+    }
 }
 
 function defaultConduitePeriod() {
