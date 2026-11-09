@@ -1383,11 +1383,13 @@ function initApp() {
 
 function renderTeacherAccessCode() {
     const input = document.getElementById('setting-teacher-access-code');
-    if (input) input.value = String((db.user && db.user.id) || 'Disponible après connexion');
+    if (input) input.value = db.user && db.user.isLoggedIn && db.user.id
+        ? String(db.user.id)
+        : 'Connectez-vous pour obtenir votre identifiant';
 }
 
 async function copyTeacherAccessCode() {
-    const value = String((db.user && db.user.id) || '').trim();
+    const value = db.user && db.user.isLoggedIn ? String(db.user.id || '').trim() : '';
     if (!value) {
         await showCustomAlert("Connectez-vous pour récupérer votre identifiant ClassInk.");
         return;
