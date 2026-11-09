@@ -1199,8 +1199,8 @@ body {
                         <thead>
                             <tr>
                                 <th>COURS</th>
-                                <th>TOTAL MAX</th>
-                                <th>PTS OBTENUS</th>
+                                <th>MAX EX2</th>
+                                <th>EX2 OBTENUS</th>
                                 <th>PTS À RETIRER</th>
                                 <th>ACTION</th>
                             </tr>
@@ -1213,8 +1213,8 @@ body {
                     <!-- Actions globales de délibération -->
                     <div style="margin-top: 1.5rem; display: flex; gap: 0.8rem; justify-content: flex-end;">
                         <button class="btn-secondary" onclick="resetDeliberation()">Annuler</button>
-                        <button class="btn-secondary" onclick="applyDeliberationAll()">Tous</button>
-                        <button class="btn-primary" style="background-color: #0284c7;" onclick="applyAutoDeliberation()">Automatique</button>
+                        <button class="btn-secondary" onclick="applyDeliberationAll()">Vérifier tous</button>
+                        <button class="btn-secondary" type="button" disabled title="La délibération automatique n'est pas encore disponible." style="opacity:.55;cursor:not-allowed;">Automatique (bientôt)</button>
                         <button class="btn-primary" style="background-color: #16a34a;" onclick="saveDeliberation()">Valider</button>
                     </div>
                 </div>
@@ -6272,104 +6272,221 @@ window.renderTeacherAvailabilityGrid = function(containerElem, daysCount, hoursC
 };
 
 let currentSourceCourseId = null;
-let pendingTransfers = {}; // Stoque { sourceCourseId: { targetCourseId, points } }
+let pendingTransfers = {}; // { sourceCourseId: { targetCourseId, points } }
+
+function parseDeliberationScore(value) {
+    if (value === null || value === undefined || value === "") return null;
+    const parsed = Number(String(value).trim().replace(",", "."));
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
+function getDeliberationCourse(courseId, classId) {
+    return appState.courses.find(course =>
+        String(course.id) === String(courseId) && String(course.classId) === String(classId)
+    ) || null;
+}
+
+function validatePendingDeliberationTransfers(studentId) {
+    const student = appState.students.find(item => String(item.id) === String(studentId));
+    if (!student) return { ok: false, message: "Sélectionnez d'abord un élève." };
+    const entries = Object.entries(pendingTransfers || {});
+    if (!entries.length) return { ok: false, message: "Aucun transfert n'a été préparé." };
+
+    const deltas = new Map();
+    const touchedCourses = new Map();
+    for (const [sourceId, transfer] of entries) {
+        const sourceCourse = getDeliberationCourse(sourceId, student.classId);
+        const targetCourse = getDeliberationCourse(transfer && transfer.targetCourseId, student.classId);
+        const points = Number(transfer && transfer.points);
+        if (!sourceCourse || !targetCourse || sourceCourse.id === targetCourse.id) {
+            return { ok: false, message: "Un transfert cible un cours absent ou invalide. Vérifiez les sélections." };
+        }
+        if (!Number.isFinite(points) || points <= 0) {
+            return { ok: false, message: "Chaque transfert doit contenir un nombre de points strictement positif." };
+        }
+
+        const sourceKey = student.id + "_" + sourceCourse.id;
+        const targetKey = student.id + "_" + targetCourse.id;
+        const sourceGrade = appState.grades && appState.grades[sourceKey];
+        const sourceEx2 = parseDeliberationScore(sourceGrade && sourceGrade.ex2);
+        if (sourceEx2 === null) {
+            return { ok: false, message: "La note EX2 de " + sourceCourse.name + " est vide ou illisible. Aucun transfert n'est possible depuis ce cours." };
+        }
+        if (sourceEx2 + (deltas.get(sourceCourse.id) || 0) < points) {
+            return { ok: false, message: "Les points EX2 disponibles dans " + sourceCourse.name + " sont insuffisants." };
+        }
+
+        deltas.set(sourceCourse.id, (deltas.get(sourceCourse.id) || 0) - points);
+        deltas.set(targetCourse.id, (deltas.get(targetCourse.id) || 0) + points);
+        touchedCourses.set(sourceCourse.id, sourceCourse);
+        touchedCourses.set(targetCourse.id, targetCourse);
+    }
+
+    for (const [courseId, delta] of deltas.entries()) {
+        const course = touchedCourses.get(courseId);
+        const grade = appState.grades && appState.grades[student.id + "_" + courseId];
+        const rawCurrent = parseDeliberationScore(grade && grade.ex2);
+        const current = rawCurrent === null ? 0 : rawCurrent;
+        const next = current + delta;
+        const maxEx2 = (Number(course.maxPer) || 0) * 2;
+        if (next < -0.000001) {
+            return { ok: false, message: "Le transfert retirerait plus de points EX2 que le cours " + course.name + n'en possède." };
+        }
+        if (maxEx2 <= 0 || next > maxEx2 + 0.000001) {
+            return { ok: false, message: "Le transfert ferait dépasser le maximum EX2 du cours " + course.name + "." };
+        }
+    }
+    return { ok: true, student, entries, deltas, touchedCourses };
+}
 
 function renderDeliberationView(studentId) {
-    const student = appState.students.find(s => s.id === studentId);
-    if (!student) return;
+    const student = appState.students.find(item => String(item.id) === String(studentId));
+    if (!student) {
+        const tbody = document.getElementById("delibTableBody");
+        if (tbody) tbody.innerHTML = '<tr><td colspan="5">Sélectionnez un élève.</td></tr>';
+        return;
+    }
+    activeStudentId = student.id;
+    document.getElementById("delibStudentName").textContent =
+        [student.name, student.postname, student.prename].filter(Boolean).join(" ");
 
-    document.getElementById('delibStudentName').textContent = `${student.name} ${student.postname || ''} ${student.prename || ''}`;
-    const classCourses = appState.courses.filter(c => c.classId === student.classId);
-    const tbody = document.getElementById('delibTableBody');
-    tbody.innerHTML = '';
+    const classCourses = appState.courses.filter(course => String(course.classId) === String(student.classId));
+    const tbody = document.getElementById("delibTableBody");
+    tbody.innerHTML = "";
 
-    classCourses.forEach(crs => {
-        const gradeKey = `${student.id}_${crs.id}`;
-        const g = appState.grades[gradeKey] || { p1:0, p2:0, ex1:0, p3:0, p4:0, ex2:0 };
-        const totObtenu = (parseFloat(g.p1)||0) + (parseFloat(g.p2)||0) + (parseFloat(g.ex1)||0) +
-                          (parseFloat(g.p3)||0) + (parseFloat(g.p4)||0) + (parseFloat(g.ex2)||0);
-        const maxEx = crs.maxPer * 2;
-        const totalMax = (crs.maxPer * 4) + (maxEx * 2);
-
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td><strong>${safeHTML(crs.name)}</strong> ${crs.category ? `<small>(${safeHTML(crs.category)})</small>` : ''}</td>
-            <td>${safeHTML(totalMax)}</td>
-            <td><strong>${safeHTML(totObtenu)}</strong></td>
-            <td><input type="number" min="0" max="${safeHTML(totObtenu)}" class="form-control" id="pts_deduct_${safeHTML(crs.id)}" style="width: 100px;" value="0"></td>
-            <td><button class="btn-primary" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;" onclick="openTargetCourseModal(${jsArg(crs.id)})">Choisir le cours</button></td>
-        `;
+    classCourses.forEach(course => {
+        const gradeKey = student.id + "_" + course.id;
+        const grade = (appState.grades && appState.grades[gradeKey]) || {};
+        const ex2 = parseDeliberationScore(grade.ex2);
+        const maxEx2 = (Number(course.maxPer) || 0) * 2;
+        const inputValue = pendingTransfers[course.id] ? pendingTransfers[course.id].points : 0;
+        const available = ex2 !== null && ex2 > 0 && maxEx2 > 0;
+        const tr = document.createElement("tr");
+        tr.innerHTML =
+            '<td><strong>' + safeHTML(course.name) + '</strong> ' +
+            (course.category ? '<small>(' + safeHTML(course.category) + ')</small>' : '') + '</td>' +
+            '<td>' + safeHTML(maxEx2) + '</td>' +
+            '<td><strong>' + (ex2 === null ? "—" : safeHTML(ex2)) + '</strong></td>' +
+            '<td><input type="number" min="0" max="' + safeHTML(ex2 === null ? 0 : ex2) +
+            '" step="0.5" class="form-control" id="pts_deduct_' + safeHTML(course.id) +
+            '" style="width:100px;" value="' + safeHTML(inputValue) + '"' + (available ? "" : " disabled") + '></td>' +
+            '<td><button type="button" class="btn-primary" style="padding:.3rem .6rem;font-size:.8rem;" ' +
+            'onclick="openTargetCourseModal(' + jsArg(course.id) + ')"' + (available ? "" : " disabled") + '>Choisir le cours</button>' +
+            (pendingTransfers[course.id] ? '<br><small>Transfert préparé</small>' : '') +
+            (!available ? '<br><small>EX2 manquante ou aucun point disponible</small>' : '') + '</td>';
         tbody.appendChild(tr);
     });
 }
 
 function openTargetCourseModal(sourceCourseId) {
+    const student = appState.students.find(item => String(item.id) === String(activeStudentId));
+    if (!student) return alert("Sélectionnez d'abord un élève.");
+    const sourceCourse = getDeliberationCourse(sourceCourseId, student.classId);
+    if (!sourceCourse) return alert("Le cours source n'existe plus.");
+    const input = document.getElementById("pts_deduct_" + sourceCourseId);
+    const requested = Number(input && input.value);
+    const sourceGrade = appState.grades && appState.grades[student.id + "_" + sourceCourseId];
+    const sourceEx2 = parseDeliberationScore(sourceGrade && sourceGrade.ex2);
+    if (sourceEx2 === null || !Number.isFinite(requested) || requested <= 0 || requested > sourceEx2) {
+        return alert("Saisissez des points à retirer qui ne dépassent pas la note EX2 réellement obtenue.");
+    }
+
     currentSourceCourseId = sourceCourseId;
-    const student = appState.students.find(s => s.id === activeStudentId);
-    const classCourses = appState.courses.filter(c => c.classId === student.classId && c.id !== sourceCourseId);
-    const container = document.getElementById('targetCourseList');
-    container.innerHTML = '';
-
-    classCourses.forEach(crs => {
-        const btn = document.createElement('button');
-        btn.className = 'btn-secondary';
-        btn.style.textAlign = 'left';
-        btn.style.padding = '0.7rem 1rem';
-        btn.innerHTML = `<strong>${safeHTML(crs.name)}</strong> <span>| ${safeHTML(crs.category || "Cours d'option")}</span>`;
-        btn.onclick = () => selectTargetCourse(crs.id);
-        container.appendChild(btn);
+    const classCourses = appState.courses.filter(course =>
+        String(course.classId) === String(student.classId) && String(course.id) !== String(sourceCourseId)
+    );
+    const container = document.getElementById("targetCourseList");
+    container.innerHTML = "";
+    classCourses.forEach(course => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "btn-secondary";
+        button.style.textAlign = "left";
+        button.style.padding = ".7rem 1rem";
+        button.innerHTML = '<strong>' + safeHTML(course.name) + '</strong> <span>| ' +
+            safeHTML(course.category || "Cours d'option") + '</span>';
+        button.addEventListener("click", () => selectTargetCourse(course.id));
+        container.appendChild(button);
     });
-
-    document.getElementById('modal-select-target-course').classList.remove('hidden');
+    document.getElementById("modal-select-target-course").classList.remove("hidden");
 }
 
 function closeTargetCourseModal() {
-    document.getElementById('modal-select-target-course').classList.add('hidden');
+    document.getElementById("modal-select-target-course").classList.add("hidden");
 }
 
 function selectTargetCourse(targetCourseId) {
-    const ptsInput = document.getElementById(`pts_deduct_${currentSourceCourseId}`);
-    const pointsToDeduct = parseFloat(ptsInput.value) || 0;
+    const student = appState.students.find(item => String(item.id) === String(activeStudentId));
+    if (!student || !currentSourceCourseId) return alert("Sélectionnez d'abord un élève et un cours source.");
+    const input = document.getElementById("pts_deduct_" + currentSourceCourseId);
+    const pointsToDeduct = Number(input && input.value);
+    const sourceCourse = getDeliberationCourse(currentSourceCourseId, student.classId);
+    const targetCourse = getDeliberationCourse(targetCourseId, student.classId);
+    const sourceGrade = appState.grades && appState.grades[student.id + "_" + currentSourceCourseId];
+    const sourceEx2 = parseDeliberationScore(sourceGrade && sourceGrade.ex2);
 
-    if (pointsToDeduct <= 0) {
-        alert("Veuillez indiquer un nombre de points à retirer valide.");
-        return;
+    if (!sourceCourse || !targetCourse || sourceCourse.id === targetCourse.id) {
+        return alert("Le cours de destination choisi n'est pas valide.");
     }
-
+    if (!Number.isFinite(pointsToDeduct) || pointsToDeduct <= 0 || sourceEx2 === null || pointsToDeduct > sourceEx2) {
+        return alert("Le nombre de points à retirer doit être positif et ne pas dépasser EX2.");
+    }
     pendingTransfers[currentSourceCourseId] = {
         targetCourseId: targetCourseId,
         points: pointsToDeduct
     };
-
     closeTargetCourseModal();
-    alert(`Points (${pointsToDeduct}) prêts à être transférés.`);
+    renderDeliberationView(student.id);
+    alert("Transfert préparé. Vérifiez tous les transferts avant de les valider.");
+}
+
+function resetDeliberation() {
+    pendingTransfers = {};
+    currentSourceCourseId = null;
+    document.querySelectorAll("#delibTableBody input[id^='pts_deduct_']").forEach(input => { input.value = "0"; });
+    if (activeStudentId) renderDeliberationView(activeStudentId);
+    alert("Les transferts non validés ont été annulés. Aucune note n'a été modifiée.");
+}
+
+function applyDeliberationAll() {
+    const validation = validatePendingDeliberationTransfers(activeStudentId);
+    if (!validation.ok) {
+        alert(validation.message);
+        return;
+    }
+    alert(validation.entries.length + " transfert(s) vérifié(s). Aucune note n'a encore été modifiée. Cliquez sur « Valider » pour enregistrer.");
 }
 
 function applyAutoDeliberation() {
-    // Mode automatique : retire les points des cours secondaires/non-option pour combler les échecs légers (< 50%)
-    const student = appState.students.find(s => s.id === activeStudentId);
-    const classCourses = appState.courses.filter(c => c.classId === student.classId);
-    
-    // Logique automatique pour équilibrer les notes
-    alert("⚡ Délibération automatique calculée sur les cours éligibles !");
+    alert("La délibération automatique n'est pas activée. Utilisez les transferts manuels après avoir vérifié les points EX2.");
 }
 
 function saveDeliberation() {
-    // Applique définitivement les transferts sur les notes de fin d'année (EX2/S2)
-    Object.keys(pendingTransfers).forEach(srcId => {
-        const transfer = pendingTransfers[srcId];
-        const srcKey = `${activeStudentId}_${srcId}`;
-        const tgtKey = `${activeStudentId}_${transfer.targetCourseId}`;
+    const validation = validatePendingDeliberationTransfers(activeStudentId);
+    if (!validation.ok) {
+        alert(validation.message);
+        return;
+    }
 
-        if (appState.grades[srcKey]) {
-            appState.grades[srcKey].ex2 = Math.max(0, (appState.grades[srcKey].ex2 || 0) - transfer.points);
-        }
-        if (appState.grades[tgtKey]) {
-            appState.grades[tgtKey].ex2 = (appState.grades[tgtKey].ex2 || 0) + transfer.points;
-        }
+    const previousGrades = appState.grades;
+    const stagedGrades = JSON.parse(JSON.stringify(appState.grades || {}));
+    validation.entries.forEach(([sourceId, transfer]) => {
+        const sourceKey = activeStudentId + "_" + sourceId;
+        const targetKey = activeStudentId + "_" + transfer.targetCourseId;
+        if (!stagedGrades[sourceKey]) stagedGrades[sourceKey] = {};
+        if (!stagedGrades[targetKey]) stagedGrades[targetKey] = {};
+        const sourceValue = parseDeliberationScore(stagedGrades[sourceKey].ex2);
+        const targetValue = parseDeliberationScore(stagedGrades[targetKey].ex2);
+        stagedGrades[sourceKey].ex2 = sourceValue - Number(transfer.points);
+        stagedGrades[targetKey].ex2 = (targetValue === null ? 0 : targetValue) + Number(transfer.points);
     });
 
-    saveState();
+    appState.grades = stagedGrades;
+    if (!saveState()) {
+        appState.grades = previousGrades;
+        alert("Les notes n'ont pas été modifiées : PrimeInk n'a pas pu sauvegarder les données sur cet appareil.");
+        return;
+    }
     pendingTransfers = {};
     renderDeliberationView(activeStudentId);
     alert("✅ Délibération enregistrée avec succès !");
