@@ -1756,34 +1756,103 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
     if declared_class and isinstance(conduct_payload.get(declared_class), dict):
         conduct_report = store_conduct(db, teacher, declared_class, students_dict.get(declared_class, []), conduct_payload[declared_class])
 
-    # --- 1. Indexation & Validation des Élèves ---
-    student_lookup = {}  # { student_id: {"name": ..., "class": ...} }
-    for class_name, st_list in students_dict.items():
-        for st in st_list:
-            st_id = st.get("id")
-            st_name = st.get("name", "").strip()
-            if st_id and st_name:
-                student_lookup[st_id] = {"name": st_name, "class": class_name}
+    # --- 1. Catalogue scolaire officiel et périmètre du professeur ---
+    verified_school_id = teacher.school_id if teacher_has_verified_school_access(teacher) else None
+    official_classes_by_name = {}
+    assigned_courses_by_class = {}
+    official_course_max = {}
+    teacher_allowed_classes = set()
 
-    # --- 2. Indexation & Validation des Évaluations ---
-    eval_lookup = {}  # { eval_id: {"name": ..., "max": ..., "course": ..., "period": ..., "class": ...} }
+    if verified_school_id:
+        official_classes = db.query(ClasseInformation).filter(
+            ClasseInformation.school_id == verified_school_id
+        ).all()
+        official_classes_by_name = {
+            normalize_name(item.class_name): item for item in official_classes
+        }
+        for official_class in official_classes:
+            if teacher_is_titulaire(teacher, official_class):
+                teacher_allowed_classes.add(str(official_class.class_name))
+        official_courses = db.query(CourseInformation).filter(
+            CourseInformation.school_id == verified_school_id
+        ).all()
+        classes_by_id = {str(item.id): item for item in official_classes}
+        for course in official_courses:
+            if not teacher_matches_catalog_name(teacher, course.titulaire_name):
+                continue
+            official_class = classes_by_id.get(str(course.class_id))
+            if not official_class:
+                continue
+            class_name = str(official_class.class_name)
+            teacher_allowed_classes.add(class_name)
+            assigned_courses_by_class.setdefault(class_name, set()).add(str(course.course_name))
+            official_course_max[(class_name, str(course.course_name))] = float(course.max_per or 40)
+
+    # --- 2. Indexation des élèves réellement présents dans le catalogue autorisé ---
+    student_lookup = {}  # { ClassInk student_id: {name, class, official_student_id} }
+    for class_name, st_list in students_dict.items():
+        if verified_school_id:
+            official_class = official_classes_by_name.get(normalize_name(class_name))
+            if not official_class or class_name not in teacher_allowed_classes:
+                continue
+        else:
+            official_class = None
+        for st in (st_list or []):
+            if not isinstance(st, dict):
+                continue
+            st_id = str(st.get("id") or "").strip()
+            st_name = str(st.get("name") or "").strip()
+            if not st_id or not st_name:
+                continue
+            official_student_id = None
+            if verified_school_id:
+                official_student_id = resolve_student(
+                    db, verified_school_id, official_class, teacher.email, st_id, st_name
+                )
+                if not official_student_id:
+                    continue
+            student_lookup[st_id] = {
+                "name": st_name, "class": str(official_class.class_name) if official_class else class_name,
+                "official_student_id": official_student_id,
+            }
+
+    # --- 3. Indexation des évaluations, limitée aux cours attribués ---
+    eval_lookup = {}  # { eval_id: {name, max, course, period, class} }
     for class_name, periods in evaluations_dict.items():
-        for period_key, ev_list in periods.items():
-            for ev in ev_list:
-                ev_id = ev.get("id")
-                ev_course = ev.get("course", "").strip()
+        if verified_school_id and class_name not in teacher_allowed_classes:
+            continue
+        for period_key, ev_list in (periods or {}).items():
+            if period_key not in PERIODS:
+                continue
+            for ev in (ev_list or []):
+                if not isinstance(ev, dict):
+                    continue
+                ev_id = str(ev.get("id") or "").strip()
+                ev_course = str(ev.get("course") or "").strip()
                 ev_max = ev.get("max")
-                
-                # Vérification : le cours doit exister dans la classe
-                valid_courses = courses_dict.get(class_name, [])
-                if ev_id and ev_course in valid_courses and isinstance(ev_max, (int, float)) and ev_max > 0:
-                    eval_lookup[ev_id] = {
-                        "name": ev.get("name", "Évaluation"),
-                        "max": float(ev_max),
-                        "course": ev_course,
-                        "period": period_key,
-                        "class": class_name
-                    }
+                if verified_school_id:
+                    if ev_course not in assigned_courses_by_class.get(class_name, set()):
+                        continue
+                    catalog_max = official_course_max.get((class_name, ev_course))
+                    if catalog_max is None:
+                        continue
+                else:
+                    valid_courses = courses_dict.get(class_name, [])
+                    if ev_course not in valid_courses:
+                        continue
+                    catalog_max = None
+
+                if not ev_id or not isinstance(ev_max, (int, float)) or isinstance(ev_max, bool) or ev_max <= 0:
+                    continue
+                if catalog_max is not None and float(ev_max) > catalog_max:
+                    continue
+                eval_lookup[ev_id] = {
+                    "name": str(ev.get("name") or "Évaluation")[:160],
+                    "max": float(ev_max),
+                    "course": ev_course,
+                    "period": period_key,
+                    "class": class_name,
+                }
 
     # --- 3. Traitement & Validation des Notes (Grades) ---
     updates_count = 0
