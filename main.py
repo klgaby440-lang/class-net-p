@@ -2167,6 +2167,18 @@ def validate_school_class_catalog(payload: dict, expected_school_id: str) -> dic
     return clean_payload
 
 
+def teacher_matches_school_roster(teacher, roster_entry: dict) -> bool:
+    """Un compte n'est rattaché que par son code ClassInk officiel ET son nom enregistré."""
+    unique_id = clean_text(roster_entry.get("uniqueId"), 100)
+    registered_name = normalize_name(roster_entry.get("name") or "")
+    return bool(
+        unique_id
+        and normalize_name(getattr(teacher, "teacher_code", "") or "") == normalize_name(unique_id)
+        and registered_name
+        and normalize_name(getattr(teacher, "full_name", "") or "") == registered_name
+    )
+
+
 def store_school_class_catalog(db: Session, school: SchoolInformation, catalog: dict) -> dict:
     """Met à jour les classes, élèves et cours sans toucher aux notes ni aux données locales des enseignants."""
     school_data = catalog["school"]
@@ -2245,9 +2257,11 @@ def store_school_class_catalog(db: Session, school: SchoolInformation, catalog: 
         if not item["uniqueId"]:
             continue
         teacher = db.query(Teacher).filter(Teacher.teacher_code == item["uniqueId"]).first()
-        if not teacher or teacher.school_id not in (None, school.school_id):
-            continue
-        if normalize_name(teacher.full_name or "") != normalize_name(item["name"]):
+        if (
+            not teacher
+            or teacher.school_id not in (None, school.school_id)
+            or not teacher_matches_school_roster(teacher, item)
+        ):
             continue
         teacher.school_id = school.school_id
         teacher.school_name = school.name_school
