@@ -2405,36 +2405,14 @@ def teacher_matches_catalog_name(teacher, value: str) -> bool:
 
 
 def compose_teacher_classroom_context(teacher, school, classes, students, courses) -> dict:
-    """
-    Construit uniquement le périmètre pédagogique du compte :
-    - classes où le professeur est titulaire ;
-    - classes où au moins un cours lui est attribué dans PrimeInk.
-    La liste des élèves est fournie pour ces classes, mais seuls les cours attribués
-    à ce professeur sont exposés. Le droit de conduite reste vérifié séparément.
-    """
-    classes_by_id = {str(item.id): item for item in classes}
-    titular_classes = [item for item in classes if teacher_is_titulaire(teacher, item)]
-    titular_class_ids = {str(item.id) for item in titular_classes}
-    assigned_courses = [
-        course for course in courses
-        if str(course.class_id or "") in classes_by_id
-        and teacher_matches_catalog_name(teacher, course.titulaire_name)
-    ]
-    assigned_course_class_ids = {str(course.class_id) for course in assigned_courses}
-    visible_classes = [
-        item for item in classes
-        if str(item.id) in titular_class_ids or str(item.id) in assigned_course_class_ids
-    ]
-    visible_ids = {str(item.id) for item in visible_classes}
-    class_names = {str(item.id): str(item.class_name) for item in visible_classes}
-
-    students_by_class = {item.class_name: [] for item in visible_classes}
-    courses_by_class = {item.class_name: [] for item in visible_classes}
-    course_max = {}
-    course_details_by_class = {item.class_name: [] for item in visible_classes}
-
+    """Construit le catalogue de l'école ; le statut de titulaire reste propre à chaque classe."""
+    classes_by_id = {str(item.id): str(item.class_name) for item in classes}
+    students_by_class, courses_by_class, course_max = {}, {}, {}
+    for item in classes:
+        students_by_class.setdefault(item.class_name, [])
+        courses_by_class.setdefault(item.class_name, [])
     for item in students:
-        class_name = class_names.get(str(item.class_id))
+        class_name = classes_by_id.get(str(item.class_id))
         if not class_name:
             continue
         full_name = " ".join(part for part in (
@@ -2445,41 +2423,36 @@ def compose_teacher_classroom_context(teacher, school, classes, students, course
             "postname": item.student_post_name or "", "prename": item.student_pre_name or "",
             "sexe": item.student_sexe or "", "classId": item.class_id,
         })
-
-    for item in assigned_courses:
-        class_name = class_names.get(str(item.class_id))
+    for item in courses:
+        class_name = classes_by_id.get(str(item.class_id))
         if not class_name:
             continue
         values = courses_by_class.setdefault(class_name, [])
         if item.course_name not in values:
             values.append(item.course_name)
-        maximum = float(item.max_per or 40)
-        course_max[f"{class_name}_{item.course_name}"] = maximum
-        course_details_by_class.setdefault(class_name, []).append({
-            "id": item.id,
-            "name": item.course_name,
-            "maxPer": maximum,
-            "category": item.category or "",
-            "subCategory": item.sub_category or "",
-            "titulaire": item.titulaire_name or "",
-        })
+        course_max[f"{class_name}_{item.course_name}"] = float(item.max_per or 40)
 
-    titulaire_classes = [item.class_name for item in titular_classes]
+    # L'enseignant autorisé reçoit le catalogue des classes de son école.
+    # En revanche, le droit de modifier la conduite n'est accordé que dans ses classes
+    # de titulariat officielles, vérifiées par teacher_is_titulaire et store_conduct.
+    titulaire_classes = [
+        item.class_name for item in classes
+        if teacher_is_titulaire(teacher, item)
+    ]
     classroom_rows = []
-    for item in visible_classes:
+    for item in classes:
         classroom_rows.append({
             "id": item.id,
             "name": item.class_name,
             "titulaire": item.titulaire_name or "",
-            "isTitulaire": str(item.id) in titular_class_ids,
+            "isTitulaire": teacher_is_titulaire(teacher, item),
             "students": students_by_class.get(item.class_name, []),
-            "courses": course_details_by_class.get(item.class_name, []),
+            "courses": courses_by_class.get(item.class_name, []),
         })
-
     return {
         "schoolId": school.school_id if school else "",
         "schoolName": school.name_school if school else (teacher.school_name or ""),
-        "classes": [item.class_name for item in visible_classes],
+        "classes": [item.class_name for item in classes],
         "students": students_by_class,
         "courses": courses_by_class,
         "courseMax": course_max,
@@ -2487,11 +2460,11 @@ def compose_teacher_classroom_context(teacher, school, classes, students, course
         "classrooms": classroom_rows,
     }
 
+
 def apply_teacher_classroom_context(state: dict, context: dict) -> dict:
-    """Applique le périmètre scolaire autorisé sans réintroduire de classes locales étrangères."""
+    """Fusionne le catalogue autorisé de l'école avec l'espace local sans effacer les notes."""
     state = dict(state or {})
-    # Un enseignant indépendant/non encore autorisé garde son espace local, mais
-    # aucune conduite n'est considérée comme vérifiée tant que l'école ne l'a pas rattaché.
+    # Un enseignant indépendant/non autorisé garde son espace local, sans titulaire déclaré.
     if not context.get("schoolId"):
         user = dict(state.get("user") or {})
         user["schoolId"] = ""
@@ -2500,27 +2473,30 @@ def apply_teacher_classroom_context(state: dict, context: dict) -> dict:
         state["user"] = user
         state["titulaireClasses"] = []
         state["classrooms"] = []
+        state["schoolId"] = ""
         return state
-    allowed_classes = [str(value) for value in (context.get("classes") or [])]
-    allowed_set = set(allowed_classes)
-    state["classes"] = allowed_classes
 
-    # Les classes hors périmètre ne restent pas visibles dans le profil synchronisé.
+    state["classes"] = list(dict.fromkeys(
+        [str(value) for value in (state.get("classes") or [])] +
+        [str(value) for value in (context.get("classes") or [])]
+    ))
     for key in ("courses", "students"):
-        source = context.get(key) if isinstance(context.get(key), dict) else {}
-        state[key] = {
-            class_name: list(source.get(class_name) or [])
-            for class_name in allowed_classes
-        }
-
-    state["courseMax"] = dict(context.get("courseMax") or {})
-    source_evaluations = state.get("evaluations") if isinstance(state.get("evaluations"), dict) else {}
-    state["evaluations"] = {
-        class_name: source_evaluations.get(
-            class_name, {"P1": [], "P2": [], "EX1": [], "P3": [], "P4": [], "EX2": []}
-        )
-        for class_name in allowed_classes
-    }
+        merged = dict(state.get(key) or {})
+        for class_name, rows in (context.get(key) or {}).items():
+            existing = list(merged.get(class_name) or [])
+            seen = {str((item or {}).get("id")) if isinstance(item, dict) else str(item) for item in existing}
+            for item in rows:
+                item_id = str(item.get("id")) if isinstance(item, dict) else str(item)
+                if item_id not in seen:
+                    existing.append(item)
+                    seen.add(item_id)
+            merged[class_name] = existing
+        state[key] = merged
+    state["courseMax"] = {**(context.get("courseMax") or {}), **(state.get("courseMax") or {})}
+    evaluations = dict(state.get("evaluations") or {})
+    for class_name in context.get("classes") or []:
+        evaluations.setdefault(class_name, {"P1": [], "P2": [], "EX1": [], "P3": [], "P4": [], "EX2": []})
+    state["evaluations"] = evaluations
     state["titulaireClasses"] = list(context.get("titulaireClasses") or [])
     state["classrooms"] = list(context.get("classrooms") or [])
     state["schoolId"] = context.get("schoolId") or ""
@@ -2533,7 +2509,6 @@ def apply_teacher_classroom_context(state: dict, context: dict) -> dict:
     user["titulaireClasses"] = list(context.get("titulaireClasses") or [])
     state["user"] = user
     return state
-
 
 def build_teacher_classroom_context(db: Session, teacher) -> dict:
     if not teacher_has_verified_school_access(teacher):
