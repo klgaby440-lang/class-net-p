@@ -145,7 +145,7 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn(r'.replace(/[\u0300-\u036f]/g, "")', source)
         self.assertNotIn(r'.replace(/[\\u0300-\\u036f]/g', source)
         self.assertIn("function primeInkNormalizeStudentRow(row)", source)
-        self.assertIn("postname = parts.slice(1, -1).join(\" \"),", source)
+        self.assertIn('postname = parts.slice(1, -1).join(" ");', source)
         self.assertIn("previewStudents(classId, rows)", source)
         self.assertIn("finalPreview.duplicates", source)
 
