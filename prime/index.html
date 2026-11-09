@@ -2788,7 +2788,7 @@ window.alert = function(message) { showCustomAlert(message); };
                     const student = appState.students.find(s => String(s.id ?? '') === String(studentId ?? ''));
                     const area = document.getElementById('officialBulletinArea');
                     if (!student || !area) return;
-                    const cls = appState.classes.find(c => c.id === student.classId);
+                    const cls = appState.classes.find(c => String(c.id ?? '') === String(student.classId ?? ''));
                     bpDisplayedClassId = student.classId;
                     bpRendering = true;
                     area.innerHTML = bpBuildPage(student, { editable: true });
@@ -2807,9 +2807,9 @@ window.alert = function(message) { showCustomAlert(message); };
                 // Bulletin vierge d'une classe sans élève : il montre le modèle et les cours de CETTE classe
                 window.renderBlankBulletin = function(classId) {
                     const area = document.getElementById('officialBulletinArea');
-                    const cls = appState.classes.find(c => c.id === classId);
+                    const cls = appState.classes.find(c => String(c.id ?? '') === String(classId ?? ''));
                     if (!area || !cls) return;
-                    bpDisplayedClassId = classId;
+                    bpDisplayedClassId = cls.id;
                     bpRendering = true;
                     area.innerHTML = bpBuildPage(bpBlankStudent(classId), { editable: false });
                     bpRendering = false;
@@ -2829,7 +2829,7 @@ window.alert = function(message) { showCustomAlert(message); };
                 // ---- Impression (A4 / A3, orientation selon le modèle) ----
                 function bpPaper() { return appState.printSettings && appState.printSettings.paper === 'A3' ? 'A3' : 'A4'; }
                 function bpOrientationOf(classId) {
-                    const cls = appState.classes.find(c => c.id === classId);
+                    const cls = appState.classes.find(c => String(c.id ?? '') === String(classId ?? ''));
                     return BULLETIN_MODELS[bpClassModel(cls)].orientation;
                 }
                 function bpSheetDims(orientation) {
@@ -5269,14 +5269,14 @@ function updateScheduleResultTables(joursCount, heuresCount) {
             if (!student) return alert("Cet élève n'existe plus dans cette classe.");
             const confirmed = await showCustomConfirm(`Supprimer l’élève « ${student.name || ''} ${student.postname || ''} ${student.prename || ''} » ? Ses notes et données de conduite associées seront aussi supprimées.`, 'Supprimer un élève');
             if (!confirmed) return;
-            const studentCourses = appState.courses.filter(crs => crs.classId === classId);
+            const studentCourses = appState.courses.filter(crs => String(crs.classId ?? '') === String(classId ?? ''));
             studentCourses.forEach(crs => delete appState.grades[`${studentId}_${crs.id}`]);
             appState.students = appState.students.filter(st => String(st.id ?? '') !== String(studentId ?? ''));
             if (appState.bulletinPlaces) delete appState.bulletinPlaces[studentId];
             if (appState.behaviour) delete appState.behaviour[studentId];
             if (appState.repechage) Object.keys(appState.repechage).forEach(k => { if (k.startsWith(`${studentId}_`)) delete appState.repechage[k]; });
             if (appState.tools?.presences?.students) appState.tools.presences.students = appState.tools.presences.students.filter(p => p.studentId !== studentId);
-            if (activeStudentId === studentId) {
+            if (String(activeStudentId ?? '') === String(studentId ?? '')) {
                 const replacement = getSortedStudentsByClass(classId)[0];
                 activeStudentId = replacement ? replacement.id : '';
             }
