@@ -2043,7 +2043,9 @@ def teacher_is_titulaire(teacher, classe) -> bool:
     if not titulaire:
         return False
     teacher_name = normalize_name(teacher.full_name or "")
-    if teacher_name and teacher_name_identity_key(teacher.full_name or "") == teacher_name_identity_key(titulaire_raw):
+    teacher_key = teacher_name_identity_key(teacher.full_name or "")
+    titular_key = teacher_name_identity_key(titulaire_raw)
+    if teacher_name and teacher_key and teacher_key == titular_key:
         return True
     candidates = {
         normalize_name(teacher.teacher_code or ""),
