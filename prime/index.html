@@ -1361,6 +1361,8 @@ body {
                         <button class="btn-primary" onclick="renderinterface('ajouter_classe')">AJOUTER UNE CLASSE</button>
                         <button class="btn-primary" style="background-color: #0284c7;" onclick="fetchServerData()">Récupérer les données sur Internet</button>
                         <button class="btn-primary" style="background-color: #16a34a;" onclick="saveDatabaseOnline()">Save data base OnLine</button>
+                        <button class="btn-primary" style="background-color:#7c3aed;" id="prepareClassInformationBtn" onclick="prepareClassInformation()">Préparer les informations des classes</button>
+                        <small id="prepareClassInformationStatus" style="font-size:0.78rem;color:var(--text-secondary);" aria-live="polite">Publie les classes, élèves, cours et titulaires pour les comptes ClassInk de cette école.</small>
                         <button class="btn-secondary" onclick="loadSchoolData()">Charger les données de l'école</button>
                     </div>
                 </div>
@@ -5635,6 +5637,102 @@ function updateScheduleResultTables(joursCount, heuresCount) {
                 }
             } catch (err) {
                 alert("❌ Erreur lors de l'envoi vers le serveur : " + err.message);
+            }
+        }
+
+        // Publie uniquement le catalogue scolaire nécessaire au démarrage des comptes ClassInk.
+        // Les notes et les réglages locaux ne sont ni envoyés ni remplacés par cette action.
+        async function prepareClassInformation() {
+            const btn = document.getElementById('prepareClassInformationBtn');
+            const status = document.getElementById('prepareClassInformationStatus');
+            const headers = cloudAuthHeaders();
+            if (!headers.Authorization) {
+                const message = "Connectez d'abord PrimeInk au compte de l'école avec « Charger les données de l'école ».";
+                if (status) status.textContent = message;
+                await showCustomAlert(message, "Connexion requise");
+                return;
+            }
+            const schoolId = String((appState.school && appState.school.id) || '').trim();
+            if (!schoolId) {
+                await showCustomAlert("L'identifiant de l'école manque. Chargez d'abord les données de l'école.", "École non configurée");
+                return;
+            }
+            if (!Array.isArray(appState.classes) || !appState.classes.length) {
+                await showCustomAlert("Aucune classe à publier. Créez ou chargez d'abord les classes de l'école.");
+                return;
+            }
+            if (!saveState()) {
+                await showCustomAlert("La base locale n'a pas pu être sauvegardée. Aucune donnée n'a été envoyée.");
+                return;
+            }
+
+            const payload = {
+                school: {
+                    id: schoolId,
+                    name: appState.school.name || '',
+                    code: appState.school.code || '',
+                    city: appState.school.city || '',
+                    commune: appState.school.commune || ''
+                },
+                classes: (appState.classes || []).map(cls => ({
+                    id: cls.id,
+                    name: cls.name,
+                    titulaire: cls.titulaire || '',
+                    categories: Array.isArray(cls.categories) ? cls.categories : [],
+                    bulletinModel: cls.bulletinModel || '',
+                    bulletinTitle: cls.bulletinTitle || '',
+                    signatureSource: cls.signatureSource || ''
+                })),
+                students: (appState.students || []).map(student => ({
+                    id: student.id,
+                    classId: student.classId,
+                    name: student.name || '',
+                    postname: student.postname || '',
+                    prename: student.prename || '',
+                    sexe: student.sexe || '',
+                    bornDate: student.bornDate || '',
+                    bornWhere: student.bornWhere || '',
+                    permi: student.permi || ''
+                })),
+                courses: (appState.courses || []).map(course => ({
+                    id: course.id,
+                    classId: course.classId,
+                    name: course.name,
+                    maxPer: course.maxPer,
+                    category: course.category || 'Général',
+                    titulaire: course.titulaire || '',
+                    subCategory: course.subCategory || ''
+                })),
+                teachers: (appState.teachers || []).map(teacher => ({
+                    uniqueId: teacher.uniqueId || '',
+                    name: teacher.name || '',
+                    subject: teacher.subject || '',
+                    status: teacher.status || 'Actif'
+                }))
+            };
+
+            if (btn) { btn.disabled = true; btn.textContent = "Publication en cours…"; }
+            if (status) status.textContent = "Envoi des informations scolaires sécurisées…";
+            try {
+                const response = await window.primeInkFetchWithTimeout(
+                    API_BASE_URL + '/api/primenet/prepare-classes',
+                    { method: 'POST', headers, body: JSON.stringify(payload) },
+                    30000
+                );
+                let result = {};
+                try { result = await response.json(); } catch (e) { /* réponse invalide */ }
+                if (!response.ok || result.status !== true) {
+                    throw new Error(result.detail || result.message || ("Erreur serveur HTTP " + response.status));
+                }
+                const message = result.message || "Informations des classes publiées.";
+                if (status) status.textContent = "✓ " + message;
+                await showCustomAlert("✅ " + message, "Informations des classes prêtes");
+            } catch (error) {
+                const message = error && error.message ? error.message : "Erreur réseau inconnue.";
+                if (status) status.textContent = "Échec : " + message;
+                await showCustomAlert("Impossible de publier les informations des classes : " + message, "Publication impossible");
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = "Préparer les informations des classes"; }
             }
         }
 
