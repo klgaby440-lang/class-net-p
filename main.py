@@ -1125,22 +1125,6 @@ async def init_teacher_register(data: TeacherInitSchema, background_tasks: Backg
         background_tasks.add_task(send_sms_via_twilio, identifier, sms_text)
         return {"status": True, "message": f"Code envoyé par SMS au {identifier}."}
 
-def find_registered_school_for_teacher(db, school_name: str):
-    """Associe prudemment un compte enseignant à une école déjà enregistrée."""
-    requested = normalize_name(school_name or "")
-    if not requested:
-        return None
-    matches = []
-    for school in db.query(SchoolInformation).all():
-        candidate = normalize_name(school.name_school or "")
-        if not candidate:
-            continue
-        # Tolère un complément de localisation, mais n'accepte qu'une correspondance unique.
-        if candidate == requested or candidate.startswith(requested + " ") or requested.startswith(candidate + " "):
-            matches.append(school)
-    return matches[0] if len(matches) == 1 else None
-
-
 @app.post("/api/auth/teacher/verify-register")
 def verify_teacher_register(data: OTPVerifySchema, db: Session = Depends(get_db)):
     # 1. Extraction et nettoyage de l'identifiant
@@ -1191,14 +1175,14 @@ def verify_teacher_register(data: OTPVerifySchema, db: Session = Depends(get_db)
         raise HTTPException(status_code=400, detail="Adresse e-mail invalide.")
     phone_val = raw_identifier if not is_email(raw_identifier) else t_data.phone_number
 
-    # 4. Association automatique à l'école si son nom correspond à une seule école connue.
-    linked_school = find_registered_school_for_teacher(db, t_data.school_name)
+    # 4. Création du compte enseignant.
+    # Le nom de l'école saisi dans le formulaire n'accorde aucun accès : l'établissement
+    # doit ajouter le teacher_code du compte dans sa liste officielle PrimeInk.
     new_teacher = Teacher(
         email=email_val,
         phone_number=phone_val,
         full_name=t_data.full_name,
-        school_name=linked_school.name_school if linked_school else t_data.school_name,
-        school_id=linked_school.school_id if linked_school else None,
+        school_name=t_data.school_name,
         password=hash_password(t_data.password),
         age=t_data.age,
         teacher_code=f"prof_{generate_otp()}"
@@ -1209,11 +1193,8 @@ def verify_teacher_register(data: OTPVerifySchema, db: Session = Depends(get_db)
     db.commit()
 
     message = "Compte enseignant créé avec succès !"
-    if linked_school:
-        message += " Votre compte est associé à " + linked_school.name_school + " ; les classes disponibles seront chargées à la prochaine connexion."
-    else:
-        message += " L'école n'a pas été reconnue automatiquement : vérifiez le nom exact de l'établissement lors de l'inscription."
-    return {"status": True, "message": message}
+    message += " Pour recevoir les classes de votre école, communiquez votre identifiant ClassInk à l'administration. Elle devra l'ajouter dans PrimeInk puis cliquer sur « Préparer les informations des classes »."
+    return {"status": True, "message": message, "teacher_code": new_teacher.teacher_code}
 
 @app.post("/api/auth/school/register")
 def register_school(data: SchoolRegisterSchema, db: Session = Depends(get_db), _admin: bool = Depends(require_admin)):
@@ -2259,36 +2240,22 @@ def store_school_class_catalog(db: Session, school: SchoolInformation, catalog: 
 
     linked_teachers = set()
     for item in catalog["teachers"]:
-        teacher = None
-        if item["uniqueId"]:
-            teacher = db.query(Teacher).filter(Teacher.teacher_code == item["uniqueId"]).first()
-        if teacher and teacher.school_id not in (None, school.school_id):
-            teacher = None
-        if teacher and normalize_name(teacher.full_name or "") != normalize_name(item["name"]):
-            teacher = None
-        if not teacher:
-            for candidate in db.query(Teacher).filter(Teacher.school_id == school.school_id).all():
-                if normalize_name(candidate.full_name or "") == normalize_name(item["name"]):
-                    teacher = candidate
-                    break
-        if teacher:
-            teacher.school_id = school.school_id
-            if item["uniqueId"] and not teacher.teacher_code:
-                teacher.teacher_code = item["uniqueId"]
-            if item["subject"]:
-                teacher.subject = item["subject"]
-            if item["status"]:
-                teacher.status = item["status"]
-            linked_teachers.add(teacher.email)
-
-    # Associe aussi les anciens comptes dont le nom d'école contient une localisation,
-    # mais seulement si ce nom mène à une école unique.
-    for teacher in db.query(Teacher).filter(Teacher.school_id.is_(None)).all():
-        matched_school = find_registered_school_for_teacher(db, teacher.school_name or "")
-        if matched_school and matched_school.school_id == school.school_id:
-            teacher.school_id = school.school_id
-            teacher.school_name = school.name_school
-            linked_teachers.add(teacher.email)
+        # Le code doit être celui du compte authentifié, communiqué à l'administration.
+        # Une correspondance de nom seule n'est jamais suffisante pour ouvrir l'accès aux élèves.
+        if not item["uniqueId"]:
+            continue
+        teacher = db.query(Teacher).filter(Teacher.teacher_code == item["uniqueId"]).first()
+        if not teacher or teacher.school_id not in (None, school.school_id):
+            continue
+        if normalize_name(teacher.full_name or "") != normalize_name(item["name"]):
+            continue
+        teacher.school_id = school.school_id
+        teacher.school_name = school.name_school
+        if item["subject"]:
+            teacher.subject = item["subject"]
+        if item["status"]:
+            teacher.status = item["status"]
+        linked_teachers.add(teacher.email)
 
     db.commit()
     return {
