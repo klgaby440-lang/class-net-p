@@ -906,37 +906,37 @@
             
             <div class="form-group">
                 <label>NOM COMPLET DE L'ENSEIGNANT</label>
-                <input type="text" id="setting-user-name">
+                <input type="text" id="edit-profile-user-name">
             </div>
 
             <div class="form-group">
                 <label>ADRESSE E-MAIL DE L'ENSEIGNANT (IDENTIFIANT UNIQUE)</label>
-                <input type="email" id="setting-user-email">
+                <input type="email" id="edit-profile-user-email">
             </div>
 
             <div class="form-group">
                 <label>ÉTABLISSEMENT / ÉCOLE</label>
-                <input type="text" id="setting-school-id">
+                <input type="text" id="edit-profile-school-id">
             </div>
 
             <div class="form-group">
                 <label>NOUVEAU MOT DE PASSE (Optionnel)</label>
-                <input type="password" id="setting-user-pass" placeholder="••••••••">
+                <input type="password" id="edit-profile-user-pass" placeholder="••••••••">
             </div>
 
             <div class="form-group">
                 <label>NUMÉRO DE TÉLÉPHONE</label>
-                <input type="tel" id="setting-user-phone">
+                <input type="tel" id="edit-profile-user-phone">
             </div>
 
             <div class="form-group">
                 <label>ÂGE</label>
-                <input type="number" id="setting-user-age">
+                <input type="number" id="edit-profile-user-age">
             </div>
 
             <div class="form-group">
                 <label>ID DE L'ÉCOLE (Optionnel)</label>
-                <input type="text" id="setting-school-code">
+                <input type="text" id="edit-profile-school-code">
             </div>
 
             <div style="display: flex; gap: 10px; margin-top: 15px;">
@@ -2484,34 +2484,6 @@ const CONFIG = {
 /**
  * Effectue une requête POST avec gestion du timeout et basculement automatique (fallback)
  */
-async function postDataWithFallback(endpoint, payload) {
-    const urls = [CONFIG.PRIMARY_URL, CONFIG.FALLBACK_URL];
-
-    for (const baseUrl of urls) {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), CONFIG.TIMEOUT_MS);
-
-        try {
-            const response = await fetch(`${baseUrl}${endpoint}`, {
-                method: 'POST',
-                headers: cloudAuthHeaders(),
-                body: JSON.stringify(withoutSecrets(payload)),
-                signal: controller.signal
-            });
-
-            clearTimeout(timeoutId);
-
-            if (response.ok) {
-                return { success: true, url: baseUrl, response };
-            }
-        } catch (error) {
-            clearTimeout(timeoutId);
-            // serveur local injoignable : on essaie l'adresse suivante
-        }
-    }
-
-    return { success: false };
-}
 
 /**
  * Transmet l'intégralité de la base de données locale vers le serveur Intranet
@@ -3510,57 +3482,6 @@ function updateActiveClassCourses() {
     alert("✅ La liste des cours a été mise à jour.");
 }
 
-function showCustomPrompt(message, defaultValue = '') {
-    return new Promise((resolve) => {
-        const modal = document.getElementById('custom-prompt-modal');
-        const label = document.getElementById('custom-prompt-label');
-        const input = document.getElementById('custom-prompt-input');
-        const btnConfirm = document.getElementById('custom-prompt-confirm');
-        const btnCancel = document.getElementById('custom-prompt-cancel');
-
-        label.textContent = message;
-        input.value = defaultValue;
-        modal.classList.add('active');
-        input.focus();
-
-        const cleanup = () => {
-            modal.classList.remove('active');
-            btnConfirm.onclick = null;
-            btnCancel.onclick = null;
-        };
-
-        btnConfirm.onclick = () => {
-            const val = input.value.trim();
-            cleanup();
-            resolve(val);
-        };
-
-        btnCancel.onclick = () => {
-            cleanup();
-            resolve(null);
-        };
-    });
-}
-
-function showCustomAlert(message, title = "ClassInk") {
-    return new Promise((resolve) => {
-        const modal = document.getElementById('custom-alert-modal');
-        const label = document.getElementById('custom-alert-label');
-        const titleEl = document.getElementById('custom-alert-title');
-        const btnOk = document.getElementById('custom-alert-ok');
-
-        if (titleEl) titleEl.textContent = title;
-        label.textContent = message;
-        modal.classList.add('active');
-
-        btnOk.onclick = () => {
-            modal.classList.remove('active');
-            btnOk.onclick = null;
-            resolve();
-        };
-    });
-}
-
 // Remplacement du journal de logs interne
 function logSystemEvent(level, message, detail = null) {
     const timestamp = new Date().toISOString();
@@ -3574,12 +3495,12 @@ function logSystemEvent(level, message, detail = null) {
    ========================================================================== */
 
 function openEditProfileModal() {
-    document.getElementById('setting-user-name').value = db.user.name || '';
-    document.getElementById('setting-user-email').value = db.user.email || '';
-    document.getElementById('setting-school-id').value = db.user.school || '';
-    document.getElementById('setting-user-phone').value = db.user.phone || '';
-    document.getElementById('setting-user-age').value = db.user.age || '';
-    document.getElementById('setting-school-code').value = db.user.schoolCode || '';
+    document.getElementById('edit-profile-user-name').value = db.user.name || '';
+    document.getElementById('edit-profile-user-email').value = db.user.email || '';
+    document.getElementById('edit-profile-school-id').value = db.user.school || '';
+    document.getElementById('edit-profile-user-phone').value = db.user.phone || '';
+    document.getElementById('edit-profile-user-age').value = db.user.age || '';
+    document.getElementById('edit-profile-school-code').value = db.user.schoolCode || '';
     document.getElementById('edit-profile-modal').classList.add('active');
 }
 
@@ -3596,20 +3517,20 @@ async function verifyAndSaveProfile() {
         return;
     }
 
-    const newEmail = document.getElementById('setting-user-email').value.trim();
+    const newEmail = document.getElementById('edit-profile-user-email').value.trim();
     if (!newEmail || !newEmail.includes('@')) {
         await showCustomAlert("⚠️ Veuillez saisir une adresse e-mail valide.");
         return;
     }
 
-    db.user.name = document.getElementById('setting-user-name').value.trim();
+    db.user.name = document.getElementById('edit-profile-user-name').value.trim();
     db.user.email = newEmail;
-    db.user.school = document.getElementById('setting-school-id').value.trim();
-    db.user.phone = document.getElementById('setting-user-phone').value.trim();
-    db.user.age = document.getElementById('setting-user-age').value.trim();
-    db.user.schoolCode = document.getElementById('setting-school-code').value.trim();
+    db.user.school = document.getElementById('edit-profile-school-id').value.trim();
+    db.user.phone = document.getElementById('edit-profile-user-phone').value.trim();
+    db.user.age = document.getElementById('edit-profile-user-age').value.trim();
+    db.user.schoolCode = document.getElementById('edit-profile-school-code').value.trim();
 
-    const newPass = document.getElementById('setting-user-pass').value.trim();
+    const newPass = document.getElementById('edit-profile-user-pass').value.trim();
     if (newPass) {
         db.user.password = newPass;
     }
@@ -3618,23 +3539,6 @@ async function verifyAndSaveProfile() {
     closeEditProfileModal();
     updateLoginHeaderButton();
     await showCustomAlert("✅ Informations du profil mises à jour avec succès !");
-}
-
-// Fonction pour ouvrir la fenêtre de modification du profil
-function openEditProfileModal() {
-    document.getElementById('setting-user-name').value = db.user.name || '';
-    document.getElementById('setting-user-email').value = db.user.email || '';
-    document.getElementById('setting-school-id').value = db.user.school || '';
-    document.getElementById('setting-user-phone').value = db.user.phone || '';
-    document.getElementById('setting-user-age').value = db.user.age || '';
-    document.getElementById('setting-school-code').value = db.user.schoolCode || '';
-
-    document.getElementById('edit-profile-modal').classList.add('active');
-}
-
-// Fonction pour fermer la fenêtre
-function closeEditProfileModal() {
-    document.getElementById('edit-profile-modal').classList.remove('active');
 }
 
 // 1. Définir et sauvegarder le thème
