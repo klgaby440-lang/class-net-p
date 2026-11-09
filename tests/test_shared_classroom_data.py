@@ -6,6 +6,7 @@ from fastapi import HTTPException
 from main import (
     apply_teacher_classroom_context,
     compose_teacher_classroom_context,
+    teacher_has_verified_school_access,
     teacher_is_titulaire,
     teacher_matches_school_roster,
     validate_school_class_catalog,
@@ -249,6 +250,36 @@ def test_teacher_roster_link_requires_the_official_code_and_registered_name():
     roster_entry = {"uniqueId": "prof-123456", "name": "ALINE MUKENDI"}
 
     assert teacher_matches_school_roster(teacher, roster_entry) is True
+
+def test_school_classroom_access_requires_verified_school_roster_membership():
+    not_verified = SimpleNamespace(school_id="school-1", school_access_verified=False)
+    verified = SimpleNamespace(school_id="school-1", school_access_verified=True)
+    no_school = SimpleNamespace(school_id=None, school_access_verified=True)
+
+    assert teacher_has_verified_school_access(not_verified) is False
+    assert teacher_has_verified_school_access(no_school) is False
+    assert teacher_has_verified_school_access(verified) is True
+
+
+def test_unverified_teacher_cannot_load_the_school_catalog_even_with_a_stale_school_id():
+    teacher = SimpleNamespace(
+        school_id="school-1",
+        school_access_verified=False,
+        full_name="Aline Mukendi",
+        teacher_code="prof-123456",
+        email="aline@example.cd",
+    )
+
+    class DatabaseMustNotBeQueried:
+        def query(self, _model):
+            raise AssertionError("Unverified teacher must not query school tables")
+
+    from main import build_teacher_classroom_context
+    context = build_teacher_classroom_context(DatabaseMustNotBeQueried(), teacher)
+
+    assert context["schoolId"] == ""
+    assert context["classes"] == []
+    assert context["titulaireClasses"] == []
 
 
 def test_teacher_roster_link_does_not_grant_access_by_school_name_or_name_alone():
