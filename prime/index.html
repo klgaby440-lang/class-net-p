@@ -6604,5 +6604,228 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
     };
 })();
 </script>
+
+<script id="primeink-student-course-photo-import">
+(() => {
+    const API = window.PRIMEINK_LLINK_API_URL || "https://llink-usz9.onrender.com";
+    let pendingStudentImport = null;
+    let pendingCourseImport = null;
+    const escape = value => safeHTML(String(value == null ? "" : value));
+    const bridge = () => {
+        if (!window.primeInkFichePhotoBridge) throw new Error("PrimeInk n'est pas encore initialisé. Rechargez la page.");
+        return window.primeInkFichePhotoBridge;
+    };
+    function setStatus(id, message, error = false) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.textContent = message;
+        el.style.color = error ? "#dc2626" : "var(--text-secondary)";
+    }
+    function closeReview(id) {
+        const modal = document.getElementById(id);
+        if (modal) modal.style.display = "none";
+        if (id === "primeInkStudentPhotoReview") pendingStudentImport = null;
+        if (id === "primeInkCoursePhotoReview") pendingCourseImport = null;
+    }
+    function warningsList(items) {
+        return (Array.isArray(items) ? items : []).map(item => "<li>" + escape(item) + "</li>").join("");
+    }
+    function createReviewModal(id, title, subtitle, tableHtml, warningsHtml, applyLabel, applyHandler) {
+        let modal = document.getElementById(id);
+        if (!modal) {
+            modal = document.createElement("div");
+            modal.id = id;
+            modal.className = "primeink-fiche-modal";
+            modal.style.display = "none";
+            modal.innerHTML = '<div class="primeink-fiche-dialog" role="dialog" aria-modal="true"></div>';
+            document.body.appendChild(modal);
+            modal.addEventListener("click", event => {
+                if (event.target === modal) closeReview(id);
+            });
+        }
+        const dialog = modal.querySelector(".primeink-fiche-dialog");
+        dialog.innerHTML = '<h3>' + escape(title) + '</h3>' +
+            '<p>' + escape(subtitle) + '</p>' +
+            (warningsHtml ? '<div class="primeink-fiche-warnings"><strong>Points à vérifier</strong><ul>' + warningsHtml + '</ul></div>' : '') +
+            '<div class="primeink-fiche-table-wrap">' + tableHtml + '</div>' +
+            '<div class="primeink-fiche-actions"><span>Rien ne sera enregistré avant votre confirmation.</span>' +
+            '<div class="primeink-fiche-actions-right"><button type="button" class="btn-secondary" data-photo-cancel>Annuler</button>' +
+            '<button type="button" class="btn-primary" data-photo-apply>' + escape(applyLabel) + '</button></div></div>';
+        dialog.querySelector("[data-photo-cancel]").addEventListener("click", () => closeReview(id));
+        dialog.querySelector("[data-photo-apply]").addEventListener("click", applyHandler);
+        modal.style.display = "flex";
+        return dialog;
+    }
+    async function readPhoto(input, endpoint, className, statusId, expectedType) {
+        const file = input && input.files && input.files[0];
+        if (input) input.value = "";
+        if (!file) return null;
+        if (!window.primeInkPhotoUtils || typeof window.primeInkPhotoUtils.compress !== "function") {
+            throw new Error("Le module de préparation des photos n'est pas disponible. Rechargez PrimeInk.");
+        }
+        setStatus(statusId, "Préparation de la photo…");
+        const imageBase64 = await window.primeInkPhotoUtils.compress(file);
+        if (!imageBase64 || imageBase64.length > 8_100_000) {
+            throw new Error("La photo reste trop volumineuse. Recadrez-la puis réessayez.");
+        }
+        setStatus(statusId, "Envoi à Llink et lecture du document…");
+        const response = await fetch(API + endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ imageBase64, class_name: className || "" })
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : "Erreur Llink HTTP " + response.status);
+        if (!data || data.document_type !== expectedType) {
+            throw new Error(expectedType === "student_list"
+                ? "Llink ne reconnaît pas une liste d'élèves sur cette photo."
+                : "Llink ne reconnaît pas une liste de cours sur ce bulletin.");
+        }
+        return { data, filename: file.name || "Photo" };
+    }
+
+    function showStudentReview(data, classId, className, filename) {
+        const rows = Array.isArray(data.students) ? data.students : [];
+        if (!rows.length) throw new Error("Aucun élève n'a pu être lu sur cette photo.");
+        pendingStudentImport = { rows, classId };
+        const body = rows.map((row, index) => {
+            const confidence = Math.round(Math.max(0, Math.min(1, Number(row.confidence) || 0)) * 100);
+            return '<tr data-student-photo-row="' + index + '">' +
+                '<td><input type="checkbox" data-include checked aria-label="Importer cet élève"></td>' +
+                '<td><input class="form-control" data-field="name" value="' + escape(row.name || "") + '" aria-label="Nom"></td>' +
+                '<td><input class="form-control" data-field="postname" value="' + escape(row.postname || "") + '" aria-label="Postnom"></td>' +
+                '<td><input class="form-control" data-field="prename" value="' + escape(row.prename || "") + '" aria-label="Prénom"></td>' +
+                '<td><select class="form-control" data-field="sexe" aria-label="Sexe"><option value="">À confirmer</option>' +
+                '<option value="M" ' + (row.sexe === "M" ? "selected" : "") + '>M</option>' +
+                '<option value="F" ' + (row.sexe === "F" ? "selected" : "") + '>F</option></select></td>' +
+                '<td>' + confidence + '%</td><td>' + escape(row.warning || "") + '</td></tr>';
+        }).join("");
+        const table = '<table class="primeink-fiche-table"><thead><tr><th>Importer</th><th>Nom</th><th>Postnom</th><th>Prénom</th><th>Sexe</th><th>Confiance</th><th>Avertissement</th></tr></thead><tbody>' + body + '</tbody></table>';
+        const dialog = createReviewModal(
+            "primeInkStudentPhotoReview", "Vérifier la liste des élèves",
+            filename + " · " + className + " · " + rows.length + " ligne(s) détectée(s). Choisissez M ou F et corrigez les champs avant l'ajout.",
+            table, warningsList(data.warnings), "Ajouter les élèves vérifiés", applyStudentReview
+        );
+        dialog.querySelectorAll("[data-field='name']").forEach(field => {
+            field.addEventListener("input", () => { field.value = field.value.toUpperCase(); });
+        });
+    }
+    function applyStudentReview() {
+        if (!pendingStudentImport) return;
+        const dialog = document.querySelector("#primeInkStudentPhotoReview .primeink-fiche-dialog");
+        const rows = [];
+        for (const rowEl of dialog.querySelectorAll("[data-student-photo-row]")) {
+            if (!rowEl.querySelector("[data-include]")?.checked) continue;
+            const val = field => rowEl.querySelector('[data-field="' + field + '"]')?.value.trim() || "";
+            const row = { name: val("name"), postname: val("postname"), prename: val("prename"), sexe: val("sexe").toUpperCase() };
+            if (!row.name || !["M", "F"].includes(row.sexe)) {
+                setStatus("primeInkStudentPhotoStatus", "Complétez le nom et choisissez M ou F pour chaque ligne cochée, ou décochez les lignes incertaines.", true);
+                return;
+            }
+            rows.push(row);
+        }
+        if (!rows.length) return setStatus("primeInkStudentPhotoStatus", "Sélectionnez au moins un élève à importer.", true);
+        try {
+            const result = bridge().addStudents(pendingStudentImport.classId, rows);
+            closeReview("primeInkStudentPhotoReview");
+            const details = [
+                result.duplicates ? result.duplicates + " doublon(s) ignoré(s)" : "",
+                result.invalid ? result.invalid + " ligne(s) invalide(s)" : ""
+            ].filter(Boolean).join(" · ");
+            setStatus("primeInkStudentPhotoStatus", result.added + " élève(s) ajouté(s)." + (details ? " " + details + "." : ""));
+        } catch (error) {
+            setStatus("primeInkStudentPhotoStatus", error.message || "Impossible d'ajouter ces élèves.", true);
+        }
+    }
+
+    function showCourseReview(data, classId, className, filename) {
+        const rows = Array.isArray(data.courses) ? data.courses : [];
+        if (!rows.length) throw new Error("Aucun cours n'a pu être lu sur ce bulletin.");
+        pendingCourseImport = { rows, classId };
+        const body = rows.map((row, index) => {
+            const confidence = Math.round(Math.max(0, Math.min(1, Number(row.confidence) || 0)) * 100);
+            return '<tr data-course-photo-row="' + index + '">' +
+                '<td><input type="checkbox" data-include checked aria-label="Importer ce cours"></td>' +
+                '<td><input class="form-control" data-field="name" value="' + escape(row.name || "") + '" aria-label="Nom du cours"></td>' +
+                '<td><input class="form-control" data-field="domain" value="' + escape(row.domain || "") + '" aria-label="Domaine"></td>' +
+                '<td><input class="form-control" data-field="subdomain" value="' + escape(row.subdomain || "") + '" aria-label="Sous-domaine"></td>' +
+                '<td><input class="form-control" type="number" min="0.5" step="0.5" data-field="maxPer" value="40" aria-label="Maximum par période"></td>' +
+                '<td>' + confidence + '%</td><td>' + escape(row.warning || "") + '</td></tr>';
+        }).join("");
+        const table = '<table class="primeink-fiche-table"><thead><tr><th>Importer</th><th>Cours</th><th>Domaine</th><th>Sous-domaine</th><th>Max/période</th><th>Confiance</th><th>Avertissement</th></tr></thead><tbody>' + body + '</tbody></table>';
+        createReviewModal(
+            "primeInkCoursePhotoReview", "Vérifier les cours du bulletin",
+            filename + " · " + className + " · " + rows.length + " cours détecté(s). Le maximum par période est prérempli à 40 ; vérifiez-le pour chaque cours.",
+            table, warningsList(data.warnings), "Ajouter les cours vérifiés", applyCourseReview
+        );
+    }
+    function applyCourseReview() {
+        if (!pendingCourseImport) return;
+        const dialog = document.querySelector("#primeInkCoursePhotoReview .primeink-fiche-dialog");
+        const rows = [];
+        for (const rowEl of dialog.querySelectorAll("[data-course-photo-row]")) {
+            if (!rowEl.querySelector("[data-include]")?.checked) continue;
+            const val = field => rowEl.querySelector('[data-field="' + field + '"]')?.value.trim() || "";
+            const maxPer = Number(val("maxPer"));
+            const row = { name: val("name"), domain: val("domain"), subdomain: val("subdomain"), maxPer };
+            if (!row.name || !Number.isFinite(maxPer) || maxPer <= 0) {
+                setStatus("primeInkCoursePhotoStatus", "Chaque cours coché doit avoir un nom et un maximum par période supérieur à zéro.", true);
+                return;
+            }
+            rows.push(row);
+        }
+        if (!rows.length) return setStatus("primeInkCoursePhotoStatus", "Sélectionnez au moins un cours à importer.", true);
+        try {
+            const result = bridge().addCourses(pendingCourseImport.classId, rows);
+            closeReview("primeInkCoursePhotoReview");
+            const details = [
+                result.enriched ? result.enriched + " cours existant(s) complété(s)" : "",
+                result.duplicates ? result.duplicates + " doublon(s) ignoré(s)" : "",
+                result.invalid ? result.invalid + " ligne(s) invalide(s)" : ""
+            ].filter(Boolean).join(" · ");
+            setStatus("primeInkCoursePhotoStatus", result.added + " cours ajouté(s)." + (details ? " " + details + "." : ""));
+        } catch (error) {
+            setStatus("primeInkCoursePhotoStatus", error.message || "Impossible d'ajouter ces cours.", true);
+        }
+    }
+
+    window.handlePrimeInkStudentPhotoInput = async function(input) {
+        const cls = bridge().getActiveClass();
+        if (!cls) {
+            setStatus("primeInkStudentPhotoStatus", "Ouvrez une classe avant d'importer une liste.", true);
+            if (input) input.value = "";
+            return;
+        }
+        try {
+            const result = await readPhoto(input, "/api/primeink/students-extract", cls.name, "primeInkStudentPhotoStatus", "student_list");
+            if (!result) return;
+            showStudentReview(result.data, cls.id, cls.name, result.filename);
+            setStatus("primeInkStudentPhotoStatus", "Lecture terminée. Vérifiez les champs et le sexe avant d'ajouter les élèves.");
+        } catch (error) {
+            setStatus("primeInkStudentPhotoStatus", (error.message || "Lecture de la liste impossible.") + " Vous pouvez réessayer.", true);
+        }
+    };
+
+    window.handlePrimeInkCoursePhotoInput = async function(input) {
+        const cls = bridge().getActiveClass();
+        if (!cls) {
+            setStatus("primeInkCoursePhotoStatus", "Ouvrez une classe avant d'importer un bulletin.", true);
+            if (input) input.value = "";
+            return;
+        }
+        try {
+            const result = await readPhoto(input, "/api/primeink/courses-extract", cls.name, "primeInkCoursePhotoStatus", "bulletin_courses");
+            if (!result) return;
+            showCourseReview(result.data, cls.id, cls.name, result.filename);
+            setStatus("primeInkCoursePhotoStatus", "Lecture terminée. Vérifiez les cours, domaines, sous-domaines et maxima avant l'ajout.");
+        } catch (error) {
+            setStatus("primeInkCoursePhotoStatus", (error.message || "Lecture du bulletin impossible.") + " Vous pouvez réessayer.", true);
+        }
+    };
+    window.closePrimeInkStudentPhotoReview = () => closeReview("primeInkStudentPhotoReview");
+    window.closePrimeInkCoursePhotoReview = () => closeReview("primeInkCoursePhotoReview");
+})();
+</script>
+
 </body>
 </html>
