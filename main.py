@@ -2168,14 +2168,11 @@ def validate_school_class_catalog(payload: dict, expected_school_id: str) -> dic
 
 
 def teacher_matches_school_roster(teacher, roster_entry: dict) -> bool:
-    """Un compte n'est rattaché que par son code ClassInk officiel ET son nom enregistré."""
+    """Le code unique communiqué à l'administration identifie le compte à rattacher."""
     unique_id = clean_text(roster_entry.get("uniqueId"), 100)
-    registered_name = normalize_name(roster_entry.get("name") or "")
     return bool(
         unique_id
         and normalize_name(getattr(teacher, "teacher_code", "") or "") == normalize_name(unique_id)
-        and registered_name
-        and normalize_name(getattr(teacher, "full_name", "") or "") == registered_name
     )
 
 
@@ -2263,9 +2260,11 @@ def store_school_class_catalog(db: Session, school: SchoolInformation, catalog: 
             or not teacher_matches_school_roster(teacher, item)
         ):
             continue
+        # Le nom réel du compte vient de Teacher, pas du libellé de pré-inscription PrimeInk.
+        # Le bouton « Ajouter un enseignant » peut encore afficher un nom provisoire.
         teacher.school_id = school.school_id
         teacher.school_name = school.name_school
-        if item["subject"]:
+        if item["subject"] and item["subject"] != "Matière à attribuer":
             teacher.subject = item["subject"]
         if item["status"]:
             teacher.status = item["status"]
