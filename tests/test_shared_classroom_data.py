@@ -264,6 +264,7 @@ def test_school_classroom_access_requires_verified_school_roster_membership():
 def test_unverified_teacher_cannot_load_the_school_catalog_even_with_a_stale_school_id():
     teacher = SimpleNamespace(
         school_id="school-1",
+        school_name="École Horizon",
         school_access_verified=False,
         full_name="Aline Mukendi",
         teacher_code="prof-123456",
