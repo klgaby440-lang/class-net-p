@@ -1767,6 +1767,14 @@ body {
             <div class="form-group"><label>Date de naissance</label><input type="date" id="born-date-student" class="form-control"></div>
             <div class="form-group"><label>Lieu de naissance</label><input type="text" id="born-where-student" class="form-control"></div>
             <div class="form-group"><label>N° Permanent</label><input type="text" id="number-permi-student" class="form-control" placeholder="Ex : 763011900065"></div>
+            <div class="form-group" style="border:1px dashed var(--border-color);border-radius:8px;padding:.75rem;">
+                <label style="display:block;margin-bottom:.45rem;">AJOUTER PLUSIEURS ÉLÈVES DEPUIS UNE PHOTO</label>
+                <label class="btn-secondary" style="display:inline-flex;position:relative;overflow:hidden;align-items:center;gap:.4rem;cursor:pointer;">
+                    📷 Importer une liste avec Llink
+                    <input id="primeInkStudentPhotoInput" type="file" accept="image/*" capture="environment" aria-label="Photo d'une liste d'élèves" onchange="handlePrimeInkStudentPhotoInput(this)" style="position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;">
+                </label>
+                <small id="primeInkStudentPhotoStatus" style="display:block;margin-top:.45rem;color:var(--text-secondary);" aria-live="polite">Les noms, postnoms, prénoms et sexes seront proposés pour vérification.</small>
+            </div>
             <button class="btn-primary" style="width: 100%; margin-top: 1rem;" id="saveStudentBtn">Valider & Enregistrer</button>
         </div>
     </div>
@@ -1817,6 +1825,14 @@ body {
             <div class="form-group"><label>Titulaire du cours</label><input type="text" id="name-titulaire-added-cours" class="form-control" placeholder="Ex : Prof. Mwamba"></div>
             <div class="form-group"><label>Catégorie du cours</label><select class="form-control" id="choix-categorie"></select></div>
             <div class="form-group"><label>Sous-domaine (facultatif)</label><input type="text" id="sub-category-cours" class="form-control" placeholder="Ex : Sous-domaine des mathématiques"></div>
+            <div class="form-group" style="border:1px dashed var(--border-color);border-radius:8px;padding:.75rem;">
+                <label style="display:block;margin-bottom:.45rem;">IMPORTER LES COURS DEPUIS UN BULLETIN</label>
+                <label class="btn-secondary" style="display:inline-flex;position:relative;overflow:hidden;align-items:center;gap:.4rem;cursor:pointer;">
+                    📷 Lire les cours avec Llink
+                    <input id="primeInkCoursePhotoInput" type="file" accept="image/*" capture="environment" aria-label="Photo d'un bulletin avec les cours" onchange="handlePrimeInkCoursePhotoInput(this)" style="position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;">
+                </label>
+                <small id="primeInkCoursePhotoStatus" style="display:block;margin-top:.45rem;color:var(--text-secondary);" aria-live="polite">Les cours, domaines et sous-domaines seront proposés pour vérification. Le maximum par période est à confirmer.</small>
+            </div>
             <button class="btn-primary" style="width: 100%; margin-top: 1rem;" id="saveCourseBtn">Valider & Enregistrer</button>
         </div>
     </div>
@@ -3486,6 +3502,120 @@ async function bpPushClassBulletin(cls) {
                 getStudents(courseId) {
                     const course = this.getCourse(courseId);
                     return course ? getSortedStudentsByClass(course.classId) : [];
+                },
+                getActiveClass() {
+                    return (Array.isArray(appState.classes) ? appState.classes : [])
+                        .find(cls => String(cls.id) === String(activeClassId)) || null;
+                },
+                getClass(classId) {
+                    return (Array.isArray(appState.classes) ? appState.classes : [])
+                        .find(cls => String(cls.id) === String(classId)) || null;
+                },
+                getStudentsInClass(classId) {
+                    return getSortedStudentsByClass(classId);
+                },
+                addStudents(classId, rows) {
+                    const cls = this.getClass(classId);
+                    if (!cls) throw new Error("La classe sélectionnée n'existe plus.");
+                    if (!Array.isArray(appState.students)) appState.students = [];
+                    const normalize = value => String(value || "").normalize("NFD")
+                        .replace(/[\\u0300-\\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+                    const existingNames = new Set(appState.students
+                        .filter(student => String(student.classId) === String(classId))
+                        .map(student => normalize([student.name, student.postname, student.prename].filter(Boolean).join(" "))));
+                    const result = { added: 0, duplicates: 0, invalid: 0 };
+                    (Array.isArray(rows) ? rows : []).forEach(row => {
+                        const name = String(row && row.name || "").trim();
+                        const postname = String(row && row.postname || "").trim();
+                        const prename = String(row && row.prename || "").trim();
+                        const sexe = String(row && row.sexe || "").trim().toUpperCase();
+                        if (!name || !["M", "F"].includes(sexe)) {
+                            result.invalid++;
+                            return;
+                        }
+                        const key = normalize([name, postname, prename].filter(Boolean).join(" "));
+                        if (!key || existingNames.has(key)) {
+                            result.duplicates++;
+                            return;
+                        }
+                        existingNames.add(key);
+                        appState.students.push({
+                            id: "s_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 9),
+                            classId: cls.id,
+                            name,
+                            postname,
+                            prename,
+                            sexe,
+                            bornDate: "",
+                            bornWhere: "",
+                            permi: ""
+                        });
+                        result.added++;
+                    });
+                    if (result.added) {
+                        const lastAdded = appState.students.filter(student => String(student.classId) === String(classId)).slice(-result.added);
+                        activeClassId = cls.id;
+                        activeStudentId = lastAdded.length ? lastAdded[lastAdded.length - 1].id : activeStudentId;
+                        saveState();
+                        loadClassData(cls.id);
+                        renderClassesTable();
+                    }
+                    return result;
+                },
+                addCourses(classId, rows) {
+                    const cls = this.getClass(classId);
+                    if (!cls) throw new Error("La classe sélectionnée n'existe plus.");
+                    if (!Array.isArray(appState.courses)) appState.courses = [];
+                    if (!Array.isArray(cls.categories)) cls.categories = [];
+                    const normalize = value => String(value || "").normalize("NFD")
+                        .replace(/[\\u0300-\\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+                    const result = { added: 0, enriched: 0, duplicates: 0, invalid: 0 };
+                    (Array.isArray(rows) ? rows : []).forEach(row => {
+                        const name = String(row && row.name || "").trim();
+                        if (!name) {
+                            result.invalid++;
+                            return;
+                        }
+                        const domain = String(row && row.domain || "").trim();
+                        const subdomain = String(row && row.subdomain || "").trim();
+                        let category = "";
+                        if (domain) {
+                            const current = cls.categories.find(item => normalize(item) === normalize(domain));
+                            category = current || domain;
+                            if (!current) cls.categories.push(domain);
+                        } else {
+                            category = cls.categories.find(item => normalize(item) === "general") || "Général";
+                            if (!cls.categories.some(item => normalize(item) === normalize(category))) cls.categories.push(category);
+                        }
+                        const existing = appState.courses.find(course =>
+                            String(course.classId) === String(cls.id) && normalize(course.name) === normalize(name)
+                        );
+                        if (existing) {
+                            let changed = false;
+                            if (!existing.category && category) { existing.category = category; changed = true; }
+                            if (!existing.subCategory && subdomain) { existing.subCategory = subdomain; changed = true; }
+                            if (changed) result.enriched++;
+                            else result.duplicates++;
+                            return;
+                        }
+                        appState.courses.push({
+                            id: "k_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 9),
+                            classId: cls.id,
+                            name,
+                            maxPer: 40,
+                            category,
+                            subCategory: subdomain,
+                            titulaire: cls.titulaire || "Non assigné"
+                        });
+                        result.added++;
+                    });
+                    if (result.added || result.enriched || cls.categories.length) {
+                        activeClassId = cls.id;
+                        saveState();
+                        loadClassData(cls.id);
+                        renderClassesTable();
+                    }
+                    return result;
                 },
                 applyGrades(courseId, rows, overwrite) {
                     const course = this.getCourse(courseId);
@@ -6467,6 +6597,10 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
         } catch (error) {
             primeInkFicheStatus(error && error.message ? error.message : "Impossible d'appliquer les notes.", true);
         }
+    };
+
+    window.primeInkPhotoUtils = {
+        compress: primeInkCompressFichePhoto
     };
 })();
 </script>
