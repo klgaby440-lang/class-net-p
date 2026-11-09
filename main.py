@@ -2747,9 +2747,7 @@ def sync_primenet(payload: dict, db: Session = Depends(get_db), claims: dict = D
         t_code = t.get("uniqueId")
         if not t_code: continue
         
-        teacher_obj = db.query(Teacher).filter(
-            (Teacher.teacher_code == t_code) | (Teacher.full_name == t.get("name"))
-        ).first()
+        teacher_obj = db.query(Teacher).filter(Teacher.teacher_code == t_code).first()
         
         if teacher_obj:
             teacher_obj.school_id = school_id
