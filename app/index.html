@@ -1273,11 +1273,72 @@ async function deleteClass(classNameToDelete) {
     alert(`✅ La classe "${targetClass}" a été supprimée avec succès.`);
 }
 
-let db = JSON.parse(localStorage.getItem(DB_KEY)) || defaultDB;
+let classInkStorageAvailable = true;
+const classInkIsOperaMini = /Opera Mini/i.test((navigator && navigator.userAgent) || "")
+    || (typeof window !== "undefined" && typeof window.operamini !== "undefined");
+
+function showClassInkCompatibilityNotice(message) {
+    const display = () => {
+        let notice = document.getElementById("classink-browser-compatibility");
+        if (!notice) {
+            notice = document.createElement("div");
+            notice.id = "classink-browser-compatibility";
+            notice.setAttribute("role", "alert");
+            notice.style.cssText = "position:sticky;top:0;z-index:99999;padding:12px 16px;background:#fff4d6;color:#713f12;border-bottom:2px solid #d97706;font:600 14px/1.45 Arial,sans-serif;";
+            document.body.insertBefore(notice, document.body.firstChild);
+        }
+        notice.textContent = message;
+    };
+    if (document.body) display();
+    else document.addEventListener("DOMContentLoaded", display, { once: true });
+}
+
+function safeClassInkStorageGet(key, fallback = null) {
+    try {
+        const value = window.localStorage.getItem(key);
+        return value === null ? fallback : value;
+    } catch (error) {
+        classInkStorageAvailable = false;
+        return fallback;
+    }
+}
+
+function safeClassInkStorageSet(key, value) {
+    try {
+        window.localStorage.setItem(key, value);
+        return true;
+    } catch (error) {
+        classInkStorageAvailable = false;
+        showClassInkCompatibilityNotice("ATTENTION : ce navigateur ne permet pas de sauvegarder les données locales de ClassInk. N'effectuez aucune saisie importante ici. Ouvrez ClassInk avec Chrome, Edge, Firefox ou Opera (version normale, pas Opera Mini).");
+        return false;
+    }
+}
+
+function loadClassInkDatabase() {
+    try {
+        const saved = window.localStorage.getItem(DB_KEY);
+        if (!saved) return JSON.parse(JSON.stringify(defaultDB));
+        const parsed = JSON.parse(saved);
+        return parsed && typeof parsed === "object" ? parsed : JSON.parse(JSON.stringify(defaultDB));
+    } catch (error) {
+        classInkStorageAvailable = false;
+        return JSON.parse(JSON.stringify(defaultDB));
+    }
+}
+
+let db = loadClassInkDatabase();
 
 function saveDB() {
-    if (typeof updateConduiteNav === 'function') updateConduiteNav();
-    localStorage.setItem(DB_KEY, JSON.stringify(db));
+    try {
+        if (typeof updateConduiteNav === 'function') updateConduiteNav();
+    } catch (error) {
+        console.warn("[ClassInk] Mise à jour du menu conduite impossible :", error);
+    }
+    const saved = safeClassInkStorageSet(DB_KEY, JSON.stringify(db));
+    if (!saved || classInkIsOperaMini) {
+        showClassInkCompatibilityNotice("ATTENTION : Opera Mini n'est pas compatible avec le stockage local requis par ClassInk. Les modifications risquent de ne pas être conservées. Utilisez Chrome, Edge, Firefox ou Opera normal pour travailler.");
+    }
+    return saved;
 }
 
 let activeClass = db.classes.length > 0 ? db.classes[0] : "";
@@ -1291,6 +1352,9 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function initApp() {
+    if (classInkIsOperaMini || !classInkStorageAvailable) {
+        showClassInkCompatibilityNotice("ATTENTION : Opera Mini ne prend pas en charge le stockage local utilisé par ClassInk. Les données saisies peuvent être perdues. Pour le test du professeur, ouvrez ClassInk avec Chrome, Edge, Firefox ou Opera normal.");
+    }
     loadTheme();
     if (!db.user.id) db.user.id = generateUniqueId("SYS-CRYPT");
     document.getElementById('setting-user-name').value = db.user.name;
@@ -2936,7 +3000,7 @@ async function regenerateCryptoID() {
 
 function saveLlinkPrefs() {
     const prefs = document.getElementById('setting-llink-prefs').value;
-    localStorage.setItem('llink_custom_instructions', prefs);
+    safeClassInkStorageSet('llink_custom_instructions', prefs);
 }
 
 function exportDatabaseJSON() {
@@ -2951,7 +3015,10 @@ function exportDatabaseJSON() {
 
 async function resetAppDatabase() {
     if (await showCustomConfirm("⚠️ ATTENTION : Cela effacera l'intégralité des élèves, notes, présences et quiz enregistrés sur cet appareil. Continuer ?")) {
-        localStorage.removeItem(DB_KEY);
+        try { localStorage.removeItem(DB_KEY); } catch (error) {
+            showClassInkCompatibilityNotice("Le navigateur ne permet pas de supprimer le stockage local. Ouvrez ClassInk dans un navigateur compatible.");
+            return;
+        }
         location.reload();
     }
 }
@@ -2979,37 +3046,41 @@ function getLlinkContextPreferences() {
         ecole: school,
         classe_actuelle: activeClass || "Non spécifiée",
         cours_enseignes: activeCourseList,
-        custom_instructions: localStorage.getItem('llink_custom_instructions') || "Sois méthodique et précis."
+        custom_instructions: safeClassInkStorageGet('llink_custom_instructions', "Sois méthodique et précis.") || "Sois méthodique et précis."
     });
+}
+
+async function classInkFetchWithTimeout(url, options = {}, timeoutMs = 8000) {
+    if (typeof AbortController !== "function") return fetch(url, options);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        return await fetch(url, { ...options, signal: controller.signal });
+    } finally {
+        clearTimeout(timeoutId);
+    }
 }
 
 async function postDataWithFallback(endpoint, payload) {
     const urls = [CONFIG.PRIMARY_URL, CONFIG.FALLBACK_URL];
-
     for (const baseUrl of urls) {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), CONFIG.TIMEOUT_MS);
-
         try {
-            const response = await fetch(`${baseUrl}${endpoint}`, {
-                method: 'POST',
-                headers: cloudAuthHeaders(),
-                body: JSON.stringify(withoutSecrets(payload)),
-                signal: controller.signal
-            });
-
-            clearTimeout(timeoutId);
-
-            if (response.ok) {
-                return { success: true, url: baseUrl, response };
-            }
+            const response = await classInkFetchWithTimeout(
+                `${baseUrl}${endpoint}`,
+                {
+                    method: 'POST',
+                    headers: cloudAuthHeaders(),
+                    body: JSON.stringify(withoutSecrets(payload))
+                },
+                CONFIG.TIMEOUT_MS
+            );
+            if (response.ok) return { success: true, url: baseUrl, response };
+            await systemLog(`Le serveur ${baseUrl} a répondu HTTP ${response.status}`, 'warn', 'Réseau Intranet');
         } catch (error) {
-            clearTimeout(timeoutId);
-            const reason = error.name === 'AbortError' ? 'Timeout dépassé' : error.message;
+            const reason = error && error.name === 'AbortError' ? 'Timeout dépassé' : (error && error.message) || 'Réseau indisponible';
             await systemLog(`Échec de connexion vers ${baseUrl} (${reason})`, 'warn', 'Réseau Intranet');
         }
     }
-
     return { success: false };
 }
 
@@ -3373,13 +3444,13 @@ const SERVER_CONFIG = {
     discoverLocalServer: async function() {
         try {
             // Tentative 1 : mDNS (Idéal, zéro configuration)
-            const res = await fetch(`${this.intranetMDNS}/api/ping`, { signal: AbortSignal.timeout(2000) });
+            const res = await classInkFetchWithTimeout(`${this.intranetMDNS}/api/ping`, {}, 2000);
             if (res.ok) return this.intranetMDNS;
         } catch (e) {
             // nom mDNS non résolu : on bascule sur l'adresse IP de secours
             try {
                 // Tentative 2 : Fallback IP
-                const resFallback = await fetch(`${this.fallbackIP}/api/ping`, { signal: AbortSignal.timeout(2000) });
+                const resFallback = await classInkFetchWithTimeout(`${this.fallbackIP}/api/ping`, {}, 2000);
                 if (resFallback.ok) return this.fallbackIP;
             } catch (err) {
                 return null;
@@ -3388,14 +3459,20 @@ const SERVER_CONFIG = {
     }
 };
 
-let appState = JSON.parse(localStorage.getItem('classnet_app_db')) || {
-    activeTeacher: null,
-    syncHistory: { 
-        intranet: [], // Stocke uniquement les ID des évaluations non envoyées en local
-        internet: []  // Stocke les timestamps de la dernière synchro globale
-    }, 
-    grades: {} 
-};
+let appState = (() => {
+    const fallback = {
+        activeTeacher: null,
+        syncHistory: { intranet: [], internet: [] },
+        grades: {}
+    };
+    try {
+        const saved = window.localStorage.getItem('classnet_app_db');
+        return saved ? (JSON.parse(saved) || fallback) : fallback;
+    } catch (error) {
+        classInkStorageAvailable = false;
+        return fallback;
+    }
+})();
 
 // Fonction universelle améliorée pour tracker précisément ce qui n'est pas encore envoyé
 function logGradeChange(studentId, courseId, period, value) {
@@ -3409,7 +3486,7 @@ function logGradeChange(studentId, courseId, period, value) {
     // Ajout à l'historique INTRANET pour un envoi ciblé
     appState.syncHistory.intranet.push(record);
     
-    localStorage.setItem('classnet_app_db', JSON.stringify(appState));
+    safeClassInkStorageSet('classnet_app_db', JSON.stringify(appState));
 }
 
 // Le verrouillage d'une école se fait uniquement depuis le serveur (route d'administration protégée par une clé) :
