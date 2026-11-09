@@ -1842,9 +1842,9 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
         updates_count += 1
 
     # --- 4. Génération et Sauvegarde des données pour PrimeNet ---
-    school_id = payload.get("school_id") or getattr(teacher, "school_id", None)
-    
-    # On ne génère le format PrimeNet que si l'enseignant appartient à une école
+    school_id = teacher.school_id if teacher_has_verified_school_access(teacher) else None
+
+    # On ne génère le format PrimeNet que si l'enseignant a été autorisé par la liste officielle de l'école
     if school_id and str(school_id).lower() != "indépendant":
         # Construction des listes et dictionnaires de base
         classes_list = list(students_dict.keys())
@@ -2501,8 +2501,8 @@ def resolve_student(db, school_id, classe, teacher_email, classink_student_id, c
 def store_conduct(db, teacher, class_name, students, conduct_by_student):
     """Enregistre la conduite d'une classe, SEULEMENT si l'enseignant est le titulaire enregistré de cette classe."""
     report = {"accepted": 0, "rejected": []}
-    if not teacher.school_id:
-        report["rejected"].append({"reason": "Enseignant non rattaché à une école."})
+    if not teacher_has_verified_school_access(teacher):
+        report["rejected"].append({"reason": "Compte enseignant non autorisé par l'école. Communiquez votre identifiant ClassInk à l'administration."})
         return report
     classe = find_class_by_name(db, teacher.school_id, class_name)
     if not classe:
@@ -2753,7 +2753,9 @@ def sync_primenet(payload: dict, db: Session = Depends(get_db), claims: dict = D
         
         if teacher_obj:
             teacher_obj.school_id = school_id
-            if t.get("subject"): teacher_obj.subject = t.get("subject")
+            teacher_obj.school_name = school.name_school
+            teacher_obj.school_access_verified = True
+            if t.get("subject") and t.get("subject") != "Matière à attribuer": teacher_obj.subject = t.get("subject")
             if t.get("status"): teacher_obj.status = t.get("status")
 
     # 6. Synchronisation des évaluations/notes
