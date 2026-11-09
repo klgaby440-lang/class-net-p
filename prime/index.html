@@ -1481,10 +1481,10 @@ body {
             <div class="settings-card" style="grid-column: 1 / -1;">
                 <h2>GESTION DES ENSEIGNANTS DE L'ÉCOLE (INSPIRÉ v1.1.0)</h2>
                 <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">
-                    Regroupez les enseignants au sein de votre établissement en saisissant leur <strong>Identifiant Unique ClassInk</strong>.
+                    Demandez à chaque enseignant son identifiant unique dans ClassInk › Paramètres, puis ajoutez-le ici. La publication des informations des classes rattachera uniquement les comptes identifiés par ce code.
                 </p>
                 <div style="display: flex; gap: 0.8rem; margin-bottom: 1.2rem;">
-                    <input type="text" id="teacherUniqueIdInput" class="form-control" placeholder="Entrez l'identifiant unique du professeur (Ex: prof_63011_mwamba)" style="flex: 1;">
+                    <input type="text" id="teacherUniqueIdInput" class="form-control" placeholder="Identifiant ClassInk du professeur (Ex : prof_123456)" style="flex: 1;">
                     <button class="btn-primary" id="addTeacherBtn" style="white-space: nowrap;">+ Ajouter l'Enseignant</button>
                 </div>
 
@@ -1787,7 +1787,7 @@ body {
             <button class="modal-close-btn" onclick="renderinterface('ajouter_classe')">×</button>
             <h3 style="margin-bottom:1rem; color: var(--primary-color);">Ajouter une Classe</h3>
             <div class="form-group"><label>Nom de la classe</label><input type="text" id="name-added-class" class="form-control" placeholder="Ex: 3ème SCIENTIFIQUE"></div>
-            <div class="form-group"><label>Titulaire de la classe</label><input type="text" id="name-titulaire-added-class" class="form-control" placeholder="Ex : Prof. Mwamba"></div>
+            <div class="form-group"><label>Titulaire de la classe</label><input type="text" id="name-titulaire-added-class" class="form-control" placeholder="Nom complet exact du titulaire (ex. Aline Mukendi)"><small style="display:block;margin-top:5px;color:var(--text-secondary);">Le nom doit correspondre au compte ClassInk de l'enseignant. Le serveur confirme le rôle avant d'afficher Conduite.</small></div>
             <div class="form-group"><label>Modèle de bulletin</label>
                 <select id="class-bulletin-model" class="form-control">
                     <option value="classink">Modèle ClassInk (standard)</option>
