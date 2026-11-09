@@ -1354,20 +1354,12 @@ def login_teacher(data: LoginSchema, db: Session = Depends(get_db)):
     # Si une sauvegarde complète existe, elle est prioritaire : elle contient aussi
     # les classes, cours, élèves sans notes et les réglages que StudentGrade ne peut pas reconstruire.
     snapshot_row = db.query(ClassInkTeacherSnapshot).filter_by(teacher_email=teacher.email).first()
-    if snapshot_row and isinstance(snapshot_row.payload_data, dict):
-        restored_state = dict(snapshot_row.payload_data)
-        restored_user = dict(restored_state.get("user") or {})
-        restored_user.update({
-            "id": teacher.teacher_code or f"prof_{teacher.id}",
-            "name": teacher.full_name,
-            "email": teacher.email,
-            "password": data.password,
-            "school": teacher.school_name or "Indépendant",
-            "isLoggedIn": True,
-        })
-        restored_state["user"] = restored_user
-        restored_state["pendingCommits"] = 0
-        classnet_app_db = restored_state
+    classnet_app_db = restore_classink_teacher_state(
+        snapshot_row.payload_data if snapshot_row else None,
+        classnet_app_db,
+        teacher,
+        data.password,
+    )
 
     return {"status": True, "data": classnet_app_db,
             "token": create_token({"role": "teacher", "email": teacher.email}, TEACHER_TOKEN_TTL)}
@@ -1662,6 +1654,30 @@ def verify_and_cycle_code(data: CodeVerifySchema, background_tasks: BackgroundTa
 # ---------------------------------------------------------
 # 8. SYNCHRONISATION ET MISE À JOUR (APP & PRIMENET)
 # ---------------------------------------------------------
+def restore_classink_teacher_state(
+    snapshot_data: Any,
+    legacy_state: dict,
+    teacher: Any,
+    entered_password: str,
+) -> dict:
+    """Restaure l'instantané complet ; retombe sur l'ancien format si aucun instantané n'existe."""
+    if not isinstance(snapshot_data, dict):
+        return legacy_state
+    restored = dict(snapshot_data)
+    user = dict(restored.get("user") or {})
+    user.update({
+        "id": getattr(teacher, "teacher_code", None) or f"prof_{teacher.id}",
+        "name": teacher.full_name,
+        "email": teacher.email,
+        "password": entered_password,
+        "school": teacher.school_name or "Indépendant",
+        "isLoggedIn": True,
+    })
+    restored["user"] = user
+    restored["pendingCommits"] = 0
+    return restored
+
+
 def build_classink_teacher_snapshot(payload: dict, teacher_email: str) -> dict:
     """Construit une copie JSON sûre de l'état ClassInk, sans mot de passe ni compteurs obsolètes."""
     if not isinstance(payload, dict):
