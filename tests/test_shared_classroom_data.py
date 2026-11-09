@@ -239,4 +239,5 @@ def test_teacher_roster_link_does_not_grant_access_by_school_name_or_name_alone(
 
     assert teacher_matches_school_roster(teacher, {"uniqueId": "", "name": "Aline Mukendi"}) is False
     assert teacher_matches_school_roster(teacher, {"uniqueId": "other-code", "name": "Aline Mukendi"}) is False
-    assert teacher_matches_school_roster(teacher, {"uniqueId": "prof-123456", "name": "Someone Else"}) is False
+    # The unique ID is the account credential for linking; a display-name difference must not reject it.
+    assert teacher_matches_school_roster(teacher, {"uniqueId": "prof-123456", "name": "Aline Mukendi (enseignante)"}) is True
