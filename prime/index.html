@@ -3541,6 +3541,48 @@ async function bpPushClassBulletin(cls) {
 
             let currentFicheCourseId = null;
 
+            // Normalisation partagée par l'aperçu et l'enregistrement : les deux étapes
+            // doivent comparer exactement les mêmes identités.
+            function primeInkImportNormalize(value) {
+                return String(value == null ? "" : value).normalize("NFD")
+                    .replace(/[\u0300-\u036f]/g, "")
+                    .toLowerCase()
+                    .replace(/[^a-z0-9]+/g, " ")
+                    .trim()
+                    .replace(/\s+/g, " ");
+            }
+
+            // Llink peut renvoyer le nom complet dans un seul champ.
+            // 2 mots : Nom + Prénom ; 3 mots ou plus : Nom + Postnom(s) + Prénom.
+            function primeInkNormalizeStudentRow(row) {
+                const value = row && typeof row === "object" ? row : {};
+                let name = String(value.name || "").trim().replace(/\s+/g, " ");
+                let postname = String(value.postname || "").trim().replace(/\s+/g, " ");
+                let prename = String(value.prename || "").trim().replace(/\s+/g, " ");
+                if (!postname && !prename && name.includes(" ")) {
+                    const parts = name.split(" ").filter(Boolean);
+                    if (parts.length === 2) {
+                        name = parts[0];
+                        postname = parts[1];
+                    } else if (parts.length >= 3) {
+                        name = parts[0];
+                        postname = parts.slice(1, -1).join(" ");
+                        prename = parts[parts.length - 1];
+                    }
+                }
+                return { ...value, name, postname, prename };
+            }
+
+            function primeInkStudentIdentityKey(row) {
+                const person = primeInkNormalizeStudentRow(row);
+                return primeInkImportNormalize([person.name, person.postname, person.prename]
+                    .filter(Boolean).join(" "));
+            }
+
+            function primeInkCourseIdentityKey(value) {
+                return primeInkImportNormalize(value);
+            }
+
             // Pont contrôlé entre les fonctions internes des fiches et le module photo Llink.
             // Ces fonctions vivent dans le bloc DOMContentLoaded et ne sont pas globales.
             window.primeInkFichePhotoBridge = {
@@ -3573,6 +3615,27 @@ async function bpPushClassBulletin(cls) {
                 getStudentsInClass(classId) {
                     return getSortedStudentsByClass(classId);
                 },
+                normalizeStudentRow(row) {
+                    return primeInkNormalizeStudentRow(row);
+                },
+                previewStudents(classId, rows) {
+                    const cls = this.getClass(classId);
+                    if (!cls) throw new Error("La classe sélectionnée n'existe plus.");
+                    const existingNames = new Set((Array.isArray(appState.students) ? appState.students : [])
+                        .filter(student => String(student.classId) === String(classId))
+                        .map(primeInkStudentIdentityKey).filter(Boolean));
+                    const seen = new Set();
+                    let duplicates = 0;
+                    const preparedRows = (Array.isArray(rows) ? rows : []).map(raw => {
+                        const row = primeInkNormalizeStudentRow(raw);
+                        const key = primeInkStudentIdentityKey(row);
+                        const duplicate = Boolean(key && (existingNames.has(key) || seen.has(key)));
+                        if (key) seen.add(key);
+                        if (duplicate) duplicates++;
+                        return { ...row, duplicate };
+                    });
+                    return { rows: preparedRows, duplicates };
+                },
                 addStudents(classId, rows) {
                     const cls = this.getClass(classId);
                     if (!cls) throw new Error("La classe sélectionnée n'existe plus.");
@@ -3581,23 +3644,26 @@ async function bpPushClassBulletin(cls) {
                     const previousActiveClassId = activeClassId;
                     const previousActiveStudentId = activeStudentId;
                     if (!Array.isArray(appState.students)) appState.students = [];
-                    const normalize = value => String(value || "").normalize("NFD")
-                        .replace(/[\\u0300-\\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
                     const existingNames = new Set(appState.students
                         .filter(student => String(student.classId) === String(classId))
-                        .map(student => normalize([student.name, student.postname, student.prename].filter(Boolean).join(" "))));
+                        .map(primeInkStudentIdentityKey).filter(Boolean));
                     const result = { added: 0, duplicates: 0, invalid: 0 };
-                    (Array.isArray(rows) ? rows : []).forEach(row => {
-                        const name = String(row && row.name || "").trim();
-                        const postname = String(row && row.postname || "").trim();
-                        const prename = String(row && row.prename || "").trim();
-                        const sexe = String(row && row.sexe || "").trim().toUpperCase();
+                    (Array.isArray(rows) ? rows : []).forEach(raw => {
+                        const row = primeInkNormalizeStudentRow(raw);
+                        const name = row.name;
+                        const postname = row.postname;
+                        const prename = row.prename;
+                        const sexe = String(row.sexe || "").trim().toUpperCase();
                         if (!name || !["M", "F"].includes(sexe)) {
                             result.invalid++;
                             return;
                         }
-                        const key = normalize([name, postname, prename].filter(Boolean).join(" "));
-                        if (!key || existingNames.has(key)) {
+                        const key = primeInkStudentIdentityKey(row);
+                        if (!key) {
+                            result.invalid++;
+                            return;
+                        }
+                        if (existingNames.has(key)) {
                             result.duplicates++;
                             return;
                         }
@@ -3630,6 +3696,36 @@ async function bpPushClassBulletin(cls) {
                     }
                     return result;
                 },
+                previewCourses(classId, rows) {
+                    const cls = this.getClass(classId);
+                    if (!cls) throw new Error("La classe sélectionnée n'existe plus.");
+                    const existingByName = new Map((Array.isArray(appState.courses) ? appState.courses : [])
+                        .filter(course => String(course.classId) === String(classId))
+                        .map(course => [primeInkCourseIdentityKey(course.name), course])
+                        .filter(([key]) => Boolean(key)));
+                    const seen = new Set();
+                    let duplicates = 0;
+                    let enrichable = 0;
+                    const preparedRows = (Array.isArray(rows) ? rows : []).map(raw => {
+                        const row = { ...(raw || {}) };
+                        const key = primeInkCourseIdentityKey(row.name);
+                        const existing = key ? existingByName.get(key) : null;
+                        const duplicateInPhoto = Boolean(key && seen.has(key));
+                        if (key) seen.add(key);
+                        const maxPer = Number(row.maxPer);
+                        const hasMax = Number.isFinite(maxPer) && maxPer > 0;
+                        const canEnrich = Boolean(existing && !duplicateInPhoto && (
+                            (!existing.category && String(row.domain || "").trim()) ||
+                            (!existing.subCategory && String(row.subdomain || "").trim()) ||
+                            (hasMax && Math.abs(Number(existing.maxPer || 0) - maxPer) > 0.001)
+                        ));
+                        const duplicate = Boolean((existing && !canEnrich) || duplicateInPhoto);
+                        if (duplicate) duplicates++;
+                        if (canEnrich) enrichable++;
+                        return { ...row, duplicate, canEnrich };
+                    });
+                    return { rows: preparedRows, duplicates, enrichable };
+                },
                 addCourses(classId, rows) {
                     const cls = this.getClass(classId);
                     if (!cls) throw new Error("La classe sélectionnée n'existe plus.");
@@ -3639,43 +3735,51 @@ async function bpPushClassBulletin(cls) {
                     const previousCategories = Array.isArray(cls.categories) ? cls.categories.slice() : [];
                     if (!Array.isArray(appState.courses)) appState.courses = [];
                     if (!Array.isArray(cls.categories)) cls.categories = [];
-                    const normalize = value => String(value || "").normalize("NFD")
-                        .replace(/[\\u0300-\\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
                     const result = { added: 0, enriched: 0, duplicates: 0, invalid: 0 };
                     (Array.isArray(rows) ? rows : []).forEach(row => {
                         const name = String(row && row.name || "").trim();
-                        if (!name) {
+                        if (!name || !primeInkCourseIdentityKey(name)) {
                             result.invalid++;
                             return;
                         }
                         const domain = String(row && row.domain || "").trim();
                         const subdomain = String(row && row.subdomain || "").trim();
+                        const maxPer = Number(row && row.maxPer);
+                        const validMax = Number.isFinite(maxPer) && maxPer > 0;
                         let category = "";
                         if (domain) {
-                            const current = cls.categories.find(item => normalize(item) === normalize(domain));
+                            const current = cls.categories.find(item => primeInkImportNormalize(item) === primeInkImportNormalize(domain));
                             category = current || domain;
                             if (!current) cls.categories.push(domain);
                         } else {
-                            category = cls.categories.find(item => normalize(item) === "general") || "Général";
-                            if (!cls.categories.some(item => normalize(item) === normalize(category))) cls.categories.push(category);
+                            category = cls.categories.find(item => primeInkImportNormalize(item) === "general") || "Général";
+                            if (!cls.categories.some(item => primeInkImportNormalize(item) === primeInkImportNormalize(category))) cls.categories.push(category);
                         }
                         const existing = appState.courses.find(course =>
-                            String(course.classId) === String(cls.id) && normalize(course.name) === normalize(name)
+                            String(course.classId) === String(cls.id) &&
+                            primeInkCourseIdentityKey(course.name) === primeInkCourseIdentityKey(name)
                         );
                         if (existing) {
                             let changed = false;
                             if (!existing.category && category) { existing.category = category; changed = true; }
                             if (!existing.subCategory && subdomain) { existing.subCategory = subdomain; changed = true; }
+                            if (validMax && Math.abs(Number(existing.maxPer || 0) - maxPer) > 0.001) {
+                                existing.maxPer = maxPer;
+                                changed = true;
+                            }
                             if (changed) result.enriched++;
                             else result.duplicates++;
+                            return;
+                        }
+                        if (!validMax) {
+                            result.invalid++;
                             return;
                         }
                         appState.courses.push({
                             id: "k_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 9),
                             classId: cls.id,
                             name,
-                            maxPer: Number.isFinite(Number(row && row.maxPer)) && Number(row.maxPer) > 0
-                                ? Number(row.maxPer) : 40,
+                            maxPer,
                             category,
                             subCategory: subdomain,
                             titulaire: cls.titulaire || "Non assigné"
@@ -5943,7 +6047,7 @@ function updateScheduleResultTables(joursCount, heuresCount) {
 
                 const date = new Date().toISOString().slice(0, 10);
                 const schoolName = String((appState.school && appState.school.name) || 'Ecole')
-                    .normalize('NFD').replace(/[\\u0300-\\u036f]/g, '')
+                    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
                     .replace(/[^A-Za-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || 'Ecole';
                 XLSX.writeFile(workbook, 'PrimeInk_' + schoolName + '_' + date + '.xlsx', { compression: true });
                 setPrimeInkExcelStatus('Export Excel terminé. Conservez ce fichier dans un endroit sûr.', false);
@@ -6993,25 +7097,27 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
     }
 
     function showStudentReview(data, classId, className, filename) {
-        const rows = Array.isArray(data.students) ? data.students : [];
-        if (!rows.length) throw new Error("Aucun élève n'a pu être lu sur cette photo.");
+        const rawRows = Array.isArray(data.students) ? data.students : [];
+        if (!rawRows.length) throw new Error("Aucun élève n'a pu être lu sur cette photo.");
+        const preview = bridge().previewStudents(classId, rawRows);
+        const rows = preview.rows;
         pendingStudentImport = { rows, classId };
         const body = rows.map((row, index) => {
             const confidence = Math.round(Math.max(0, Math.min(1, Number(row.confidence) || 0)) * 100);
             return '<tr data-student-photo-row="' + index + '">' +
-                '<td><input type="checkbox" data-include checked aria-label="Importer cet élève"></td>' +
+                '<td><input type="checkbox" data-include ' + (row.duplicate ? '' : 'checked') + ' aria-label="Importer cet élève"></td>' +
                 '<td><input class="form-control" data-field="name" value="' + escape(row.name || "") + '" aria-label="Nom"></td>' +
                 '<td><input class="form-control" data-field="postname" value="' + escape(row.postname || "") + '" aria-label="Postnom"></td>' +
                 '<td><input class="form-control" data-field="prename" value="' + escape(row.prename || "") + '" aria-label="Prénom"></td>' +
                 '<td><select class="form-control" data-field="sexe" aria-label="Sexe"><option value="">À confirmer</option>' +
                 '<option value="M" ' + (row.sexe === "M" ? "selected" : "") + '>M</option>' +
                 '<option value="F" ' + (row.sexe === "F" ? "selected" : "") + '>F</option></select></td>' +
-                '<td>' + confidence + '%</td><td>' + escape(row.warning || "") + '</td></tr>';
+                '<td>' + confidence + '%</td><td>' + escape(row.duplicate ? "Déjà présent dans cette classe" : (row.warning || "")) + '</td></tr>';
         }).join("");
         const table = '<table class="primeink-fiche-table"><thead><tr><th>Importer</th><th>Nom</th><th>Postnom</th><th>Prénom</th><th>Sexe</th><th>Confiance</th><th>Avertissement</th></tr></thead><tbody>' + body + '</tbody></table>';
         const dialog = createReviewModal(
             "primeInkStudentPhotoReview", "Vérifier la liste des élèves",
-            filename + " · " + className + " · " + rows.length + " ligne(s) détectée(s). Choisissez M ou F et corrigez les champs avant l'ajout.",
+            filename + " · " + className + " · " + rows.length + " ligne(s) détectée(s) · " + preview.duplicates + " doublon(s) exact(s) déjà présent(s) dans la classe. Les lignes correspondantes sont décochées.",
             table, warningsList(data.warnings), "Ajouter les élèves vérifiés", applyStudentReview
         );
         dialog.querySelectorAll("[data-field='name']").forEach(field => {
@@ -7025,7 +7131,7 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
         for (const rowEl of dialog.querySelectorAll("[data-student-photo-row]")) {
             if (!rowEl.querySelector("[data-include]")?.checked) continue;
             const val = field => rowEl.querySelector('[data-field="' + field + '"]')?.value.trim() || "";
-            const row = { name: val("name"), postname: val("postname"), prename: val("prename"), sexe: val("sexe").toUpperCase() };
+            const row = bridge().normalizeStudentRow({ name: val("name"), postname: val("postname"), prename: val("prename"), sexe: val("sexe").toUpperCase() });
             if (!row.name || !["M", "F"].includes(row.sexe)) {
                 setStatus("primeInkStudentPhotoStatus", "Complétez le nom et choisissez M ou F pour chaque ligne cochée, ou décochez les lignes incertaines.", true);
                 return;
@@ -7034,6 +7140,11 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
         }
         if (!rows.length) return setStatus("primeInkStudentPhotoStatus", "Sélectionnez au moins un élève à importer.", true);
         try {
+            const finalPreview = bridge().previewStudents(pendingStudentImport.classId, rows);
+            if (finalPreview.duplicates) {
+                return setStatus("primeInkStudentPhotoStatus",
+                    finalPreview.duplicates + " doublon(s) exact(s) détecté(s) avant enregistrement. Décochez les lignes concernées ou corrigez leur identité, puis réessayez.", true);
+            }
             const result = bridge().addStudents(pendingStudentImport.classId, rows);
             closeReview("primeInkStudentPhotoReview");
             const details = [
@@ -7047,23 +7158,27 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
     }
 
     function showCourseReview(data, classId, className, filename) {
-        const rows = Array.isArray(data.courses) ? data.courses : [];
-        if (!rows.length) throw new Error("Aucun cours n'a pu être lu sur ce bulletin.");
+        const rawRows = Array.isArray(data.courses) ? data.courses : [];
+        if (!rawRows.length) throw new Error("Aucun cours n'a pu être lu sur ce bulletin.");
+        const preview = bridge().previewCourses(classId, rawRows);
+        const rows = preview.rows;
         pendingCourseImport = { rows, classId };
         const body = rows.map((row, index) => {
             const confidence = Math.round(Math.max(0, Math.min(1, Number(row.confidence) || 0)) * 100);
+            const suggestedMax = Number.isFinite(Number(row.maxPer)) && Number(row.maxPer) > 0 ? String(Number(row.maxPer)) : "";
+            const status = row.duplicate ? "Cours déjà présent dans cette classe" : row.canEnrich ? "Cours existant : informations à compléter" : (row.warning || "");
             return '<tr data-course-photo-row="' + index + '">' +
-                '<td><input type="checkbox" data-include checked aria-label="Importer ce cours"></td>' +
+                '<td><input type="checkbox" data-include ' + (row.duplicate ? '' : 'checked') + ' aria-label="Importer ce cours"></td>' +
                 '<td><input class="form-control" data-field="name" value="' + escape(row.name || "") + '" aria-label="Nom du cours"></td>' +
                 '<td><input class="form-control" data-field="domain" value="' + escape(row.domain || "") + '" aria-label="Domaine"></td>' +
                 '<td><input class="form-control" data-field="subdomain" value="' + escape(row.subdomain || "") + '" aria-label="Sous-domaine"></td>' +
-                '<td><input class="form-control" type="number" min="0.5" step="0.5" data-field="maxPer" value="40" aria-label="Maximum par période"></td>' +
-                '<td>' + confidence + '%</td><td>' + escape(row.warning || "") + '</td></tr>';
+                '<td><input class="form-control" type="number" min="0.5" step="0.5" data-field="maxPer" value="' + escape(suggestedMax) + '" aria-label="Maximum par période"></td>' +
+                '<td>' + confidence + '%</td><td>' + escape(status) + '</td></tr>';
         }).join("");
         const table = '<table class="primeink-fiche-table"><thead><tr><th>Importer</th><th>Cours</th><th>Domaine</th><th>Sous-domaine</th><th>Max/période</th><th>Confiance</th><th>Avertissement</th></tr></thead><tbody>' + body + '</tbody></table>';
         createReviewModal(
             "primeInkCoursePhotoReview", "Vérifier les cours du bulletin",
-            filename + " · " + className + " · " + rows.length + " cours détecté(s). Le maximum par période est prérempli à 40 ; vérifiez-le pour chaque cours.",
+            filename + " · " + className + " · " + rows.length + " cours détecté(s) · " + preview.duplicates + " doublon(s) exact(s) dans la classe. Le maximum extrait est prérempli ; si inconnu, saisissez-le avant l'ajout.",
             table, warningsList(data.warnings), "Ajouter les cours vérifiés", applyCourseReview
         );
     }
@@ -7084,6 +7199,11 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
         }
         if (!rows.length) return setStatus("primeInkCoursePhotoStatus", "Sélectionnez au moins un cours à importer.", true);
         try {
+            const finalPreview = bridge().previewCourses(pendingCourseImport.classId, rows);
+            if (finalPreview.duplicates) {
+                return setStatus("primeInkCoursePhotoStatus",
+                    finalPreview.duplicates + " doublon(s) exact(s) détecté(s) avant enregistrement. Décochez les cours concernés ou corrigez leur nom, puis réessayez.", true);
+            }
             const result = bridge().addCourses(pendingCourseImport.classId, rows);
             closeReview("primeInkCoursePhotoReview");
             const details = [

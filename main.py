@@ -1755,34 +1755,103 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
     if declared_class and isinstance(conduct_payload.get(declared_class), dict):
         conduct_report = store_conduct(db, teacher, declared_class, students_dict.get(declared_class, []), conduct_payload[declared_class])
 
-    # --- 1. Indexation & Validation des Élèves ---
-    student_lookup = {}  # { student_id: {"name": ..., "class": ...} }
-    for class_name, st_list in students_dict.items():
-        for st in st_list:
-            st_id = st.get("id")
-            st_name = st.get("name", "").strip()
-            if st_id and st_name:
-                student_lookup[st_id] = {"name": st_name, "class": class_name}
+    # --- 1. Catalogue scolaire officiel et périmètre du professeur ---
+    verified_school_id = teacher.school_id if teacher_has_verified_school_access(teacher) else None
+    official_classes_by_name = {}
+    assigned_courses_by_class = {}
+    official_course_max = {}
+    teacher_allowed_classes = set()
 
-    # --- 2. Indexation & Validation des Évaluations ---
-    eval_lookup = {}  # { eval_id: {"name": ..., "max": ..., "course": ..., "period": ..., "class": ...} }
+    if verified_school_id:
+        official_classes = db.query(ClasseInformation).filter(
+            ClasseInformation.school_id == verified_school_id
+        ).all()
+        official_classes_by_name = {
+            normalize_name(item.class_name): item for item in official_classes
+        }
+        for official_class in official_classes:
+            if teacher_is_titulaire(teacher, official_class):
+                teacher_allowed_classes.add(str(official_class.class_name))
+        official_courses = db.query(CourseInformation).filter(
+            CourseInformation.school_id == verified_school_id
+        ).all()
+        classes_by_id = {str(item.id): item for item in official_classes}
+        for course in official_courses:
+            if not teacher_matches_catalog_name(teacher, course.titulaire_name):
+                continue
+            official_class = classes_by_id.get(str(course.class_id))
+            if not official_class:
+                continue
+            class_name = str(official_class.class_name)
+            teacher_allowed_classes.add(class_name)
+            assigned_courses_by_class.setdefault(class_name, set()).add(str(course.course_name))
+            official_course_max[(class_name, str(course.course_name))] = float(course.max_per or 40)
+
+    # --- 2. Indexation des élèves réellement présents dans le catalogue autorisé ---
+    student_lookup = {}  # { ClassInk student_id: {name, class, official_student_id} }
+    for class_name, st_list in students_dict.items():
+        if verified_school_id:
+            official_class = official_classes_by_name.get(normalize_name(class_name))
+            if not official_class or class_name not in teacher_allowed_classes:
+                continue
+        else:
+            official_class = None
+        for st in (st_list or []):
+            if not isinstance(st, dict):
+                continue
+            st_id = str(st.get("id") or "").strip()
+            st_name = str(st.get("name") or "").strip()
+            if not st_id or not st_name:
+                continue
+            official_student_id = None
+            if verified_school_id:
+                official_student_id = resolve_student(
+                    db, verified_school_id, official_class, teacher.email, st_id, st_name
+                )
+                if not official_student_id:
+                    continue
+            student_lookup[st_id] = {
+                "name": st_name, "class": str(official_class.class_name) if official_class else class_name,
+                "official_student_id": official_student_id,
+            }
+
+    # --- 3. Indexation des évaluations, limitée aux cours attribués ---
+    eval_lookup = {}  # { eval_id: {name, max, course, period, class} }
     for class_name, periods in evaluations_dict.items():
-        for period_key, ev_list in periods.items():
-            for ev in ev_list:
-                ev_id = ev.get("id")
-                ev_course = ev.get("course", "").strip()
+        if verified_school_id and class_name not in teacher_allowed_classes:
+            continue
+        for period_key, ev_list in (periods or {}).items():
+            if period_key not in PERIODS:
+                continue
+            for ev in (ev_list or []):
+                if not isinstance(ev, dict):
+                    continue
+                ev_id = str(ev.get("id") or "").strip()
+                ev_course = str(ev.get("course") or "").strip()
                 ev_max = ev.get("max")
-                
-                # Vérification : le cours doit exister dans la classe
-                valid_courses = courses_dict.get(class_name, [])
-                if ev_id and ev_course in valid_courses and isinstance(ev_max, (int, float)) and ev_max > 0:
-                    eval_lookup[ev_id] = {
-                        "name": ev.get("name", "Évaluation"),
-                        "max": float(ev_max),
-                        "course": ev_course,
-                        "period": period_key,
-                        "class": class_name
-                    }
+                if verified_school_id:
+                    if ev_course not in assigned_courses_by_class.get(class_name, set()):
+                        continue
+                    catalog_max = official_course_max.get((class_name, ev_course))
+                    if catalog_max is None:
+                        continue
+                else:
+                    valid_courses = courses_dict.get(class_name, [])
+                    if ev_course not in valid_courses:
+                        continue
+                    catalog_max = None
+
+                if not ev_id or not isinstance(ev_max, (int, float)) or isinstance(ev_max, bool) or ev_max <= 0:
+                    continue
+                if catalog_max is not None and float(ev_max) > catalog_max:
+                    continue
+                eval_lookup[ev_id] = {
+                    "name": str(ev.get("name") or "Évaluation")[:160],
+                    "max": float(ev_max),
+                    "course": ev_course,
+                    "period": period_key,
+                    "class": class_name,
+                }
 
     # --- 3. Traitement & Validation des Notes (Grades) ---
     updates_count = 0
@@ -1847,7 +1916,16 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
     # On ne génère le format PrimeNet que si l'enseignant a été autorisé par la liste officielle de l'école
     if school_id and str(school_id).lower() != "indépendant":
         # Construction des listes et dictionnaires de base
-        classes_list = list(students_dict.keys())
+        classes_list = (
+            [str(class_name) for class_name in students_dict.keys()
+             if str(class_name) in teacher_allowed_classes
+             and normalize_name(class_name) in official_classes_by_name]
+            if verified_school_id else list(students_dict.keys())
+        )
+        effective_courses_dict = (
+            {class_name: sorted(assigned_courses_by_class.get(class_name, set())) for class_name in classes_list}
+            if verified_school_id else courses_dict
+        )
         presences_dict = payload.get("presences", {})
         if isinstance(presences_dict, dict):
             dates_presence = list(presences_dict.keys())
@@ -1862,15 +1940,15 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
         
         # Formatage des élèves : { "classe": ["Nom Post-nom", ...] }
         formatted_students = {}
-        for c_name, st_list in students_dict.items():
-            formatted_students[c_name] = [st.get("name", "") for st in st_list if st.get("name")]
+        for student_info in student_lookup.values():
+            formatted_students.setdefault(student_info["class"], []).append(student_info["name"])
             
         # Construction de la moyenne classe selon ta structure
         moyenne_classe = {}
         for c_name in classes_list:
             moyenne_classe[c_name] = {}
             # On récupère les cours de cette classe
-            c_courses = courses_dict.get(c_name, [])
+            c_courses = effective_courses_dict.get(c_name, [])
             for course in c_courses:
                 moyenne_classe[c_name][course] = {"P1": {}, "P2": {}, "EX1": {}, "P3": {}, "P4": {}, "EX2": {}}
                 
@@ -1896,7 +1974,7 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
             "teacher_id": teacher.email,
             "school_id": school_id,
             "classes": classes_list,
-            "cours": courses_dict,
+            "cours": effective_courses_dict,
             "date_presence": dates_presence,
             "students": formatted_students,
             "moyenne_classe": moyenne_classe,
@@ -2309,16 +2387,31 @@ def store_school_class_catalog(db: Session, school: SchoolInformation, catalog: 
     }
 
 
+def teacher_matches_catalog_name(teacher, value: str) -> bool:
+    """Compare un titulaire de cours au compte enseignant (nom, code unique ou e-mail)."""
+    raw = str(value or "").strip()
+    if not raw:
+        return False
+    normalized = normalize_name(raw)
+    candidates = {
+        normalize_name(getattr(teacher, "full_name", "") or ""),
+        normalize_name(getattr(teacher, "teacher_code", "") or ""),
+        normalize_name(getattr(teacher, "email", "") or ""),
+    }
+    if normalized in candidates:
+        return True
+    return teacher_name_identity_key(raw) == teacher_name_identity_key(getattr(teacher, "full_name", "") or "")
+
+
 def compose_teacher_classroom_context(teacher, school, classes, students, courses) -> dict:
-    """Construit la base ClassInk partagée et les classes de titulaire officiellement reconnues."""
-    classes_by_id = {str(item.id): item for item in classes}
-    classes_by_name = {str(item.id): str(item.class_name) for item in classes}
+    """Construit le catalogue de l'école ; le statut de titulaire reste propre à chaque classe."""
+    classes_by_id = {str(item.id): str(item.class_name) for item in classes}
     students_by_class, courses_by_class, course_max = {}, {}, {}
     for item in classes:
         students_by_class.setdefault(item.class_name, [])
         courses_by_class.setdefault(item.class_name, [])
     for item in students:
-        class_name = classes_by_name.get(str(item.class_id))
+        class_name = classes_by_id.get(str(item.class_id))
         if not class_name:
             continue
         full_name = " ".join(part for part in (
@@ -2330,7 +2423,7 @@ def compose_teacher_classroom_context(teacher, school, classes, students, course
             "sexe": item.student_sexe or "", "classId": item.class_id,
         })
     for item in courses:
-        class_name = classes_by_name.get(str(item.class_id))
+        class_name = classes_by_id.get(str(item.class_id))
         if not class_name:
             continue
         values = courses_by_class.setdefault(class_name, [])
@@ -2338,6 +2431,9 @@ def compose_teacher_classroom_context(teacher, school, classes, students, course
             values.append(item.course_name)
         course_max[f"{class_name}_{item.course_name}"] = float(item.max_per or 40)
 
+    # L'enseignant autorisé reçoit le catalogue des classes de son école.
+    # En revanche, le droit de modifier la conduite n'est accordé que dans ses classes
+    # de titulariat officielles, vérifiées par teacher_is_titulaire et store_conduct.
     titulaire_classes = [
         item.class_name for item in classes
         if teacher_is_titulaire(teacher, item)
@@ -2365,8 +2461,20 @@ def compose_teacher_classroom_context(teacher, school, classes, students, course
 
 
 def apply_teacher_classroom_context(state: dict, context: dict) -> dict:
-    """Fusionne le catalogue de l'école dans le profil enseignant, sans effacer ses notes locales."""
+    """Fusionne le catalogue autorisé de l'école avec l'espace local sans effacer les notes."""
     state = dict(state or {})
+    # Un enseignant indépendant/non autorisé garde son espace local, sans titulaire déclaré.
+    if not context.get("schoolId"):
+        user = dict(state.get("user") or {})
+        user["schoolId"] = ""
+        user["titulaireOf"] = ""
+        user["titulaireClasses"] = []
+        state["user"] = user
+        state["titulaireClasses"] = []
+        state["classrooms"] = []
+        state["schoolId"] = ""
+        return state
+
     state["classes"] = list(dict.fromkeys(
         [str(value) for value in (state.get("classes") or [])] +
         [str(value) for value in (context.get("classes") or [])]
@@ -2400,7 +2508,6 @@ def apply_teacher_classroom_context(state: dict, context: dict) -> dict:
     user["titulaireClasses"] = list(context.get("titulaireClasses") or [])
     state["user"] = user
     return state
-
 
 def build_teacher_classroom_context(db: Session, teacher) -> dict:
     if not teacher_has_verified_school_access(teacher):
@@ -2450,6 +2557,7 @@ def prepare_classroom_information(
     }
 
 
+
 @app.get("/api/teacher/classes")
 def get_teacher_classroom_information(
     db: Session = Depends(get_db),
@@ -2480,7 +2588,24 @@ def resolve_student(db, school_id, classe, teacher_email, classink_student_id, c
         StudentLink.school_id == school_id, StudentLink.teacher_email == teacher_email,
         StudentLink.classink_student_id == classink_student_id).first()
     if link:
-        return link.student_id
+        # Une ancienne correspondance ne doit jamais permettre d'écrire la conduite
+        # sur un élève d'une autre classe, même si le professeur est titulaire ici.
+        linked_student = db.query(SchoolStudentInformation).filter(
+            SchoolStudentInformation.id == link.student_id,
+            SchoolStudentInformation.school_id == school_id,
+            SchoolStudentInformation.class_id == classe.id,
+        ).first()
+        return linked_student.id if linked_student else None
+
+    # Dans certains imports, l'id ClassInk est identique à l'id PrimeInk.
+    direct_student = db.query(SchoolStudentInformation).filter(
+        SchoolStudentInformation.id == classink_student_id,
+        SchoolStudentInformation.school_id == school_id,
+        SchoolStudentInformation.class_id == classe.id,
+    ).first()
+    if direct_student:
+        return direct_student.id
+
     wanted = name_tokens_key(classink_student_name)
     if not wanted:
         return None

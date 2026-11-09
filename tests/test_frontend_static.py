@@ -139,6 +139,26 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn("db.user && db.user.isLoggedIn && db.user.id", source)
         self.assertIn("db.user && db.user.isLoggedIn ? String(db.user.id || '')", source)
 
+    def test_primeink_photo_import_duplicate_keys_and_student_name_split(self):
+        source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
+        self.assertIn("function primeInkImportNormalize(value)", source)
+        self.assertIn(r'.replace(/[\u0300-\u036f]/g, "")', source)
+        self.assertNotIn(r'.replace(/[\\u0300-\\u036f]/g', source)
+        self.assertIn("function primeInkNormalizeStudentRow(row)", source)
+        self.assertIn("postname = parts[1];", source)
+        self.assertIn('postname = parts.slice(1, -1).join(" ");', source)
+        self.assertIn("prename = parts[parts.length - 1];", source)
+        self.assertIn("previewStudents(classId, rows)", source)
+        self.assertIn("finalPreview.duplicates", source)
+
+    def test_primeink_photo_course_import_uses_detected_max_and_shared_normalizer(self):
+        source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
+        self.assertIn("function primeInkCourseIdentityKey(value)", source)
+        self.assertIn("previewCourses(classId, rows)", source)
+        self.assertIn("const suggestedMax = Number.isFinite(Number(row.maxPer))", source)
+        self.assertIn("existing.maxPer = maxPer", source)
+        self.assertIn("finalPreview.duplicates", source)
+
 
 if __name__ == "__main__":
     unittest.main()
