@@ -43,4 +43,4 @@ jobs:
         run: python -m compileall -q main.py classnet_common.py tests
 
       - name: Check database snapshot and frontend behavior
-        run: pytest -q tests
+        run: python -m pytest -q tests
