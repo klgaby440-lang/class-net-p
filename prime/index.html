@@ -7140,6 +7140,11 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
         }
         if (!rows.length) return setStatus("primeInkStudentPhotoStatus", "Sélectionnez au moins un élève à importer.", true);
         try {
+            const finalPreview = bridge().previewStudents(pendingStudentImport.classId, rows);
+            if (finalPreview.duplicates) {
+                return setStatus("primeInkStudentPhotoStatus",
+                    finalPreview.duplicates + " doublon(s) exact(s) détecté(s) avant enregistrement. Décochez les lignes concernées ou corrigez leur identité, puis réessayez.", true);
+            }
             const result = bridge().addStudents(pendingStudentImport.classId, rows);
             closeReview("primeInkStudentPhotoReview");
             const details = [
@@ -7194,6 +7199,11 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
         }
         if (!rows.length) return setStatus("primeInkCoursePhotoStatus", "Sélectionnez au moins un cours à importer.", true);
         try {
+            const finalPreview = bridge().previewCourses(pendingCourseImport.classId, rows);
+            if (finalPreview.duplicates) {
+                return setStatus("primeInkCoursePhotoStatus",
+                    finalPreview.duplicates + " doublon(s) exact(s) détecté(s) avant enregistrement. Décochez les cours concernés ou corrigez leur nom, puis réessayez.", true);
+            }
             const result = bridge().addCourses(pendingCourseImport.classId, rows);
             closeReview("primeInkCoursePhotoReview");
             const details = [
