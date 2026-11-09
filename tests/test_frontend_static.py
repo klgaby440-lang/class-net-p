@@ -94,6 +94,23 @@ class FrontendStaticTests(unittest.TestCase):
         for function_name in ("resetDeliberation", "applyDeliberationAll", "saveDeliberation"):
             self.assertIn(f"function {function_name}(", source)
 
+    def test_primeink_student_management_uses_shared_class_lookup(self):
+        source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
+        helper_index = source.index("function getManagedStudentsByClass(")
+        modal_index = source.index("window.openManageStudentsModal = function(")
+        self.assertLess(helper_index, modal_index)
+        self.assertIn("getManagedStudentsByClass(activeClassId)", source)
+        self.assertIn("renderManagedStudents(overlay.dataset.classId || '')", source)
+        self.assertIn("String(st.classId ?? '') === targetClassId", source)
+
+    def test_primeink_bulletin_handles_class_ids_and_print_scale(self):
+        source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
+        self.assertIn("String(c.classId ?? '') === studentClassId", source)
+        self.assertIn("String(s.classId ?? '') === studentClassId", source)
+        self.assertIn("bp-empty-courses", source)
+        self.assertIn("page.style.transform = 'none';", source)
+        self.assertNotIn("Math.min(sheet.clientWidth / pw, sheet.clientHeight / ph)", source)
+
 
 if __name__ == "__main__":
     unittest.main()

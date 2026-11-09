@@ -2488,12 +2488,15 @@ window.alert = function(message) { showCustomAlert(message); };
                 function bpBuildPage(student, opts) {
                     const editable = !!(opts && opts.editable);
                     const school = appState.school || {};
-                    const cls = appState.classes.find(c => c.id === student.classId);
+                    const studentClassId = String(student.classId ?? '');
+                    const cls = appState.classes.find(c => String(c.id ?? '') === studentClassId);
                     const model = bpClassModel(cls);
                     const M = BULLETIN_MODELS[model];
                     const isRep = M.repechage;
-                    const classStudents = appState.students.filter(s => s.classId === student.classId);
-                    const classCourses = appState.courses.filter(c => c.classId === student.classId);
+                    const classStudents = (Array.isArray(appState.students) ? appState.students : [])
+                        .filter(s => String(s.classId ?? '') === studentClassId);
+                    const classCourses = (Array.isArray(appState.courses) ? appState.courses : [])
+                        .filter(c => String(c.classId ?? '') === studentClassId);
                     const allTotals = {};
                     classStudents.forEach(s => allTotals[s.id] = bpStudentTotals(s.id, classCourses));
                     if (!allTotals[student.id]) allTotals[student.id] = bpStudentTotals(student.id, classCourses);
@@ -2590,6 +2593,11 @@ window.alert = function(message) { showCustomAlert(message); };
                             }, isRep ? '<td class="bp-sep"></td><td></td>' : '');
                         });
                     });
+
+                    if (!classCourses.length) {
+                        const totalColumns = 1 + BP_COLS.length + (isRep ? 2 : 0);
+                        body += '<tr class="bp-empty-courses"><td colspan="' + totalColumns + '" style="padding:2mm;text-align:center;font-weight:bold;">Aucun cours associé à cette classe. Vérifiez les cours de la classe et leur synchronisation.</td></tr>';
+                    }
 
                     // Les totaux généraux sont vides tant qu'un cours n'a pas son total complet.
                     ['s1', 's2', 'tg'].forEach(k => {
@@ -2777,10 +2785,10 @@ window.alert = function(message) { showCustomAlert(message); };
                 }
 
                 window.renderOfficialBulletin = function(studentId) {
-                    const student = appState.students.find(s => s.id === studentId);
+                    const student = appState.students.find(s => String(s.id ?? '') === String(studentId ?? ''));
                     const area = document.getElementById('officialBulletinArea');
                     if (!student || !area) return;
-                    const cls = appState.classes.find(c => c.id === student.classId);
+                    const cls = appState.classes.find(c => String(c.id ?? '') === String(student.classId ?? ''));
                     bpDisplayedClassId = student.classId;
                     bpRendering = true;
                     area.innerHTML = bpBuildPage(student, { editable: true });
@@ -2799,9 +2807,9 @@ window.alert = function(message) { showCustomAlert(message); };
                 // Bulletin vierge d'une classe sans élève : il montre le modèle et les cours de CETTE classe
                 window.renderBlankBulletin = function(classId) {
                     const area = document.getElementById('officialBulletinArea');
-                    const cls = appState.classes.find(c => c.id === classId);
+                    const cls = appState.classes.find(c => String(c.id ?? '') === String(classId ?? ''));
                     if (!area || !cls) return;
-                    bpDisplayedClassId = classId;
+                    bpDisplayedClassId = cls.id;
                     bpRendering = true;
                     area.innerHTML = bpBuildPage(bpBlankStudent(classId), { editable: false });
                     bpRendering = false;
@@ -2811,7 +2819,9 @@ window.alert = function(message) { showCustomAlert(message); };
 
                 // Redessine ce qui est affiché : le bulletin de l'élève actif, ou le bulletin vierge de la classe
                 function bpRefreshBulletin() {
-                    const st = appState.students.find(s => s.id === activeStudentId && s.classId === bpDisplayedClassId);
+                    const st = appState.students.find(s =>
+                        String(s.id ?? '') === String(activeStudentId ?? '') &&
+                        String(s.classId ?? '') === String(bpDisplayedClassId ?? ''));
                     if (st) window.renderOfficialBulletin(st.id);
                     else if (bpDisplayedClassId) window.renderBlankBulletin(bpDisplayedClassId);
                 }
@@ -2819,7 +2829,7 @@ window.alert = function(message) { showCustomAlert(message); };
                 // ---- Impression (A4 / A3, orientation selon le modèle) ----
                 function bpPaper() { return appState.printSettings && appState.printSettings.paper === 'A3' ? 'A3' : 'A4'; }
                 function bpOrientationOf(classId) {
-                    const cls = appState.classes.find(c => c.id === classId);
+                    const cls = appState.classes.find(c => String(c.id ?? '') === String(classId ?? ''));
                     return BULLETIN_MODELS[bpClassModel(cls)].orientation;
                 }
                 function bpSheetDims(orientation) {
@@ -2838,27 +2848,29 @@ window.alert = function(message) { showCustomAlert(message); };
                     container.id = 'pdfExportContainer';
                     container.style.cssText = 'position:fixed;left:-20000px;top:0;';
                     studentIds.forEach(id => {
-                        const st = String(id).startsWith('__blank__:') ? bpBlankStudent(String(id).slice(10)) : appState.students.find(s => s.id === id);
+                        const targetId = String(id);
+                        const st = targetId.startsWith('__blank__:')
+                            ? bpBlankStudent(targetId.slice(10))
+                            : appState.students.find(s => String(s.id ?? '') === targetId);
                         if (!st) return;
                         const sheet = document.createElement('div');
                         sheet.className = 'print-sheet';
-                        sheet.style.width = dims.w + 'mm';
-                        sheet.style.height = dims.h + 'mm';
+                        sheet.style.cssText = 'position:relative;display:flex;align-items:flex-start;justify-content:center;flex:none;width:' + dims.w + 'mm;height:' + dims.h + 'mm;margin:0 auto;';
                         sheet.innerHTML = bpBuildPage(st, { editable: false });
+                        const page = sheet.querySelector('.bp-page');
+                        if (page) {
+                            // Le bulletin est déjà dessiné aux dimensions physiques A4.
+                            // Ne pas le réduire avec un calcul offsetWidth/clientWidth sensible au zoom.
+                            page.style.position = 'relative';
+                            page.style.left = 'auto';
+                            page.style.top = 'auto';
+                            page.style.margin = '0 auto';
+                            page.style.transform = 'none';
+                            page.style.transformOrigin = 'top left';
+                        }
                         container.appendChild(sheet);
                     });
                     document.body.appendChild(container);
-                    container.querySelectorAll('.print-sheet').forEach(sheet => {
-                        const page = sheet.querySelector('.bp-page');
-                        const pw = page.offsetWidth, ph = page.offsetHeight;
-                        const s = Math.min(sheet.clientWidth / pw, sheet.clientHeight / ph);
-                        page.style.position = 'absolute';
-                        page.style.left = '50%';
-                        page.style.top = '0';
-                        page.style.marginLeft = (-pw / 2) + 'px';
-                        page.style.transformOrigin = 'top center';
-                        page.style.transform = 'scale(' + s + ')';
-                    });
                     return container;
                 }
                 // Aperçu d'impression PrimeInk. L'utilisateur déclenche lui-même le dialogue
@@ -2936,7 +2948,9 @@ window.alert = function(message) { showCustomAlert(message); };
                     sheets.remove();
                 }
                 window.printStudentBulletin = function() {
-                    const st = appState.students.find(s => s.id === activeStudentId && s.classId === bpDisplayedClassId);
+                    const st = appState.students.find(s =>
+                        String(s.id ?? '') === String(activeStudentId ?? '') &&
+                        String(s.classId ?? '') === String(bpDisplayedClassId ?? ''));
                     if (st) return bpPrint([st.id], st.classId);
                     // classe sans élève : on imprime le bulletin vierge de la classe (à remplir à la main)
                     if (bpDisplayedClassId) return bpPrint(['__blank__:' + bpDisplayedClassId], bpDisplayedClassId);
@@ -3423,7 +3437,7 @@ async function bpPushClassBulletin(cls) {
                 const tbody = document.getElementById('classesTableBody');
                 tbody.innerHTML = '';
                 appState.classes.forEach(cls => {
-                    const count = appState.students.filter(s => s.classId === cls.id).length;
+                    const count = appState.students.filter(s => String(s.classId ?? '') === String(cls.id ?? '')).length;
                     const tr = document.createElement('tr');
                     tr.className = 'clickable-row';
                     tr.innerHTML = `
@@ -3458,7 +3472,7 @@ async function bpPushClassBulletin(cls) {
                 // L'ordre est déjà normalisé dans appState.students ; on le réapplique
                 // par sécurité avant chaque liste, au cas où une synchronisation l'aurait changé.
                 sortStudentsAlphabetically(appState);
-                return appState.students.filter(st => st.classId === classId);
+                return appState.students.filter(st => String(st.classId ?? '') === String(classId ?? ''));
             }
 
                     // Et sécurise le début de loadClassData() :
@@ -5151,10 +5165,17 @@ function updateScheduleResultTables(joursCount, heuresCount) {
             await showCustomAlert(`La classe « ${cls.name} » a été supprimée.`, 'Suppression terminée');
         };
 
+        function getManagedStudentsByClass(classId) {
+            sortStudentsAlphabetically(appState);
+            const targetClassId = String(classId ?? '');
+            return (Array.isArray(appState.students) ? appState.students : [])
+                .filter(st => String(st.classId ?? '') === targetClassId);
+        }
+
         window.openManageStudentsModal = function(classId) {
-            const cls = appState.classes.find(c => c.id === classId);
+            const cls = appState.classes.find(c => String(c.id ?? '') === String(classId ?? ''));
             if (!cls) return alert("Sélectionnez d'abord une classe.");
-            activeClassId = classId;
+            activeClassId = cls.id;
             let overlay = document.getElementById('manageStudentsModal');
             if (!overlay) {
                 overlay = document.createElement('div');
@@ -5171,22 +5192,27 @@ function updateScheduleResultTables(joursCount, heuresCount) {
                     </div>`;
                 document.body.appendChild(overlay);
                 overlay.querySelectorAll('[data-close-manage-students]').forEach(btn => btn.addEventListener('click', () => overlay.classList.add('hidden')));
-                overlay.querySelector('#manageStudentsSearch').addEventListener('input', () => renderManagedStudents(classId));
+                overlay.querySelector('#manageStudentsSearch').addEventListener('input', () => {
+                    renderManagedStudents(overlay.dataset.classId || '');
+                });
             }
-            overlay.dataset.classId = classId;
-            overlay.querySelector('#manageStudentsClassLabel').textContent = `Classe : ${cls.name}`;
+            overlay.dataset.classId = String(cls.id);
+            overlay.querySelector('#manageStudentsClassLabel').textContent = 'Classe : ' + cls.name;
             overlay.querySelector('#manageStudentsSearch').value = '';
             overlay.classList.remove('hidden');
-            renderManagedStudents(classId);
+            renderManagedStudents(cls.id);
         };
 
         function renderManagedStudents(classId) {
             const overlay = document.getElementById('manageStudentsModal');
             const list = overlay?.querySelector('#manageStudentsList');
             if (!list) return;
-            const q = (overlay.querySelector('#manageStudentsSearch')?.value || '').toLowerCase().trim();
-            const students = getSortedStudentsByClass(classId).filter(st =>
-                `${st.name || ''} ${st.postname || ''} ${st.prename || ''}`.toLowerCase().includes(q));
+            const activeClassId = String(overlay.dataset.classId || classId || '');
+            const normalizeSearch = value => String(value || '').normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+            const q = normalizeSearch(overlay.querySelector('#manageStudentsSearch')?.value || '');
+            const students = getManagedStudentsByClass(activeClassId).filter(st =>
+                normalizeSearch(String(st.name || '') + ' ' + String(st.postname || '') + ' ' + String(st.prename || '')).includes(q));
             if (!students.length) {
                 list.innerHTML = '<p style="padding:1rem;text-align:center;color:var(--text-secondary);">Aucun élève trouvé pour cette recherche.</p>';
                 return;
@@ -5213,7 +5239,7 @@ function updateScheduleResultTables(joursCount, heuresCount) {
                 </div>`).join('');
             list.querySelectorAll('[data-save-student]').forEach(btn => btn.addEventListener('click', async () => {
                 const row = btn.closest('[data-managed-student-row]');
-                const student = appState.students.find(st => st.id === row.dataset.managedStudentRow);
+                const student = appState.students.find(st => String(st.id ?? '') === String(row.dataset.managedStudentRow || ''));
                 if (!student) return;
                 const val = field => row.querySelector(`[data-field="${field}"]`)?.value.trim() || '';
                 const name = val('name');
@@ -5237,18 +5263,20 @@ function updateScheduleResultTables(joursCount, heuresCount) {
         }
 
         window.deleteManagedStudent = async function(studentId, classId = activeClassId) {
-            const student = appState.students.find(st => st.id === studentId && st.classId === classId);
+            const student = appState.students.find(st =>
+                String(st.id ?? '') === String(studentId ?? '') &&
+                String(st.classId ?? '') === String(classId ?? ''));
             if (!student) return alert("Cet élève n'existe plus dans cette classe.");
             const confirmed = await showCustomConfirm(`Supprimer l’élève « ${student.name || ''} ${student.postname || ''} ${student.prename || ''} » ? Ses notes et données de conduite associées seront aussi supprimées.`, 'Supprimer un élève');
             if (!confirmed) return;
-            const studentCourses = appState.courses.filter(crs => crs.classId === classId);
+            const studentCourses = appState.courses.filter(crs => String(crs.classId ?? '') === String(classId ?? ''));
             studentCourses.forEach(crs => delete appState.grades[`${studentId}_${crs.id}`]);
-            appState.students = appState.students.filter(st => st.id !== studentId);
+            appState.students = appState.students.filter(st => String(st.id ?? '') !== String(studentId ?? ''));
             if (appState.bulletinPlaces) delete appState.bulletinPlaces[studentId];
             if (appState.behaviour) delete appState.behaviour[studentId];
             if (appState.repechage) Object.keys(appState.repechage).forEach(k => { if (k.startsWith(`${studentId}_`)) delete appState.repechage[k]; });
             if (appState.tools?.presences?.students) appState.tools.presences.students = appState.tools.presences.students.filter(p => p.studentId !== studentId);
-            if (activeStudentId === studentId) {
+            if (String(activeStudentId ?? '') === String(studentId ?? '')) {
                 const replacement = getSortedStudentsByClass(classId)[0];
                 activeStudentId = replacement ? replacement.id : '';
             }
