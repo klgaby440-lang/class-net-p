@@ -6,6 +6,7 @@ from fastapi import HTTPException
 from main import (
     apply_teacher_classroom_context,
     compose_teacher_classroom_context,
+    teacher_is_titulaire,
     teacher_matches_school_roster,
     validate_school_class_catalog,
 )
@@ -181,6 +182,27 @@ def test_teacher_classroom_context_does_not_grant_titular_role_by_school_members
     assert context["classes"] == ["1ère Scientifique"]
     assert context["titulaireClasses"] == []
     assert context["classrooms"][0]["isTitulaire"] is False
+
+def test_titular_matching_accepts_honorific_and_reordered_full_name():
+    teacher = SimpleNamespace(
+        teacher_code="prof-123456",
+        full_name="Aline Mukendi",
+        email="aline@example.cd",
+    )
+    classe = SimpleNamespace(titulaire_name="Prof. Mukendi Aline")
+
+    assert teacher_is_titulaire(teacher, classe) is True
+
+
+def test_titular_matching_does_not_grant_access_by_single_name_token():
+    teacher = SimpleNamespace(
+        teacher_code="prof-123456",
+        full_name="Aline Mukendi",
+        email="aline@example.cd",
+    )
+    classe = SimpleNamespace(titulaire_name="Prof. Mukendi")
+
+    assert teacher_is_titulaire(teacher, classe) is False
 
 
 def test_apply_teacher_classroom_context_preserves_local_notes_and_merges_students():
