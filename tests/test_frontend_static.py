@@ -134,6 +134,11 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn("(db.user && db.user.id)", source)
         self.assertIn("Communiquez votre identifiant ClassInk", source)
 
+    def test_classink_never_shares_local_temporary_id_as_school_access_code(self):
+        source = (ROOT / "app/index.html").read_text(encoding="utf-8")
+        self.assertIn("db.user && db.user.isLoggedIn && db.user.id", source)
+        self.assertIn("db.user && db.user.isLoggedIn ? String(db.user.id || '')", source)
+
 
 if __name__ == "__main__":
     unittest.main()
