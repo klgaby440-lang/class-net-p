@@ -1481,6 +1481,10 @@ function mergeServerDataIntoLocal(local, server) {
     merged.classrooms = Array.isArray(server.classrooms)
         ? server.classrooms.slice()
         : (Array.isArray(local.classrooms) ? local.classrooms.slice() : []);
+    const previousTitularSelection = local.user && local.user.titulaireOf;
+    if (previousTitularSelection && merged.titulaireClasses.includes(previousTitularSelection)) {
+        merged.user.titulaireOf = previousTitularSelection;
+    }
 
     const seenQuiz = new Set();
     merged.quizzes = [];
@@ -2831,7 +2835,13 @@ const CONDUCT_SERVER_READY = false;               // passera à true quand la ro
 
 function getTitulaireClass() {
     const cls = db.user && db.user.titulaireOf;
-    return (cls && Array.isArray(db.classes) && db.classes.includes(cls)) ? cls : "";
+    const officialAssignments = Array.isArray(db.titulaireClasses) ? db.titulaireClasses : [];
+    return (
+        cls &&
+        officialAssignments.includes(cls) &&
+        Array.isArray(db.classes) &&
+        db.classes.includes(cls)
+    ) ? cls : "";
 }
 
 function updateConduiteNav() {
