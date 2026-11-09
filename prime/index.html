@@ -1970,7 +1970,42 @@ window.alert = function(message) { showCustomAlert(message); };
             }
         };
 
-        let appState = JSON.parse(localStorage.getItem('classnet_p_db')) || defaultState;
+        let primeInkStorageAvailable = true;
+        const primeInkIsOperaMini = /Opera Mini/i.test((navigator && navigator.userAgent) || "")
+            || (typeof window !== "undefined" && typeof window.operamini !== "undefined");
+
+        function showPrimeInkStorageNotice(message) {
+            const display = () => {
+                let notice = document.getElementById("primeink-browser-compatibility");
+                if (!notice) {
+                    notice = document.createElement("div");
+                    notice.id = "primeink-browser-compatibility";
+                    notice.setAttribute("role", "alert");
+                    notice.style.cssText = "position:sticky;top:0;z-index:99999;padding:12px 16px;background:#fff4d6;color:#713f12;border-bottom:2px solid #d97706;font:600 14px/1.45 Arial,sans-serif;";
+                    document.body.insertBefore(notice, document.body.firstChild);
+                }
+                notice.textContent = message;
+            };
+            if (document.body) display();
+            else document.addEventListener("DOMContentLoaded", display, { once: true });
+        }
+
+        function loadPrimeInkState() {
+            try {
+                const saved = window.localStorage.getItem('classnet_p_db');
+                if (!saved) return JSON.parse(JSON.stringify(defaultState));
+                const parsed = JSON.parse(saved);
+                return parsed && typeof parsed === "object" ? parsed : JSON.parse(JSON.stringify(defaultState));
+            } catch (error) {
+                primeInkStorageAvailable = false;
+                return JSON.parse(JSON.stringify(defaultState));
+            }
+        }
+
+        let appState = loadPrimeInkState();
+        if (primeInkIsOperaMini || !primeInkStorageAvailable) {
+            showPrimeInkStorageNotice("ATTENTION : Opera Mini n'est pas compatible avec le stockage local utilisé par PrimeInk. Les données saisies peuvent être perdues. Pour tester ou travailler, ouvrez PrimeInk avec Chrome, Edge, Firefox ou Opera normal.");
+        }
 
         // Patch de sécurité pour les anciennes versions stockées en local
         if (!appState.teachers) appState.teachers = defaultState.teachers;
@@ -2028,7 +2063,15 @@ window.alert = function(message) { showCustomAlert(message); };
 
         function saveState() {
             sortStudentsAlphabetically(appState);
-            localStorage.setItem('classnet_p_db', JSON.stringify(appState));
+            try {
+                window.localStorage.setItem('classnet_p_db', JSON.stringify(appState));
+                primeInkStorageAvailable = true;
+                return true;
+            } catch (error) {
+                primeInkStorageAvailable = false;
+                showPrimeInkStorageNotice("ATTENTION : PrimeInk n'a pas pu sauvegarder sur cet appareil. N'effectuez aucune saisie importante dans ce navigateur. Utilisez Chrome, Edge, Firefox ou Opera normal (pas Opera Mini).");
+                return false;
+            }
         }
 
         // Migration automatique : réorganise aussi les élèves des anciennes bases locales.
@@ -6828,5 +6871,18 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
 })();
 </script>
 
+
+<script id="primeink-fetch-compatibility">
+window.primeInkFetchWithTimeout = async function(url, options = {}, timeoutMs = 10000) {
+    if (typeof AbortController !== "function") return fetch(url, options);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        return await fetch(url, { ...options, signal: controller.signal });
+    } finally {
+        clearTimeout(timeoutId);
+    }
+};
+</script>
 </body>
 </html>
