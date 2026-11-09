@@ -1125,6 +1125,22 @@ async def init_teacher_register(data: TeacherInitSchema, background_tasks: Backg
         background_tasks.add_task(send_sms_via_twilio, identifier, sms_text)
         return {"status": True, "message": f"Code envoyé par SMS au {identifier}."}
 
+def find_registered_school_for_teacher(db, school_name: str):
+    """Associe prudemment un compte enseignant à une école déjà enregistrée."""
+    requested = normalize_name(school_name or "")
+    if not requested:
+        return None
+    matches = []
+    for school in db.query(SchoolInformation).all():
+        candidate = normalize_name(school.name_school or "")
+        if not candidate:
+            continue
+        # Tolère un complément de localisation, mais n'accepte qu'une correspondance unique.
+        if candidate == requested or candidate.startswith(requested + " ") or requested.startswith(candidate + " "):
+            matches.append(school)
+    return matches[0] if len(matches) == 1 else None
+
+
 @app.post("/api/auth/teacher/verify-register")
 def verify_teacher_register(data: OTPVerifySchema, db: Session = Depends(get_db)):
     # 1. Extraction et nettoyage de l'identifiant
@@ -1175,22 +1191,29 @@ def verify_teacher_register(data: OTPVerifySchema, db: Session = Depends(get_db)
         raise HTTPException(status_code=400, detail="Adresse e-mail invalide.")
     phone_val = raw_identifier if not is_email(raw_identifier) else t_data.phone_number
 
-    # 4. Création du compte enseignant
+    # 4. Association automatique à l'école si son nom correspond à une seule école connue.
+    linked_school = find_registered_school_for_teacher(db, t_data.school_name)
     new_teacher = Teacher(
         email=email_val,
         phone_number=phone_val,
         full_name=t_data.full_name,
-        school_name=t_data.school_name,
+        school_name=linked_school.name_school if linked_school else t_data.school_name,
+        school_id=linked_school.school_id if linked_school else None,
         password=hash_password(t_data.password),
         age=t_data.age,
         teacher_code=f"prof_{generate_otp()}"
     )
-    
+
     db.add(new_teacher)
-    db.delete(otp_record)  # Correction : 'otp_record' au lieu de 'record'
+    db.delete(otp_record)
     db.commit()
 
-    return {"status": True, "message": "Compte enseignant créé avec succès !"}
+    message = "Compte enseignant créé avec succès !"
+    if linked_school:
+        message += " Votre compte est associé à " + linked_school.name_school + " ; les classes disponibles seront chargées à la prochaine connexion."
+    else:
+        message += " L'école n'a pas été reconnue automatiquement : vérifiez le nom exact de l'établissement lors de l'inscription."
+    return {"status": True, "message": message}
 
 @app.post("/api/auth/school/register")
 def register_school(data: SchoolRegisterSchema, db: Session = Depends(get_db), _admin: bool = Depends(require_admin)):
@@ -1359,6 +1382,11 @@ def login_teacher(data: LoginSchema, db: Session = Depends(get_db)):
         classnet_app_db,
         teacher,
         data.password,
+    )
+    # Les classes officielles de l'école sont ajoutées à chaque connexion, même sans aucune note.
+    classnet_app_db = apply_teacher_classroom_context(
+        classnet_app_db,
+        build_teacher_classroom_context(db, teacher),
     )
 
     return {"status": True, "data": classnet_app_db,
@@ -2027,6 +2055,401 @@ def teacher_is_titulaire(teacher, classe) -> bool:
     candidates.discard("")
     return titulaire in candidates
 
+
+
+def validate_school_class_catalog(payload: dict, expected_school_id: str) -> dict:
+    """Valide le JSON de préparation avant toute écriture dans les tables de l'école."""
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=422, detail="Le JSON de préparation doit être un objet.")
+    school_data = payload.get("school") if isinstance(payload.get("school"), dict) else {}
+    supplied_school_id = str(school_data.get("id") or school_data.get("school_id") or "").strip()
+    if supplied_school_id != str(expected_school_id):
+        raise HTTPException(status_code=403, detail="Ce jeton ne correspond pas à l'école indiquée dans les données.")
+
+    raw_classes = payload.get("classes")
+    raw_students = payload.get("students")
+    raw_courses = payload.get("courses")
+    raw_teachers = payload.get("teachers", [])
+    if not isinstance(raw_classes, list) or not isinstance(raw_students, list) or not isinstance(raw_courses, list):
+        raise HTTPException(status_code=422, detail="Les listes classes, students et courses sont obligatoires.")
+    if not isinstance(raw_teachers, list):
+        raise HTTPException(status_code=422, detail="La liste teachers doit être un tableau.")
+    limits = ((raw_classes, 500, "classes"), (raw_students, 20000, "élèves"),
+              (raw_courses, 12000, "cours"), (raw_teachers, 1500, "enseignants"))
+    for values, limit, label in limits:
+        if len(values) > limit:
+            raise HTTPException(status_code=413, detail="Le nombre de " + label + " dépasse la limite autorisée.")
+
+    classes, class_ids = [], set()
+    for index, row in enumerate(raw_classes):
+        if not isinstance(row, dict):
+            raise HTTPException(status_code=422, detail=f"Classe invalide à la ligne {index + 1}.")
+        class_id = clean_text(row.get("id"), 120)
+        class_name = clean_text(row.get("name"), 160)
+        if not class_id or not class_name:
+            raise HTTPException(status_code=422, detail=f"Identifiant ou nom de classe manquant à la ligne {index + 1}.")
+        if class_id in class_ids:
+            raise HTTPException(status_code=422, detail="Identifiant de classe en double : " + class_id)
+        class_ids.add(class_id)
+        categories = row.get("categories") if isinstance(row.get("categories"), list) else []
+        classes.append({
+            "id": class_id,
+            "name": class_name,
+            "titulaire": clean_text(row.get("titulaire"), 160),
+            "categories": [clean_text(value, 120) for value in categories[:100] if clean_text(value, 120)],
+            "bulletinModel": row.get("bulletinModel") if row.get("bulletinModel") in BULLETIN_MODELS else None,
+            "bulletinTitle": clean_text(row.get("bulletinTitle"), 160),
+            "signatureSource": row.get("signatureSource") if row.get("signatureSource") in SIGNATURE_SOURCES else None,
+        })
+
+    students, student_ids = [], set()
+    for index, row in enumerate(raw_students):
+        if not isinstance(row, dict):
+            raise HTTPException(status_code=422, detail=f"Élève invalide à la ligne {index + 1}.")
+        student_id = clean_text(row.get("id"), 120)
+        class_id = clean_text(row.get("classId"), 120)
+        name = clean_text(row.get("name"), 120)
+        postname = clean_text(row.get("postname"), 120)
+        prename = clean_text(row.get("prename"), 120)
+        if not student_id or class_id not in class_ids:
+            raise HTTPException(status_code=422, detail=f"Identifiant ou classe inconnue pour l'élève à la ligne {index + 1}.")
+        if not any((name, postname, prename)):
+            raise HTTPException(status_code=422, detail=f"Nom d'élève manquant à la ligne {index + 1}.")
+        if student_id in student_ids:
+            raise HTTPException(status_code=422, detail="Identifiant d'élève en double : " + student_id)
+        student_ids.add(student_id)
+        sex = str(row.get("sexe") or "").strip().upper()
+        students.append({
+            "id": student_id, "classId": class_id, "name": name, "postname": postname,
+            "prename": prename, "sexe": sex if sex in ("M", "F") else "",
+            "bornDate": clean_text(row.get("bornDate"), 30),
+            "bornWhere": clean_text(row.get("bornWhere"), 120),
+            "permi": clean_text(row.get("permi"), 100),
+        })
+
+    courses, course_ids = [], set()
+    for index, row in enumerate(raw_courses):
+        if not isinstance(row, dict):
+            raise HTTPException(status_code=422, detail=f"Cours invalide à la ligne {index + 1}.")
+        course_id = clean_text(row.get("id"), 120)
+        class_id = clean_text(row.get("classId"), 120)
+        course_name = clean_text(row.get("name"), 160)
+        if not course_id or class_id not in class_ids or not course_name:
+            raise HTTPException(status_code=422, detail=f"Identifiant, classe ou nom de cours invalide à la ligne {index + 1}.")
+        if course_id in course_ids:
+            raise HTTPException(status_code=422, detail="Identifiant de cours en double : " + course_id)
+        course_ids.add(course_id)
+        try:
+            max_per = float(row.get("maxPer", 40) or 40)
+        except (TypeError, ValueError):
+            max_per = 40.0
+        if not (0 < max_per <= 100000):
+            max_per = 40.0
+        courses.append({
+            "id": course_id, "classId": class_id, "name": course_name, "maxPer": max_per,
+            "category": clean_text(row.get("category"), 120) or "Général",
+            "titulaire": clean_text(row.get("titulaire"), 160),
+            "subCategory": clean_text(row.get("subCategory"), 160),
+        })
+
+    teachers = []
+    seen_teacher_ids = set()
+    for row in raw_teachers:
+        if not isinstance(row, dict):
+            continue
+        unique_id = clean_text(row.get("uniqueId"), 100)
+        name = clean_text(row.get("name"), 160)
+        if not name:
+            continue
+        if unique_id and unique_id in seen_teacher_ids:
+            continue
+        if unique_id:
+            seen_teacher_ids.add(unique_id)
+        teachers.append({
+            "uniqueId": unique_id, "name": name,
+            "subject": clean_text(row.get("subject"), 120),
+            "status": clean_text(row.get("status"), 40) or "Actif",
+        })
+
+    clean_payload = {
+        "school": {
+            "id": str(expected_school_id),
+            "name": clean_text(school_data.get("name"), 200),
+            "code": clean_text(school_data.get("code"), 80),
+            "city": clean_text(school_data.get("city"), 120),
+            "commune": clean_text(school_data.get("commune"), 120),
+        },
+        "classes": classes, "students": students, "courses": courses, "teachers": teachers,
+    }
+    if len(json.dumps(clean_payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")) > 8 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Les informations des classes dépassent la taille maximale de 8 Mo.")
+    return clean_payload
+
+
+def store_school_class_catalog(db: Session, school: SchoolInformation, catalog: dict) -> dict:
+    """Met à jour les classes, élèves et cours sans toucher aux notes ni aux données locales des enseignants."""
+    school_data = catalog["school"]
+    for attr, key in (("name_school", "name"), ("code", "code"), ("city", "city"), ("commune", "commune")):
+        if school_data.get(key):
+            setattr(school, attr, school_data[key])
+
+    class_rows = {}
+    for item in catalog["classes"]:
+        row = db.query(ClasseInformation).filter(ClasseInformation.id == item["id"]).first()
+        if row and row.school_id != school.school_id:
+            raise HTTPException(status_code=409, detail="L'identifiant de classe " + item["id"] + " appartient déjà à une autre école.")
+        if not row:
+            row = ClasseInformation(id=item["id"], school_id=school.school_id, class_name=item["name"])
+            db.add(row)
+        row.school_id = school.school_id
+        row.class_name = item["name"]
+        row.titulaire_name = item["titulaire"]
+        row.domaines = item["categories"]
+        if item["bulletinModel"]:
+            row.bulletin_model = item["bulletinModel"]
+        if item["bulletinTitle"]:
+            row.bulletin_title = item["bulletinTitle"]
+        if item["signatureSource"]:
+            row.signature_source = item["signatureSource"]
+        class_rows[item["id"]] = row
+    db.flush()
+
+    for item in catalog["students"]:
+        row = db.query(SchoolStudentInformation).filter(
+            SchoolStudentInformation.id == item["id"]
+        ).first()
+        if row and row.school_id != school.school_id:
+            raise HTTPException(status_code=409, detail="L'identifiant d'élève " + item["id"] + " appartient déjà à une autre école.")
+        if not row:
+            row = SchoolStudentInformation(id=item["id"], school_id=school.school_id)
+            db.add(row)
+        permanent = item["permi"] or item["id"]
+        collision = db.query(SchoolStudentInformation).filter(
+            SchoolStudentInformation.student_n_permanent == permanent,
+            SchoolStudentInformation.id != item["id"]
+        ).first()
+        if collision:
+            permanent = (permanent[:70] + "_" + item["id"][:28])[:100]
+        row.school_id = school.school_id
+        row.class_id = item["classId"]
+        row.student_name = item["name"] or ""
+        row.student_post_name = item["postname"] or ""
+        row.student_pre_name = item["prename"] or ""
+        row.student_sexe = item["sexe"] or ""
+        row.student_born_date = item["bornDate"] or ""
+        row.student_born_place = item["bornWhere"] or ""
+        row.student_n_permanent = permanent
+    db.flush()
+
+    for item in catalog["courses"]:
+        row = db.query(CourseInformation).filter(CourseInformation.id == item["id"]).first()
+        if row and row.school_id != school.school_id:
+            raise HTTPException(status_code=409, detail="L'identifiant de cours " + item["id"] + " appartient déjà à une autre école.")
+        if not row:
+            row = CourseInformation(id=item["id"], school_id=school.school_id, course_name=item["name"])
+            db.add(row)
+        row.school_id = school.school_id
+        row.class_id = item["classId"]
+        row.course_name = item["name"]
+        row.max_per = item["maxPer"]
+        row.category = item["category"]
+        row.titulaire_name = item["titulaire"]
+        row.sub_category = item["subCategory"]
+    db.flush()
+
+    linked_teachers = set()
+    for item in catalog["teachers"]:
+        teacher = None
+        if item["uniqueId"]:
+            teacher = db.query(Teacher).filter(Teacher.teacher_code == item["uniqueId"]).first()
+        if teacher and teacher.school_id not in (None, school.school_id):
+            teacher = None
+        if teacher and normalize_name(teacher.full_name or "") != normalize_name(item["name"]):
+            teacher = None
+        if not teacher:
+            for candidate in db.query(Teacher).filter(Teacher.school_id == school.school_id).all():
+                if normalize_name(candidate.full_name or "") == normalize_name(item["name"]):
+                    teacher = candidate
+                    break
+        if teacher:
+            teacher.school_id = school.school_id
+            if item["uniqueId"] and not teacher.teacher_code:
+                teacher.teacher_code = item["uniqueId"]
+            if item["subject"]:
+                teacher.subject = item["subject"]
+            if item["status"]:
+                teacher.status = item["status"]
+            linked_teachers.add(teacher.email)
+
+    # Associe aussi les comptes déjà créés qui ont indiqué le nom exact de cette école.
+    school_key = normalize_name(school.name_school or "")
+    if school_key:
+        for teacher in db.query(Teacher).filter(Teacher.school_id.is_(None)).all():
+            if normalize_name(teacher.school_name or "") == school_key:
+                teacher.school_id = school.school_id
+                linked_teachers.add(teacher.email)
+
+    db.commit()
+    return {
+        "classes": len(catalog["classes"]),
+        "students": len(catalog["students"]),
+        "courses": len(catalog["courses"]),
+        "linkedTeachers": len(linked_teachers),
+    }
+
+
+def compose_teacher_classroom_context(teacher, school, classes, students, courses) -> dict:
+    """Construit la base ClassInk partagée et les classes de titulaire officiellement reconnues."""
+    classes_by_id = {str(item.id): item for item in classes}
+    classes_by_name = {str(item.id): str(item.class_name) for item in classes}
+    students_by_class, courses_by_class, course_max = {}, {}, {}
+    for item in classes:
+        students_by_class.setdefault(item.class_name, [])
+        courses_by_class.setdefault(item.class_name, [])
+    for item in students:
+        class_name = classes_by_name.get(str(item.class_id))
+        if not class_name:
+            continue
+        full_name = " ".join(part for part in (
+            item.student_name or "", item.student_post_name or "", item.student_pre_name or ""
+        ) if part).strip()
+        students_by_class.setdefault(class_name, []).append({
+            "id": item.id, "name": full_name,
+            "postname": item.student_post_name or "", "prename": item.student_pre_name or "",
+            "sexe": item.student_sexe or "", "classId": item.class_id,
+        })
+    for item in courses:
+        class_name = classes_by_name.get(str(item.class_id))
+        if not class_name:
+            continue
+        values = courses_by_class.setdefault(class_name, [])
+        if item.course_name not in values:
+            values.append(item.course_name)
+        course_max[f"{class_name}_{item.course_name}"] = float(item.max_per or 40)
+
+    titulaire_classes = [
+        item.class_name for item in classes
+        if teacher_is_titulaire(teacher, item)
+    ]
+    classroom_rows = []
+    for item in classes:
+        classroom_rows.append({
+            "id": item.id,
+            "name": item.class_name,
+            "titulaire": item.titulaire_name or "",
+            "isTitulaire": teacher_is_titulaire(teacher, item),
+            "students": students_by_class.get(item.class_name, []),
+            "courses": courses_by_class.get(item.class_name, []),
+        })
+    return {
+        "schoolId": school.school_id if school else "",
+        "schoolName": school.name_school if school else (teacher.school_name or ""),
+        "classes": [item.class_name for item in classes],
+        "students": students_by_class,
+        "courses": courses_by_class,
+        "courseMax": course_max,
+        "titulaireClasses": titulaire_classes,
+        "classrooms": classroom_rows,
+    }
+
+
+def apply_teacher_classroom_context(state: dict, context: dict) -> dict:
+    """Fusionne le catalogue de l'école dans le profil enseignant, sans effacer ses notes locales."""
+    state = dict(state or {})
+    state["classes"] = list(dict.fromkeys(
+        [str(value) for value in (state.get("classes") or [])] +
+        [str(value) for value in (context.get("classes") or [])]
+    ))
+    for key in ("courses", "students"):
+        merged = dict(state.get(key) or {})
+        for class_name, rows in (context.get(key) or {}).items():
+            existing = list(merged.get(class_name) or [])
+            seen = {str((item or {}).get("id")) if isinstance(item, dict) else str(item) for item in existing}
+            for item in rows:
+                item_id = str(item.get("id")) if isinstance(item, dict) else str(item)
+                if item_id not in seen:
+                    existing.append(item)
+                    seen.add(item_id)
+            merged[class_name] = existing
+        state[key] = merged
+    state["courseMax"] = {**(context.get("courseMax") or {}), **(state.get("courseMax") or {})}
+    evaluations = dict(state.get("evaluations") or {})
+    for class_name in context.get("classes") or []:
+        evaluations.setdefault(class_name, {"P1": [], "P2": [], "EX1": [], "P3": [], "P4": [], "EX2": []})
+    state["evaluations"] = evaluations
+    state["titulaireClasses"] = list(context.get("titulaireClasses") or [])
+    state["classrooms"] = list(context.get("classrooms") or [])
+    state["schoolId"] = context.get("schoolId") or ""
+    user = dict(state.get("user") or {})
+    if context.get("schoolName"):
+        user["school"] = context["schoolName"]
+    user["schoolId"] = context.get("schoolId") or ""
+    # Le rôle est fourni par le registre de l'école, jamais par une auto-déclaration locale.
+    user["titulaireOf"] = (context.get("titulaireClasses") or [""])[0]
+    user["titulaireClasses"] = list(context.get("titulaireClasses") or [])
+    state["user"] = user
+    return state
+
+
+def build_teacher_classroom_context(db: Session, teacher) -> dict:
+    school = db.query(SchoolInformation).filter(SchoolInformation.school_id == teacher.school_id).first() if teacher.school_id else None
+    if not school:
+        return compose_teacher_classroom_context(teacher, None, [], [], [])
+    classes = db.query(ClasseInformation).filter(
+        ClasseInformation.school_id == school.school_id
+    ).order_by(ClasseInformation.class_name.asc()).all()
+    students = db.query(SchoolStudentInformation).filter(
+        SchoolStudentInformation.school_id == school.school_id
+    ).all()
+    courses = db.query(CourseInformation).filter(
+        CourseInformation.school_id == school.school_id
+    ).all()
+    return compose_teacher_classroom_context(teacher, school, classes, students, courses)
+
+
+@app.post("/api/primenet/prepare-classes")
+def prepare_classroom_information(
+    payload: dict,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(require_active_school),
+):
+    """PrimeInk publie le catalogue complet des classes, élèves, cours et titulaires."""
+    school_id = str(claims.get("school_id") or "")
+    school = db.query(SchoolInformation).filter(SchoolInformation.school_id == school_id).first()
+    if not school:
+        raise HTTPException(status_code=404, detail="École introuvable.")
+    try:
+        catalog = validate_school_class_catalog(payload, school_id)
+        counts = store_school_class_catalog(db, school, catalog)
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Impossible de préparer les informations des classes.") from exc
+    return {
+        "status": True,
+        "message": (
+            f"Informations publiées : {counts['classes']} classes, {counts['students']} élèves, "
+            f"{counts['courses']} cours. {counts['linkedTeachers']} compte(s) enseignant(s) associé(s)."
+        ),
+        "counts": counts,
+    }
+
+
+@app.get("/api/teacher/classes")
+def get_teacher_classroom_information(
+    db: Session = Depends(get_db),
+    claims: dict = Depends(require_teacher),
+):
+    teacher = db.query(Teacher).filter(Teacher.email == claims.get("email")).first()
+    if not teacher:
+        raise HTTPException(status_code=404, detail="Compte enseignant introuvable.")
+    blocked = teacher_school_block(db, teacher)
+    if blocked:
+        raise HTTPException(status_code=403, detail=blocked)
+    context = build_teacher_classroom_context(db, teacher)
+    return {"status": True, "data": context}
 
 def find_class_by_name(db, school_id, class_name):
     wanted = normalize_name(class_name)
