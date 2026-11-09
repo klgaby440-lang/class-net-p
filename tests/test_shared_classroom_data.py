@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from main import (
     apply_teacher_classroom_context,
     compose_teacher_classroom_context,
-    find_registered_school_for_teacher,
+    teacher_matches_school_roster,
     validate_school_class_catalog,
 )
 
@@ -217,17 +217,26 @@ def test_apply_teacher_classroom_context_preserves_local_notes_and_merges_studen
     assert updated["user"]["titulaireOf"] == "1ère Scientifique"
 
 
-def test_find_registered_school_for_teacher_requires_a_unique_school_match():
-    school = SimpleNamespace(name_school="École Horizon", school_id="school-1")
-    db = SimpleNamespace(query=lambda _model: SimpleNamespace(all=lambda: [school]))
+def test_teacher_roster_link_requires_the_official_code_and_registered_name():
+    teacher = SimpleNamespace(
+        teacher_code="prof-123456",
+        full_name="Aline Mukendi",
+        school_name="École Horizon",
+        school_id=None,
+    )
+    roster_entry = {"uniqueId": "prof-123456", "name": "ALINE MUKENDI"}
 
-    assert find_registered_school_for_teacher(db, "Ecole Horizon") is school
-    assert find_registered_school_for_teacher(db, "École Horizon - Bukavu") is school
+    assert teacher_matches_school_roster(teacher, roster_entry) is True
 
 
-def test_find_registered_school_for_teacher_does_not_guess_between_similar_schools():
-    first = SimpleNamespace(name_school="École Horizon", school_id="school-1")
-    second = SimpleNamespace(name_school="École Horizon Bukavu", school_id="school-2")
-    db = SimpleNamespace(query=lambda _model: SimpleNamespace(all=lambda: [first, second]))
+def test_teacher_roster_link_does_not_grant_access_by_school_name_or_name_alone():
+    teacher = SimpleNamespace(
+        teacher_code="prof-123456",
+        full_name="Aline Mukendi",
+        school_name="École Horizon",
+        school_id=None,
+    )
 
-    assert find_registered_school_for_teacher(db, "École Horizon") is None
+    assert teacher_matches_school_roster(teacher, {"uniqueId": "", "name": "Aline Mukendi"}) is False
+    assert teacher_matches_school_roster(teacher, {"uniqueId": "other-code", "name": "Aline Mukendi"}) is False
+    assert teacher_matches_school_roster(teacher, {"uniqueId": "prof-123456", "name": "Someone Else"}) is False
