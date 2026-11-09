@@ -2331,18 +2331,18 @@ def compose_teacher_classroom_context(teacher, school, classes, students, course
     Construit uniquement le périmètre pédagogique du compte :
     - classes où le professeur est titulaire ;
     - classes où au moins un cours lui est attribué dans PrimeInk.
-    La liste des élèves est fournie pour ces classes ; le droit de modifier la conduite
-    reste indépendant et exclusivement vérifié par teacher_is_titulaire côté serveur.
+    La liste des élèves est fournie pour ces classes, mais seuls les cours attribués
+    à ce professeur sont exposés. Le droit de conduite reste vérifié séparément.
     """
     classes_by_id = {str(item.id): item for item in classes}
-    assigned_course_class_ids = {
-        str(course.class_id)
-        for course in courses
-        if str(course.class_id or "") in classes_by_id
-        and teacher_matches_catalog_name(teacher, course.titulaire_name)
-    }
     titular_classes = [item for item in classes if teacher_is_titulaire(teacher, item)]
     titular_class_ids = {str(item.id) for item in titular_classes}
+    assigned_courses = [
+        course for course in courses
+        if str(course.class_id or "") in classes_by_id
+        and teacher_matches_catalog_name(teacher, course.titulaire_name)
+    ]
+    assigned_course_class_ids = {str(course.class_id) for course in assigned_courses}
     visible_classes = [
         item for item in classes
         if str(item.id) in titular_class_ids or str(item.id) in assigned_course_class_ids
@@ -2368,7 +2368,7 @@ def compose_teacher_classroom_context(teacher, school, classes, students, course
             "sexe": item.student_sexe or "", "classId": item.class_id,
         })
 
-    for item in courses:
+    for item in assigned_courses:
         class_name = class_names.get(str(item.class_id))
         if not class_name:
             continue
@@ -2410,29 +2410,28 @@ def compose_teacher_classroom_context(teacher, school, classes, students, course
     }
 
 def apply_teacher_classroom_context(state: dict, context: dict) -> dict:
-    """Fusionne le catalogue de l'école dans le profil enseignant, sans effacer ses notes locales."""
+    """Applique le périmètre scolaire autorisé sans réintroduire de classes locales étrangères."""
     state = dict(state or {})
-    state["classes"] = list(dict.fromkeys(
-        [str(value) for value in (state.get("classes") or [])] +
-        [str(value) for value in (context.get("classes") or [])]
-    ))
+    allowed_classes = [str(value) for value in (context.get("classes") or [])]
+    allowed_set = set(allowed_classes)
+    state["classes"] = allowed_classes
+
+    # Les classes hors périmètre ne restent pas visibles dans le profil synchronisé.
     for key in ("courses", "students"):
-        merged = dict(state.get(key) or {})
-        for class_name, rows in (context.get(key) or {}).items():
-            existing = list(merged.get(class_name) or [])
-            seen = {str((item or {}).get("id")) if isinstance(item, dict) else str(item) for item in existing}
-            for item in rows:
-                item_id = str(item.get("id")) if isinstance(item, dict) else str(item)
-                if item_id not in seen:
-                    existing.append(item)
-                    seen.add(item_id)
-            merged[class_name] = existing
-        state[key] = merged
-    state["courseMax"] = {**(context.get("courseMax") or {}), **(state.get("courseMax") or {})}
-    evaluations = dict(state.get("evaluations") or {})
-    for class_name in context.get("classes") or []:
-        evaluations.setdefault(class_name, {"P1": [], "P2": [], "EX1": [], "P3": [], "P4": [], "EX2": []})
-    state["evaluations"] = evaluations
+        source = context.get(key) if isinstance(context.get(key), dict) else {}
+        state[key] = {
+            class_name: list(source.get(class_name) or [])
+            for class_name in allowed_classes
+        }
+
+    state["courseMax"] = dict(context.get("courseMax") or {})
+    source_evaluations = state.get("evaluations") if isinstance(state.get("evaluations"), dict) else {}
+    state["evaluations"] = {
+        class_name: source_evaluations.get(
+            class_name, {"P1": [], "P2": [], "EX1": [], "P3": [], "P4": [], "EX2": []}
+        )
+        for class_name in allowed_classes
+    }
     state["titulaireClasses"] = list(context.get("titulaireClasses") or [])
     state["classrooms"] = list(context.get("classrooms") or [])
     state["schoolId"] = context.get("schoolId") or ""
@@ -2649,10 +2648,14 @@ async def parse_primeink_photo(
             if not (name or postname):
                 continue
             sex = str(row.get("sexe") or "").strip().upper()
+            try:
+                confidence = max(0.0, min(1.0, float(row.get("confidence") or 0)))
+            except (TypeError, ValueError):
+                confidence = 0.0
             clean_rows.append({
                 "name": name, "postname": postname, "prename": prename,
                 "sexe": sex if sex in ("M", "F") else "",
-                "confidence": max(0.0, min(1.0, float(row.get("confidence") or 0))),
+                "confidence": confidence,
             })
         return {"status": True, "type": import_type, "students": clean_rows, "notes": clean_text(parsed.get("notes"), 500)}
     else:
@@ -2712,7 +2715,24 @@ def resolve_student(db, school_id, classe, teacher_email, classink_student_id, c
         StudentLink.school_id == school_id, StudentLink.teacher_email == teacher_email,
         StudentLink.classink_student_id == classink_student_id).first()
     if link:
-        return link.student_id
+        # Une ancienne correspondance ne doit jamais permettre d'écrire la conduite
+        # sur un élève d'une autre classe, même si le professeur est titulaire ici.
+        linked_student = db.query(SchoolStudentInformation).filter(
+            SchoolStudentInformation.id == link.student_id,
+            SchoolStudentInformation.school_id == school_id,
+            SchoolStudentInformation.class_id == classe.id,
+        ).first()
+        return linked_student.id if linked_student else None
+
+    # Dans certains imports, l'id ClassInk est identique à l'id PrimeInk.
+    direct_student = db.query(SchoolStudentInformation).filter(
+        SchoolStudentInformation.id == classink_student_id,
+        SchoolStudentInformation.school_id == school_id,
+        SchoolStudentInformation.class_id == classe.id,
+    ).first()
+    if direct_student:
+        return direct_student.id
+
     wanted = name_tokens_key(classink_student_name)
     if not wanted:
         return None
