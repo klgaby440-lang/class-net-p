@@ -523,6 +523,14 @@ class PrimeNetPayload(Base):
         onupdate=func.now()
     )
 
+class ClassInkTeacherSnapshot(Base):
+    """État complet ClassInk d'un enseignant, y compris les classes et élèves sans note."""
+    __tablename__ = "classink_teacher_snapshots"
+
+    teacher_email = Column(String, primary_key=True, index=True)
+    payload_data = Column(JSON, nullable=False, default=dict)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 # ---------------------------------------------------------
 # MODÈLE COMMUN (étape 3) : types de bulletin, conduite, signatures, accès aux notes, liens d'élèves.
 # Les valeurs autorisées viennent de classnet_common.py : ne pas les recopier ici.
@@ -1343,6 +1351,16 @@ def login_teacher(data: LoginSchema, db: Session = Depends(get_db)):
         "pendingCommits": 0
     }
     
+    # Si une sauvegarde complète existe, elle est prioritaire : elle contient aussi
+    # les classes, cours, élèves sans notes et les réglages que StudentGrade ne peut pas reconstruire.
+    snapshot_row = db.query(ClassInkTeacherSnapshot).filter_by(teacher_email=teacher.email).first()
+    classnet_app_db = restore_classink_teacher_state(
+        snapshot_row.payload_data if snapshot_row else None,
+        classnet_app_db,
+        teacher,
+        data.password,
+    )
+
     return {"status": True, "data": classnet_app_db,
             "token": create_token({"role": "teacher", "email": teacher.email}, TEACHER_TOKEN_TTL)}
 
@@ -1636,6 +1654,58 @@ def verify_and_cycle_code(data: CodeVerifySchema, background_tasks: BackgroundTa
 # ---------------------------------------------------------
 # 8. SYNCHRONISATION ET MISE À JOUR (APP & PRIMENET)
 # ---------------------------------------------------------
+def restore_classink_teacher_state(
+    snapshot_data: Any,
+    legacy_state: dict,
+    teacher: Any,
+    entered_password: str,
+) -> dict:
+    """Restaure l'instantané complet ; retombe sur l'ancien format si aucun instantané n'existe."""
+    if not isinstance(snapshot_data, dict):
+        return legacy_state
+    restored = dict(snapshot_data)
+    user = dict(restored.get("user") or {})
+    user.update({
+        "id": getattr(teacher, "teacher_code", None) or f"prof_{teacher.id}",
+        "name": teacher.full_name,
+        "email": teacher.email,
+        "password": entered_password,
+        "school": teacher.school_name or "Indépendant",
+        "isLoggedIn": True,
+    })
+    restored["user"] = user
+    restored["pendingCommits"] = 0
+    return restored
+
+
+def build_classink_teacher_snapshot(payload: dict, teacher_email: str) -> dict:
+    """Construit une copie JSON sûre de l'état ClassInk, sans mot de passe ni compteurs obsolètes."""
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=422, detail="La sauvegarde ClassInk doit être un objet JSON.")
+    try:
+        snapshot = json.loads(json.dumps(payload, ensure_ascii=False, allow_nan=False))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail="La sauvegarde contient des données non JSON ou des nombres invalides.") from exc
+
+    user = snapshot.get("user")
+    if not isinstance(user, dict):
+        raise HTTPException(status_code=422, detail="Le profil de l'enseignant manque dans la sauvegarde.")
+    if str(user.get("email") or "").strip().lower() != teacher_email:
+        raise HTTPException(status_code=403, detail="Le profil de la sauvegarde ne correspond pas à la session.")
+
+    user.pop("password", None)
+    user["email"] = teacher_email
+    user["isLoggedIn"] = True
+    snapshot["user"] = user
+    snapshot["pendingCommits"] = 0
+
+    serialized = json.dumps(snapshot, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+    if len(serialized.encode("utf-8")) > 8 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="La sauvegarde ClassInk dépasse la taille maximale de 8 Mo.")
+    return snapshot
+
+
+
 @app.post("/api/sync/classnet-app")
 def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict = Depends(require_teacher)):
     """
@@ -1655,6 +1725,8 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
     blocked = teacher_school_block(db, teacher)
     if blocked:
         raise HTTPException(status_code=403, detail=blocked)
+
+    snapshot = build_classink_teacher_snapshot(payload, teacher.email)
 
     students_dict = payload.get("students", {})
     courses_dict = payload.get("courses", {})
@@ -1832,6 +1904,13 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
                 payload_data=primenet_data
             )
             db.add(new_payload)
+
+    # État complet : conserve les cours/classes/élèves sans aucune note.
+    snapshot_row = db.query(ClassInkTeacherSnapshot).filter_by(teacher_email=teacher.email).first()
+    if snapshot_row:
+        snapshot_row.payload_data = snapshot
+    else:
+        db.add(ClassInkTeacherSnapshot(teacher_email=teacher.email, payload_data=snapshot))
 
     # Historique de synchronisation
     db.add(SyncHistory(

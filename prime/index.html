@@ -1199,8 +1199,8 @@ body {
                         <thead>
                             <tr>
                                 <th>COURS</th>
-                                <th>TOTAL MAX</th>
-                                <th>PTS OBTENUS</th>
+                                <th>MAX EX2</th>
+                                <th>EX2 OBTENUS</th>
                                 <th>PTS À RETIRER</th>
                                 <th>ACTION</th>
                             </tr>
@@ -1213,8 +1213,8 @@ body {
                     <!-- Actions globales de délibération -->
                     <div style="margin-top: 1.5rem; display: flex; gap: 0.8rem; justify-content: flex-end;">
                         <button class="btn-secondary" onclick="resetDeliberation()">Annuler</button>
-                        <button class="btn-secondary" onclick="applyDeliberationAll()">Tous</button>
-                        <button class="btn-primary" style="background-color: #0284c7;" onclick="applyAutoDeliberation()">Automatique</button>
+                        <button class="btn-secondary" onclick="applyDeliberationAll()">Vérifier tous</button>
+                        <button class="btn-secondary" type="button" disabled title="La délibération automatique n'est pas encore disponible." style="opacity:.55;cursor:not-allowed;">Automatique (bientôt)</button>
                         <button class="btn-primary" style="background-color: #16a34a;" onclick="saveDeliberation()">Valider</button>
                     </div>
                 </div>
@@ -1767,6 +1767,14 @@ body {
             <div class="form-group"><label>Date de naissance</label><input type="date" id="born-date-student" class="form-control"></div>
             <div class="form-group"><label>Lieu de naissance</label><input type="text" id="born-where-student" class="form-control"></div>
             <div class="form-group"><label>N° Permanent</label><input type="text" id="number-permi-student" class="form-control" placeholder="Ex : 763011900065"></div>
+            <div class="form-group" style="border:1px dashed var(--border-color);border-radius:8px;padding:.75rem;">
+                <label style="display:block;margin-bottom:.45rem;">AJOUTER PLUSIEURS ÉLÈVES DEPUIS UNE PHOTO</label>
+                <label class="btn-secondary" style="display:inline-flex;position:relative;overflow:hidden;align-items:center;gap:.4rem;cursor:pointer;">
+                    📷 Importer une liste avec Llink
+                    <input id="primeInkStudentPhotoInput" type="file" accept="image/*" capture="environment" aria-label="Photo d'une liste d'élèves" onchange="handlePrimeInkStudentPhotoInput(this)" style="position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;">
+                </label>
+                <small id="primeInkStudentPhotoStatus" style="display:block;margin-top:.45rem;color:var(--text-secondary);" aria-live="polite">Les noms, postnoms, prénoms et sexes seront proposés pour vérification.</small>
+            </div>
             <button class="btn-primary" style="width: 100%; margin-top: 1rem;" id="saveStudentBtn">Valider & Enregistrer</button>
         </div>
     </div>
@@ -1817,6 +1825,14 @@ body {
             <div class="form-group"><label>Titulaire du cours</label><input type="text" id="name-titulaire-added-cours" class="form-control" placeholder="Ex : Prof. Mwamba"></div>
             <div class="form-group"><label>Catégorie du cours</label><select class="form-control" id="choix-categorie"></select></div>
             <div class="form-group"><label>Sous-domaine (facultatif)</label><input type="text" id="sub-category-cours" class="form-control" placeholder="Ex : Sous-domaine des mathématiques"></div>
+            <div class="form-group" style="border:1px dashed var(--border-color);border-radius:8px;padding:.75rem;">
+                <label style="display:block;margin-bottom:.45rem;">IMPORTER LES COURS DEPUIS UN BULLETIN</label>
+                <label class="btn-secondary" style="display:inline-flex;position:relative;overflow:hidden;align-items:center;gap:.4rem;cursor:pointer;">
+                    📷 Lire les cours avec Llink
+                    <input id="primeInkCoursePhotoInput" type="file" accept="image/*" capture="environment" aria-label="Photo d'un bulletin avec les cours" onchange="handlePrimeInkCoursePhotoInput(this)" style="position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;">
+                </label>
+                <small id="primeInkCoursePhotoStatus" style="display:block;margin-top:.45rem;color:var(--text-secondary);" aria-live="polite">Les cours, domaines et sous-domaines seront proposés pour vérification. Le maximum par période est à confirmer.</small>
+            </div>
             <button class="btn-primary" style="width: 100%; margin-top: 1rem;" id="saveCourseBtn">Valider & Enregistrer</button>
         </div>
     </div>
@@ -1954,7 +1970,42 @@ window.alert = function(message) { showCustomAlert(message); };
             }
         };
 
-        let appState = JSON.parse(localStorage.getItem('classnet_p_db')) || defaultState;
+        let primeInkStorageAvailable = true;
+        const primeInkIsOperaMini = /Opera Mini/i.test((navigator && navigator.userAgent) || "")
+            || (typeof window !== "undefined" && typeof window.operamini !== "undefined");
+
+        function showPrimeInkStorageNotice(message) {
+            const display = () => {
+                let notice = document.getElementById("primeink-browser-compatibility");
+                if (!notice) {
+                    notice = document.createElement("div");
+                    notice.id = "primeink-browser-compatibility";
+                    notice.setAttribute("role", "alert");
+                    notice.style.cssText = "position:sticky;top:0;z-index:99999;padding:12px 16px;background:#fff4d6;color:#713f12;border-bottom:2px solid #d97706;font:600 14px/1.45 Arial,sans-serif;";
+                    document.body.insertBefore(notice, document.body.firstChild);
+                }
+                notice.textContent = message;
+            };
+            if (document.body) display();
+            else document.addEventListener("DOMContentLoaded", display, { once: true });
+        }
+
+        function loadPrimeInkState() {
+            try {
+                const saved = window.localStorage.getItem('classnet_p_db');
+                if (!saved) return JSON.parse(JSON.stringify(defaultState));
+                const parsed = JSON.parse(saved);
+                return parsed && typeof parsed === "object" ? parsed : JSON.parse(JSON.stringify(defaultState));
+            } catch (error) {
+                primeInkStorageAvailable = false;
+                return JSON.parse(JSON.stringify(defaultState));
+            }
+        }
+
+        let appState = loadPrimeInkState();
+        if (primeInkIsOperaMini || !primeInkStorageAvailable) {
+            showPrimeInkStorageNotice("ATTENTION : Opera Mini n'est pas compatible avec le stockage local utilisé par PrimeInk. Les données saisies peuvent être perdues. Pour tester ou travailler, ouvrez PrimeInk avec Chrome, Edge, Firefox ou Opera normal.");
+        }
 
         // Patch de sécurité pour les anciennes versions stockées en local
         if (!appState.teachers) appState.teachers = defaultState.teachers;
@@ -2012,7 +2063,15 @@ window.alert = function(message) { showCustomAlert(message); };
 
         function saveState() {
             sortStudentsAlphabetically(appState);
-            localStorage.setItem('classnet_p_db', JSON.stringify(appState));
+            try {
+                window.localStorage.setItem('classnet_p_db', JSON.stringify(appState));
+                primeInkStorageAvailable = true;
+                return true;
+            } catch (error) {
+                primeInkStorageAvailable = false;
+                showPrimeInkStorageNotice("ATTENTION : PrimeInk n'a pas pu sauvegarder sur cet appareil. N'effectuez aucune saisie importante dans ce navigateur. Utilisez Chrome, Edge, Firefox ou Opera normal (pas Opera Mini).");
+                return false;
+            }
         }
 
         // Migration automatique : réorganise aussi les élèves des anciennes bases locales.
@@ -3203,7 +3262,7 @@ async function bpServerCall(method, path, body) {
     const headers = cloudAuthHeaders();
     if (!headers['Authorization']) return { ok: false, offline: true };
     try {
-        const response = await fetch(API_BASE_URL + path, { method, headers, body: JSON.stringify(body), signal: AbortSignal.timeout(20000) });
+        const response = await window.primeInkFetchWithTimeout(API_BASE_URL + path, { method, headers, body: JSON.stringify(body) }, 20000);
         let data = {};
         try { data = await response.json(); } catch (e) { /* réponse sans détail */ }
         return { ok: response.ok && data.status !== false, status: response.status, message: data.message || data.detail || '' };
@@ -3486,6 +3545,139 @@ async function bpPushClassBulletin(cls) {
                 getStudents(courseId) {
                     const course = this.getCourse(courseId);
                     return course ? getSortedStudentsByClass(course.classId) : [];
+                },
+                getActiveClass() {
+                    return (Array.isArray(appState.classes) ? appState.classes : [])
+                        .find(cls => String(cls.id) === String(activeClassId)) || null;
+                },
+                getClass(classId) {
+                    return (Array.isArray(appState.classes) ? appState.classes : [])
+                        .find(cls => String(cls.id) === String(classId)) || null;
+                },
+                getStudentsInClass(classId) {
+                    return getSortedStudentsByClass(classId);
+                },
+                addStudents(classId, rows) {
+                    const cls = this.getClass(classId);
+                    if (!cls) throw new Error("La classe sélectionnée n'existe plus.");
+                    const previousStudents = (Array.isArray(appState.students) ? appState.students : [])
+                        .map(student => ({ ...student }));
+                    const previousActiveClassId = activeClassId;
+                    const previousActiveStudentId = activeStudentId;
+                    if (!Array.isArray(appState.students)) appState.students = [];
+                    const normalize = value => String(value || "").normalize("NFD")
+                        .replace(/[\\u0300-\\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+                    const existingNames = new Set(appState.students
+                        .filter(student => String(student.classId) === String(classId))
+                        .map(student => normalize([student.name, student.postname, student.prename].filter(Boolean).join(" "))));
+                    const result = { added: 0, duplicates: 0, invalid: 0 };
+                    (Array.isArray(rows) ? rows : []).forEach(row => {
+                        const name = String(row && row.name || "").trim();
+                        const postname = String(row && row.postname || "").trim();
+                        const prename = String(row && row.prename || "").trim();
+                        const sexe = String(row && row.sexe || "").trim().toUpperCase();
+                        if (!name || !["M", "F"].includes(sexe)) {
+                            result.invalid++;
+                            return;
+                        }
+                        const key = normalize([name, postname, prename].filter(Boolean).join(" "));
+                        if (!key || existingNames.has(key)) {
+                            result.duplicates++;
+                            return;
+                        }
+                        existingNames.add(key);
+                        appState.students.push({
+                            id: "s_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 9),
+                            classId: cls.id,
+                            name,
+                            postname,
+                            prename,
+                            sexe,
+                            bornDate: "",
+                            bornWhere: "",
+                            permi: ""
+                        });
+                        result.added++;
+                    });
+                    if (result.added) {
+                        const lastAdded = appState.students.filter(student => String(student.classId) === String(classId)).slice(-result.added);
+                        activeClassId = cls.id;
+                        activeStudentId = lastAdded.length ? lastAdded[lastAdded.length - 1].id : activeStudentId;
+                        if (!saveState()) {
+                            appState.students = previousStudents;
+                            activeClassId = previousActiveClassId;
+                            activeStudentId = previousActiveStudentId;
+                            throw new Error("Les élèves n'ont pas été ajoutés : ce navigateur ne peut pas enregistrer les données localement. Ouvrez PrimeInk dans Chrome, Edge, Firefox ou Opera normal.");
+                        }
+                        loadClassData(cls.id);
+                        renderClassesTable();
+                    }
+                    return result;
+                },
+                addCourses(classId, rows) {
+                    const cls = this.getClass(classId);
+                    if (!cls) throw new Error("La classe sélectionnée n'existe plus.");
+                    const previousCourses = (Array.isArray(appState.courses) ? appState.courses : [])
+                        .map(course => ({ ...course }));
+                    const previousActiveClassId = activeClassId;
+                    const previousCategories = Array.isArray(cls.categories) ? cls.categories.slice() : [];
+                    if (!Array.isArray(appState.courses)) appState.courses = [];
+                    if (!Array.isArray(cls.categories)) cls.categories = [];
+                    const normalize = value => String(value || "").normalize("NFD")
+                        .replace(/[\\u0300-\\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+                    const result = { added: 0, enriched: 0, duplicates: 0, invalid: 0 };
+                    (Array.isArray(rows) ? rows : []).forEach(row => {
+                        const name = String(row && row.name || "").trim();
+                        if (!name) {
+                            result.invalid++;
+                            return;
+                        }
+                        const domain = String(row && row.domain || "").trim();
+                        const subdomain = String(row && row.subdomain || "").trim();
+                        let category = "";
+                        if (domain) {
+                            const current = cls.categories.find(item => normalize(item) === normalize(domain));
+                            category = current || domain;
+                            if (!current) cls.categories.push(domain);
+                        } else {
+                            category = cls.categories.find(item => normalize(item) === "general") || "Général";
+                            if (!cls.categories.some(item => normalize(item) === normalize(category))) cls.categories.push(category);
+                        }
+                        const existing = appState.courses.find(course =>
+                            String(course.classId) === String(cls.id) && normalize(course.name) === normalize(name)
+                        );
+                        if (existing) {
+                            let changed = false;
+                            if (!existing.category && category) { existing.category = category; changed = true; }
+                            if (!existing.subCategory && subdomain) { existing.subCategory = subdomain; changed = true; }
+                            if (changed) result.enriched++;
+                            else result.duplicates++;
+                            return;
+                        }
+                        appState.courses.push({
+                            id: "k_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 9),
+                            classId: cls.id,
+                            name,
+                            maxPer: Number.isFinite(Number(row && row.maxPer)) && Number(row.maxPer) > 0
+                                ? Number(row.maxPer) : 40,
+                            category,
+                            subCategory: subdomain,
+                            titulaire: cls.titulaire || "Non assigné"
+                        });
+                        result.added++;
+                    });
+                    if (result.added || result.enriched || cls.categories.length) {
+                        activeClassId = cls.id;
+                        if (!saveState()) {
+                            appState.courses = previousCourses;
+                            cls.categories = previousCategories;
+                            activeClassId = previousActiveClassId;
+                            throw new Error("Les cours n'ont pas été ajoutés : ce navigateur ne peut pas enregistrer les données localement. Ouvrez PrimeInk dans Chrome, Edge, Firefox ou Opera normal.");
+                        }
+                        loadClassData(cls.id);
+                        renderClassesTable();
+                    }
+                    return result;
                 },
                 applyGrades(courseId, rows, overwrite) {
                     const course = this.getCourse(courseId);
@@ -4082,7 +4274,7 @@ async function bpPushClassBulletin(cls) {
         async function fetchIntranetAverages() {
             try {
                 // Lecture NON destructive : /api/intranet/fetch marque les mises à jour comme lues, on ne l'utilise pas ici
-                let response = await fetch(`${INTRANET_URL}/api/primenet/sync`, { headers: cloudAuthHeaders(), signal: AbortSignal.timeout(4000) });
+                let response = await window.primeInkFetchWithTimeout(`${INTRANET_URL}/api/primenet/sync`, { headers: cloudAuthHeaders() }, 4000);
                 if (!response.ok) return; // 404 = aucun enseignant n'a encore envoyé de données
                 let result = await response.json();
                 let snapshot = JSON.stringify(result.data || {});
@@ -4118,7 +4310,7 @@ async function bpPushClassBulletin(cls) {
             const schoolId = appState && appState.school && appState.school.id;
             if (!schoolId) return;
             try {
-                const response = await fetch(`${API_BASE_URL}/api/cloud/${encodeURIComponent(schoolId)}/status`, { signal: AbortSignal.timeout(6000) });
+                const response = await window.primeInkFetchWithTimeout(`${API_BASE_URL}/api/cloud/${encodeURIComponent(schoolId)}/status`, {}, 6000);
                 if (!response.ok) return;
                 const data = await response.json();
                 if (data.locked !== true) return;
@@ -4421,11 +4613,10 @@ async function bpPushClassBulletin(cls) {
             if (capacity < students.length && !(await showCustomConfirm("Les salles n'offrent que " + capacity + " places pour " + students.length + " élèves. Continuer quand même ?", "Places insuffisantes"))) return;
             const exemplaires = Math.max(1, Math.min(5, parseInt(document.getElementById('mixExemplaires').value, 10) || 1));
             try {
-                const response = await fetch(API_BASE_URL + '/api/mixage/generate', {
+                const response = await window.primeInkFetchWithTimeout(API_BASE_URL + '/api/mixage/generate', {
                     method: 'POST', headers,
-                    body: JSON.stringify({ school_id: appState.school.id, target_classes: targetClasses, rooms, supervisors, exemplaires, students }),
-                    signal: AbortSignal.timeout(60000)
-                });
+                    body: JSON.stringify({ school_id: appState.school.id, target_classes: targetClasses, rooms, supervisors, exemplaires, students })
+                }, 60000);
                 if (!response.ok) return alert(await bpServerErrorMessage(response));
                 const result = await response.json();
                 if (!result.success) return alert(result.message || "Le mixage n'a pas pu être généré.");
@@ -4640,7 +4831,7 @@ window.updateHoraireStructure = function() {
             const collected = bpCollectSchedulePayload();
             if (collected.error) return alert(collected.error);
             try {
-                const response = await fetch(API_BASE_URL + '/api/schedule/generate', {
+                const response = await window.primeInkFetchWithTimeout(API_BASE_URL + '/api/schedule/generate', {
                     method: 'POST', headers,
                     body: JSON.stringify({
                         school_id: appState.school.id,
@@ -4648,9 +4839,8 @@ window.updateHoraireStructure = function() {
                         config: { jours_travail: collected.jours, heures_par_jour: collected.heures },
                         time_slots: collected.slots,
                         teachers: collected.teachers
-                    }),
-                    signal: AbortSignal.timeout(60000)
-                });
+                    })
+                }, 60000);
                 if (!response.ok) return alert(await bpServerErrorMessage(response));
                 const result = await response.json();
                 const names = {};
@@ -5846,10 +6036,10 @@ function updateScheduleResultTables(joursCount, heuresCount) {
                 const previousSchoolId = String(previousState.school && previousState.school.id || '');
                 appState = importedState;
                 try {
-                    saveState();
+                    if (!saveState()) throw new Error("Stockage local indisponible.");
                 } catch (storageError) {
                     appState = previousState;
-                    throw new Error("Importation interrompue : le navigateur n'a pas pu enregistrer cette base (espace de stockage insuffisant). La base précédente est conservée.");
+                    throw new Error("Importation interrompue : le navigateur ne peut pas enregistrer cette base. La base précédente est conservée.");
                 }
 
                 const importedSchoolId = String(appState.school && appState.school.id || '');
@@ -5893,10 +6083,15 @@ function updateScheduleResultTables(joursCount, heuresCount) {
                     if (result.token) {
                         try { localStorage.setItem('primeink_cloud_token', result.token); } catch (e) { /* stockage indisponible */ }
                     }
+                    const previousState = appState;
                     const bpLocalOnly = bpSnapshotLocalOnly();
                     appState = result.data;
                     bpRestoreLocalOnly(appState, bpLocalOnly);
-                    saveState();
+                    if (!saveState()) {
+                        appState = previousState;
+                        await showCustomAlert("La base a été reçue, mais ce navigateur ne peut pas la sauvegarder. Ouvrez PrimeInk avec Chrome, Edge, Firefox ou Opera normal avant de poursuivre.");
+                        return;
+                    }
                     await showCustomAlert("✅ Base de données de l'école chargée avec succès !");
                     location.reload(); // Recharge pour appliquer le nouvel état
                 } else {
@@ -6095,104 +6290,221 @@ window.renderTeacherAvailabilityGrid = function(containerElem, daysCount, hoursC
 };
 
 let currentSourceCourseId = null;
-let pendingTransfers = {}; // Stoque { sourceCourseId: { targetCourseId, points } }
+let pendingTransfers = {}; // { sourceCourseId: { targetCourseId, points } }
+
+function parseDeliberationScore(value) {
+    if (value === null || value === undefined || value === "") return null;
+    const parsed = Number(String(value).trim().replace(",", "."));
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
+function getDeliberationCourse(courseId, classId) {
+    return appState.courses.find(course =>
+        String(course.id) === String(courseId) && String(course.classId) === String(classId)
+    ) || null;
+}
+
+function validatePendingDeliberationTransfers(studentId) {
+    const student = appState.students.find(item => String(item.id) === String(studentId));
+    if (!student) return { ok: false, message: "Sélectionnez d'abord un élève." };
+    const entries = Object.entries(pendingTransfers || {});
+    if (!entries.length) return { ok: false, message: "Aucun transfert n'a été préparé." };
+
+    const deltas = new Map();
+    const touchedCourses = new Map();
+    for (const [sourceId, transfer] of entries) {
+        const sourceCourse = getDeliberationCourse(sourceId, student.classId);
+        const targetCourse = getDeliberationCourse(transfer && transfer.targetCourseId, student.classId);
+        const points = Number(transfer && transfer.points);
+        if (!sourceCourse || !targetCourse || sourceCourse.id === targetCourse.id) {
+            return { ok: false, message: "Un transfert cible un cours absent ou invalide. Vérifiez les sélections." };
+        }
+        if (!Number.isFinite(points) || points <= 0) {
+            return { ok: false, message: "Chaque transfert doit contenir un nombre de points strictement positif." };
+        }
+
+        const sourceKey = student.id + "_" + sourceCourse.id;
+        const targetKey = student.id + "_" + targetCourse.id;
+        const sourceGrade = appState.grades && appState.grades[sourceKey];
+        const sourceEx2 = parseDeliberationScore(sourceGrade && sourceGrade.ex2);
+        if (sourceEx2 === null) {
+            return { ok: false, message: "La note EX2 de " + sourceCourse.name + " est vide ou illisible. Aucun transfert n'est possible depuis ce cours." };
+        }
+        if (sourceEx2 + (deltas.get(sourceCourse.id) || 0) < points) {
+            return { ok: false, message: "Les points EX2 disponibles dans " + sourceCourse.name + " sont insuffisants." };
+        }
+
+        deltas.set(sourceCourse.id, (deltas.get(sourceCourse.id) || 0) - points);
+        deltas.set(targetCourse.id, (deltas.get(targetCourse.id) || 0) + points);
+        touchedCourses.set(sourceCourse.id, sourceCourse);
+        touchedCourses.set(targetCourse.id, targetCourse);
+    }
+
+    for (const [courseId, delta] of deltas.entries()) {
+        const course = touchedCourses.get(courseId);
+        const grade = appState.grades && appState.grades[student.id + "_" + courseId];
+        const rawCurrent = parseDeliberationScore(grade && grade.ex2);
+        const current = rawCurrent === null ? 0 : rawCurrent;
+        const next = current + delta;
+        const maxEx2 = (Number(course.maxPer) || 0) * 2;
+        if (next < -0.000001) {
+            return { ok: false, message: "Le transfert retirerait plus de points EX2 que le cours " + course.name + " n'en possède." };
+        }
+        if (maxEx2 <= 0 || next > maxEx2 + 0.000001) {
+            return { ok: false, message: "Le transfert ferait dépasser le maximum EX2 du cours " + course.name + "." };
+        }
+    }
+    return { ok: true, student, entries, deltas, touchedCourses };
+}
 
 function renderDeliberationView(studentId) {
-    const student = appState.students.find(s => s.id === studentId);
-    if (!student) return;
+    const student = appState.students.find(item => String(item.id) === String(studentId));
+    if (!student) {
+        const tbody = document.getElementById("delibTableBody");
+        if (tbody) tbody.innerHTML = '<tr><td colspan="5">Sélectionnez un élève.</td></tr>';
+        return;
+    }
+    activeStudentId = student.id;
+    document.getElementById("delibStudentName").textContent =
+        [student.name, student.postname, student.prename].filter(Boolean).join(" ");
 
-    document.getElementById('delibStudentName').textContent = `${student.name} ${student.postname || ''} ${student.prename || ''}`;
-    const classCourses = appState.courses.filter(c => c.classId === student.classId);
-    const tbody = document.getElementById('delibTableBody');
-    tbody.innerHTML = '';
+    const classCourses = appState.courses.filter(course => String(course.classId) === String(student.classId));
+    const tbody = document.getElementById("delibTableBody");
+    tbody.innerHTML = "";
 
-    classCourses.forEach(crs => {
-        const gradeKey = `${student.id}_${crs.id}`;
-        const g = appState.grades[gradeKey] || { p1:0, p2:0, ex1:0, p3:0, p4:0, ex2:0 };
-        const totObtenu = (parseFloat(g.p1)||0) + (parseFloat(g.p2)||0) + (parseFloat(g.ex1)||0) +
-                          (parseFloat(g.p3)||0) + (parseFloat(g.p4)||0) + (parseFloat(g.ex2)||0);
-        const maxEx = crs.maxPer * 2;
-        const totalMax = (crs.maxPer * 4) + (maxEx * 2);
-
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td><strong>${safeHTML(crs.name)}</strong> ${crs.category ? `<small>(${safeHTML(crs.category)})</small>` : ''}</td>
-            <td>${safeHTML(totalMax)}</td>
-            <td><strong>${safeHTML(totObtenu)}</strong></td>
-            <td><input type="number" min="0" max="${safeHTML(totObtenu)}" class="form-control" id="pts_deduct_${safeHTML(crs.id)}" style="width: 100px;" value="0"></td>
-            <td><button class="btn-primary" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;" onclick="openTargetCourseModal(${jsArg(crs.id)})">Choisir le cours</button></td>
-        `;
+    classCourses.forEach(course => {
+        const gradeKey = student.id + "_" + course.id;
+        const grade = (appState.grades && appState.grades[gradeKey]) || {};
+        const ex2 = parseDeliberationScore(grade.ex2);
+        const maxEx2 = (Number(course.maxPer) || 0) * 2;
+        const inputValue = pendingTransfers[course.id] ? pendingTransfers[course.id].points : 0;
+        const available = ex2 !== null && ex2 > 0 && maxEx2 > 0;
+        const tr = document.createElement("tr");
+        tr.innerHTML =
+            '<td><strong>' + safeHTML(course.name) + '</strong> ' +
+            (course.category ? '<small>(' + safeHTML(course.category) + ')</small>' : '') + '</td>' +
+            '<td>' + safeHTML(maxEx2) + '</td>' +
+            '<td><strong>' + (ex2 === null ? "—" : safeHTML(ex2)) + '</strong></td>' +
+            '<td><input type="number" min="0" max="' + safeHTML(ex2 === null ? 0 : ex2) +
+            '" step="0.5" class="form-control" id="pts_deduct_' + safeHTML(course.id) +
+            '" style="width:100px;" value="' + safeHTML(inputValue) + '"' + (available ? "" : " disabled") + '></td>' +
+            '<td><button type="button" class="btn-primary" style="padding:.3rem .6rem;font-size:.8rem;" ' +
+            'onclick="openTargetCourseModal(' + jsArg(course.id) + ')"' + (available ? "" : " disabled") + '>Choisir le cours</button>' +
+            (pendingTransfers[course.id] ? '<br><small>Transfert préparé</small>' : '') +
+            (!available ? '<br><small>EX2 manquante ou aucun point disponible</small>' : '') + '</td>';
         tbody.appendChild(tr);
     });
 }
 
 function openTargetCourseModal(sourceCourseId) {
+    const student = appState.students.find(item => String(item.id) === String(activeStudentId));
+    if (!student) return alert("Sélectionnez d'abord un élève.");
+    const sourceCourse = getDeliberationCourse(sourceCourseId, student.classId);
+    if (!sourceCourse) return alert("Le cours source n'existe plus.");
+    const input = document.getElementById("pts_deduct_" + sourceCourseId);
+    const requested = Number(input && input.value);
+    const sourceGrade = appState.grades && appState.grades[student.id + "_" + sourceCourseId];
+    const sourceEx2 = parseDeliberationScore(sourceGrade && sourceGrade.ex2);
+    if (sourceEx2 === null || !Number.isFinite(requested) || requested <= 0 || requested > sourceEx2) {
+        return alert("Saisissez des points à retirer qui ne dépassent pas la note EX2 réellement obtenue.");
+    }
+
     currentSourceCourseId = sourceCourseId;
-    const student = appState.students.find(s => s.id === activeStudentId);
-    const classCourses = appState.courses.filter(c => c.classId === student.classId && c.id !== sourceCourseId);
-    const container = document.getElementById('targetCourseList');
-    container.innerHTML = '';
-
-    classCourses.forEach(crs => {
-        const btn = document.createElement('button');
-        btn.className = 'btn-secondary';
-        btn.style.textAlign = 'left';
-        btn.style.padding = '0.7rem 1rem';
-        btn.innerHTML = `<strong>${safeHTML(crs.name)}</strong> <span>| ${safeHTML(crs.category || "Cours d'option")}</span>`;
-        btn.onclick = () => selectTargetCourse(crs.id);
-        container.appendChild(btn);
+    const classCourses = appState.courses.filter(course =>
+        String(course.classId) === String(student.classId) && String(course.id) !== String(sourceCourseId)
+    );
+    const container = document.getElementById("targetCourseList");
+    container.innerHTML = "";
+    classCourses.forEach(course => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "btn-secondary";
+        button.style.textAlign = "left";
+        button.style.padding = ".7rem 1rem";
+        button.innerHTML = '<strong>' + safeHTML(course.name) + '</strong> <span>| ' +
+            safeHTML(course.category || "Cours d'option") + '</span>';
+        button.addEventListener("click", () => selectTargetCourse(course.id));
+        container.appendChild(button);
     });
-
-    document.getElementById('modal-select-target-course').classList.remove('hidden');
+    document.getElementById("modal-select-target-course").classList.remove("hidden");
 }
 
 function closeTargetCourseModal() {
-    document.getElementById('modal-select-target-course').classList.add('hidden');
+    document.getElementById("modal-select-target-course").classList.add("hidden");
 }
 
 function selectTargetCourse(targetCourseId) {
-    const ptsInput = document.getElementById(`pts_deduct_${currentSourceCourseId}`);
-    const pointsToDeduct = parseFloat(ptsInput.value) || 0;
+    const student = appState.students.find(item => String(item.id) === String(activeStudentId));
+    if (!student || !currentSourceCourseId) return alert("Sélectionnez d'abord un élève et un cours source.");
+    const input = document.getElementById("pts_deduct_" + currentSourceCourseId);
+    const pointsToDeduct = Number(input && input.value);
+    const sourceCourse = getDeliberationCourse(currentSourceCourseId, student.classId);
+    const targetCourse = getDeliberationCourse(targetCourseId, student.classId);
+    const sourceGrade = appState.grades && appState.grades[student.id + "_" + currentSourceCourseId];
+    const sourceEx2 = parseDeliberationScore(sourceGrade && sourceGrade.ex2);
 
-    if (pointsToDeduct <= 0) {
-        alert("Veuillez indiquer un nombre de points à retirer valide.");
-        return;
+    if (!sourceCourse || !targetCourse || sourceCourse.id === targetCourse.id) {
+        return alert("Le cours de destination choisi n'est pas valide.");
     }
-
+    if (!Number.isFinite(pointsToDeduct) || pointsToDeduct <= 0 || sourceEx2 === null || pointsToDeduct > sourceEx2) {
+        return alert("Le nombre de points à retirer doit être positif et ne pas dépasser EX2.");
+    }
     pendingTransfers[currentSourceCourseId] = {
         targetCourseId: targetCourseId,
         points: pointsToDeduct
     };
-
     closeTargetCourseModal();
-    alert(`Points (${pointsToDeduct}) prêts à être transférés.`);
+    renderDeliberationView(student.id);
+    alert("Transfert préparé. Vérifiez tous les transferts avant de les valider.");
+}
+
+function resetDeliberation() {
+    pendingTransfers = {};
+    currentSourceCourseId = null;
+    document.querySelectorAll("#delibTableBody input[id^='pts_deduct_']").forEach(input => { input.value = "0"; });
+    if (activeStudentId) renderDeliberationView(activeStudentId);
+    alert("Les transferts non validés ont été annulés. Aucune note n'a été modifiée.");
+}
+
+function applyDeliberationAll() {
+    const validation = validatePendingDeliberationTransfers(activeStudentId);
+    if (!validation.ok) {
+        alert(validation.message);
+        return;
+    }
+    alert(validation.entries.length + " transfert(s) vérifié(s). Aucune note n'a encore été modifiée. Cliquez sur « Valider » pour enregistrer.");
 }
 
 function applyAutoDeliberation() {
-    // Mode automatique : retire les points des cours secondaires/non-option pour combler les échecs légers (< 50%)
-    const student = appState.students.find(s => s.id === activeStudentId);
-    const classCourses = appState.courses.filter(c => c.classId === student.classId);
-    
-    // Logique automatique pour équilibrer les notes
-    alert("⚡ Délibération automatique calculée sur les cours éligibles !");
+    alert("La délibération automatique n'est pas activée. Utilisez les transferts manuels après avoir vérifié les points EX2.");
 }
 
 function saveDeliberation() {
-    // Applique définitivement les transferts sur les notes de fin d'année (EX2/S2)
-    Object.keys(pendingTransfers).forEach(srcId => {
-        const transfer = pendingTransfers[srcId];
-        const srcKey = `${activeStudentId}_${srcId}`;
-        const tgtKey = `${activeStudentId}_${transfer.targetCourseId}`;
+    const validation = validatePendingDeliberationTransfers(activeStudentId);
+    if (!validation.ok) {
+        alert(validation.message);
+        return;
+    }
 
-        if (appState.grades[srcKey]) {
-            appState.grades[srcKey].ex2 = Math.max(0, (appState.grades[srcKey].ex2 || 0) - transfer.points);
-        }
-        if (appState.grades[tgtKey]) {
-            appState.grades[tgtKey].ex2 = (appState.grades[tgtKey].ex2 || 0) + transfer.points;
-        }
+    const previousGrades = appState.grades;
+    const stagedGrades = JSON.parse(JSON.stringify(appState.grades || {}));
+    validation.entries.forEach(([sourceId, transfer]) => {
+        const sourceKey = activeStudentId + "_" + sourceId;
+        const targetKey = activeStudentId + "_" + transfer.targetCourseId;
+        if (!stagedGrades[sourceKey]) stagedGrades[sourceKey] = {};
+        if (!stagedGrades[targetKey]) stagedGrades[targetKey] = {};
+        const sourceValue = parseDeliberationScore(stagedGrades[sourceKey].ex2);
+        const targetValue = parseDeliberationScore(stagedGrades[targetKey].ex2);
+        stagedGrades[sourceKey].ex2 = sourceValue - Number(transfer.points);
+        stagedGrades[targetKey].ex2 = (targetValue === null ? 0 : targetValue) + Number(transfer.points);
     });
 
-    saveState();
+    appState.grades = stagedGrades;
+    if (!saveState()) {
+        appState.grades = previousGrades;
+        alert("Les notes n'ont pas été modifiées : PrimeInk n'a pas pu sauvegarder les données sur cet appareil.");
+        return;
+    }
     pendingTransfers = {};
     renderDeliberationView(activeStudentId);
     alert("✅ Délibération enregistrée avec succès !");
@@ -6468,7 +6780,247 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
             primeInkFicheStatus(error && error.message ? error.message : "Impossible d'appliquer les notes.", true);
         }
     };
+
+    window.primeInkPhotoUtils = {
+        compress: primeInkCompressFichePhoto
+    };
 })();
+</script>
+
+<script id="primeink-student-course-photo-import">
+(() => {
+    const API = window.PRIMEINK_LLINK_API_URL || "https://llink-usz9.onrender.com";
+    let pendingStudentImport = null;
+    let pendingCourseImport = null;
+    const escape = value => safeHTML(String(value == null ? "" : value));
+    const bridge = () => {
+        if (!window.primeInkFichePhotoBridge) throw new Error("PrimeInk n'est pas encore initialisé. Rechargez la page.");
+        return window.primeInkFichePhotoBridge;
+    };
+    function setStatus(id, message, error = false) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.textContent = message;
+        el.style.color = error ? "#dc2626" : "var(--text-secondary)";
+    }
+    function closeReview(id) {
+        const modal = document.getElementById(id);
+        if (modal) modal.style.display = "none";
+        if (id === "primeInkStudentPhotoReview") pendingStudentImport = null;
+        if (id === "primeInkCoursePhotoReview") pendingCourseImport = null;
+    }
+    function warningsList(items) {
+        return (Array.isArray(items) ? items : []).map(item => "<li>" + escape(item) + "</li>").join("");
+    }
+    function createReviewModal(id, title, subtitle, tableHtml, warningsHtml, applyLabel, applyHandler) {
+        let modal = document.getElementById(id);
+        if (!modal) {
+            modal = document.createElement("div");
+            modal.id = id;
+            modal.className = "primeink-fiche-modal";
+            modal.style.display = "none";
+            modal.innerHTML = '<div class="primeink-fiche-dialog" role="dialog" aria-modal="true"></div>';
+            document.body.appendChild(modal);
+            modal.addEventListener("click", event => {
+                if (event.target === modal) closeReview(id);
+            });
+        }
+        const dialog = modal.querySelector(".primeink-fiche-dialog");
+        dialog.innerHTML = '<h3>' + escape(title) + '</h3>' +
+            '<p>' + escape(subtitle) + '</p>' +
+            (warningsHtml ? '<div class="primeink-fiche-warnings"><strong>Points à vérifier</strong><ul>' + warningsHtml + '</ul></div>' : '') +
+            '<div class="primeink-fiche-table-wrap">' + tableHtml + '</div>' +
+            '<div class="primeink-fiche-actions"><span>Rien ne sera enregistré avant votre confirmation.</span>' +
+            '<div class="primeink-fiche-actions-right"><button type="button" class="btn-secondary" data-photo-cancel>Annuler</button>' +
+            '<button type="button" class="btn-primary" data-photo-apply>' + escape(applyLabel) + '</button></div></div>';
+        dialog.querySelector("[data-photo-cancel]").addEventListener("click", () => closeReview(id));
+        dialog.querySelector("[data-photo-apply]").addEventListener("click", applyHandler);
+        modal.style.display = "flex";
+        return dialog;
+    }
+    async function readPhoto(input, endpoint, className, statusId, expectedType) {
+        const file = input && input.files && input.files[0];
+        if (input) input.value = "";
+        if (!file) return null;
+        if (!window.primeInkPhotoUtils || typeof window.primeInkPhotoUtils.compress !== "function") {
+            throw new Error("Le module de préparation des photos n'est pas disponible. Rechargez PrimeInk.");
+        }
+        setStatus(statusId, "Préparation de la photo…");
+        const imageBase64 = await window.primeInkPhotoUtils.compress(file);
+        if (!imageBase64 || imageBase64.length > 8_100_000) {
+            throw new Error("La photo reste trop volumineuse. Recadrez-la puis réessayez.");
+        }
+        setStatus(statusId, "Envoi à Llink et lecture du document…");
+        const response = await fetch(API + endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ imageBase64, class_name: className || "" })
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : "Erreur Llink HTTP " + response.status);
+        if (!data || data.document_type !== expectedType) {
+            throw new Error(expectedType === "student_list"
+                ? "Llink ne reconnaît pas une liste d'élèves sur cette photo."
+                : "Llink ne reconnaît pas une liste de cours sur ce bulletin.");
+        }
+        return { data, filename: file.name || "Photo" };
+    }
+
+    function showStudentReview(data, classId, className, filename) {
+        const rows = Array.isArray(data.students) ? data.students : [];
+        if (!rows.length) throw new Error("Aucun élève n'a pu être lu sur cette photo.");
+        pendingStudentImport = { rows, classId };
+        const body = rows.map((row, index) => {
+            const confidence = Math.round(Math.max(0, Math.min(1, Number(row.confidence) || 0)) * 100);
+            return '<tr data-student-photo-row="' + index + '">' +
+                '<td><input type="checkbox" data-include checked aria-label="Importer cet élève"></td>' +
+                '<td><input class="form-control" data-field="name" value="' + escape(row.name || "") + '" aria-label="Nom"></td>' +
+                '<td><input class="form-control" data-field="postname" value="' + escape(row.postname || "") + '" aria-label="Postnom"></td>' +
+                '<td><input class="form-control" data-field="prename" value="' + escape(row.prename || "") + '" aria-label="Prénom"></td>' +
+                '<td><select class="form-control" data-field="sexe" aria-label="Sexe"><option value="">À confirmer</option>' +
+                '<option value="M" ' + (row.sexe === "M" ? "selected" : "") + '>M</option>' +
+                '<option value="F" ' + (row.sexe === "F" ? "selected" : "") + '>F</option></select></td>' +
+                '<td>' + confidence + '%</td><td>' + escape(row.warning || "") + '</td></tr>';
+        }).join("");
+        const table = '<table class="primeink-fiche-table"><thead><tr><th>Importer</th><th>Nom</th><th>Postnom</th><th>Prénom</th><th>Sexe</th><th>Confiance</th><th>Avertissement</th></tr></thead><tbody>' + body + '</tbody></table>';
+        const dialog = createReviewModal(
+            "primeInkStudentPhotoReview", "Vérifier la liste des élèves",
+            filename + " · " + className + " · " + rows.length + " ligne(s) détectée(s). Choisissez M ou F et corrigez les champs avant l'ajout.",
+            table, warningsList(data.warnings), "Ajouter les élèves vérifiés", applyStudentReview
+        );
+        dialog.querySelectorAll("[data-field='name']").forEach(field => {
+            field.addEventListener("input", () => { field.value = field.value.toUpperCase(); });
+        });
+    }
+    function applyStudentReview() {
+        if (!pendingStudentImport) return;
+        const dialog = document.querySelector("#primeInkStudentPhotoReview .primeink-fiche-dialog");
+        const rows = [];
+        for (const rowEl of dialog.querySelectorAll("[data-student-photo-row]")) {
+            if (!rowEl.querySelector("[data-include]")?.checked) continue;
+            const val = field => rowEl.querySelector('[data-field="' + field + '"]')?.value.trim() || "";
+            const row = { name: val("name"), postname: val("postname"), prename: val("prename"), sexe: val("sexe").toUpperCase() };
+            if (!row.name || !["M", "F"].includes(row.sexe)) {
+                setStatus("primeInkStudentPhotoStatus", "Complétez le nom et choisissez M ou F pour chaque ligne cochée, ou décochez les lignes incertaines.", true);
+                return;
+            }
+            rows.push(row);
+        }
+        if (!rows.length) return setStatus("primeInkStudentPhotoStatus", "Sélectionnez au moins un élève à importer.", true);
+        try {
+            const result = bridge().addStudents(pendingStudentImport.classId, rows);
+            closeReview("primeInkStudentPhotoReview");
+            const details = [
+                result.duplicates ? result.duplicates + " doublon(s) ignoré(s)" : "",
+                result.invalid ? result.invalid + " ligne(s) invalide(s)" : ""
+            ].filter(Boolean).join(" · ");
+            setStatus("primeInkStudentPhotoStatus", result.added + " élève(s) ajouté(s)." + (details ? " " + details + "." : ""));
+        } catch (error) {
+            setStatus("primeInkStudentPhotoStatus", error.message || "Impossible d'ajouter ces élèves.", true);
+        }
+    }
+
+    function showCourseReview(data, classId, className, filename) {
+        const rows = Array.isArray(data.courses) ? data.courses : [];
+        if (!rows.length) throw new Error("Aucun cours n'a pu être lu sur ce bulletin.");
+        pendingCourseImport = { rows, classId };
+        const body = rows.map((row, index) => {
+            const confidence = Math.round(Math.max(0, Math.min(1, Number(row.confidence) || 0)) * 100);
+            return '<tr data-course-photo-row="' + index + '">' +
+                '<td><input type="checkbox" data-include checked aria-label="Importer ce cours"></td>' +
+                '<td><input class="form-control" data-field="name" value="' + escape(row.name || "") + '" aria-label="Nom du cours"></td>' +
+                '<td><input class="form-control" data-field="domain" value="' + escape(row.domain || "") + '" aria-label="Domaine"></td>' +
+                '<td><input class="form-control" data-field="subdomain" value="' + escape(row.subdomain || "") + '" aria-label="Sous-domaine"></td>' +
+                '<td><input class="form-control" type="number" min="0.5" step="0.5" data-field="maxPer" value="40" aria-label="Maximum par période"></td>' +
+                '<td>' + confidence + '%</td><td>' + escape(row.warning || "") + '</td></tr>';
+        }).join("");
+        const table = '<table class="primeink-fiche-table"><thead><tr><th>Importer</th><th>Cours</th><th>Domaine</th><th>Sous-domaine</th><th>Max/période</th><th>Confiance</th><th>Avertissement</th></tr></thead><tbody>' + body + '</tbody></table>';
+        createReviewModal(
+            "primeInkCoursePhotoReview", "Vérifier les cours du bulletin",
+            filename + " · " + className + " · " + rows.length + " cours détecté(s). Le maximum par période est prérempli à 40 ; vérifiez-le pour chaque cours.",
+            table, warningsList(data.warnings), "Ajouter les cours vérifiés", applyCourseReview
+        );
+    }
+    function applyCourseReview() {
+        if (!pendingCourseImport) return;
+        const dialog = document.querySelector("#primeInkCoursePhotoReview .primeink-fiche-dialog");
+        const rows = [];
+        for (const rowEl of dialog.querySelectorAll("[data-course-photo-row]")) {
+            if (!rowEl.querySelector("[data-include]")?.checked) continue;
+            const val = field => rowEl.querySelector('[data-field="' + field + '"]')?.value.trim() || "";
+            const maxPer = Number(val("maxPer"));
+            const row = { name: val("name"), domain: val("domain"), subdomain: val("subdomain"), maxPer };
+            if (!row.name || !Number.isFinite(maxPer) || maxPer <= 0) {
+                setStatus("primeInkCoursePhotoStatus", "Chaque cours coché doit avoir un nom et un maximum par période supérieur à zéro.", true);
+                return;
+            }
+            rows.push(row);
+        }
+        if (!rows.length) return setStatus("primeInkCoursePhotoStatus", "Sélectionnez au moins un cours à importer.", true);
+        try {
+            const result = bridge().addCourses(pendingCourseImport.classId, rows);
+            closeReview("primeInkCoursePhotoReview");
+            const details = [
+                result.enriched ? result.enriched + " cours existant(s) complété(s)" : "",
+                result.duplicates ? result.duplicates + " doublon(s) ignoré(s)" : "",
+                result.invalid ? result.invalid + " ligne(s) invalide(s)" : ""
+            ].filter(Boolean).join(" · ");
+            setStatus("primeInkCoursePhotoStatus", result.added + " cours ajouté(s)." + (details ? " " + details + "." : ""));
+        } catch (error) {
+            setStatus("primeInkCoursePhotoStatus", error.message || "Impossible d'ajouter ces cours.", true);
+        }
+    }
+
+    window.handlePrimeInkStudentPhotoInput = async function(input) {
+        const cls = bridge().getActiveClass();
+        if (!cls) {
+            setStatus("primeInkStudentPhotoStatus", "Ouvrez une classe avant d'importer une liste.", true);
+            if (input) input.value = "";
+            return;
+        }
+        try {
+            const result = await readPhoto(input, "/api/primeink/students-extract", cls.name, "primeInkStudentPhotoStatus", "student_list");
+            if (!result) return;
+            showStudentReview(result.data, cls.id, cls.name, result.filename);
+            setStatus("primeInkStudentPhotoStatus", "Lecture terminée. Vérifiez les champs et le sexe avant d'ajouter les élèves.");
+        } catch (error) {
+            setStatus("primeInkStudentPhotoStatus", (error.message || "Lecture de la liste impossible.") + " Vous pouvez réessayer.", true);
+        }
+    };
+
+    window.handlePrimeInkCoursePhotoInput = async function(input) {
+        const cls = bridge().getActiveClass();
+        if (!cls) {
+            setStatus("primeInkCoursePhotoStatus", "Ouvrez une classe avant d'importer un bulletin.", true);
+            if (input) input.value = "";
+            return;
+        }
+        try {
+            const result = await readPhoto(input, "/api/primeink/courses-extract", cls.name, "primeInkCoursePhotoStatus", "bulletin_courses");
+            if (!result) return;
+            showCourseReview(result.data, cls.id, cls.name, result.filename);
+            setStatus("primeInkCoursePhotoStatus", "Lecture terminée. Vérifiez les cours, domaines, sous-domaines et maxima avant l'ajout.");
+        } catch (error) {
+            setStatus("primeInkCoursePhotoStatus", (error.message || "Lecture du bulletin impossible.") + " Vous pouvez réessayer.", true);
+        }
+    };
+    window.closePrimeInkStudentPhotoReview = () => closeReview("primeInkStudentPhotoReview");
+    window.closePrimeInkCoursePhotoReview = () => closeReview("primeInkCoursePhotoReview");
+})();
+</script>
+
+
+<script id="primeink-fetch-compatibility">
+window.primeInkFetchWithTimeout = async function(url, options = {}, timeoutMs = 10000) {
+    if (typeof AbortController !== "function") return fetch(url, options);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        return await fetch(url, { ...options, signal: controller.signal });
+    } finally {
+        clearTimeout(timeoutId);
+    }
+};
 </script>
 </body>
 </html>
