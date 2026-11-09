@@ -406,6 +406,7 @@ class Teacher(Base):
     subject = Column(String, nullable=True)
     status = Column(String, default="Actif")
     school_id = Column(String, ForeignKey("school_information.school_id"), nullable=True)
+    school_access_verified = Column(Boolean, nullable=False, default=False, server_default="false")
     llink_preferences = Column(Text, nullable=True)
     signature = Column(Text, nullable=True)  # photo de la signature, prise dans ClassInk
 
@@ -975,6 +976,7 @@ with engine.connect() as conn:
     conn.execute(text("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS subject VARCHAR;"))
     conn.execute(text("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS status VARCHAR DEFAULT 'Actif';"))
     conn.execute(text("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS teacher_code VARCHAR(50);"))
+    conn.execute(text("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS school_access_verified BOOLEAN NOT NULL DEFAULT FALSE;"))
     conn.execute(text("ALTER TABLE school_information ADD COLUMN IF NOT EXISTS email TEXT;"))
     conn.execute(text("ALTER TABLE school_information ADD COLUMN IF NOT EXISTS province VARCHAR(255);"))
     conn.execute(text("ALTER TABLE school_information ADD COLUMN IF NOT EXISTS province VARCHAR(255);"))
@@ -2027,6 +2029,15 @@ def school_state_extras(db, school):
     return out
 
 
+def teacher_has_verified_school_access(teacher) -> bool:
+    """Vrai uniquement après rattachement du compte dans la liste officielle PrimeInk."""
+    return bool(
+        teacher
+        and getattr(teacher, "school_id", None)
+        and getattr(teacher, "school_access_verified", False)
+    )
+
+
 def teacher_name_identity_key(value: str) -> str:
     """Clé de nom enseignant tolérant titres de civilité et ordre des noms."""
     tokens = normalize_name(value or "").split()
@@ -2282,6 +2293,7 @@ def store_school_class_catalog(db: Session, school: SchoolInformation, catalog: 
         # Le bouton « Ajouter un enseignant » peut encore afficher un nom provisoire.
         teacher.school_id = school.school_id
         teacher.school_name = school.name_school
+        teacher.school_access_verified = True
         if item["subject"] and item["subject"] != "Matière à attribuer":
             teacher.subject = item["subject"]
         if item["status"]:
@@ -2391,7 +2403,9 @@ def apply_teacher_classroom_context(state: dict, context: dict) -> dict:
 
 
 def build_teacher_classroom_context(db: Session, teacher) -> dict:
-    school = db.query(SchoolInformation).filter(SchoolInformation.school_id == teacher.school_id).first() if teacher.school_id else None
+    if not teacher_has_verified_school_access(teacher):
+        return compose_teacher_classroom_context(teacher, None, [], [], [])
+    school = db.query(SchoolInformation).filter(SchoolInformation.school_id == teacher.school_id).first()
     if not school:
         return compose_teacher_classroom_context(teacher, None, [], [], [])
     classes = db.query(ClasseInformation).filter(
@@ -2444,6 +2458,8 @@ def get_teacher_classroom_information(
     teacher = db.query(Teacher).filter(Teacher.email == claims.get("email")).first()
     if not teacher:
         raise HTTPException(status_code=404, detail="Compte enseignant introuvable.")
+    if not teacher_has_verified_school_access(teacher):
+        raise HTTPException(status_code=403, detail="Votre compte n'est pas encore autorisé par l'école. Communiquez votre identifiant ClassInk à l'administration pour qu'elle l'ajoute dans PrimeInk.")
     blocked = teacher_school_block(db, teacher)
     if blocked:
         raise HTTPException(status_code=403, detail=blocked)
