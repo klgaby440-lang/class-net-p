@@ -111,6 +111,75 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn("page.style.transform = 'none';", source)
         self.assertNotIn("Math.min(sheet.clientWidth / pw, sheet.clientHeight / ph)", source)
 
+    def test_primeink_class_settings_group_actions_and_paginate_students(self):
+        source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
+        self.assertIn('data-sub="view-settings">PARAMÈTRES</button>', source)
+        self.assertIn('id="view-settings"', source)
+        for action in (
+            "Ajouter des élèves depuis une liste",
+            "Gérer les élèves existants",
+            "Ajouter des cours depuis un bulletin",
+            "Gérer les cours existants",
+            "Éditer la classe",
+            "Imprimer les bulletins de la classe",
+            "Supprimer la classe",
+        ):
+            self.assertIn(action, source)
+        self.assertNotIn('onclick="exportClassBulletinsPDF()"', source)
+        self.assertIn("const PRIMEINK_STUDENTS_PER_PAGE = 15", source)
+        self.assertIn("students.slice(start, start + PRIMEINK_STUDENTS_PER_PAGE)", source)
+        self.assertIn("const pageSize = 15", source)
+        self.assertIn("visibleStudents.map(st =>", source)
+        student_form = source.split('id="interface-eleve"', 1)[1].split('id="interface-classe"', 1)[0]
+        course_form = source.split('id="interface-cours"', 1)[1].split('id="modal-select-target-course"', 1)[0]
+        self.assertIn('id="primeInkStudentPhotoInput"', student_form)
+        self.assertNotIn('primeInkCoursePhotoInput', student_form)
+        self.assertIn('id="primeInkCoursePhotoInput"', course_form)
+        self.assertNotIn('primeInkStudentPhotoInput', course_form)
+
+    def test_primeink_parent_identifier_copy_has_legacy_fallback_and_clear_block_label(self):
+        source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
+        copy_logic = source.split("window.bpSuiviCopyCode = async function()", 1)[1].split("window.bpSuiviToggleAccess", 1)[0]
+        self.assertIn("navigator.clipboard.writeText(row.code)", copy_logic)
+        self.assertIn("document.execCommand('copy')", copy_logic)
+        self.assertIn("Identifiant parent copié", copy_logic)
+        self.assertIn("toggleButton.textContent = row.individualAccessAllowed ? 'Bloquer les notes' : 'Autoriser les résultats';", source)
+        self.assertIn("le parent sera informé qu’il doit régler les frais", source)
+
+    def test_suivi_individual_block_hides_results_and_requests_payment(self):
+        source = (ROOT / "main.py").read_text(encoding="utf-8")
+        endpoint = source.split('@app.post("/api/suivi/student")', 1)[1].split('@app.get("/api/suivi/school/classes/{class_id}/students")', 1)[0]
+        self.assertIn('access_reason = "payment_required"', endpoint)
+        self.assertIn('"paymentRequired": bool(not results_allowed and not individual_access_allowed)', endpoint)
+        self.assertIn('"results": results', endpoint)
+        self.assertIn("results = None", endpoint)
+        self.assertIn("le parent doit régler", endpoint)
+
+    def test_crypt_school_account_creation_generates_and_hands_off_credentials(self):
+        source = (ROOT / "crypt/index.html").read_text(encoding="utf-8")
+        self.inspect_file("crypt/index.html")
+        for item in (
+            'id="schoolForm"',
+            'id="schoolIdInput"',
+            'id="bulletinSeqIdInput"',
+            'id="schoolPasswordInput"',
+            'id="generateSchoolId"',
+            'id="generateBulletinId"',
+            'id="generateSchoolPassword"',
+            'id="createdAccountPanel"',
+            'data-copy-created="school_id"',
+            'data-copy-created="bulletin_seq_id"',
+            'data-copy-created="pass_word"',
+            'id="copyCreatedCredentials"',
+        ):
+            self.assertIn(item, source)
+        self.assertIn("function secureRandomHex", source)
+        self.assertIn("window.crypto.getRandomValues", source)
+        self.assertIn("function showCreatedAccount(data)", source)
+        self.assertIn("function copyConsoleText(value)", source)
+        self.assertIn("document.execCommand('copy')", source)
+        self.assertIn("createdAccount=null", source)
+
     def test_primeink_prepares_shared_class_catalog(self):
         source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
         self.assertIn('id="prepareClassInformationBtn"', source)
