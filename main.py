@@ -2114,7 +2114,7 @@ def crypt_console_db_query(payload: dict, db: Session = Depends(get_db), _admin:
     if re.search(r"\b(information_schema|pg_catalog|sqlite_master|pg_toast)\b", sql, re.IGNORECASE):
         raise HTTPException(status_code=403, detail="Les catalogues système ne sont pas accessibles depuis cet explorateur.")
     allowed_tables = set(Base.metadata.tables.keys()) - {"otp_codes", "access_codes"}
-    referenced = re.findall(r'\\b(?:FROM|JOIN)\\s+["]?([A-Za-z_][A-Za-z0-9_]*)["]?', sql, re.IGNORECASE)
+    referenced = re.findall(r'\b(?:FROM|JOIN)\s+["]?([A-Za-z_][A-Za-z0-9_]*)["]?', sql, re.IGNORECASE)
     if not referenced or any(name not in allowed_tables for name in referenced):
         raise HTTPException(status_code=403, detail="La requête doit cibler uniquement les tables applicatives autorisées.")
     query_hash = hashlib.sha256(sql.encode("utf-8")).hexdigest()
@@ -2169,6 +2169,11 @@ def crypt_telemetry_event(payload: dict, request: Request, db: Session = Depends
     device_id = str(request.headers.get("x-crypt-device") or payload.get("device_id") or "")[:100]
     if not re.fullmatch(r"[A-Za-z0-9._:-]{8,100}", device_id):
         raise HTTPException(status_code=422, detail="Identifiant de session appareil invalide.")
+    authorization = request.headers.get("authorization", "")
+    claims = verify_token(authorization[7:].strip()) if authorization.lower().startswith("bearer ") else None
+    claims = claims or {}
+    school_id = str(claims.get("school_id") or request.headers.get("x-crypt-school") or "")[:100] or None
+    account = str(claims.get("email") or school_id or "")[:180] or None
     message = clean_text(payload.get("message"), 700)
     feature = clean_text(payload.get("feature"), 160)
     event_type = str(payload.get("event_type") or "feature").lower()
@@ -2176,8 +2181,9 @@ def crypt_telemetry_event(payload: dict, request: Request, db: Session = Depends
         event_type = "feature"
     _crypt_touch_public_device(db, request, app_name, device_id)
     db.add(CryptTelemetryEvent(
-        device_id=device_id, app=app_name, event_type=event_type, feature=feature,
-        message=message, details=payload.get("details") if isinstance(payload.get("details"), dict) else {},
+        device_id=device_id, app=app_name, school_id=school_id, account_identifier=account,
+        event_type=event_type, feature=feature, message=message,
+        details=payload.get("details") if isinstance(payload.get("details"), dict) else {},
         created_at=datetime.utcnow(),
     ))
     db.commit()
