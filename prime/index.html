@@ -3376,12 +3376,14 @@ function bpSuiviRenderAccessPanel(student) {
     codeNode.textContent = 'ID parent : ' + row.code + ' · ' + bpSuiviStudentName(student);
     statusNode.textContent = row.resultsAllowed
         ? 'Résultats visibles pour le parent.'
-        : 'Résultats bloqués pour le parent.';
+        : row.individualAccessAllowed
+            ? 'Autorisation individuelle donnée, mais une règle scolaire bloque encore les résultats.'
+            : 'Résultats bloqués pour le parent.';
     statusNode.style.color = row.resultsAllowed ? '#16a34a' : '#dc6b24';
     copyButton.disabled = false;
     toggleButton.disabled = false;
-    toggleButton.textContent = row.resultsAllowed ? 'Bloquer les résultats' : 'Autoriser les résultats';
-    toggleButton.style.backgroundColor = row.resultsAllowed ? '#dc2626' : '#16a34a';
+    toggleButton.textContent = row.individualAccessAllowed ? 'Retirer l’autorisation individuelle' : 'Autoriser les résultats';
+    toggleButton.style.backgroundColor = row.individualAccessAllowed ? '#dc2626' : '#16a34a';
 }
 
 function bpSuiviRenderSidebarCodes(classId) {
@@ -3395,7 +3397,7 @@ function bpSuiviRenderSidebarCodes(classId) {
         button.innerHTML =
             '<span style="display:block;font-weight:600;">' + safeHTML(bpSuiviStudentName(student)) + '</span>' +
             '<small style="display:block;margin-top:3px;opacity:.78;font-size:.72rem;">ID parent : ' + safeHTML(row.code) +
-            ' · ' + (row.resultsAllowed ? 'Résultats visibles' : 'Bloqués') + '</small>';
+            ' · ' + (row.resultsAllowed ? 'Résultats visibles' : row.individualAccessAllowed ? 'Règle scolaire active' : 'Bloqués') + '</small>';
     });
 }
 
@@ -3447,10 +3449,10 @@ window.bpSuiviToggleAccess = async function() {
         if (typeof showCustomAlert === 'function') showCustomAlert('Chargez d’abord les identifiants de la classe.');
         return;
     }
-    const next = !row.resultsAllowed;
+    const next = !row.individualAccessAllowed;
     const question = next
         ? 'Autoriser le parent de ' + bpSuiviStudentName(student) + ' à consulter ses résultats dans Class-Ink Suivi ?'
-        : 'Bloquer immédiatement l’affichage des résultats de ' + bpSuiviStudentName(student) + ' dans Class-Ink Suivi ?';
+        : 'Retirer l’autorisation individuelle donnée au parent de ' + bpSuiviStudentName(student) + ' ?';
     if (typeof showCustomConfirm === 'function' && !(await showCustomConfirm(question, 'Class-Ink Suivi'))) return;
 
     const button = document.getElementById('primeInkSuiviToggle');
@@ -3466,7 +3468,12 @@ window.bpSuiviToggleAccess = async function() {
         if (typeof showCustomAlert === 'function') showCustomAlert(result.message || 'Impossible de modifier les droits du parent.');
         return;
     }
-    row.resultsAllowed = next;
+    row.individualAccessAllowed = result.data
+        ? Boolean(result.data.individualAccessAllowed)
+        : next;
+    row.resultsAllowed = result.data
+        ? Boolean(result.data.resultsAllowed)
+        : row.individualAccessAllowed;
     bpSuiviRenderSidebarCodes(student.classId);
     bpSuiviRenderAccessPanel(student);
     if (typeof showCustomAlert === 'function') showCustomAlert(result.message || 'Accès parent mis à jour.');
