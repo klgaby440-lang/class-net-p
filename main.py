@@ -2129,27 +2129,8 @@ def validate_crypt_read_query(query: str) -> str:
 def crypt_console_db_query(payload: dict, db: Session = Depends(get_db), _admin: dict = Depends(require_crypt_admin)):
     sql = validate_crypt_read_query(str(payload.get("query") or ""))
     query_hash = hashlib.sha256(sql.encode("utf-8")).hexdigest()
-    if not query or len(query) > 6000:
-        raise HTTPException(status_code=422, detail="La requête est vide ou trop longue (maximum 6 000 caractères).")
-    sql = query.rstrip().rstrip(";").strip()
-    if ";" in sql:
-        raise HTTPException(status_code=422, detail="Une seule instruction SQL est autorisée.")
-    if not re.match(r"^SELECT\b", sql, re.IGNORECASE):
-        raise HTTPException(status_code=403, detail="Seules les requêtes SELECT simples sont autorisées.")
-    forbidden = r"\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|GRANT|REVOKE|COPY|DO|CALL|EXECUTE|LOCK|SET|VACUUM|ANALYZE|INTO|NEXTVAL|SETVAL)\b|\bFOR\s+(UPDATE|SHARE)\b|\b(pg_sleep|pg_read_file|pg_write_file|pg_ls_dir|pg_advisory_lock|pg_advisory_xact_lock|pg_notify|dblink|lo_export|lo_import|set_config)\s*\("
-    if re.search(forbidden, sql, re.IGNORECASE):
-        raise HTTPException(status_code=403, detail="Instruction ou fonction interdite dans l'explorateur.")
-    secret_columns = r"\b(pass_word|password|secret|token|signature|head_signature|api_key|otp)\b"
-    if re.search(secret_columns, sql, re.IGNORECASE):
-        raise HTTPException(status_code=403, detail="Les colonnes d'authentification, signatures et secrets sont masquées.")
-    if re.search(r"\b(information_schema|pg_catalog|sqlite_master|pg_toast)\b", sql, re.IGNORECASE):
-        raise HTTPException(status_code=403, detail="Les catalogues système ne sont pas accessibles depuis cet explorateur.")
-    allowed_tables = set(Base.metadata.tables.keys()) - {"otp_codes", "access_codes"}
-    referenced = re.findall(r'\b(?:FROM|JOIN)\s+["]?([A-Za-z_][A-Za-z0-9_]*)["]?', sql, re.IGNORECASE)
-    if not referenced or any(name not in allowed_tables for name in referenced):
-        raise HTTPException(status_code=403, detail="La requête doit cibler uniquement les tables applicatives autorisées.")
-    query_hash = hashlib.sha256(sql.encode("utf-8")).hexdigest()
     try:
+        # Le premier ordre SQL de la transaction active le mode lecture seule.
         db.execute(text("SET TRANSACTION READ ONLY"))
         db.execute(text("SET LOCAL statement_timeout = '5000ms'"))
         result = db.execute(text("SELECT * FROM (" + sql + ") AS crypt_readonly_result LIMIT 101"))
@@ -2158,16 +2139,19 @@ def crypt_console_db_query(payload: dict, db: Session = Depends(get_db), _admin:
         truncated = len(rows) > 100
         rows = rows[:100]
         data = []
+        hidden_columns = {"pass_word", "password", "secret", "token", "signature", "head_signature", "seal", "armoiries", "api_key", "otp"}
         for row in rows:
             item = {}
             for key in columns:
-                if str(key).lower() in {"pass_word", "password", "secret", "token", "signature", "head_signature", "seal", "armoiries", "api_key", "otp"}:
+                if str(key).lower() in hidden_columns:
                     continue
                 value = row.get(key)
                 if isinstance(value, datetime):
                     value = value.isoformat() + "Z"
                 elif isinstance(value, (bytes, bytearray)):
                     value = "[binaire masqué]"
+                elif hasattr(value, "isoformat") and callable(value.isoformat):
+                    value = value.isoformat()
                 item[str(key)] = value
             data.append(item)
         db.rollback()
@@ -2183,8 +2167,13 @@ def crypt_console_db_query(payload: dict, db: Session = Depends(get_db), _admin:
         audit_db.commit()
     finally:
         audit_db.close()
-    return {"status": True, "columns": [c for c in columns if c.lower() not in {"pass_word", "password", "secret", "token", "signature", "head_signature", "seal", "armoiries", "api_key", "otp"}],
-            "rows": data, "truncated": truncated, "row_limit": 100}
+    return {
+        "status": True,
+        "columns": [column for column in columns if str(column).lower() not in hidden_columns],
+        "rows": data,
+        "truncated": truncated,
+        "row_limit": 100,
+    }
 
 
 @app.post("/api/telemetry/events")
