@@ -28,6 +28,7 @@ def test_crypt_sql_allows_safe_aggregates():
         "SELECT * FROM school_information FOR UPDATE",
         "SELECT school_id FROM school_information -- comment injection",
         "SELECT * FROM school_information /* hidden statement */",
+        "SELECT s.school_id FROM school_information s, unknown_private_table",
     ],
 )
 def test_crypt_sql_rejects_non_readonly_or_sensitive_queries(query):
