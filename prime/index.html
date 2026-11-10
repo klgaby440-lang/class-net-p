@@ -1374,6 +1374,8 @@ body {
                         <button class="btn-primary" style="background-color: #0284c7;" onclick="fetchServerData()">Récupérer les données sur Internet</button>
                         <button class="btn-primary" style="background-color: #16a34a;" onclick="saveDatabaseOnline()">Save data base OnLine</button>
                         <button class="btn-primary" style="background-color:#7c3aed;" id="prepareClassInformationBtn" onclick="prepareClassInformation()">Préparer les informations des classes</button>
+                        <button class="btn-secondary" onclick="publishExistingScheduleToManager()">Publier un horaire déjà généré</button>
+                        <small style="font-size:0.78rem;color:var(--text-secondary);">À utiliser une seule fois pour transférer au serveur un ancien horaire enregistré dans PrimeInk.</small>
                         <small id="prepareClassInformationStatus" style="font-size:0.78rem;color:var(--text-secondary);" aria-live="polite">Publie les classes, élèves, cours et titulaires pour les comptes ClassInk de cette école.</small>
                         <button class="btn-secondary" onclick="loadSchoolData()">Charger les données de l'école</button>
                     </div>
@@ -5198,6 +5200,45 @@ window.updateHoraireStructure = function() {
                 alert("Le serveur est injoignable. Vérifiez la connexion internet et réessayez.");
             }
         };
+
+        async function publishExistingScheduleToManager() {
+            const schoolId = String(appState.school && appState.school.id || '').trim();
+            const headers = cloudAuthHeaders();
+            if (!schoolId || !headers.Authorization) {
+                return showCustomAlert("Connectez d'abord PrimeInk à l'établissement avec « Charger les données de l'école ».");
+            }
+            const savedSchedules = appState.tools && appState.tools.horaire && appState.tools.horaire.generatedSchedules;
+            const scheduleResult = Array.isArray(savedSchedules)
+                ? savedSchedules.find(item => item && item.schedules && Array.isArray(item.schedules.classes))
+                : null;
+            if (!scheduleResult) {
+                return showCustomAlert("Aucun ancien horaire complet n'a été trouvé dans la sauvegarde PrimeInk de cet appareil.");
+            }
+            try {
+                const response = await window.primeInkFetchWithTimeout(API_BASE_URL + '/api/manager/schedule', {
+                    method: 'PUT',
+                    headers,
+                    body: JSON.stringify({
+                        school_id: schoolId,
+                        schedule: {
+                            academicYear: appState.school.schoolYear || bpDefaultSchoolYear(),
+                            generatedAt: scheduleResult.generated_at || new Date().toISOString(),
+                            config: (appState.tools.horaire && appState.tools.horaire.config) || {},
+                            slots: [],
+                            teachers: [],
+                            result: scheduleResult
+                        }
+                    }),
+                    cache: 'no-store'
+                }, 30000);
+                if (!response.ok) throw new Error(await bpServerErrorMessage(response));
+                if (window.trackPrimeInkEvent) window.trackPrimeInkEvent('schedule.publish-legacy', 'feature', 'Ancien horaire publié vers Manager');
+                await showCustomAlert("Ancien horaire publié sur le serveur. Il est maintenant consultable dans ClassInk Manager.");
+            } catch (error) {
+                if (window.trackPrimeInkEvent) window.trackPrimeInkEvent('schedule.publish-legacy', 'sync_error', error.message || 'Publication échouée');
+                await showCustomAlert("Publication de l'ancien horaire impossible : " + error.message);
+            }
+        }
 
         function bpScheduleTableHTML(grid, cellFn) {
             const s = __lastSchedule;
