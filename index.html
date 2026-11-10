@@ -3,8 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ClassNet & PrimeNet | Architecture & Solutions Éducatives CRYPT</title>
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg width='1024' height='1024' viewBox='0 0 1024 1024' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3ClinearGradient id='bg' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%230F2040'/%3E%3Cstop offset='100%25' stop-color='%230A1628'/%3E%3C/linearGradient%3E%3ClinearGradient id='accent' x1='0%25' y1='0%25' x2='100%25' y2='0%25'%3E%3Cstop offset='0%25' stop-color='%233B82F6'/%3E%3Cstop offset='100%25' stop-color='%2306B6D4'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='1024' height='1024' rx='200' fill='url(%23bg)'/%3E%3Cg transform='translate(512,512) scale(1.1) translate(-280,-320)'%3E%3Crect x='60' y='40' width='340' height='480' rx='12' fill='none' stroke='white' stroke-width='14' stroke-linecap='round'/%3E%3Cline x1='60' y1='520' x2='400' y2='520' stroke='white' stroke-width='14' stroke-linecap='round'/%3E%3Cpath d='M 60 280 Q 220 280 360 520' fill='none' stroke='white' stroke-width='18' stroke-linecap='round'/%3E%3Cpath d='M 60 380 Q 170 380 260 520' fill='none' stroke='white' stroke-width='18' stroke-linecap='round'/%3E%3Cpath d='M 60 470 A 70 70 0 0 1 130 520 L 60 520 Z' fill='white'/%3E%3Cpath d='M 60 280 Q 220 280 360 520' fill='none' stroke='url(%23accent)' stroke-width='18' stroke-linecap='round' opacity='0.9'/%3E%3Cg transform='translate(460, 40)'%3E%3Crect x='0' y='40' width='28' height='400' rx='6' fill='none' stroke='white' stroke-width='10'/%3E%3Cpath d='M 0 40 L 14 0 L 28 40 Z' fill='none' stroke='white' stroke-width='10' stroke-linejoin='round'/%3E%3Crect x='0' y='440' width='28' height='28' rx='4' fill='%233B82F6'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E">
+    <title>ClassInk & PrimeInk | Suite de gestion scolaire CRYPT</title>
+    <meta name="description" content="ClassInk, PrimeInk, ClassInk Manager et Class-Ink Suivi : une suite de gestion scolaire pour les enseignants, les établissements et les parents.">
+    <meta name="theme-color" content="#0f172a">
+    <link rel="icon" type="image/svg+xml" href="./assets/classink-logo.svg">
     <style>
         /* --- VARIABLES DU THÈME & DESIGN SYSTEM --- */
         :root {
@@ -450,6 +452,20 @@
             nav ul { flex-wrap: wrap; justify-content: center; gap: 1rem; }
             .primenet-box { padding: 1.8rem; }
         }
+
+        .download-grid .download-card { min-width: 0; }
+        .download-grid .download-card .btn { box-sizing: border-box; }
+        .feature-card .btn { margin-top: 1rem; }
+        .feature-card p { line-height: 1.65; }
+        .section-header { scroll-margin-top: 90px; }
+        section[id] { scroll-margin-top: 90px; }
+        @media (max-width: 768px) {
+            .hero { padding: 4rem 1rem 2.5rem; }
+            .container { padding: 0 1rem; }
+            .features-grid, .download-grid, .faq-grid { grid-template-columns: 1fr; }
+            .feature-card, .download-card { padding: 1.5rem; }
+            .logo-container { justify-content: center; }
+        }
     </style>
 </head>
 <body>
@@ -457,45 +473,19 @@
     <!-- BARRE DE NAVIGATION -->
     <header>
         <div class="nav-container">
-            <a href="#" class="logo-container" style="display: flex; align-items: center; gap: 0.75rem; text-decoration: none;">
-            <!-- Logo SVG inline vectoriel -->
-            <svg width="36" height="36" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg" style="border-radius: 8px;">
-                <defs>
-                    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" stop-color="#0F2040"/>
-                        <stop offset="100%" stop-color="#0A1628"/>
-                    </linearGradient>
-                    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="0%">
-                        <stop offset="0%" stop-color="#3B82F6"/>
-                        <stop offset="100%" stop-color="#06B6D4"/>
-                    </linearGradient>
-                </defs>
-                <rect width="1024" height="1024" rx="200" fill="url(#bg)"/>
-                <g transform="translate(512,512) scale(1.1) translate(-280,-320)">
-                    <rect x="60" y="40" width="340" height="480" rx="12" fill="none" stroke="white" stroke-width="14" stroke-linecap="round"/>
-                    <line x1="60" y1="520" x2="400" y2="520" stroke="white" stroke-width="14" stroke-linecap="round"/>
-                    <path d="M 60 280 Q 220 280 360 520" fill="none" stroke="white" stroke-width="18" stroke-linecap="round"/>
-                    <path d="M 60 380 Q 170 380 260 520" fill="none" stroke="white" stroke-width="18" stroke-linecap="round"/>
-                    <path d="M 60 470 A 70 70 0 0 1 130 520 L 60 520 Z" fill="white"/>
-                    <path d="M 60 280 Q 220 280 360 520" fill="none" stroke="url(#accent)" stroke-width="18" stroke-linecap="round" opacity="0.9"/>
-                    <g transform="translate(460, 40)">
-                        <rect x="0" y="40" width="28" height="400" rx="6" fill="none" stroke="white" stroke-width="10"/>
-                        <path d="M 0 40 L 14 0 L 28 40 Z" fill="none" stroke="white" stroke-width="10" stroke-linejoin="round"/>
-                        <rect x="0" y="440" width="28" height="28" rx="4" fill="#3B82F6"/>
-                    </g>
-                </g>
-            </svg>
-            
-            <span class="logo-text" style="font-size: 1.25rem; font-weight: 800; color: var(--text-main);">CRYPT <span style="color: var(--primary);">| ClassNet</span></span>
-        </a>
-            <nav>
+            <a href="#" class="logo-container" style="display:flex;align-items:center;gap:.65rem;text-decoration:none;">
+                <img src="./assets/classink-logo.svg" alt="Logo ClassInk" width="42" height="42" style="border-radius:9px;">
+                <span class="logo-text" style="font-size:1.15rem;font-weight:800;color:var(--text-main);">ClassInk <span style="color:var(--primary);">&amp; PrimeInk</span></span>
+                <img src="./assets/crypt-logo.svg" alt="Logo CRYPT" width="46" height="40" style="object-fit:contain;border-radius:5px;">
+            </a>
+            <nav aria-label="Navigation principale">
                 <ul>
-                    <li><a href="#classnet">ClassNet App</a></li>
-                    <li><a href="#primenet">PrimeNet Server</a></li>
-                    <li><a href="#specs">Spécifications</a></li>
-                    <li><a href="#download">Téléchargement</a></li>
+                    <li><a href="#classink">ClassInk</a></li>
+                    <li><a href="#primeink">PrimeInk</a></li>
+                    <li><a href="#ecosystem">Établissement & parents</a></li>
+                    <li><a href="#architecture">Fonctionnement</a></li>
+                    <li><a href="#download">Accès & téléchargements</a></li>
                     <li><a href="#faq">FAQ</a></li>
-                    <li><a href="#contact">Contact</a></li>
                     <li>
                         <button class="theme-toggle-btn" id="themeToggle" aria-label="Changer de thème">
                             <span id="themeIcon">🌙</span> <span id="themeText">Sombre</span>
@@ -507,260 +497,391 @@
     </header>
 
     <div class="container">
-
-        <!-- HERO SECTION -->
+        <!-- PRÉSENTATION GÉNÉRALE -->
         <section class="hero">
-            <div class="badge">Souveraineté des Données • Mode 100% Hors-Ligne</div>
-            <h1>Plateforme Éducative Autonome & Administration Scolaire</h1>
+            <div class="badge">La suite scolaire ClassInk · PrimeInk · CRYPT</div>
+            <h1>La gestion scolaire, des enseignants aux parents.</h1>
             <p>
-                Une suite logicielle complète conçue par <strong>CRYPT Tech Solutions</strong> pour la gestion des évaluations, du suivi des présences et de la centralisation des données d'établissement sans aucune dépendance Internet.
+                <strong>ClassInk</strong> accompagne les enseignants dans le suivi quotidien des classes.
+                <strong>PrimeInk</strong> aide l’établissement à organiser les élèves, les cours, les notes et les bulletins.
+                <strong>ClassInk Manager</strong> donne à la direction une vue d’ensemble, tandis que
+                <strong>Class-Ink Suivi</strong> permet aux parents de consulter les informations que l’école a autorisées.
             </p>
             <div class="btn-group">
-                <a href="#download" class="btn btn-primary">💻 Installer ClassNet (Windows)</a>
-                <a href="#download" class="btn btn-secondary">📱 Installer ClassNet (Android)</a>
-                <a href="#primenet" class="btn btn-outline">🌐 En savoir plus sur PrimeNet</a>
+                <a href="./app/" class="btn btn-primary">Ouvrir ClassInk</a>
+                <a href="./prime/" class="btn btn-secondary">Ouvrir PrimeInk</a>
+                <a href="#ecosystem" class="btn btn-outline">Découvrir les autres espaces</a>
             </div>
         </section>
 
-        <!-- STATISTIQUES CLÉS -->
+        <!-- REPÈRES DE LA SUITE -->
         <div class="stats-grid">
             <div class="stat-card">
-                <div class="stat-number">100%</div>
-                <div class="stat-label">Autonomie Hors-Ligne</div>
+                <div class="stat-number">4</div>
+                <div class="stat-label">Espaces complémentaires : enseignant, école, direction et parents</div>
             </div>
             <div class="stat-card">
-                <div class="stat-number">&lt; 10ms</div>
-                <div class="stat-label">Temps de Réponse Local</div>
+                <div class="stat-number">Llink</div>
+                <div class="stat-label">Assistant IA et lecture de documents photographiés</div>
             </div>
             <div class="stat-card">
-                <div class="stat-number">0 $</div>
-                <div class="stat-label">Frais d'Abonnement Cloud</div>
+                <div class="stat-number">Excel</div>
+                <div class="stat-label">Import et export de la base scolaire dans PrimeInk</div>
             </div>
             <div class="stat-card">
-                <div class="stat-number">Multi</div>
-                <div class="stat-label">Compatibilité Windows & Android</div>
+                <div class="stat-number">3 modes</div>
+                <div class="stat-label">Intranet, Internet et synchronisation hybride selon la configuration</div>
             </div>
         </div>
 
-        <!-- SECTION CLASSNET -->
-        <section id="classnet">
+        <!-- CLASSINK -->
+        <section id="classink">
             <div class="section-header">
-                <h2 class="section-title">ClassNet App : L'outil ultime de l'enseignant</h2>
+                <h2 class="section-title">ClassInk — L’espace de travail des enseignants</h2>
                 <p class="section-subtitle">
-                    Une application locale rapide, sécurisée et ergonomique spécifiquement développée pour éliminer la paperasse administrative des enseignants et directeurs de discipline.
+                    Une application pensée pour les tâches quotidiennes de l’enseignant : organiser sa classe,
+                    saisir les évaluations, suivre les présences et retrouver les informations qui lui sont attribuées par l’école.
                 </p>
             </div>
-
             <div class="features-grid">
-                <div class="feature-card">
+                <article class="feature-card">
                     <span class="feature-icon">📊</span>
-                    <h3>Saisie & Calcul des Cotes</h3>
-                    <p>Gestion avancée des fiches de cotation hebdomadaires, mensuelles et périodiques avec ajustement dynamique des maximas.</p>
+                    <h3>Notes et évaluations</h3>
+                    <p>Les enseignants travaillent par classe et par cours, avec des fiches de saisie et le suivi des évaluations.</p>
                     <ul class="feature-list">
-                        <li>Calcul automatique des pourcentages et moyennes</li>
-                        <li>Configurabilité des maximas par matière et évaluation</li>
-                        <li>Contrôle de saisie prévenant les erreurs d'encodage</li>
-                        <li>Visualisation synthétique des performances</li>
+                        <li>Saisie des notes et des barèmes</li>
+                        <li>Création et conservation des interrogations</li>
+                        <li>Consultation des résultats par élève et par cours</li>
                     </ul>
-                </div>
-
-                <div class="feature-card">
-                    <span class="feature-icon">📋</span>
-                    <h3>Registre de Présence Numérique</h3>
-                    <p>Suivi quotidien et précis du comportement et de la régularité des élèves au sein de chaque classe.</p>
+                </article>
+                <article class="feature-card">
+                    <span class="feature-icon">📅</span>
+                    <h3>Présences quotidiennes</h3>
+                    <p>Un journal numérique pour enregistrer la situation des élèves au fil des journées.</p>
                     <ul class="feature-list">
-                        <li>Pointage rapide (Présent, Absent, Retard, Justifié)</li>
-                        <li>Comptabilisation automatique des taux de présence</li>
-                        <li>Export instantané du registre au format PDF</li>
-                        <li>Historique complet de l'année scolaire</li>
+                        <li>Présent, absent, retard et absence justifiée</li>
+                        <li>Recherche d’un élève dans la classe</li>
+                        <li>Historique et rapports de présence</li>
                     </ul>
-                </div>
-
-                <div class="feature-card">
-                    <span class="feature-icon">📑</span>
-                    <h3>Évaluation & Impression D’interrogations</h3>
-                    <p>Génération adaptative de sujets d'évaluations et impression directe depuis l'application via un moteur d'impression léger.</p>
+                </article>
+                <article class="feature-card">
+                    <span class="feature-icon">🧭</span>
+                    <h3>Conduite et rôle du titulaire</h3>
+                    <p>La conduite est rattachée aux classes dont l’enseignant est officiellement reconnu comme titulaire.</p>
                     <ul class="feature-list">
-                        <li>Mise en page normalisée prête à l'impression</li>
-                        <li>Gestion autonome du moteur d'impression (Iframe/Tauri)</li>
-                        <li>Exportation PDF directe ou sauvegarde locale</li>
-                        <li>Mise en page adaptée aux consommables standard</li>
+                        <li>Classes et élèves transmis par l’établissement</li>
+                        <li>Accès conditionné par l’association du compte à l’école</li>
+                        <li>Rôle de titulaire vérifié côté serveur</li>
                     </ul>
-                </div>
-
-                <div class="feature-card">
-                    <span class="feature-icon">🔒</span>
-                    <h3>Sécurité & Souveraineté Local-First</h3>
-                    <p>Toutes vos données restent hébergées sur votre machine. Aucun transfert non sollicité vers des serveurs externes.</p>
+                </article>
+                <article class="feature-card">
+                    <span class="feature-icon">🤖</span>
+                    <h3>Assistance Llink</h3>
+                    <p>L’assistant accompagne la préparation pédagogique et les tâches de l’enseignant.</p>
                     <ul class="feature-list">
-                        <li>Authentification locale renforcée</li>
-                        <li>Base de données autonome résiliente aux pannes</li>
-                        <li>Sauvegarde et restauration faciles sur clé USB</li>
-                        <li>Fonctionne sans connexion Internet active</li>
+                        <li>Aide à la préparation d’interrogations</li>
+                        <li>Banque d’interrogations sauvegardées</li>
+                        <li>Assistance conversationnelle selon les services activés</li>
                     </ul>
-                </div>
+                </article>
+                <article class="feature-card">
+                    <span class="feature-icon">🏫</span>
+                    <h3>Connexion à l’établissement</h3>
+                    <p>Après validation par l’école, l’enseignant peut récupérer les classes, les élèves et les cours qui le concernent.</p>
+                    <ul class="feature-list">
+                        <li>Compte enseignant et identifiant ClassInk</li>
+                        <li>Récupération du catalogue préparé dans PrimeInk</li>
+                        <li>Profil, rôle, emploi du temps et signature</li>
+                    </ul>
+                </article>
+                <article class="feature-card">
+                    <span class="feature-icon">📄</span>
+                    <h3>Documents et rapports</h3>
+                    <p>Les outils de consultation et d’impression facilitent la préparation des documents liés aux activités de classe.</p>
+                    <ul class="feature-list">
+                        <li>Fiches récapitulatives et rapports</li>
+                        <li>Documents de présence et évaluations</li>
+                        <li>Impression et export selon les fonctions disponibles</li>
+                    </ul>
+                </article>
             </div>
         </section>
 
-        <!-- SECTION SPÉCIFICATIONS TECHNIQUES -->
-        <section id="specs">
+        <!-- PRIMEINK -->
+        <section id="primeink">
             <div class="section-header">
-                <h2 class="section-title">Spécifications Techniques & Compatibilité</h2>
-                <p class="section-subtitle">Performances optimales garanties sur du matériel récent comme ancien.</p>
+                <h2 class="section-title">PrimeInk — L’administration pédagogique de l’école</h2>
+                <p class="section-subtitle">
+                    L’établissement centralise ses classes et prépare les informations qui seront mises à la disposition
+                    des enseignants autorisés dans ClassInk.
+                </p>
             </div>
+            <div class="features-grid">
+                <article class="feature-card">
+                    <span class="feature-icon">🏷️</span>
+                    <h3>Gestion des classes et des élèves</h3>
+                    <p>Créez les classes, renseignez leurs titulaires et gérez leurs effectifs depuis un espace organisé par classe.</p>
+                    <ul class="feature-list">
+                        <li>Ajout et gestion manuels des élèves</li>
+                        <li>Import d’une liste photographiée avec Llink</li>
+                        <li>Vérification des identités et détection des doublons avant enregistrement</li>
+                    </ul>
+                </article>
+                <article class="feature-card">
+                    <span class="feature-icon">📚</span>
+                    <h3>Gestion des cours</h3>
+                    <p>Définissez les cours et leurs paramètres pour chaque classe.</p>
+                    <ul class="feature-list">
+                        <li>Ajout et modification manuels</li>
+                        <li>Lecture des cours depuis une photo de bulletin avec Llink</li>
+                        <li>Domaines, sous-domaines et maxima à vérifier</li>
+                    </ul>
+                </article>
+                <article class="feature-card">
+                    <span class="feature-icon">📝</span>
+                    <h3>Fiches et bulletins</h3>
+                    <p>Travaillez sur les notes de la classe et préparez les documents scolaires.</p>
+                    <ul class="feature-list">
+                        <li>Fiches de cotation et calculs par période</li>
+                        <li>Modèles de bulletins et paramètres de classe</li>
+                        <li>Impression des bulletins d’une classe</li>
+                    </ul>
+                </article>
+                <article class="feature-card">
+                    <span class="feature-icon">📈</span>
+                    <h3>Statistiques et délibération</h3>
+                    <p>Consultez les résultats de la classe et préparez les opérations de délibération.</p>
+                    <ul class="feature-list">
+                        <li>Statistiques et synthèses de résultats</li>
+                        <li>Vue de délibération par élève</li>
+                        <li>Gestion des cours et des élèves depuis les paramètres de classe</li>
+                    </ul>
+                </article>
+                <article class="feature-card">
+                    <span class="feature-icon">🔄</span>
+                    <h3>Catalogue partagé avec ClassInk</h3>
+                    <p>Après avoir vérifié les classes, élèves, cours et titulaires, l’école peut publier ce catalogue pour les comptes enseignants correspondants.</p>
+                    <ul class="feature-list">
+                        <li>Ajout des identifiants ClassInk des enseignants</li>
+                        <li>Préparation des informations des classes</li>
+                        <li>Récupération des classes autorisées après connexion</li>
+                    </ul>
+                </article>
+                <article class="feature-card">
+                    <span class="feature-icon">📦</span>
+                    <h3>Sauvegarde Excel et identité scolaire</h3>
+                    <p>Les informations de l’école et des bulletins se configurent dans les paramètres de PrimeInk.</p>
+                    <ul class="feature-list">
+                        <li>Export et import de la base au format Excel</li>
+                        <li>Informations de l’établissement et année scolaire</li>
+                        <li>Sceau, signatures et identité des bulletins</li>
+                    </ul>
+                </article>
+            </div>
+        </section>
 
+        <!-- MANAGER ET SUIVI PARENTS -->
+        <section id="ecosystem">
+            <div class="section-header">
+                <h2 class="section-title">Un espace adapté à chaque acteur</h2>
+                <p class="section-subtitle">
+                    Les informations scolaires sont utilisées selon le rôle et les autorisations définis pour l’établissement.
+                </p>
+            </div>
+            <div class="features-grid">
+                <article class="feature-card">
+                    <span class="feature-icon">🏫</span>
+                    <h3>ClassInk Manager — Pour la direction</h3>
+                    <p>Un espace de gestion destiné aux responsables d’établissement pour consulter les indicateurs de l’école.</p>
+                    <ul class="feature-list">
+                        <li>Vue générale des classes et des effectifs</li>
+                        <li>Résultats par période et indicateurs de réussite</li>
+                        <li>Rapports, horaires et gestion des enseignants</li>
+                        <li>Paramètres de l’établissement et accès aux résultats Suivi</li>
+                    </ul>
+                    <a href="./manager/" class="btn btn-outline">Ouvrir ClassInk Manager</a>
+                </article>
+                <article class="feature-card">
+                    <span class="feature-icon">👨‍👩‍👧‍👦</span>
+                    <h3>Class-Ink Suivi — Pour les parents</h3>
+                    <p>Les parents retrouvent le dossier de leur enfant à l’aide des informations d’identification communiquées par l’établissement.</p>
+                    <ul class="feature-list">
+                        <li>Recherche de l’établissement et liaison par identifiant élève</li>
+                        <li>Consultation des résultats lorsque l’école l’autorise</li>
+                        <li>Résultats masqués lorsque l’accès est bloqué par l’établissement</li>
+                        <li>Possibilité de lier plusieurs enfants dans l’espace parent</li>
+                    </ul>
+                    <p style="font-size:.86rem;color:var(--text-muted);">Lorsque l’accès est bloqué pour raison de paiement, le parent doit régler les frais auprès de l’établissement. L’école confirme ensuite le règlement et peut réautoriser les résultats. Le portail ne constitue pas, à lui seul, un service de paiement en ligne.</p>
+                    <a href="./suivi/" class="btn btn-outline">Ouvrir Class-Ink Suivi</a>
+                </article>
+            </div>
+        </section>
+
+        <!-- MODES DE FONCTIONNEMENT -->
+        <section id="architecture">
+            <div class="section-header">
+                <h2 class="section-title">Un fonctionnement adapté au réseau de l’école</h2>
+                <p class="section-subtitle">
+                    Le mode de travail dépend de l’installation et des services que l’établissement souhaite utiliser.
+                    Les fonctions locales, les échanges avec le serveur et l’assistance IA n’ont pas les mêmes besoins réseau.
+                </p>
+            </div>
             <div class="table-container">
                 <table>
                     <thead>
                         <tr>
-                            <th>Plateforme</th>
-                            <th>Version Minimale</th>
-                            <th>Moteur / Architecture</th>
-                            <th>Mode de Stockage</th>
-                            <th>Fonctionnalité Clé</th>
+                            <th>Mode</th>
+                            <th>Principe</th>
+                            <th>Utilisation</th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr>
-                            <td><strong>Windows Desktop</strong></td>
-                            <td>Windows 10 / 11 (64-bit)</td>
-                            <td>Tauri Framework (Rust + JS)</td>
-                            <td>Local FileSystem / SQLite</td>
-                            <td>Impression directe & Dialogue d'enregistrement PDF native</td>
+                            <td><strong>Intranet</strong></td>
+                            <td>Échanges sur le réseau local de l’établissement.</td>
+                            <td>Synchronisation locale lorsque l’infrastructure PrimeInk / ClassInk est configurée pour ce mode.</td>
                         </tr>
                         <tr>
-                            <td><strong>Android Mobile/Tablette</strong></td>
-                            <td>Android 8.0 (Oreo) ou supérieur</td>
-                            <td>Webview Native / APK</td>
-                            <td>IndexedDB / LocalStorage</td>
-                            <td>Saisie tactile optimisée & export de rapports PDF</td>
+                            <td><strong>Internet / Cloud</strong></td>
+                            <td>Connexion aux services distants de l’établissement.</td>
+                            <td>Connexion des comptes, récupération du catalogue scolaire et consultation des données autorisées.</td>
                         </tr>
                         <tr>
-                            <td><strong>Navigateur Web Standard</strong></td>
-                            <td>Chrome 90+, Firefox 88+, Edge 90+</td>
-                            <td>ES6+ JavaScript Modern</td>
-                            <td>Storage API Native</td>
-                            <td>Exécution zéro-installation pour consultation rapide</td>
+                            <td><strong>Hybride</strong></td>
+                            <td>Combinaison des échanges locaux et des services cloud.</td>
+                            <td>Pour les écoles qui utilisent à la fois leur réseau local et la synchronisation distante.</td>
                         </tr>
                     </tbody>
                 </table>
             </div>
-        </section>
-
-        <!-- SECTION PRIMENET -->
-        <section id="primenet">
             <div class="primenet-box">
                 <div class="primenet-header">
                     <div>
-                        <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981;">Infrastructure Réseau</span>
-                        <h2>PrimeNet : Le Serveur Central d'Établissement</h2>
+                        <span class="badge" style="background:rgba(16,185,129,.15);color:#10b981;">À retenir</span>
+                        <h2>Le mode hors connexion dépend des opérations utilisées</h2>
                     </div>
                 </div>
-                <p style="color: var(--text-muted); font-size: 1.05rem; margin-bottom: 2rem;">
-                    <strong>PrimeNet</strong> est la solution d'interconnexion développée par CRYPT Tech Solutions. Elle permet de relier dynamiquement toutes les instances de l'application <strong>ClassNet</strong> déployées auprès des enseignants au sein du réseau local (LAN/Wi-Fi) de l'école.
+                <p style="color:var(--text-muted);font-size:1.02rem;">
+                    La saisie et les données déjà disponibles localement peuvent rester accessibles selon l’application et sa configuration.
+                    En revanche, la synchronisation avec les services distants, la récupération de données à partir du serveur et les fonctions
+                    Llink qui envoient une photo ou une demande à un service distant nécessitent une connexion réseau.
+                    Il est donc important de prévoir une sauvegarde régulière des données de l’établissement.
                 </p>
-
-                <div class="features-grid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); border: none; padding: 0;">
-                    <div style="background: var(--bg-body); padding: 1.5rem; border-radius: 10px; border: 1px solid var(--border-color);">
-                        <h4 style="margin-bottom: 0.5rem; color: var(--primary);">📡 Centralisation Local Network</h4>
-                        <p style="font-size: 0.9rem; color: var(--text-muted);">Synchronisez les cotes et fiches de présence de tous les professeurs sans Internet, simplement via le Wi-Fi local de l'établissement.</p>
-                    </div>
-                    <div style="background: var(--bg-body); padding: 1.5rem; border-radius: 10px; border: 1px solid var(--border-color);">
-                        <h4 style="margin-bottom: 0.5rem; color: var(--primary);">📜 Édition Automatisée des Bulletins</h4>
-                        <p style="font-size: 0.9rem; color: var(--text-muted);">Agrégation globale des données de toutes les classes pour générer, calculer et imprimer l'ensemble des bulletins scolaires en quelques clics.</p>
-                    </div>
-                    <div style="background: var(--bg-body); padding: 1.5rem; border-radius: 10px; border: 1px solid var(--border-color);">
-                        <h4 style="margin-bottom: 0.5rem; color: var(--primary);">🛡️ Contrôle Administratif</h4>
-                        <p style="font-size: 0.9rem; color: var(--text-muted);">Tableau de bord dédié à la direction générale pour suivre la progression du programme, valider les cotations et gérer les effectifs.</p>
-                    </div>
-                </div>
             </div>
         </section>
 
-        <!-- SECTION TÉLÉCHARGEMENT -->
+        <!-- ACCÈS ET TÉLÉCHARGEMENTS -->
         <section id="download">
             <div class="section-header">
-                <h2 class="section-title">Centre de Téléchargement ClassNet</h2>
-                <p class="section-subtitle">Téléchargez la version officielle correspondant à votre équipement.</p>
+                <h2 class="section-title">Accéder aux applications</h2>
+                <p class="section-subtitle">Ouvrez directement l’espace correspondant à votre rôle ou téléchargez l’application enseignante.</p>
             </div>
-
             <div class="download-grid">
-                <!-- TELECHARGEMENT WINDOWS -->
-                <div class="download-card highlight">
-                    <span style="font-size: 2.5rem; display: block; margin-bottom: 1rem;">💻</span>
-                    <h3>ClassNet pour Windows</h3>
-                    <div class="version">Version v2.1.0 • Exécutable Installateur (.EXE)</div>
-                    <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.8rem;">
-                        Optimisé pour les ordinateurs portables et de bureau sous Windows 10 et 11. Inclut le moteur d'impression autonome et le gestionnaire de fichiers natif.
-                    </p>
-                    <a href="https://github.com/klgaby440-lang/Compilateur-sm/releases/download/build-v1.3.0-99/ClassNet_App_Setup_v1.3.0.exe" download class="btn btn-primary" style="width: 100%; justify-content: center;">
-                        Télécharger ClassNet.exe
-                    </a>
-                </div>
-
-                <!-- TELECHARGEMENT ANDROID -->
-                <div class="download-card">
-                    <span style="font-size: 2.5rem; display: block; margin-bottom: 1rem;">📱</span>
-                    <h3>ClassNet pour Android</h3>
-                    <div class="version">Version v2.1.0 • Paquet d'Installation (.APK)</div>
-                    <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.8rem;">
-                        Idéal pour les smartphones et tablettes Android (v8.0+). Permet un pointage mobile en salle de classe et la saisie rapide des cotes d'interrogations.
-                    </p>
-                    <a href="https://github.com/klgaby440-lang/Compilateur-sm/releases/download/build-v1.3.0-99/Class-Ink-Enseignant.apk" download class="btn btn-secondary" style="width: 100%; justify-content: center;">
-                        Télécharger ClassNet.apk
-                    </a>
-                </div>
+                <article class="download-card highlight">
+                    <span style="font-size:2.5rem;display:block;margin-bottom:1rem;">👩‍🏫</span>
+                    <h3>ClassInk</h3>
+                    <div class="version">Espace enseignant · Web</div>
+                    <p style="color:var(--text-muted);font-size:.9rem;margin-bottom:1.8rem;">Connexion enseignant, classes autorisées, notes, présences et conduite.</p>
+                    <a href="./app/" class="btn btn-primary" style="width:100%;justify-content:center;">Ouvrir ClassInk</a>
+                </article>
+                <article class="download-card">
+                    <span style="font-size:2.5rem;display:block;margin-bottom:1rem;">🏫</span>
+                    <h3>PrimeInk</h3>
+                    <div class="version">Espace de l’établissement · Web</div>
+                    <p style="color:var(--text-muted);font-size:.9rem;margin-bottom:1.8rem;">Classes, élèves, cours, fiches, bulletins et synchronisation avec ClassInk.</p>
+                    <a href="./prime/" class="btn btn-primary" style="width:100%;justify-content:center;">Ouvrir PrimeInk</a>
+                </article>
+                <article class="download-card">
+                    <span style="font-size:2.5rem;display:block;margin-bottom:1rem;">📊</span>
+                    <h3>ClassInk Manager</h3>
+                    <div class="version">Espace de la direction · Web</div>
+                    <p style="color:var(--text-muted);font-size:.9rem;margin-bottom:1.8rem;">Tableaux de bord, résultats, rapports, horaires et enseignants.</p>
+                    <a href="./manager/" class="btn btn-primary" style="width:100%;justify-content:center;">Ouvrir Manager</a>
+                </article>
+                <article class="download-card">
+                    <span style="font-size:2.5rem;display:block;margin-bottom:1rem;">👨‍👩‍👧</span>
+                    <h3>Class-Ink Suivi</h3>
+                    <div class="version">Espace parent · Web</div>
+                    <p style="color:var(--text-muted);font-size:.9rem;margin-bottom:1.8rem;">Liaison de l’enfant et consultation des informations autorisées.</p>
+                    <a href="./suivi/" class="btn btn-primary" style="width:100%;justify-content:center;">Ouvrir Suivi</a>
+                </article>
+                <article class="download-card">
+                    <span style="font-size:2.5rem;display:block;margin-bottom:1rem;">💻</span>
+                    <h3>ClassInk pour Windows</h3>
+                    <div class="version">Installateur de bureau (.EXE)</div>
+                    <p style="color:var(--text-muted);font-size:.9rem;margin-bottom:1.8rem;">Paquet Windows distribué pour les ordinateurs de l’enseignant.</p>
+                    <a href="https://github.com/klgaby440-lang/Compilateur-sm/releases/download/build-v1.3.0-99/ClassNet_App_Setup_v1.3.0.exe" download class="btn btn-secondary" style="width:100%;justify-content:center;">Télécharger pour Windows</a>
+                </article>
+                <article class="download-card">
+                    <span style="font-size:2.5rem;display:block;margin-bottom:1rem;">📱</span>
+                    <h3>ClassInk pour Android</h3>
+                    <div class="version">Application mobile (.APK)</div>
+                    <p style="color:var(--text-muted);font-size:.9rem;margin-bottom:1.8rem;">Paquet Android pour les smartphones et tablettes compatibles.</p>
+                    <a href="https://github.com/klgaby440-lang/Compilateur-sm/releases/download/build-v1.3.0-99/Class-Ink-Enseignant.apk" download class="btn btn-secondary" style="width:100%;justify-content:center;">Télécharger pour Android</a>
+                </article>
             </div>
         </section>
 
-        <!-- SECTION FAQ -->
+        <!-- FAQ -->
         <section id="faq">
             <div class="section-header">
-                <h2 class="section-title">Foire Aux Questions (FAQ)</h2>
-                <p class="section-subtitle">Réponses aux questions fréquemment posées par les enseignants et établissements.</p>
+                <h2 class="section-title">Questions fréquentes</h2>
+                <p class="section-subtitle">Quelques repères pour démarrer avec la suite ClassInk et PrimeInk.</p>
             </div>
-
             <div class="faq-grid">
-                <div class="faq-item">
-                    <h4>Une connexion Internet est-elle requise ?</h4>
-                    <p>Non. ClassNet a été conçu sur le principe du "Offline-First". L'intégralité des fonctionnalités (saisie, gestion, rapports PDF, impression) fonctionne parfaitement sans aucune connexion Internet[cite: 14].</p>
-                </div>
-                <div class="faq-item">
-                    <h4>Comment se passe la synchronisation avec PrimeNet ?</h4>
-                    <p>PrimeNet s'installe sur un serveur ou PC maître au sein de l'école. Dès que l'enseignant se connecte au Wi-Fi local de l'établissement, les données enregistrées dans ClassNet sont synchronisées automatiquement[cite: 14].</p>
-                </div>
-                <div class="faq-item">
-                    <h4>Comment exporter les registres de présence et fiches de cotes ?</h4>
-                    <p>L'application embarque un système d'impression et d'exportation PDF unifié[cite: 13]. Vous pouvez exporter vos documents au format PDF ou les imprimer directement via l'interface[cite: 13].</p>
-                </div>
-                <div class="faq-item">
-                    <h4>Mes données sont-elles protégées en cas de vol du PC ?</h4>
-                    <p>L'accès à l'application et à sa base de données locale est verrouillé par mot de passe[cite: 14]. Il est recommandé d'effectuer régulièrement une sauvegarde de sécurité sur clé USB via le menu prévu à cet effet.</p>
-                </div>
+                <article class="faq-item">
+                    <h4>Comment un enseignant récupère-t-il ses classes ?</h4>
+                    <p>L’établissement prépare d’abord les classes, élèves, cours et titulaires dans PrimeInk. Il associe ensuite les identifiants ClassInk des enseignants et publie les informations. L’enseignant se connecte à son compte pour récupérer les classes qui lui sont autorisées.</p>
+                </article>
+                <article class="faq-item">
+                    <h4>Faut-il toujours une connexion Internet ?</h4>
+                    <p>Pas pour toutes les opérations. Certaines données et fonctions peuvent être utilisées localement selon l’installation. Les synchronisations distantes, la récupération depuis le cloud et les fonctions Llink qui contactent un service distant nécessitent une connexion réseau.</p>
+                </article>
+                <article class="faq-item">
+                    <h4>Comment un parent consulte-t-il les résultats ?</h4>
+                    <p>Il sélectionne l’établissement puis utilise l’identifiant individuel communiqué par l’école. Les notes ne sont affichées que lorsque les règles d’accès de l’établissement autorisent leur consultation.</p>
+                </article>
+                <article class="faq-item">
+                    <h4>Que se passe-t-il lorsque les résultats sont bloqués ?</h4>
+                    <p>Le portail masque les notes et explique au parent la raison du blocage. Lorsque le blocage est lié au paiement, le parent règle directement auprès de l’établissement, qui confirme le règlement avant de réautoriser l’accès.</p>
+                </article>
+                <article class="faq-item">
+                    <h4>Peut-on sauvegarder les données de PrimeInk ?</h4>
+                    <p>Oui. PrimeInk propose l’export de la base scolaire vers un classeur Excel et l’import d’un fichier Excel compatible pour restaurer ou mettre à jour les informations.</p>
+                </article>
+                <article class="faq-item">
+                    <h4>Comment Llink lit-il une liste ou un bulletin ?</h4>
+                    <p>Depuis les formulaires d’import de PrimeInk, l’utilisateur choisit une photo. Llink propose les informations reconnues pour vérification ; l’enregistrement se fait après confirmation par l’utilisateur. Cette opération envoie l’image au service Llink et nécessite une connexion réseau.</p>
+                </article>
             </div>
         </section>
 
-        <!-- SECTION CONTACT -->
-        <section id="contact" style="margin-top: 4rem;">
-            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; padding: 3rem; text-align: center;">
-                <h2 style="font-size: 2rem; margin-bottom: 1rem;">Besoin d'assistance ou d'un déploiement PrimeNet ?</h2>
-                <p style="color: var(--text-muted); max-width: 650px; margin: 0 auto 2rem auto;">
-                    L'équipe d'ingénieurs de <strong>CRYPT Tech Solutions</strong> accompagne votre établissement pour l'installation du serveur PrimeNet, la formation des enseignants et la configuration de votre infrastructure.
+        <!-- CONTACT -->
+        <section id="contact" style="margin-top:4rem;">
+            <div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:16px;padding:3rem;text-align:center;">
+                <h2 style="font-size:2rem;margin-bottom:1rem;">Vous souhaitez équiper votre établissement ?</h2>
+                <p style="color:var(--text-muted);max-width:720px;margin:0 auto 2rem auto;">
+                    Contactez CRYPT Entreprise pour présenter la suite, préparer l’installation et accompagner l’établissement
+                    dans la mise en place de ses classes, comptes enseignants et accès parents.
                 </p>
-                <div style="display: flex; justify-content: center; gap: 2rem; flex-wrap: wrap; font-size: 0.95rem;">
-                    <div><strong>📧 Email :</strong> klgaby440@gmail.com </div>
-                    <div><strong>💬 WhatsApp / Tél :</strong> +243 895 281 304</div>
-                    <div><strong>🏢 Support :</strong> CRYPT Entreprise</div>
+                <div style="display:flex;justify-content:center;gap:2rem;flex-wrap:wrap;font-size:.95rem;">
+                    <div><strong>📧 E-mail :</strong> <a href="mailto:klgaby440@gmail.com">klgaby440@gmail.com</a></div>
+                    <div><strong>💬 WhatsApp / Tél :</strong> <a href="https://wa.me/243895281304" target="_blank" rel="noopener noreferrer">+243 895 281 304</a></div>
+                    <div><strong>🏢 Éditeur :</strong> CRYPT Entreprise</div>
                 </div>
             </div>
         </section>
-
     </div>
 
     <!-- FOOTER -->
     <footer>
         <div class="container">
-            <p>&copy; 2026 CRYPT Entreprise. Tous droits réservés. ClassNet & PrimeNet sont des marques déposées[cite: 14].</p>
+            <p>&copy; 2026 CRYPT Entreprise. ClassInk, PrimeInk et les services associés.</p>
+            <p style="margin-top:.7rem;">
+                <a href="./confidentialite/" style="color:var(--primary);text-decoration:none;font-weight:600;">Politique de confidentialité</a>
+                <span aria-hidden="true"> · </span>
+                <a href="#contact" style="color:var(--primary);text-decoration:none;font-weight:600;">Contact</a>
+            </p>
         </div>
     </footer>
 
