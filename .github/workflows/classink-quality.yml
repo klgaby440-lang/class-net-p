@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - fix/classink-reliability-photo-imports
+      - feature/crypt-command-center-primeink-stateless-20261110
   pull_request:
     branches:
       - main

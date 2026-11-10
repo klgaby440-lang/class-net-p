@@ -171,6 +171,28 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn("safe.results = null", source)
         self.assertIn("Hors connexion : les résultats restent masqués", source)
         self.assertIn("f.configured === false", source)
+        for storage_api in ("localStorage", "sessionStorage", "indexedDB", "document.cookie"):
+            self.assertNotIn(storage_api, source)
+        self.assertIn("const memoryStore = new Map()", source)
+        self.assertIn("cache: 'no-store'", source)
+        self.assertIn("pagehide", source)
+        main_script_end = source.index("</script>", source.index("const memoryStore"))
+        cleanup_handler = source.index("window.addEventListener('pagehide'", source.index("const memoryStore"))
+        self.assertLess(cleanup_handler, main_script_end)
+        self.assertNotIn("liveData.clear();", source[source.rfind("</script>"):])
+
+    def test_primeink_keeps_local_database_persistence(self):
+        source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
+        self.assertIn("classnet_p_db", source)
+        self.assertIn("primeink_cloud_token", source)
+        self.assertIn("window.localStorage.setItem('classnet_p_db'", source)
+        self.assertIn("window.localStorage.getItem('classnet_p_db'", source)
+        self.assertIn('id="crypt-client-telemetry"', source)
+
+    def test_classink_app_keeps_local_persistence(self):
+        source = (ROOT / "app/index.html").read_text(encoding="utf-8")
+        self.assertTrue("localStorage" in source or "indexedDB" in source)
+        self.assertIn('id="crypt-client-telemetry"', source)
 
     def test_primeink_exposes_parent_code_and_controls_student_result_access(self):
         source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
@@ -228,6 +250,62 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn("LECTURE SEULE", source)
         self.assertNotIn("Institut Horizon", source)
         self.assertNotIn("Aline Mukendi", source)
+        self.assertIn("window.__CLASSINK_MANAGER_TOKEN__=managerToken", source)
+        self.assertIn('id="llink-assist-widget"', source)
+
+    def test_crypt_command_center_frontend_is_interactive_and_has_no_storage(self):
+        source = (ROOT / "crypt/index.html").read_text(encoding="utf-8")
+        self.inspect_file("crypt/index.html")
+        for storage_api in ("localStorage", "sessionStorage", "indexedDB", "document.cookie"):
+            self.assertNotIn(storage_api, source)
+        for route in (
+            "/api/crypt-console/login",
+            "/api/crypt-console/overview",
+            "/api/crypt-console/schools",
+            "/api/crypt-console/devices",
+            "/api/crypt-console/events",
+            "/api/crypt-console/tickets",
+            "/api/crypt-console/db/query",
+        ):
+            self.assertIn(route, source)
+        self.assertIn("Seules les requêtes SELECT", source)
+        self.assertIn("Créer un établissement", source)
+        self.assertIn("Déconnexion", source)
+        self.assertIn("window.__CRYPT_ADMIN_TOKEN__=token", source)
+        self.assertIn('id="llink-assist-widget"', source)
+
+    def test_llink_assist_is_embedded_without_persisting_conversation_data(self):
+        for relative in ("suivi/index.html", "manager/index.html", "crypt/index.html"):
+            source = (ROOT / relative).read_text(encoding="utf-8")
+            self.inspect_file(relative)
+            self.assertIn('id="llink-assist-widget"', source)
+            self.assertIn("/api/llink/assist", source)
+            self.assertIn("history.slice(-8)", source)
+            self.assertNotIn("localStorage", source)
+            self.assertNotIn("sessionStorage", source)
+
+    def test_manager_has_crypt_telemetry_and_no_persistent_storage(self):
+        source = (ROOT / "manager/index.html").read_text(encoding="utf-8")
+        self.assertIn("const APP = 'manager'", source)
+        self.assertIn("/api/telemetry/complaints", source)
+        self.assertIn("window.addEventListener('pagehide'", source)
+        for storage_api in ("localStorage", "sessionStorage", "indexedDB"):
+            self.assertNotIn(storage_api, source)
+
+    def test_primeink_has_legacy_schedule_publication_and_preserves_old_schedules_at_login(self):
+        source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
+        self.assertIn("publishExistingScheduleToManager", source)
+        self.assertIn("/api/manager/schedule", source)
+        self.assertIn("generatedSchedules", source)
+        snapshot = source.split("function bpSnapshotLocalOnly()", 1)[1].split("function bpRestoreLocalOnly", 1)[0]
+        restore = source.split("function bpRestoreLocalOnly", 1)[1].split("// GESTION DU REGISTRE", 1)[0]
+        self.assertIn("horaire.generatedSchedules", snapshot)
+        self.assertIn("mixage.generatedSchedules", snapshot)
+        self.assertIn("target.generatedSchedules = combined.filter", restore)
+        self.assertIn("localSchoolId === remoteSchoolId", source)
+        self.assertIn("_managerSchedule", source)
+        self.assertIn("slots: Array.isArray(scheduleMeta.slots)", source)
+        self.assertIn("['surveillants', 'salles', 'coursProgrammes']", source)
 
     def test_manager_and_primeink_publish_server_schedule_and_share_suivi_access(self):
         server = (ROOT / "main.py").read_text(encoding="utf-8")

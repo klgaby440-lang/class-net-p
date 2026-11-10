@@ -1,13 +1,14 @@
 import os
 import secrets
 import string
+import uuid
 import smtplib
 from email.mime.text import MIMEText
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
 import httpx
 from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, status, Header, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, EmailStr
 from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, Text, JSON, Float, text, func, UniqueConstraint, CheckConstraint
@@ -493,6 +494,67 @@ class QuizBank(Base):
     content = Column(Text)
     teacher = relationship("Teacher", back_populates="quizzes")
 
+
+class CryptDeviceSession(Base):
+    __tablename__ = "crypt_device_sessions"
+    id = Column(String(100), primary_key=True)
+    app = Column(String(30), nullable=False, index=True)
+    school_id = Column(String(100), nullable=True, index=True)
+    account_identifier = Column(String(180), nullable=True, index=True)
+    platform = Column(String(80), nullable=True)
+    app_version = Column(String(40), nullable=True)
+    user_agent = Column(Text, nullable=True)
+    ip_address = Column(String(80), nullable=True)
+    first_seen = Column(DateTime, nullable=False, default=datetime.utcnow)
+    last_seen = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    contact_count = Column(Integer, nullable=False, default=0)
+    last_path = Column(String(240), nullable=True)
+
+
+class CryptTelemetryEvent(Base):
+    __tablename__ = "crypt_telemetry_events"
+    id = Column(Integer, primary_key=True, index=True)
+    device_id = Column(String(100), nullable=True, index=True)
+    app = Column(String(30), nullable=False, index=True)
+    school_id = Column(String(100), nullable=True, index=True)
+    account_identifier = Column(String(180), nullable=True, index=True)
+    event_type = Column(String(40), nullable=False, index=True)
+    feature = Column(String(160), nullable=True)
+    message = Column(Text, nullable=True)
+    details = Column(JSON, nullable=True)
+    http_method = Column(String(12), nullable=True)
+    endpoint = Column(String(240), nullable=True)
+    status_code = Column(Integer, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+
+
+class CryptSupportTicket(Base):
+    __tablename__ = "crypt_support_tickets"
+    id = Column(String(40), primary_key=True, default=lambda: str(uuid.uuid4()))
+    app = Column(String(30), nullable=False, index=True)
+    device_id = Column(String(100), nullable=True, index=True)
+    school_id = Column(String(100), nullable=True, index=True)
+    account_identifier = Column(String(180), nullable=True)
+    contact = Column(String(180), nullable=True)
+    category = Column(String(60), nullable=False, default="support")
+    subject = Column(String(180), nullable=False)
+    message = Column(Text, nullable=False)
+    status = Column(String(24), nullable=False, default="open", index=True)
+    admin_note = Column(Text, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class CryptAdminAudit(Base):
+    __tablename__ = "crypt_admin_audit"
+    id = Column(Integer, primary_key=True, index=True)
+    action = Column(String(80), nullable=False, index=True)
+    actor = Column(String(120), nullable=False, default="crypt_admin")
+    target = Column(String(180), nullable=True)
+    details = Column(JSON, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+
+
 class AccessCode(Base):
     __tablename__ = "access_codes"
     id = Column(Integer, primary_key=True, index=True)
@@ -859,6 +921,11 @@ LOGIN_LIMITER = AttemptLimiter(max_attempts=5, window_seconds=900)       # 5 éc
 OTP_REQUEST_LIMITER = AttemptLimiter(max_attempts=5, window_seconds=3600)  # 5 demandes de code / heure
 CODE_LIMITER = AttemptLimiter(max_attempts=10, window_seconds=900)          # 10 codes de licence faux / 15 min / adresse
 SUIVI_LOOKUP_LIMITER = AttemptLimiter(max_attempts=10, window_seconds=900) # 10 identifiants parent erronés / 15 min / adresse
+CRYPT_CONSOLE_LOGIN_LIMITER = AttemptLimiter(max_attempts=5, window_seconds=900)
+CRYPT_TELEMETRY_LIMITER = AttemptLimiter(max_attempts=180, window_seconds=60)
+CRYPT_TICKET_LIMITER = AttemptLimiter(max_attempts=5, window_seconds=3600)
+CRYPT_LLINK_LIMITER = AttemptLimiter(max_attempts=12, window_seconds=300)
+
 
 
 def get_bearer_claims(authorization: Optional[str] = Header(None)) -> dict:
@@ -897,6 +964,14 @@ def require_admin(x_admin_key: Optional[str] = Header(None)) -> bool:
     if not x_admin_key or not hmac.compare_digest(x_admin_key.encode("utf-8"), ADMIN_API_KEY.encode("utf-8")):
         raise HTTPException(status_code=403, detail="Clé d'administration invalide.")
     return True
+
+def require_crypt_admin(claims: dict = Depends(get_bearer_claims)) -> dict:
+    """Accès au centre CRYPT réservé à une session issue de la clé administrative."""
+    if claims.get("role") != "crypt_admin":
+        raise HTTPException(status_code=403, detail="Accès réservé au centre de commande CRYPT.")
+    return claims
+
+
 
 
 LICENCE_MESSAGES = {
@@ -1080,6 +1155,84 @@ app.add_middleware(
     allow_methods=["*"],                # Autorise toutes les méthodes (POST, GET, OPTIONS, etc.)
     allow_headers=["*"],                # Autorise tous les en-têtes HTTP
 )
+
+@app.middleware("http")
+async def crypt_observe_client_requests(request: Request, call_next):
+    """Enregistre les contacts des applications clientes sans lire leurs corps de requête."""
+    response = await call_next(request)
+    path = request.url.path or ""
+    app_name = (request.headers.get("x-crypt-app") or "").strip().lower()
+    device_id = (request.headers.get("x-crypt-device") or "").strip()
+    if app_name in ("suivi", "manager"):
+        # Les applications parent et Manager ne doivent jamais mettre en cache les réponses API.
+        response.headers["Cache-Control"] = "no-store, private, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    if (
+        request.method == "OPTIONS"
+        or not path.startswith("/api/")
+        or path.startswith("/api/crypt-console/")
+        or path in ("/api/telemetry/events", "/api/telemetry/complaints")
+        or app_name not in ("primeink", "classink", "suivi", "manager")
+        or not re.fullmatch(r"[A-Za-z0-9._:-]{8,100}", device_id)
+    ):
+        return response
+
+    db = None
+    try:
+        db = SessionLocal()
+        claims = {}
+        authorization = request.headers.get("authorization", "")
+        if authorization.lower().startswith("bearer "):
+            claims = verify_token(authorization[7:].strip()) or {}
+        school_id = str(claims.get("school_id") or request.headers.get("x-crypt-school") or "")[:100] or None
+        email = str(claims.get("email") or "")[:180] or None
+        if not school_id and email and claims.get("role") == "teacher":
+            teacher_record = db.query(Teacher).filter(Teacher.email == email).first()
+            school_id = str(teacher_record.school_id or "")[:100] or None if teacher_record else None
+        account = str(email or school_id or request.headers.get("x-crypt-account") or "")[:180] or None
+        remote = request.client.host if request.client else ""
+        user_agent = (request.headers.get("user-agent") or "")[:1000]
+        platform = (request.headers.get("sec-ch-ua-platform") or request.headers.get("x-crypt-platform") or "")[:80]
+        now = datetime.utcnow()
+        device = db.query(CryptDeviceSession).filter(CryptDeviceSession.id == device_id).first()
+        if device is None:
+            device = CryptDeviceSession(
+                id=device_id, app=app_name, school_id=school_id, account_identifier=account,
+                platform=platform, app_version=(request.headers.get("x-crypt-version") or "")[:40],
+                user_agent=user_agent, ip_address=remote[:80], first_seen=now, last_seen=now,
+                contact_count=0, last_path=path[:240],
+            )
+            db.add(device)
+        device.app = app_name
+        device.school_id = school_id or device.school_id
+        device.account_identifier = account or device.account_identifier
+        device.platform = platform or device.platform
+        device.user_agent = user_agent or device.user_agent
+        device.ip_address = remote[:80] or device.ip_address
+        device.last_seen = now
+        device.contact_count = int(device.contact_count or 0) + 1
+        device.last_path = path[:240]
+        db.add(CryptTelemetryEvent(
+            device_id=device_id, app=app_name, school_id=school_id, account_identifier=account,
+            event_type="api_error" if response.status_code >= 400 else "server_contact",
+            feature=(request.headers.get("x-crypt-feature") or path)[:160],
+            message=("Réponse HTTP " + str(response.status_code)) if response.status_code >= 400 else "Requête reçue",
+            details={"method": request.method, "status": response.status_code},
+            http_method=request.method[:12], endpoint=path[:240], status_code=response.status_code,
+            created_at=now,
+        ))
+        db.commit()
+    except Exception as telemetry_error:
+        if db is not None:
+            db.rollback()
+        print("[CRYPT telemetry] " + str(telemetry_error)[:240])
+    finally:
+        if db is not None:
+            db.close()
+    return response
+
+
 
 # ---------------------------------------------------------
 # 6. ROUTES D'AUTHENTIFICATION ET COMPTES
@@ -1539,8 +1692,16 @@ class PrimeNetLoadSchema(BaseModel):
 
 @app.post("/api/primenet/load")
 def load_primenet_state(data: PrimeNetLoadSchema, db: Session = Depends(get_db)):
-    """PrimeInk envoie { school_id, password } : même logique que /api/auth/school/login."""
-    return login_school(LoginSchema(identifier=data.school_id, password=data.password), db)
+    """PrimeInk envoie { school_id, password } ; le navigateur ne met jamais la réponse en cache."""
+    result = login_school(LoginSchema(identifier=data.school_id, password=data.password), db)
+    headers = {"Cache-Control": "no-store, private, max-age=0", "Pragma": "no-cache", "Expires": "0"}
+    if isinstance(result, JSONResponse):
+        try:
+            payload = json.loads(result.body.decode("utf-8"))
+        except Exception:
+            payload = {"status": False, "message": "Réponse du serveur illisible."}
+        return JSONResponse(content=payload, status_code=result.status_code, headers=headers)
+    return JSONResponse(content=result, headers=headers)
 
 
 @app.post("/api/manager/login")
@@ -1550,6 +1711,20 @@ def manager_login(data: LoginSchema, db: Session = Depends(get_db)):
     Les données sont renvoyées sans cache HTTP ; le client les garde uniquement en mémoire.
     """
     result = login_school(data, db)
+    headers = {
+        "Cache-Control": "no-store, private, max-age=0",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "Vary": "Authorization",
+    }
+    # login_school peut déjà avoir construit une réponse HTTP (ex. limitation 429).
+    # Ne jamais appeler .get() sur un objet JSONResponse.
+    if isinstance(result, JSONResponse):
+        try:
+            payload = json.loads(result.body.decode("utf-8"))
+        except Exception:
+            payload = {"status": False, "message": "Réponse d'authentification indisponible."}
+        return JSONResponse(content=payload, status_code=result.status_code, headers=headers)
     if result.get("status") and isinstance(result.get("data"), dict):
         state = result["data"]
         # Manager n'a pas besoin des signatures ou images d'identité intégrées aux bulletins.
@@ -1559,14 +1734,23 @@ def manager_login(data: LoginSchema, db: Session = Depends(get_db)):
         for key in ("seal", "headSignature", "armoiries"):
             school_data.pop(key, None)
         state.pop("signatureBook", None)
+    return JSONResponse(content=result, headers=headers)
+
+
+@app.get("/api/manager/schedule")
+def manager_get_schedule(
+    db: Session = Depends(get_db),
+    claims: dict = Depends(require_active_school),
+):
+    """Manager récupère le dernier horaire publié par PrimeInk pour l'établissement connecté."""
+    school_id = str(claims.get("school_id") or "")
+    school = db.query(SchoolInformation).filter(SchoolInformation.school_id == school_id).first()
+    if not school:
+        raise HTTPException(status_code=404, detail="Établissement introuvable.")
+    schedule = (school.pn_extra or {}).get("managerSchedule")
     return JSONResponse(
-        content=result,
-        headers={
-            "Cache-Control": "no-store, private, max-age=0",
-            "Pragma": "no-cache",
-            "Expires": "0",
-            "Vary": "Authorization",
-        },
+        content={"status": True, "data": schedule if isinstance(schedule, dict) else None},
+        headers={"Cache-Control": "no-store, private, max-age=0", "Pragma": "no-cache", "Expires": "0"},
     )
 
 
@@ -1712,6 +1896,483 @@ def admin_list_schools(db: Session = Depends(get_db), _admin: bool = Depends(req
         rows.append({"school_id": s.school_id, "name": s.name_school, "city": s.city, "licence_date": s.licence_date,
                      "is_locked": bool(s.is_locked), "state": st["reason"] or "ok"})
     return {"status": True, "data": rows}
+
+
+
+# ---------------------------------------------------------------------------
+# CRYPT COMMAND CENTER — administration, télémétrie, réclamations et inspection
+# ---------------------------------------------------------------------------
+
+def _crypt_audit(db: Session, action: str, target: Optional[str] = None, details: Optional[dict] = None):
+    db.add(CryptAdminAudit(
+        action=str(action)[:80], actor="crypt_admin", target=str(target or "")[:180] or None,
+        details=details or {}, created_at=datetime.utcnow(),
+    ))
+
+
+def _crypt_public_school(school, db: Session) -> dict:
+    state = licence_state(school)
+    return {
+        "id": school.school_id,
+        "name": school.name_school,
+        "code": school.code,
+        "city": school.city,
+        "commune": school.commune,
+        "responsable": school.name_responsable,
+        "phone": school.num_tel,
+        "email": school.email,
+        "licenceDate": school.licence_date or "",
+        "locked": bool(school.is_locked),
+        "licenceState": state["reason"] or "ok",
+        "classes": db.query(ClasseInformation).filter(ClasseInformation.school_id == school.school_id).count(),
+        "students": db.query(SchoolStudentInformation).filter(SchoolStudentInformation.school_id == school.school_id).count(),
+        "teachers": db.query(Teacher).filter(Teacher.school_id == school.school_id).count(),
+    }
+
+
+def _crypt_touch_public_device(db: Session, request: Request, app_name: str, device_id: str):
+    now = datetime.utcnow()
+    remote = request.client.host if request.client else ""
+    device = db.query(CryptDeviceSession).filter(CryptDeviceSession.id == device_id).first()
+    if device is None:
+        device = CryptDeviceSession(id=device_id, app=app_name, first_seen=now, last_seen=now, contact_count=0)
+        db.add(device)
+    device.app = app_name[:30]
+    device.last_seen = now
+    device.contact_count = int(device.contact_count or 0) + 1
+    device.ip_address = (remote or "")[:80] or device.ip_address
+    device.user_agent = (request.headers.get("user-agent") or "")[:1000] or device.user_agent
+    authorization = request.headers.get("authorization", "")
+    claims = verify_token(authorization[7:].strip()) if authorization.lower().startswith("bearer ") else None
+    claims = claims or {}
+    device.school_id = str(claims.get("school_id") or request.headers.get("x-crypt-school") or device.school_id or "")[:100] or None
+    device.account_identifier = str(claims.get("email") or device.school_id or "")[:180] or None
+    device.platform = (request.headers.get("sec-ch-ua-platform") or request.headers.get("x-crypt-platform") or device.platform or "")[:80]
+    device.last_path = request.url.path[:240]
+    return device
+
+
+@app.post("/api/crypt-console/login")
+def crypt_console_login(payload: dict, request: Request, db: Session = Depends(get_db)):
+    """Échange la clé ADMIN_API_KEY contre un jeton administratif temporaire."""
+    remote = request.client.host if request.client else "unknown"
+    limiter_key = "crypt-console:" + remote
+    if CRYPT_CONSOLE_LOGIN_LIMITER.is_blocked(limiter_key):
+        raise HTTPException(status_code=429, detail="Trop de tentatives. Réessayez dans 15 minutes.")
+    supplied = str(payload.get("admin_key") or "")
+    if not ADMIN_API_KEY:
+        raise HTTPException(status_code=503, detail="Centre CRYPT désactivé : définissez ADMIN_API_KEY dans les variables Render.")
+    if not supplied or not hmac.compare_digest(supplied.encode("utf-8"), ADMIN_API_KEY.encode("utf-8")):
+        CRYPT_CONSOLE_LOGIN_LIMITER.record(limiter_key)
+        raise HTTPException(status_code=401, detail="Clé administrative invalide.")
+    CRYPT_CONSOLE_LOGIN_LIMITER.reset(limiter_key)
+    _crypt_audit(db, "admin_login", remote, {"result": "success"})
+    db.commit()
+    return JSONResponse(
+        content={"status": True, "token": create_token({"role": "crypt_admin", "sub": "crypt-console"}, 28800)},
+        headers={"Cache-Control": "no-store, private, max-age=0", "Pragma": "no-cache", "Expires": "0"},
+    )
+
+
+@app.get("/api/crypt-console/overview")
+def crypt_console_overview(db: Session = Depends(get_db), _admin: dict = Depends(require_crypt_admin)):
+    now = datetime.utcnow()
+    return {
+        "status": True,
+        "data": {
+            "schools": db.query(SchoolInformation).count(),
+            "teachers": db.query(Teacher).count(),
+            "students": db.query(SchoolStudentInformation).count(),
+            "devices_online": db.query(CryptDeviceSession).filter(CryptDeviceSession.last_seen >= now - timedelta(minutes=5)).count(),
+            "devices_total": db.query(CryptDeviceSession).count(),
+            "events_24h": db.query(CryptTelemetryEvent).filter(CryptTelemetryEvent.created_at >= now - timedelta(hours=24)).count(),
+            "errors_24h": db.query(CryptTelemetryEvent).filter(
+                CryptTelemetryEvent.created_at >= now - timedelta(hours=24),
+                CryptTelemetryEvent.event_type.in_(("api_error", "client_error")),
+            ).count(),
+            "open_tickets": db.query(CryptSupportTicket).filter(CryptSupportTicket.status == "open").count(),
+            "recent_events": [
+                {"id": x.id, "app": x.app, "school_id": x.school_id, "event_type": x.event_type,
+                 "feature": x.feature, "message": x.message, "status_code": x.status_code,
+                 "created_at": x.created_at.isoformat() + "Z" if x.created_at else ""}
+                for x in db.query(CryptTelemetryEvent).order_by(CryptTelemetryEvent.created_at.desc()).limit(12).all()
+            ],
+        },
+    }
+
+
+@app.get("/api/crypt-console/schools")
+def crypt_console_schools(db: Session = Depends(get_db), _admin: dict = Depends(require_crypt_admin)):
+    rows = db.query(SchoolInformation).order_by(SchoolInformation.name_school.asc()).limit(500).all()
+    return {"status": True, "data": [_crypt_public_school(s, db) for s in rows]}
+
+
+@app.post("/api/crypt-console/schools")
+def crypt_console_create_school(data: SchoolRegisterSchema, db: Session = Depends(get_db), _admin: dict = Depends(require_crypt_admin)):
+    if len(str(data.pass_word or "")) < 10:
+        raise HTTPException(status_code=422, detail="Le mot de passe de l'établissement doit contenir au moins 10 caractères.")
+    if db.query(SchoolInformation).filter(SchoolInformation.school_id == data.school_id).first():
+        raise HTTPException(status_code=409, detail="Cet identifiant d'établissement existe déjà.")
+    if db.query(SchoolInformation).filter(SchoolInformation.bulletin_seq_id == data.bulletin_seq_id).first():
+        raise HTTPException(status_code=409, detail="Cet identifiant de bulletin existe déjà.")
+    fields = data.dict()
+    fields["school_id"] = clean_text(fields["school_id"], 80)
+    fields["name_school"] = clean_text(fields["name_school"], 180)
+    fields["pass_word"] = hash_password(fields["pass_word"])
+    school = SchoolInformation(**fields)
+    db.add(school)
+    db.flush()
+    _crypt_audit(db, "school_created", school.school_id, {"school_name": school.name_school})
+    db.commit()
+    return {"status": True, "message": "Compte PrimeInk créé.", "data": {"school_id": school.school_id, "name": school.name_school}}
+
+
+@app.put("/api/crypt-console/schools/{school_id}/status")
+def crypt_console_school_status(school_id: str, payload: dict, db: Session = Depends(get_db), _admin: dict = Depends(require_crypt_admin)):
+    wanted = str(payload.get("status") or "").upper()
+    if wanted not in ("LOCKED", "UNLOCKED"):
+        raise HTTPException(status_code=422, detail="Utilisez LOCKED ou UNLOCKED.")
+    school = db.query(SchoolInformation).filter(SchoolInformation.school_id == school_id).first()
+    if not school:
+        raise HTTPException(status_code=404, detail="Établissement introuvable.")
+    school.is_locked = wanted == "LOCKED"
+    _crypt_audit(db, "school_status_changed", school_id, {"status": wanted})
+    db.commit()
+    return {"status": True, "message": "Statut de l'établissement mis à jour."}
+
+
+@app.get("/api/crypt-console/devices")
+def crypt_console_devices(limit: int = 100, db: Session = Depends(get_db), _admin: dict = Depends(require_crypt_admin)):
+    limit = max(1, min(int(limit or 100), 300))
+    rows = db.query(CryptDeviceSession).order_by(CryptDeviceSession.last_seen.desc()).limit(limit).all()
+    return {"status": True, "data": [{
+        "id": d.id, "app": d.app, "school_id": d.school_id, "account": d.account_identifier,
+        "platform": d.platform, "version": d.app_version, "ip": d.ip_address,
+        "user_agent": d.user_agent, "first_seen": d.first_seen.isoformat() + "Z" if d.first_seen else "",
+        "last_seen": d.last_seen.isoformat() + "Z" if d.last_seen else "",
+        "contact_count": d.contact_count, "last_path": d.last_path,
+        "online": bool(d.last_seen and d.last_seen >= datetime.utcnow() - timedelta(minutes=5)),
+    } for d in rows]}
+
+
+@app.get("/api/crypt-console/events")
+def crypt_console_events(limit: int = 100, event_type: Optional[str] = None, app_name: Optional[str] = None,
+                         db: Session = Depends(get_db), _admin: dict = Depends(require_crypt_admin)):
+    limit = max(1, min(int(limit or 100), 300))
+    query = db.query(CryptTelemetryEvent)
+    if event_type:
+        query = query.filter(CryptTelemetryEvent.event_type == event_type[:40])
+    if app_name:
+        query = query.filter(CryptTelemetryEvent.app == app_name[:30])
+    rows = query.order_by(CryptTelemetryEvent.created_at.desc()).limit(limit).all()
+    return {"status": True, "data": [{
+        "id": e.id, "app": e.app, "school_id": e.school_id, "account": e.account_identifier,
+        "device_id": e.device_id, "type": e.event_type, "feature": e.feature,
+        "message": e.message, "endpoint": e.endpoint, "method": e.http_method,
+        "status": e.status_code, "details": e.details or {},
+        "created_at": e.created_at.isoformat() + "Z" if e.created_at else "",
+    } for e in rows]}
+
+
+@app.get("/api/crypt-console/tickets")
+def crypt_console_tickets(status_filter: Optional[str] = None, limit: int = 100,
+                          db: Session = Depends(get_db), _admin: dict = Depends(require_crypt_admin)):
+    limit = max(1, min(int(limit or 100), 300))
+    query = db.query(CryptSupportTicket)
+    if status_filter:
+        query = query.filter(CryptSupportTicket.status == status_filter[:24])
+    rows = query.order_by(CryptSupportTicket.created_at.desc()).limit(limit).all()
+    return {"status": True, "data": [{
+        "id": t.id, "app": t.app, "school_id": t.school_id, "account": t.account_identifier,
+        "device_id": t.device_id, "contact": t.contact, "category": t.category, "subject": t.subject,
+        "message": t.message, "status": t.status, "admin_note": t.admin_note,
+        "created_at": t.created_at.isoformat() + "Z" if t.created_at else "",
+        "updated_at": t.updated_at.isoformat() + "Z" if t.updated_at else "",
+    } for t in rows]}
+
+
+@app.put("/api/crypt-console/tickets/{ticket_id}")
+def crypt_console_update_ticket(ticket_id: str, payload: dict, db: Session = Depends(get_db), _admin: dict = Depends(require_crypt_admin)):
+    wanted = str(payload.get("status") or "").lower()
+    if wanted not in ("open", "in_progress", "resolved", "closed"):
+        raise HTTPException(status_code=422, detail="Statut de réclamation inconnu.")
+    ticket = db.query(CryptSupportTicket).filter(CryptSupportTicket.id == ticket_id).first()
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Réclamation introuvable.")
+    ticket.status = wanted
+    ticket.admin_note = clean_text(payload.get("admin_note"), 2000) if payload.get("admin_note") is not None else ticket.admin_note
+    ticket.updated_at = datetime.utcnow()
+    _crypt_audit(db, "ticket_updated", ticket_id, {"status": wanted})
+    db.commit()
+    return {"status": True, "message": "Réclamation mise à jour."}
+
+
+@app.get("/api/crypt-console/db/schema")
+def crypt_console_db_schema(_admin: dict = Depends(require_crypt_admin)):
+    hidden = {"pass_word", "password", "secret", "token", "signature", "head_signature", "seal", "armoiries"}
+    tables = []
+    for table_name, table in Base.metadata.tables.items():
+        if table_name in ("otp_codes", "access_codes"):
+            continue
+        tables.append({
+            "name": table_name,
+            "columns": [{"name": column.name, "type": str(column.type), "nullable": bool(column.nullable)}
+                        for column in table.columns if column.name.lower() not in hidden],
+        })
+    return {"status": True, "data": tables}
+
+
+def validate_crypt_read_query(query: str) -> str:
+    """Valide une requête de consultation CRYPT avant son exécution en transaction read-only."""
+    sql = str(query or "").strip()
+    if not sql or len(sql) > 6000:
+        raise HTTPException(status_code=422, detail="La requête est vide ou trop longue (maximum 6 000 caractères).")
+    sql = sql.rstrip().rstrip(";").strip()
+    if ";" in sql or "--" in sql or "/*" in sql or "*/" in sql:
+        raise HTTPException(status_code=403, detail="Une seule instruction sans commentaires SQL est autorisée.")
+    if not re.match(r"^SELECT\b", sql, re.IGNORECASE):
+        raise HTTPException(status_code=403, detail="Seules les requêtes SELECT simples sont autorisées.")
+    forbidden = r"\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|GRANT|REVOKE|COPY|DO|CALL|EXECUTE|LOCK|SET|VACUUM|ANALYZE|INTO|NEXTVAL|SETVAL|CURRENT_USER|SESSION_USER|CURRENT_ROLE|SESSION_ROLE|CURRENT_SCHEMA|CURRENT_CATALOG)\b|\bFOR\s+(UPDATE|SHARE)\b|\b(pg_[a-z0-9_]*|lo_[a-z0-9_]*|dblink|set_config|current_setting|current_database|version|to_json|to_jsonb|row_to_json|json_agg|jsonb_agg|json_build_object|jsonb_build_object|hstore)\s*\("
+    if re.search(forbidden, sql, re.IGNORECASE):
+        raise HTTPException(status_code=403, detail="Instruction ou fonction interdite dans l'explorateur.")
+    secret_columns = r"\b(pass_word|password|secret|token|signature|head_signature|api_key|otp)\b"
+    if re.search(secret_columns, sql, re.IGNORECASE):
+        raise HTTPException(status_code=403, detail="Les colonnes sensibles sont masquées.")
+    if re.search(r"\b(information_schema|pg_catalog|sqlite_master|pg_toast)\b", sql, re.IGNORECASE):
+        raise HTTPException(status_code=403, detail="Les catalogues système ne sont pas accessibles depuis cet explorateur.")
+    from_prefix = re.split(r"\b(?:WHERE|GROUP\s+BY|ORDER\s+BY|HAVING|LIMIT|OFFSET|UNION|INTERSECT|EXCEPT)\b", sql, maxsplit=1, flags=re.IGNORECASE)[0]
+    from_clause = re.search(r"\bFROM\b(.*)$", from_prefix, re.IGNORECASE | re.DOTALL)
+    if from_clause and "," in from_clause.group(1):
+        raise HTTPException(status_code=403, detail="Utilisez des JOIN explicites ; les jointures implicites par virgule sont interdites.")
+    allowed_tables = set(Base.metadata.tables.keys()) - {"otp_codes", "access_codes"}
+    referenced = re.findall(r'\b(?:FROM|JOIN)\s+["]?([A-Za-z_][A-Za-z0-9_]*)["]?', sql, re.IGNORECASE)
+    if not referenced or any(name not in allowed_tables for name in referenced):
+        raise HTTPException(status_code=403, detail="La requête doit cibler uniquement les tables applicatives autorisées.")
+    return sql
+
+
+@app.post("/api/crypt-console/db/query")
+def crypt_console_db_query(payload: dict, db: Session = Depends(get_db), _admin: dict = Depends(require_crypt_admin)):
+    sql = validate_crypt_read_query(str(payload.get("query") or ""))
+    query_hash = hashlib.sha256(sql.encode("utf-8")).hexdigest()
+    try:
+        # Le premier ordre SQL de la transaction active le mode lecture seule.
+        db.execute(text("SET TRANSACTION READ ONLY"))
+        db.execute(text("SET LOCAL statement_timeout = '5000ms'"))
+        result = db.execute(text("SELECT * FROM (" + sql + ") AS crypt_readonly_result LIMIT 101"))
+        columns = list(result.keys())
+        rows = result.mappings().fetchmany(101)
+        truncated = len(rows) > 100
+        rows = rows[:100]
+        data = []
+        hidden_columns = {"pass_word", "password", "secret", "token", "signature", "head_signature", "seal", "armoiries", "api_key", "otp"}
+        for row in rows:
+            item = {}
+            for key in columns:
+                if str(key).lower() in hidden_columns:
+                    continue
+                value = row.get(key)
+                if isinstance(value, datetime):
+                    value = value.isoformat() + "Z"
+                elif isinstance(value, (bytes, bytearray)):
+                    value = "[binaire masqué]"
+                elif hasattr(value, "isoformat") and callable(value.isoformat):
+                    value = value.isoformat()
+                item[str(key)] = value
+            data.append(item)
+        db.rollback()
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Erreur SQL : " + str(exc)[:350])
+    audit_db = SessionLocal()
+    try:
+        _crypt_audit(audit_db, "database_read_query", None, {"query_sha256": query_hash, "rows": len(data)})
+        audit_db.commit()
+    finally:
+        audit_db.close()
+    return {
+        "status": True,
+        "columns": [column for column in columns if str(column).lower() not in hidden_columns],
+        "rows": data,
+        "truncated": truncated,
+        "row_limit": 100,
+    }
+
+
+@app.post("/api/telemetry/events")
+def crypt_telemetry_event(payload: dict, request: Request, db: Session = Depends(get_db)):
+    remote = request.client.host if request.client else "unknown"
+    limiter_key = "crypt-telemetry:" + remote
+    if CRYPT_TELEMETRY_LIMITER.is_blocked(limiter_key):
+        raise HTTPException(status_code=429, detail="Trop d'événements envoyés.")
+    CRYPT_TELEMETRY_LIMITER.record(limiter_key)
+    app_name = str(request.headers.get("x-crypt-app") or payload.get("app") or "unknown").lower()
+    if app_name not in ("primeink", "classink", "suivi", "manager"):
+        raise HTTPException(status_code=422, detail="Application inconnue.")
+    device_id = str(request.headers.get("x-crypt-device") or payload.get("device_id") or "")[:100]
+    if not re.fullmatch(r"[A-Za-z0-9._:-]{8,100}", device_id):
+        raise HTTPException(status_code=422, detail="Identifiant de session appareil invalide.")
+    authorization = request.headers.get("authorization", "")
+    claims = verify_token(authorization[7:].strip()) if authorization.lower().startswith("bearer ") else None
+    claims = claims or {}
+    school_id = str(claims.get("school_id") or request.headers.get("x-crypt-school") or "")[:100] or None
+    account = str(claims.get("email") or school_id or "")[:180] or None
+    message = clean_text(payload.get("message"), 700)
+    feature = clean_text(payload.get("feature"), 160)
+    event_type = str(payload.get("event_type") or "feature").lower()
+    if event_type not in ("feature", "client_error", "sync_error", "login_error"):
+        event_type = "feature"
+    device = _crypt_touch_public_device(db, request, app_name, device_id)
+    school_id = school_id or (device.school_id if device else None)
+    account = account or (device.account_identifier if device else None)
+    db.add(CryptTelemetryEvent(
+        device_id=device_id, app=app_name, school_id=school_id, account_identifier=account,
+        event_type=event_type, feature=feature, message=message,
+        details=payload.get("details") if isinstance(payload.get("details"), dict) else {},
+        created_at=datetime.utcnow(),
+    ))
+    db.commit()
+    return {"status": True}
+
+
+@app.post("/api/telemetry/complaints")
+def crypt_telemetry_complaint(payload: dict, request: Request, db: Session = Depends(get_db)):
+    remote = request.client.host if request.client else "unknown"
+    limiter_key = "crypt-ticket:" + remote
+    if CRYPT_TICKET_LIMITER.is_blocked(limiter_key):
+        raise HTTPException(status_code=429, detail="Trop de réclamations depuis cette connexion. Réessayez plus tard.")
+    app_name = str(request.headers.get("x-crypt-app") or payload.get("app") or "unknown").lower()
+    if app_name not in ("primeink", "classink", "suivi", "manager"):
+        raise HTTPException(status_code=422, detail="Application inconnue.")
+    message = clean_text(payload.get("message"), 5000)
+    subject = clean_text(payload.get("subject"), 180)
+    if len(message) < 10 or not subject:
+        raise HTTPException(status_code=422, detail="Ajoutez un sujet et un message suffisamment détaillé.")
+    CRYPT_TICKET_LIMITER.record(limiter_key)
+    device_id = str(request.headers.get("x-crypt-device") or payload.get("device_id") or "")[:100]
+    if not re.fullmatch(r"[A-Za-z0-9._:-]{8,100}", device_id):
+        device_id = None
+    device = _crypt_touch_public_device(db, request, app_name, device_id) if device_id else None
+    claims = {}
+    authorization = request.headers.get("authorization", "")
+    if authorization.lower().startswith("bearer "):
+        claims = verify_token(authorization[7:].strip()) or {}
+    ticket = CryptSupportTicket(
+        app=app_name, device_id=device_id,
+        school_id=str(claims.get("school_id") or request.headers.get("x-crypt-school") or (device.school_id if device else "") or "")[:100] or None,
+        account_identifier=str(claims.get("email") or claims.get("school_id") or (device.account_identifier if device else "") or "")[:180] or None,
+        contact=clean_text(payload.get("contact"), 180),
+        category=clean_text(payload.get("category") or "support", 60),
+        subject=subject, message=message, status="open",
+    )
+    db.add(ticket)
+    db.add(CryptTelemetryEvent(
+        device_id=device_id, app=app_name, school_id=ticket.school_id,
+        account_identifier=ticket.account_identifier, event_type="complaint",
+        feature=ticket.category, message=ticket.subject, details={"ticket_id": ticket.id},
+        created_at=datetime.utcnow(),
+    ))
+    db.commit()
+    return {"status": True, "ticket_id": ticket.id, "message": "Réclamation transmise à CRYPT."}
+
+
+@app.post("/api/llink/assist")
+async def classink_llink_assist(payload: dict, request: Request):
+    """Relais Llink limité à VELORA ; aucune donnée scolaire n'est ajoutée au contexte."""
+    app_name = str(request.headers.get("x-crypt-app") or "").strip().lower()
+    if app_name not in ("suivi", "manager", "crypt"):
+        raise HTTPException(status_code=403, detail="Application non autorisée pour Llink.")
+
+    authorization = request.headers.get("authorization", "")
+    claims = verify_token(authorization[7:].strip()) if authorization.lower().startswith("bearer ") else None
+    claims = claims or {}
+    if app_name == "manager" and claims.get("role") != "school":
+        raise HTTPException(status_code=401, detail="Connectez-vous à Manager avant d'utiliser Llink.")
+    if app_name == "crypt" and claims.get("role") != "crypt_admin":
+        raise HTTPException(status_code=403, detail="Session CRYPT administrateur requise.")
+
+    remote = request.client.host if request.client else "unknown"
+    limiter_key = "llink-assist:" + remote
+    if CRYPT_LLINK_LIMITER.is_blocked(limiter_key):
+        raise HTTPException(status_code=429, detail="Limite Llink atteinte. Réessayez dans quelques minutes.")
+
+    message = str(payload.get("message") or "").strip()
+    if not message or len(message) > 5000:
+        raise HTTPException(status_code=422, detail="Votre question doit contenir entre 1 et 5 000 caractères.")
+
+    history = []
+    raw_history = payload.get("history")
+    if isinstance(raw_history, list):
+        for turn in raw_history[-8:]:
+            if not isinstance(turn, dict):
+                continue
+            role = str(turn.get("role") or "").strip().lower()
+            text_value = turn.get("text")
+            if role not in ("user", "assistant") or not isinstance(text_value, str):
+                continue
+            text_value = text_value.strip()[-2500:]
+            if text_value:
+                history.append({"role": role, "text": text_value})
+    if sum(len(item["text"]) for item in history) > 12000:
+        history = history[-4:]
+
+    context_by_app = {
+        "suivi": "Tu es Llink, l'assistant d'aide de Class-Ink Suivi, destiné aux parents. Explique simplement l'utilisation de l'application et les notions générales. Tu ne reçois aucun dossier d'élève, aucune note et aucune identité. Ne prétends jamais consulter le compte du parent. Réponds en français sauf si la personne écrit dans une autre langue.",
+        "manager": "Tu es Llink, l'assistant d'aide de ClassInk Manager, destiné aux responsables d'établissement. Explique la consultation des classes, élèves, indicateurs, accès Suivi et horaires. Tu ne reçois aucune donnée de l'école ni aucun dossier. Ne prétends pas voir l'écran ou exécuter une action.",
+        "crypt": "Tu es Llink, l'assistant du centre de contrôle CRYPT. Aide à comprendre les fonctions de supervision et à diagnostiquer des problèmes généraux. Tu ne reçois ni les données du tableau de bord, ni les journaux, ni les réclamations, ni le contenu de la base. N'invente aucune observation.",
+    }
+    request_payload = {
+        "message": message,
+        "history": history,
+        "model": "velora",
+        "level": "velora",
+        "effort": "normal",
+        "mode": "chat",
+        "source": "classink_" + app_name,
+        "preferences": context_by_app[app_name] + " Les données scolaires et personnelles ne doivent jamais être demandées ni supposées. Ne demande pas à l'utilisateur de coller de notes, noms, identifiants ou informations confidentielles.",
+        "data_collection_consent": False,
+    }
+    CRYPT_LLINK_LIMITER.record(limiter_key)
+
+    client = httpx.AsyncClient(timeout=httpx.Timeout(connect=30.0, read=90.0, write=20.0, pool=12.0))
+    url = os.getenv("LLINK_API_BASE_URL", "https://llink-usz9.onrender.com").rstrip("/") + "/api/chat"
+    try:
+        upstream = await client.send(
+            client.build_request(
+                "POST", url, json=request_payload,
+                headers={"Accept": "text/event-stream", "Cache-Control": "no-cache"},
+            ),
+            stream=True,
+        )
+    except httpx.HTTPError as exc:
+        await client.aclose()
+        raise HTTPException(status_code=503, detail="Le serveur Llink est injoignable. Réessayez.") from exc
+
+    if upstream.status_code >= 400:
+        status_code = upstream.status_code if upstream.status_code in (401, 403, 422, 429, 503) else 502
+        raw_error = (await upstream.aread()).decode("utf-8", "replace")[:500]
+        await upstream.aclose()
+        await client.aclose()
+        raise HTTPException(status_code=status_code, detail="Llink : " + (raw_error or "service indisponible"))
+
+    async def relay_llink_stream():
+        try:
+            async for chunk in upstream.aiter_raw():
+                if chunk:
+                    yield chunk
+        finally:
+            await upstream.aclose()
+            await client.aclose()
+
+    return StreamingResponse(
+        relay_llink_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache, no-store", "X-Accel-Buffering": "no", "Connection": "keep-alive"},
+    )
+
 
 
 @app.get("/api/cloud/{school_id}/status")
