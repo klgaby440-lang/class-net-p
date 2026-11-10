@@ -1185,7 +1185,11 @@ async def crypt_observe_client_requests(request: Request, call_next):
         if authorization.lower().startswith("bearer "):
             claims = verify_token(authorization[7:].strip()) or {}
         school_id = str(claims.get("school_id") or request.headers.get("x-crypt-school") or "")[:100] or None
-        account = str(claims.get("email") or school_id or request.headers.get("x-crypt-account") or "")[:180] or None
+        email = str(claims.get("email") or "")[:180] or None
+        if not school_id and email and claims.get("role") == "teacher":
+            teacher_record = db.query(Teacher).filter(Teacher.email == email).first()
+            school_id = str(teacher_record.school_id or "")[:100] or None if teacher_record else None
+        account = str(email or school_id or request.headers.get("x-crypt-account") or "")[:180] or None
         remote = request.client.host if request.client else ""
         user_agent = (request.headers.get("user-agent") or "")[:1000]
         platform = (request.headers.get("sec-ch-ua-platform") or request.headers.get("x-crypt-platform") or "")[:80]
