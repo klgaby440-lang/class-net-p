@@ -1429,6 +1429,7 @@ def login_school(data: LoginSchema, db: Session = Depends(get_db)):
     students_data = []
     student_id_map = {}  # Mappe le numéro permanent vers l'id de l'élève
     for s in school.students:
+        suivi_code = ensure_suivi_student_code(db, s)
         students_data.append({
             "id": s.id,
             "name": s.student_name,
@@ -1439,11 +1440,14 @@ def login_school(data: LoginSchema, db: Session = Depends(get_db)):
             "bornWhere": s.student_born_place or "",
             "permi": s.student_n_permanent or "",
             "classId": s.class_id,
-            "suiviCode": s.suivi_code or "",
-            "suiviResultsAllowed": bool(s.suivi_results_allowed)
+            "suiviCode": suivi_code,
+            "suiviResultsAllowed": is_suivi_results_allowed(db, school.school_id, s),
+            "suiviIndividualAccessAllowed": bool(s.suivi_results_allowed)
         })
         if s.student_n_permanent:
             student_id_map[s.student_n_permanent] = s.id
+    # Persiste également les codes Suivi attribués lors du premier chargement Manager/PrimeInk.
+    db.commit()
 
     # 3. Chargement des cours
     courses_data = []
@@ -1494,7 +1498,14 @@ def login_school(data: LoginSchema, db: Session = Depends(get_db)):
             "name": school.name_school,
             "code": school.code,
             "city": school.city,
-            "commune": school.commune
+            "commune": school.commune,
+            "province": school.province or "",
+            "headName": school.head_name or "",
+            "schoolYear": school.school_year or "",
+            "responsable": school.name_responsable or "",
+            "phone": school.num_tel or "",
+            "email": school.email or "",
+            "address": school.adresse_physique or ""
         },
         "classes": classes_data,
         "students": students_data,
@@ -1530,6 +1541,78 @@ class PrimeNetLoadSchema(BaseModel):
 def load_primenet_state(data: PrimeNetLoadSchema, db: Session = Depends(get_db)):
     """PrimeInk envoie { school_id, password } : même logique que /api/auth/school/login."""
     return login_school(LoginSchema(identifier=data.school_id, password=data.password), db)
+
+
+@app.post("/api/manager/login")
+def manager_login(data: LoginSchema, db: Session = Depends(get_db)):
+    """
+    Connexion Manager avec les mêmes identifiants que PrimeInk.
+    Les données sont renvoyées sans cache HTTP ; le client les garde uniquement en mémoire.
+    """
+    result = login_school(data, db)
+    if result.get("status") and isinstance(result.get("data"), dict):
+        state = result["data"]
+        # Manager n'a pas besoin des signatures ou images d'identité intégrées aux bulletins.
+        for teacher in state.get("teachers", []):
+            teacher.pop("signature", None)
+        school_data = state.get("school") or {}
+        for key in ("seal", "headSignature", "armoiries"):
+            school_data.pop(key, None)
+        state.pop("signatureBook", None)
+    return JSONResponse(
+        content=result,
+        headers={
+            "Cache-Control": "no-store, private, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+            "Vary": "Authorization",
+        },
+    )
+
+
+@app.put("/api/manager/schedule")
+def manager_publish_schedule(
+    payload: dict,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(require_active_school),
+):
+    """PrimeInk publie l'horaire généré afin que Manager puisse le consulter depuis le serveur."""
+    school_id = str(claims.get("school_id") or "")
+    if str(payload.get("school_id") or "") != school_id:
+        raise HTTPException(status_code=403, detail="Accès refusé aux données d'une autre école.")
+    schedule = payload.get("schedule")
+    if not isinstance(schedule, dict):
+        raise HTTPException(status_code=422, detail="Horaire manquant ou invalide.")
+    result = schedule.get("result")
+    schedules = result.get("schedules") if isinstance(result, dict) else None
+    if not isinstance(schedules, dict) or not isinstance(schedules.get("classes"), list):
+        raise HTTPException(status_code=422, detail="Le résultat de l'horaire est incomplet.")
+    try:
+        serialized_size = len(json.dumps(schedule, ensure_ascii=False))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=422, detail="L'horaire contient des données non valides.")
+    if serialized_size > 1500000:
+        raise HTTPException(status_code=413, detail="L'horaire est trop volumineux pour être publié.")
+    school = db.query(SchoolInformation).filter(SchoolInformation.school_id == school_id).first()
+    if not school:
+        raise HTTPException(status_code=404, detail="Établissement introuvable.")
+    stored = {
+        "academicYear": str(schedule.get("academicYear") or school.school_year or "")[:30],
+        "generatedAt": str(schedule.get("generatedAt") or datetime.utcnow().isoformat())[:60],
+        "config": schedule.get("config") if isinstance(schedule.get("config"), dict) else {},
+        "slots": schedule.get("slots") if isinstance(schedule.get("slots"), list) else [],
+        "teachers": schedule.get("teachers") if isinstance(schedule.get("teachers"), list) else [],
+        "result": result,
+    }
+    extra = dict(school.pn_extra or {})
+    extra["managerSchedule"] = stored
+    school.pn_extra = extra
+    db.commit()
+    return JSONResponse(
+        content={"status": True, "message": "Horaire publié pour ClassInk Manager."},
+        headers={"Cache-Control": "no-store, private, max-age=0", "Pragma": "no-cache", "Expires": "0"},
+    )
+
 
 # ---------------------------------------------------------
 # 7. GESTION DES CODES À USAGE UNIQUE (119 BITS)
@@ -2041,7 +2124,7 @@ IMAGE_DATAURL_RE = re.compile(r"^data:image/(png|jpeg|webp|gif);base64,[A-Za-z0-
 MAX_IMAGE_CHARS = 450000
 BULLETIN_MODELS = ("classink", "ige010", "repechage")
 SIGNATURE_SOURCES = ("titulaire", "responsable", "default", "none")
-PN_EXTRA_KEYS = ("signatureBook", "repechage", "printSettings", "behaviour")
+PN_EXTRA_KEYS = ("signatureBook", "repechage", "printSettings", "behaviour", "managerSchedule")
 PERIOD_TO_KEY = {"P1": "p1", "P2": "p2", "EX1": "ex1", "P3": "p3", "P4": "p4", "EX2": "ex2"}
 
 
@@ -2071,6 +2154,13 @@ def clean_pn_extra(extra):
     settings = extra.get("printSettings")
     if isinstance(settings, dict):
         out["printSettings"] = {"paper": "A3" if settings.get("paper") == "A3" else "A4"}
+    manager_schedule = extra.get("managerSchedule")
+    if isinstance(manager_schedule, dict):
+        try:
+            if len(json.dumps(manager_schedule, ensure_ascii=False)) <= 1500000:
+                out["managerSchedule"] = manager_schedule
+        except (TypeError, ValueError):
+            pass
     return out
 
 
@@ -2119,6 +2209,8 @@ def school_state_extras(db, school):
             out[key] = extra[key]
     if behaviour:
         out["behaviour"] = behaviour
+    if isinstance(extra.get("managerSchedule"), dict):
+        out["managerSchedule"] = extra["managerSchedule"]
     return out
 
 
