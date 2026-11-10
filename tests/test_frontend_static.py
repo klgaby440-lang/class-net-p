@@ -274,11 +274,16 @@ class FrontendStaticTests(unittest.TestCase):
         for storage_api in ("localStorage", "sessionStorage", "indexedDB"):
             self.assertNotIn(storage_api, source)
 
-    def test_primeink_has_legacy_schedule_publication(self):
+    def test_primeink_has_legacy_schedule_publication_and_preserves_old_schedules_at_login(self):
         source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
         self.assertIn("publishExistingScheduleToManager", source)
         self.assertIn("/api/manager/schedule", source)
         self.assertIn("generatedSchedules", source)
+        snapshot = source.split("function bpSnapshotLocalOnly()", 1)[1].split("function bpRestoreLocalOnly", 1)[0]
+        restore = source.split("function bpRestoreLocalOnly", 1)[1].split("// GESTION DU REGISTRE", 1)[0]
+        self.assertIn("horaire.generatedSchedules", snapshot)
+        self.assertIn("mixage.generatedSchedules", snapshot)
+        self.assertIn("target.generatedSchedules = combined.filter", restore)
 
     def test_manager_and_primeink_publish_server_schedule_and_share_suivi_access(self):
         server = (ROOT / "main.py").read_text(encoding="utf-8")
