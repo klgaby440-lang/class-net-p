@@ -1162,6 +1162,11 @@ async def crypt_observe_client_requests(request: Request, call_next):
     path = request.url.path or ""
     app_name = (request.headers.get("x-crypt-app") or "").strip().lower()
     device_id = (request.headers.get("x-crypt-device") or "").strip()
+    if app_name in ("suivi", "manager"):
+        # Les applications parent et Manager ne doivent jamais mettre en cache les réponses API.
+        response.headers["Cache-Control"] = "no-store, private, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
     if (
         request.method == "OPTIONS"
         or not path.startswith("/api/")
