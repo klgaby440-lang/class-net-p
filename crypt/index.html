@@ -51,14 +51,58 @@
       </section>
       <section class="page" id="page-schools">
         <div class="page-head"><div><h1>Comptes PrimeInk</h1><p>Créer les comptes d'établissement, consulter leur état et suspendre ou réactiver un accès.</p></div><button class="btn" id="showCreate">+ Créer un établissement</button></div>
-        <article class="card hidden" id="createPanel"><h2>Nouveau compte PrimeInk</h2><form id="schoolForm"><div class="form-grid">
-          <div><label>Identifiant établissement</label><input name="school_id" required maxlength="80"></div><div><label>Identifiant bulletin</label><input name="bulletin_seq_id" required maxlength="80"></div>
-          <div><label>Code établissement</label><input name="code" required></div><div><label>Nom de l'établissement</label><input name="name_school" required></div>
-          <div><label>Ville</label><input name="city" required></div><div><label>Commune</label><input name="commune" required></div>
-          <div><label>Nom du responsable</label><input name="name_responsable" required></div><div><label>Téléphone</label><input name="num_tel" required></div>
-          <div class="full"><label>Adresse physique</label><input name="adresse_physique" required></div>
-          <div><label>E-mail</label><input name="email" type="email" required></div><div><label>Mot de passe initial (10 caractères minimum)</label><input name="pass_word" type="password" minlength="10" autocomplete="new-password" required></div>
-        </div><div class="row" style="margin-top:16px"><button class="btn">Créer le compte</button><button class="btn secondary" type="button" id="cancelCreate">Annuler</button></div><div class="error" id="schoolError"></div></form></article>
+        <article class="card hidden" id="createPanel">
+          <h2>Nouveau compte PrimeInk</h2>
+          <p class="muted" style="margin:0 0 16px;">Renseignez les informations recueillies auprès de l’établissement. CRYPT génère les identifiants techniques et le mot de passe initial.</p>
+          <form id="schoolForm">
+            <h3 style="font-size:13px;margin:0 0 10px;">1. Informations de l’établissement</h3>
+            <div class="form-grid">
+              <div><label>Nom de l’établissement</label><input name="name_school" required maxlength="180" autocomplete="organization"></div>
+              <div><label>Code officiel de l’établissement</label><input name="code" required maxlength="80"></div>
+              <div><label>Ville</label><input name="city" required maxlength="100"></div>
+              <div><label>Commune</label><input name="commune" required maxlength="100"></div>
+              <div><label>Nom du responsable</label><input name="name_responsable" required maxlength="180"></div>
+              <div><label>Téléphone</label><input name="num_tel" required maxlength="80" autocomplete="tel"></div>
+              <div class="full"><label>Adresse physique</label><input name="adresse_physique" required maxlength="240"></div>
+              <div class="full"><label>E-mail de contact</label><input name="email" type="email" required maxlength="180" autocomplete="email"></div>
+            </div>
+            <div class="divider" style="margin:18px 0;border-top:1px solid var(--line);"></div>
+            <h3 style="font-size:13px;margin:0 0 10px;">2. Accès PrimeInk générés par CRYPT</h3>
+            <div class="form-grid">
+              <div>
+                <label>Identifiant de connexion école</label>
+                <div class="row"><input id="schoolIdInput" name="school_id" required maxlength="80" autocomplete="off" style="flex:1;"><button class="btn secondary" type="button" id="generateSchoolId">Générer</button></div>
+              </div>
+              <div>
+                <label>Identifiant de bulletin</label>
+                <div class="row"><input id="bulletinSeqIdInput" name="bulletin_seq_id" required maxlength="80" autocomplete="off" style="flex:1;"><button class="btn secondary" type="button" id="generateBulletinId">Générer</button></div>
+              </div>
+              <div class="full">
+                <label>Mot de passe initial (10 caractères minimum)</label>
+                <div class="row"><input id="schoolPasswordInput" name="pass_word" type="text" minlength="10" maxlength="128" autocomplete="new-password" required style="flex:1;"><button class="btn secondary" type="button" id="generateSchoolPassword">Générer un mot de passe</button></div>
+                <small class="muted">Le mot de passe est affiché une seule fois après la création. Remettez-le directement au responsable.</small>
+              </div>
+            </div>
+            <div class="row" style="margin-top:18px;flex-wrap:wrap;">
+              <button class="btn" id="createSchoolSubmit" type="submit">Créer le compte PrimeInk</button>
+              <button class="btn secondary" type="button" id="cancelCreate">Annuler</button>
+            </div>
+            <div class="error" id="schoolError" role="alert"></div>
+          </form>
+        </article>
+        <article class="card hidden" id="createdAccountPanel" aria-live="polite" style="margin:14px 0;">
+          <div class="row" style="align-items:center;justify-content:space-between;flex-wrap:wrap;">
+            <div><h2 style="margin:0;">Compte PrimeInk créé</h2><p class="muted" style="margin:4px 0 0;">Remettez ces accès au responsable de l’établissement.</p></div>
+            <span class="pill ok">Compte actif</span>
+          </div>
+          <div class="form-grid" style="margin-top:14px;">
+            <div><label>Identifiant de connexion</label><div class="row"><code id="createdSchoolId" class="code" style="flex:1;overflow-wrap:anywhere;"></code><button class="btn secondary" type="button" data-copy-created="school_id">Copier</button></div></div>
+            <div><label>Identifiant de bulletin</label><div class="row"><code id="createdBulletinId" class="code" style="flex:1;overflow-wrap:anywhere;"></code><button class="btn secondary" type="button" data-copy-created="bulletin_seq_id">Copier</button></div></div>
+            <div class="full"><label>Mot de passe initial</label><div class="row"><code id="createdSchoolPassword" class="code" style="flex:1;overflow-wrap:anywhere;"></code><button class="btn secondary" type="button" data-copy-created="pass_word">Copier</button></div></div>
+          </div>
+          <div class="row" style="margin-top:14px;flex-wrap:wrap;"><button class="btn" type="button" id="copyCreatedCredentials">Copier toute la fiche des accès</button><button class="btn secondary" type="button" id="hideCreatedCredentials">Masquer les accès</button></div>
+          <small class="muted" id="createdAccountNotice" style="display:block;margin-top:10px;">Le mot de passe reste uniquement dans cette page et disparaît à sa fermeture.</small>
+        </article>
         <div class="toolbar"><input id="schoolSearch" placeholder="Rechercher une école…"><button class="btn secondary" id="refreshSchools">Actualiser</button></div>
         <article class="card"><div class="table-wrap"><table><thead><tr><th>Établissement</th><th>Identifiant</th><th>Localité</th><th>Licence</th><th>Classes</th><th>Élèves</th><th>Enseignants</th><th>État</th><th>Action</th></tr></thead><tbody id="schoolsBody"></tbody></table></div></article>
       </section>
@@ -115,7 +159,7 @@ $('#loginForm').addEventListener('submit',async e=>{
  catch(err){$('#loginError').textContent=err.message||'Connexion impossible.';}finally{btn.disabled=false;}
 });
 $('#logoutBtn').addEventListener('click',()=>logout(true));
-window.addEventListener('pagehide',()=>{token=null;window.__CRYPT_ADMIN_TOKEN__=null;schools=[];devices=[];events=[];tickets=[];});
+window.addEventListener('pagehide',()=>{token=null;window.__CRYPT_ADMIN_TOKEN__=null;schools=[];devices=[];events=[];tickets=[];createdAccount=null;});
 document.addEventListener('click',e=>{const b=e.target.closest('[data-page]');if(b)go(b.dataset.page);if(e.target.closest('[data-refresh]'))loadOverview();});
 async function loadOverview(){
  try{const r=await api('/api/crypt-console/overview');const d=r.data;
@@ -133,10 +177,80 @@ function renderSchools(){
  const list=schools.filter(s=>(s.name+' '+s.id+' '+s.city+' '+s.code).toLowerCase().includes(term));
  $('#schoolsBody').innerHTML=list.length?list.map(s=>'<tr><td><b>'+esc(s.name)+'</b><br><span class="muted">'+esc(s.email)+'</span></td><td class="code">'+esc(s.id)+'</td><td>'+esc(s.city)+' · '+esc(s.commune)+'</td><td>'+esc(s.licenceDate||'—')+'</td><td>'+s.classes+'</td><td>'+s.students+'</td><td>'+s.teachers+'</td><td>'+pill(s.locked?'Suspendu':s.licenceState,s.locked?'bad':s.licenceState==='ok'?'ok':'warn')+'</td><td><button class="btn secondary" data-school="'+esc(s.id)+'" data-status="'+(s.locked?'UNLOCKED':'LOCKED')+'">'+(s.locked?'Réactiver':'Suspendre')+'</button></td></tr>').join(''):'<tr><td colspan="9" class="empty">Aucun établissement correspondant.</td></tr>';
 }
+let createdAccount=null;
+function secureRandomHex(bytes=6){
+ if(!window.crypto||typeof window.crypto.getRandomValues!=='function')throw new Error('Génération sécurisée indisponible dans ce navigateur.');
+ const data=new Uint8Array(bytes);window.crypto.getRandomValues(data);
+ return Array.from(data,x=>x.toString(16).padStart(2,'0')).join('').toUpperCase();
+}
+function generateSchoolId(){ $('#schoolIdInput').value='CI-'+secureRandomHex(5); }
+function generateBulletinId(){ $('#bulletinSeqIdInput').value='BUL-'+secureRandomHex(5); }
+function generateSchoolPassword(){
+ const chars='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%';
+ if(!window.crypto||typeof window.crypto.getRandomValues!=='function')throw new Error('Génération sécurisée indisponible dans ce navigateur.');
+ const bytes=new Uint8Array(18);window.crypto.getRandomValues(bytes);
+ $('#schoolPasswordInput').value=Array.from(bytes,b=>chars[b%chars.length]).join('');
+ $('#schoolPasswordInput').type='text';
+}
+async function copyConsoleText(value){
+ const text=String(value||'');if(!text)return false;
+ try{if(navigator.clipboard&&typeof navigator.clipboard.writeText==='function'){await navigator.clipboard.writeText(text);return true;}}catch(_){}
+ const area=document.createElement('textarea');area.value=text;area.setAttribute('readonly','');
+ area.style.cssText='position:fixed;left:-9999px;top:0;opacity:0;';document.body.appendChild(area);area.focus();area.select();
+ let ok=false;try{ok=document.execCommand('copy');}catch(_){ok=false;}area.remove();return ok;
+}
+function showCreatedAccount(data){
+ createdAccount=data;
+ $('#createdSchoolId').textContent=data.school_id;
+ $('#createdBulletinId').textContent=data.bulletin_seq_id;
+ $('#createdSchoolPassword').textContent=data.pass_word;
+ $('#createdAccountPanel').classList.remove('hidden');
+ $('#createdAccountNotice').textContent='Accès de '+data.name_school+' · copie immédiate recommandée. Le mot de passe ne sera pas conservé après fermeture de la page.';
+}
+function hideCreatedAccount(){
+ createdAccount=null;
+ $('#createdAccountPanel').classList.add('hidden');
+ $('#createdSchoolId').textContent='';$('#createdBulletinId').textContent='';$('#createdSchoolPassword').textContent='';
+}
 $('#schoolSearch').addEventListener('input',renderSchools);$('#refreshSchools').addEventListener('click',loadSchools);
-$('#showCreate').addEventListener('click',()=>$('#createPanel').classList.toggle('hidden'));$('#cancelCreate').addEventListener('click',()=>$('#createPanel').classList.add('hidden'));
+$('#showCreate').addEventListener('click',()=>{
+ const opening=$('#createPanel').classList.contains('hidden');
+ $('#createPanel').classList.toggle('hidden');
+ if(opening){
+  if(!$('#schoolIdInput').value)try{generateSchoolId();}catch(_){}
+  if(!$('#bulletinSeqIdInput').value)try{generateBulletinId();}catch(_){}
+  if(!$('#schoolPasswordInput').value)try{generateSchoolPassword();}catch(_){}
+ }
+});
+$('#generateSchoolId').addEventListener('click',()=>{try{generateSchoolId();$('#schoolError').textContent='';}catch(e){$('#schoolError').textContent=e.message;}});
+$('#generateBulletinId').addEventListener('click',()=>{try{generateBulletinId();$('#schoolError').textContent='';}catch(e){$('#schoolError').textContent=e.message;}});
+$('#generateSchoolPassword').addEventListener('click',()=>{try{generateSchoolPassword();$('#schoolError').textContent='';}catch(e){$('#schoolError').textContent=e.message;}});
+$('#cancelCreate').addEventListener('click',()=>{$('#createPanel').classList.add('hidden');});
+$('#hideCreatedCredentials').addEventListener('click',hideCreatedAccount);
+$('#copyCreatedCredentials').addEventListener('click',async()=>{
+ if(!createdAccount)return;
+ const text='Compte PrimeInk · '+createdAccount.name_school+'\nIdentifiant : '+createdAccount.school_id+'\nIdentifiant bulletin : '+createdAccount.bulletin_seq_id+'\nMot de passe initial : '+createdAccount.pass_word;
+ const ok=await copyConsoleText(text);alert(ok?'Fiche des accès copiée.':'Copie impossible. Sélectionnez les identifiants affichés pour les copier.');
+});
+document.querySelector('#createdAccountPanel').addEventListener('click',async e=>{
+ const button=e.target.closest('[data-copy-created]');if(!button||!createdAccount)return;
+ const value=createdAccount[button.dataset.copyCreated];const ok=await copyConsoleText(value);
+ alert(ok?'Identifiant copié.':'Copie impossible. Sélectionnez le texte affiché pour le copier.');
+});
 $('#schoolsBody').addEventListener('click',async e=>{const b=e.target.closest('[data-school]');if(!b)return;const status=b.dataset.status;if(!confirm((status==='LOCKED'?'Suspendre':'Réactiver')+' le compte '+b.dataset.school+' ?'))return;try{await api('/api/crypt-console/schools/'+encodeURIComponent(b.dataset.school)+'/status',{method:'PUT',body:JSON.stringify({status})});await loadSchools();}catch(err){alert(err.message);}});
-$('#schoolForm').addEventListener('submit',async e=>{e.preventDefault();const obj=Object.fromEntries(new FormData(e.currentTarget).entries());const btn=e.submitter;btn.disabled=true;$('#schoolError').textContent='';try{const r=await api('/api/crypt-console/schools',{method:'POST',body:JSON.stringify(obj)});alert(r.message);e.currentTarget.reset();$('#createPanel').classList.add('hidden');await loadSchools();}catch(err){$('#schoolError').textContent=err.message;}finally{btn.disabled=false;}});
+$('#schoolForm').addEventListener('submit',async e=>{
+ e.preventDefault();
+ const obj=Object.fromEntries(new FormData(e.currentTarget).entries());
+ const btn=$('#createSchoolSubmit');btn.disabled=true;btn.textContent='Création…';$('#schoolError').textContent='';
+ hideCreatedAccount();
+ try{
+  const r=await api('/api/crypt-console/schools',{method:'POST',body:JSON.stringify(obj)});
+  showCreatedAccount({school_id:obj.school_id,bulletin_seq_id:obj.bulletin_seq_id,pass_word:obj.pass_word,name_school:obj.name_school});
+  e.currentTarget.reset();$('#createPanel').classList.add('hidden');await loadSchools();
+  $('#createdAccountPanel').scrollIntoView({behavior:'smooth',block:'nearest'});
+ }catch(err){$('#schoolError').textContent=err.message||'Création impossible.';}
+ finally{btn.disabled=false;btn.textContent='Créer le compte PrimeInk';}
+});
 async function loadDevices(){try{const r=await api('/api/crypt-console/devices?limit=300');devices=r.data;renderDevices();}catch(e){$('#devicesBody').innerHTML='<tr><td colspan="9">'+esc(e.message)+'</td></tr>';}}
 function renderDevices(){const q=$('#deviceSearch').value.toLowerCase(),app=$('#deviceApp').value;const a=devices.filter(d=>(!app||d.app===app)&&[d.app,d.school_id,d.account,d.id,d.platform,d.ip,d.user_agent].join(' ').toLowerCase().includes(q));$('#devicesBody').innerHTML=a.length?a.map(d=>'<tr><td>'+pill(d.app)+'</td><td>'+esc(d.school_id||d.account||'—')+'</td><td class="code">'+esc(d.id)+'</td><td>'+esc(d.platform||d.user_agent||'—')+'</td><td class="code">'+esc(d.ip||'—')+'</td><td>'+when(d.first_seen)+'</td><td>'+when(d.last_seen)+'</td><td>'+Number(d.contact_count||0)+'</td><td>'+pill(d.online?'Actif':'Inactif',d.online?'ok':'')+'</td></tr>').join(''):'<tr><td colspan="9" class="empty">Aucune session observée.</td></tr>';}
 $('#refreshDevices').addEventListener('click',loadDevices);$('#deviceSearch').addEventListener('input',renderDevices);$('#deviceApp').addEventListener('change',renderDevices);
