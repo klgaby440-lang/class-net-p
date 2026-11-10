@@ -159,6 +159,43 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn("renderDeliberationView(activeStudentId, false);", source)
 
 
+    def test_suivi_parent_html_ids_and_inline_javascript(self):
+        source = (ROOT / "suivi/index.html").read_text(encoding="utf-8")
+        self.inspect_file("suivi/index.html")
+        self.assertIn("/api/suivi/schools", source)
+        self.assertIn("/api/suivi/student", source)
+        self.assertIn("Identifiant élève", source)
+        self.assertIn("d.resultsAccess.message", source)
+        self.assertIn("function redactedParentData(data)", source)
+        self.assertIn("liveData.set(key, entry)", source)
+        self.assertIn("safe.results = null", source)
+        self.assertIn("Hors connexion : les résultats restent masqués", source)
+        self.assertIn("f.configured === false", source)
+
+    def test_primeink_exposes_parent_code_and_controls_student_result_access(self):
+        source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
+        self.assertIn('id="primeInkSuiviAccessPanel"', source)
+        self.assertIn('id="primeInkSuiviStudentCode"', source)
+        self.assertIn('id="primeInkSuiviToggle"', source)
+        self.assertIn("function bpSuiviLoadRoster(classId)", source)
+        self.assertIn("/api/suivi/school/classes/", source)
+        self.assertIn("/api/suivi/school/students/", source)
+        self.assertIn("row.individualAccessAllowed", source)
+        self.assertIn("ID parent :", source)
+
+    def test_classnet_has_public_parent_lookup_and_school_only_access_routes(self):
+        source = (ROOT / "main.py").read_text(encoding="utf-8")
+        self.assertIn('@app.get("/api/suivi/schools")', source)
+        self.assertIn('@app.post("/api/suivi/student")', source)
+        self.assertIn('@app.get("/api/suivi/school/classes/{class_id}/students")', source)
+        self.assertIn('@app.put("/api/suivi/school/students/{student_id}/access")', source)
+        self.assertIn("Depends(require_active_school)", source)
+        self.assertIn("results = None", source)
+        self.assertIn("is_suivi_results_allowed(db, school_id, student)", source)
+        self.assertIn("suivi_results_allowed = Column(Boolean", source)
+        self.assertIn("suivi_code = Column(String(40)", source)
+
+
     def test_primeink_photo_import_duplicate_keys_and_student_name_split(self):
         source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
         self.assertIn("function primeInkImportNormalize(value)", source)
