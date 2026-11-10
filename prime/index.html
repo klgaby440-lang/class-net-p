@@ -1171,9 +1171,7 @@ body {
             <button class="sub-nav-btn" data-sub="view-fiches">FICHES</button>
             <button class="sub-nav-btn" data-sub="view-stats">STATISTIQUES</button>
             <button class="sub-nav-btn" data-sub="view-deliberation">DELIBERER</button>
-            <button class="btn-primary" onclick="exportClassBulletinsPDF()" style="background-color: #16a34a; margin-bottom: 0.5rem;">
-                📄 Exporter la classe en PDF
-            </button>
+            <button class="sub-nav-btn" data-sub="view-settings">PARAMÈTRES</button>
         </nav>
         
             <!-- Vue Délibération (dans section-class-detail) -->
@@ -1229,11 +1227,9 @@ body {
                     <span class="sidebar-title" id="bulletinSidebarTitle">BULLETIN</span>
                     <button class="toggle-sidebar-btn">◀</button>
                 </div>
-                <button class="btn-secondary" onclick="renderinterface('ajouter_eleve')">Ajouter un élève</button>
-                <button class="btn-secondary" onclick="openManageStudentsModal(activeClassId)">✏️ Gérer les élèves</button>
-                <button class="btn-secondary" onclick="renderinterface('ajouter_cours')">Ajouter un cours</button>
-                <input type="text" placeholder="Rechercher un élève..." class="search-input">
+                <input type="search" id="studentSidebarSearch" placeholder="Rechercher un élève..." class="search-input" autocomplete="off">
                 <div class="item-list" id="studentListSidebar"></div>
+                <div id="studentListPagination" style="display:flex;align-items:center;justify-content:space-between;gap:.4rem;flex-wrap:wrap;padding:.5rem 0;" aria-label="Pagination des élèves"></div>
             </nav>
 
             <div class="bp-screen-wrap">
@@ -1357,6 +1353,35 @@ body {
                     </thead>
                     <tbody id="statsTableBody"></tbody>
                 </table>
+            </div>
+        </div>
+        <div id="view-settings" class="sub-view-content">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;align-items:start;">
+                <article class="settings-card">
+                    <h3>Élèves</h3>
+                    <p style="color:var(--text-secondary);font-size:.86rem;">Ajoutez une fiche ou importez une liste photographiée, puis gérez les élèves déjà inscrits.</p>
+                    <div style="display:grid;gap:.55rem;margin-top:.8rem;">
+                        <button type="button" class="btn-primary" onclick="renderinterface('ajouter_eleve')">＋ Ajouter des élèves depuis une liste</button>
+                        <button type="button" class="btn-secondary" onclick="openManageStudentsModal(activeClassId)">Gérer les élèves existants</button>
+                    </div>
+                </article>
+                <article class="settings-card">
+                    <h3>Cours</h3>
+                    <p style="color:var(--text-secondary);font-size:.86rem;">Ajoutez des cours manuellement ou lisez les cours d’un bulletin avec Llink.</p>
+                    <div style="display:grid;gap:.55rem;margin-top:.8rem;">
+                        <button type="button" class="btn-primary" onclick="renderinterface('ajouter_cours')">＋ Ajouter des cours depuis un bulletin</button>
+                        <button type="button" class="btn-secondary" onclick="openManageCoursesModal(activeClassId)">Gérer les cours existants</button>
+                    </div>
+                </article>
+                <article class="settings-card">
+                    <h3>Classe</h3>
+                    <p style="color:var(--text-secondary);font-size:.86rem;">Modifiez les informations, imprimez les bulletins ou supprimez cette classe.</p>
+                    <div style="display:grid;gap:.55rem;margin-top:.8rem;">
+                        <button type="button" class="btn-secondary" onclick="editClassById(activeClassId)">Éditer la classe</button>
+                        <button type="button" class="btn-primary" style="background:#16a34a;" onclick="printClassBulletins()">Imprimer les bulletins de la classe</button>
+                        <button type="button" class="btn-secondary" style="background:#dc2626;color:white;" onclick="deleteManagedClass(activeClassId)">Supprimer la classe</button>
+                    </div>
+                </article>
             </div>
         </div>
         </div>
@@ -3384,7 +3409,7 @@ function bpSuiviRenderAccessPanel(student) {
     statusNode.style.color = row.resultsAllowed ? '#16a34a' : '#dc6b24';
     copyButton.disabled = false;
     toggleButton.disabled = false;
-    toggleButton.textContent = row.individualAccessAllowed ? 'Retirer l’autorisation individuelle' : 'Autoriser les résultats';
+    toggleButton.textContent = row.individualAccessAllowed ? 'Bloquer les notes' : 'Autoriser les résultats';
     toggleButton.style.backgroundColor = row.individualAccessAllowed ? '#dc2626' : '#16a34a';
 }
 
@@ -3436,11 +3461,33 @@ window.bpSuiviCopyCode = async function() {
     const student = bpSuiviCurrentStudent();
     const row = bpSuiviGetRosterRow(student);
     if (!row || !row.code) return;
+    let copied = false;
     try {
-        await navigator.clipboard.writeText(row.code);
-        if (typeof showCustomAlert === 'function') showCustomAlert('Identifiant parent copié : ' + row.code);
-    } catch (e) {
-        if (typeof showCustomAlert === 'function') showCustomAlert('Identifiant parent : ' + row.code);
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+            await navigator.clipboard.writeText(row.code);
+            copied = true;
+        }
+    } catch (e) { /* Repli pour les navigateurs et webviews qui bloquent Clipboard API. */ }
+    if (!copied) {
+        const field = document.createElement('textarea');
+        field.value = row.code;
+        field.setAttribute('readonly', '');
+        field.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0;';
+        document.body.appendChild(field);
+        field.focus();
+        field.select();
+        try { copied = document.execCommand('copy'); } catch (e) { copied = false; }
+        field.remove();
+    }
+    const status = document.getElementById('primeInkSuiviAccessStatus');
+    if (copied) {
+        if (status) status.textContent = 'Identifiant parent copié : ' + row.code;
+        if (typeof showCustomAlert === 'function') showCustomAlert('Identifiant parent copié.');
+    } else {
+        const codeNode = document.getElementById('primeInkSuiviStudentCode');
+        if (codeNode) codeNode.textContent = 'ID parent : ' + row.code + ' · ' + bpSuiviStudentName(student) + ' (sélectionnez le code pour le copier)';
+        if (status) status.textContent = 'Copie automatique indisponible dans ce navigateur. Sélectionnez l’identifiant affiché puis copiez-le.';
+        if (typeof showCustomAlert === 'function') showCustomAlert('Copie automatique indisponible. L’identifiant est affiché au-dessus pour une copie manuelle.');
     }
 };
 
@@ -3454,7 +3501,7 @@ window.bpSuiviToggleAccess = async function() {
     const next = !row.individualAccessAllowed;
     const question = next
         ? 'Autoriser le parent de ' + bpSuiviStudentName(student) + ' à consulter ses résultats dans Class-Ink Suivi ?'
-        : 'Retirer l’autorisation individuelle donnée au parent de ' + bpSuiviStudentName(student) + ' ?';
+        : 'Bloquer les notes de ' + bpSuiviStudentName(student) + ' dans Class-Ink Suivi ? Son parent sera informé qu’il doit régler les frais auprès de l’établissement avant le déblocage.';
     if (typeof showCustomConfirm === 'function' && !(await showCustomConfirm(question, 'Class-Ink Suivi'))) return;
 
     const button = document.getElementById('primeInkSuiviToggle');
@@ -3716,52 +3763,97 @@ async function bpPushClassBulletin(cls) {
             }
 
                     // Et sécurise le début de loadClassData() :
-            function loadClassData(classId) {
-                const studentList = document.getElementById('studentListSidebar');
-                if (!studentList) return; // Bloque la tentative d'écriture si l'élément n'existe pas
-                        studentList.innerHTML = '';
-                        
-                        const students = getSortedStudentsByClass(classId);
-                if (students.length > 0 && !students.some(s => s.id === activeStudentId)) {
-                    activeStudentId = students[0].id;
-                }
+            const PRIMEINK_STUDENTS_PER_PAGE = 15;
+            const primeInkStudentPages = Object.create(null);
 
-                students.forEach(st => {
+            function renderStudentSidebarPage(classId, students) {
+                const studentList = document.getElementById('studentListSidebar');
+                const pager = document.getElementById('studentListPagination');
+                if (!studentList || !pager) return;
+                const key = String(classId ?? '');
+                const totalPages = Math.max(1, Math.ceil(students.length / PRIMEINK_STUDENTS_PER_PAGE));
+                const page = Math.max(1, Math.min(totalPages, Number(primeInkStudentPages[key] || 1)));
+                primeInkStudentPages[key] = page;
+                const start = (page - 1) * PRIMEINK_STUDENTS_PER_PAGE;
+                const currentPageStudents = students.slice(start, start + PRIMEINK_STUDENTS_PER_PAGE);
+                studentList.innerHTML = '';
+                if (!students.length) {
+                    studentList.innerHTML = '<small style="display:block;padding:.8rem;color:var(--text-secondary);">Aucun élève trouvé.</small>';
+                }
+                currentPageStudents.forEach(st => {
                     const btn = document.createElement('button');
-                    btn.className = `list-item ${st.id === activeStudentId ? 'active' : ''}`;
+                    btn.type = 'button';
+                    btn.className = 'list-item ' + (String(st.id) === String(activeStudentId) ? 'active' : '');
                     btn.dataset.studentId = String(st.id);
-                    btn.textContent = `${st.name} ${st.postname} ${st.prename}`;
+                    btn.textContent = [st.name, st.postname, st.prename].filter(Boolean).join(' ');
                     btn.addEventListener('click', () => {
-                        document.querySelectorAll('#studentListSidebar .list-item').forEach(b => b.classList.remove('active'));
+                        document.querySelectorAll('#studentListSidebar .list-item').forEach(item => item.classList.remove('active'));
                         btn.classList.add('active');
                         activeStudentId = st.id;
                         window.renderOfficialBulletin(st.id);
                     });
                     studentList.appendChild(btn);
                 });
+                pager.innerHTML = '';
+                if (students.length <= PRIMEINK_STUDENTS_PER_PAGE) return;
+                const makeButton = (label, nextPage, disabled) => {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'btn-secondary';
+                    button.textContent = label;
+                    button.disabled = disabled;
+                    button.style.cssText = 'padding:.25rem .5rem;font-size:.72rem;';
+                    button.addEventListener('click', () => {
+                        primeInkStudentPages[key] = nextPage;
+                        loadClassData(classId);
+                    });
+                    return button;
+                };
+                const label = document.createElement('small');
+                label.textContent = page + ' / ' + totalPages + ' · ' + students.length + ' élèves';
+                label.style.cssText = 'font-size:.7rem;color:var(--text-secondary);';
+                pager.appendChild(makeButton('‹', page - 1, page <= 1));
+                pager.appendChild(label);
+                pager.appendChild(makeButton('›', page + 1, page >= totalPages));
+            }
 
+            function loadClassData(classId) {
+                const studentList = document.getElementById('studentListSidebar');
+                if (!studentList) return;
+                let students = getSortedStudentsByClass(classId);
+                const search = document.getElementById('studentSidebarSearch');
+                const query = String(search && search.value || '').normalize('NFD')
+                    .replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+                if (query) {
+                    students = students.filter(st =>
+                        [st.name, st.postname, st.prename].filter(Boolean).join(' ')
+                            .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(query));
+                }
+                if (students.length && !students.some(st => String(st.id) === String(activeStudentId))) {
+                    activeStudentId = students[0].id;
+                    primeInkStudentPages[String(classId)] = 1;
+                }
+                renderStudentSidebarPage(classId, students);
                 if (students.length > 0) {
                     window.renderOfficialBulletin(activeStudentId);
                 } else {
                     activeStudentId = '';
-                    window.renderBlankBulletin(classId);   // plus de bulletin d'une autre classe resté à l'écran
+                    window.renderBlankBulletin(classId);
                 }
-
                 renderCoursesSidebar(classId);
                 renderStatsSidebar(classId);
                 if (typeof bpSuiviLoadRoster === 'function') bpSuiviLoadRoster(classId);
             }
 
+            document.getElementById('studentSidebarSearch')?.addEventListener('input', () => {
+                if (!activeClassId) return;
+                primeInkStudentPages[String(activeClassId)] = 1;
+                loadClassData(activeClassId);
+            });
+
             function renderCoursesSidebar(classId) {
                 const courseListSidebar = document.getElementById('courseListSidebar');
                 courseListSidebar.innerHTML = '';
-                const manageBtn = document.createElement('button');
-                manageBtn.type = 'button';
-                manageBtn.className = 'btn-secondary';
-                manageBtn.style.cssText = 'width:100%;margin-bottom:0.5rem;';
-                manageBtn.textContent = '✏️ Gérer les cours';
-                manageBtn.addEventListener('click', () => window.openManageCoursesModal(classId));
-                courseListSidebar.appendChild(manageBtn);
                 const courses = appState.courses.filter(c => c.classId === classId);
 
                 courses.forEach((crs, idx) => {
@@ -5609,15 +5701,18 @@ function updateScheduleResultTables(joursCount, heuresCount) {
                         <p id="manageStudentsClassLabel" style="margin-bottom:1rem;color:var(--text-secondary);"></p>
                         <input type="search" id="manageStudentsSearch" class="form-control" placeholder="Rechercher un élève…" style="margin-bottom:0.8rem;">
                         <div id="manageStudentsList" style="display:flex;flex-direction:column;gap:0.8rem;"></div>
+                        <div id="manageStudentsPagination" style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;flex-wrap:wrap;padding:.7rem 0;" aria-label="Pagination de la gestion des élèves"></div>
                         <div class="action-toolbar"><button type="button" class="btn-secondary" data-close-manage-students>Fermer</button></div>
                     </div>`;
                 document.body.appendChild(overlay);
                 overlay.querySelectorAll('[data-close-manage-students]').forEach(btn => btn.addEventListener('click', () => overlay.classList.add('hidden')));
                 overlay.querySelector('#manageStudentsSearch').addEventListener('input', () => {
+                    overlay.dataset.studentPage = '1';
                     renderManagedStudents(overlay.dataset.classId || '');
                 });
             }
             overlay.dataset.classId = String(cls.id);
+            overlay.dataset.studentPage = '1';
             overlay.querySelector('#manageStudentsClassLabel').textContent = 'Classe : ' + cls.name;
             overlay.querySelector('#manageStudentsSearch').value = '';
             overlay.classList.remove('hidden');
@@ -5634,11 +5729,18 @@ function updateScheduleResultTables(joursCount, heuresCount) {
             const q = normalizeSearch(overlay.querySelector('#manageStudentsSearch')?.value || '');
             const students = getManagedStudentsByClass(activeClassId).filter(st =>
                 normalizeSearch(String(st.name || '') + ' ' + String(st.postname || '') + ' ' + String(st.prename || '')).includes(q));
+            const pager = overlay.querySelector('#manageStudentsPagination');
+            const pageSize = 15;
+            const totalPages = Math.max(1, Math.ceil(students.length / pageSize));
+            const page = Math.max(1, Math.min(totalPages, Number(overlay.dataset.studentPage || 1)));
+            overlay.dataset.studentPage = String(page);
+            const visibleStudents = students.slice((page - 1) * pageSize, page * pageSize);
             if (!students.length) {
                 list.innerHTML = '<p style="padding:1rem;text-align:center;color:var(--text-secondary);">Aucun élève trouvé pour cette recherche.</p>';
+                if (pager) pager.innerHTML = '';
                 return;
             }
-            list.innerHTML = students.map(st => `
+            list.innerHTML = visibleStudents.map(st => `
                 <div class="settings-card" data-managed-student-row="${safeHTML(st.id)}" style="padding:0.9rem;box-shadow:none;">
                     <div style="display:flex;justify-content:space-between;gap:0.6rem;align-items:center;margin-bottom:0.6rem;">
                         <strong>${safeHTML(`${st.name || ''} ${st.postname || ''} ${st.prename || ''}`.trim() || 'Nouvel élève')}</strong>
@@ -5658,6 +5760,30 @@ function updateScheduleResultTables(joursCount, heuresCount) {
                         <button type="button" class="btn-secondary" data-delete-student style="background:#dc2626;">Supprimer l'élève</button>
                     </div>
                 </div>`).join('');
+            if (pager) {
+                pager.innerHTML = '';
+                if (students.length > pageSize) {
+                    const makePageButton = (label, targetPage, disabled) => {
+                        const button = document.createElement('button');
+                        button.type = 'button';
+                        button.className = 'btn-secondary';
+                        button.textContent = label;
+                        button.disabled = disabled;
+                        button.style.cssText = 'padding:.35rem .7rem;';
+                        button.addEventListener('click', () => {
+                            overlay.dataset.studentPage = String(targetPage);
+                            renderManagedStudents(activeClassId);
+                        });
+                        return button;
+                    };
+                    const pageLabel = document.createElement('small');
+                    pageLabel.textContent = page + ' / ' + totalPages + ' · ' + students.length + ' élèves';
+                    pageLabel.style.cssText = 'color:var(--text-secondary);';
+                    pager.appendChild(makePageButton('‹ Précédents', page - 1, page <= 1));
+                    pager.appendChild(pageLabel);
+                    pager.appendChild(makePageButton('Suivants ›', page + 1, page >= totalPages));
+                }
+            }
             list.querySelectorAll('[data-save-student]').forEach(btn => btn.addEventListener('click', async () => {
                 const row = btn.closest('[data-managed-student-row]');
                 const student = appState.students.find(st => String(st.id ?? '') === String(row.dataset.managedStudentRow || ''));
