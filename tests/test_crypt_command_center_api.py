@@ -179,12 +179,13 @@ def test_manager_login_passes_through_rate_limit_response(crypt_client, monkeypa
         db.close()
 
     limiter = main.AttemptLimiter(max_attempts=1, window_seconds=900)
-    limiter.record("school:" + school.school_id)
+    school_id = school_payload["school_id"]
+    limiter.record("school:" + school_id)
     monkeypatch.setattr(main, "LOGIN_LIMITER", limiter)
 
     response = crypt_client.post(
         "/api/manager/login",
-        json={"identifier": school.school_id, "password": "any-password"},
+        json={"identifier": school_id, "password": "any-password"},
     )
     assert response.status_code == 429
     assert response.json()["status"] is False
