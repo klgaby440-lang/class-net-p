@@ -17,7 +17,7 @@ import random
 import re
 from classnet_common import (
     PERIODS, CONDUCT_KINDS, CONDUCT_MAX_LEN, SIGNER_ROLES, ACCESS_AUDIENCES, MATCH_METHODS, sql_in,
-    validate_conduct_value, normalize_name, name_tokens_key,
+    validate_conduct_value, normalize_name, name_tokens_key, resolve_grade_access,
 )
 
 import os
@@ -454,6 +454,12 @@ class SchoolStudentInformation(Base):
     student_born_date = Column(String, nullable=True)
     student_born_place = Column(String, nullable=True)
     student_n_permanent = Column(String, unique=True, index=True)
+    # Identifiant public, imprévisible et permanent communiqué aux parents.
+    suivi_code = Column(String(40), nullable=True)
+    # Les résultats restent invisibles aux parents tant que l'école ne les autorise pas.
+    suivi_results_allowed = Column(Boolean, nullable=False, default=False, server_default="false")
+    suivi_results_updated_at = Column(DateTime, nullable=True)
+    suivi_results_updated_by = Column(String, nullable=True)
     school = relationship("SchoolInformation", back_populates="students")
     classe = relationship("ClasseInformation", back_populates="students")
 
@@ -852,6 +858,7 @@ class AttemptLimiter:
 LOGIN_LIMITER = AttemptLimiter(max_attempts=5, window_seconds=900)       # 5 échecs / 15 min
 OTP_REQUEST_LIMITER = AttemptLimiter(max_attempts=5, window_seconds=3600)  # 5 demandes de code / heure
 CODE_LIMITER = AttemptLimiter(max_attempts=10, window_seconds=900)          # 10 codes de licence faux / 15 min / adresse
+SUIVI_LOOKUP_LIMITER = AttemptLimiter(max_attempts=10, window_seconds=900) # 10 identifiants parent erronés / 15 min / adresse
 
 
 def get_bearer_claims(authorization: Optional[str] = Header(None)) -> dict:
@@ -987,6 +994,11 @@ with engine.connect() as conn:
     conn.execute(text("ALTER TABLE school_information ADD COLUMN IF NOT EXISTS armoiries TEXT;"))
     conn.execute(text("ALTER TABLE school_information ADD COLUMN IF NOT EXISTS pn_extra TEXT;"))
     conn.execute(text("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS signature TEXT;"))
+    conn.execute(text("ALTER TABLE school_student_informations ADD COLUMN IF NOT EXISTS suivi_code VARCHAR(40);"))
+    conn.execute(text("ALTER TABLE school_student_informations ADD COLUMN IF NOT EXISTS suivi_results_allowed BOOLEAN NOT NULL DEFAULT FALSE;"))
+    conn.execute(text("ALTER TABLE school_student_informations ADD COLUMN IF NOT EXISTS suivi_results_updated_at TIMESTAMP;"))
+    conn.execute(text("ALTER TABLE school_student_informations ADD COLUMN IF NOT EXISTS suivi_results_updated_by VARCHAR;"))
+    conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_school_student_suivi_code ON school_student_informations (suivi_code) WHERE suivi_code IS NOT NULL;"))
     conn.execute(text("""
     ALTER TABLE course_informations
     ADD COLUMN IF NOT EXISTS sub_category VARCHAR;"""))
@@ -1055,6 +1067,7 @@ with engine.connect() as conn:
 app = FastAPI(title="CRYPT Cloud Internet Node", version="3.1.0")
 origins = [
     "https://class-net-p.vercel.app",  # Ton frontend Vercel en production
+    "https://klgaby440-lang.github.io", # Class-Ink Suivi sur GitHub Pages
     "http://localhost:3000",            # Pour tes tests locaux
     "http://localhost:5173",            # Pour Vite / React local
     "http://localhost:8080"
@@ -1416,6 +1429,7 @@ def login_school(data: LoginSchema, db: Session = Depends(get_db)):
     students_data = []
     student_id_map = {}  # Mappe le numéro permanent vers l'id de l'élève
     for s in school.students:
+        suivi_code = ensure_suivi_student_code(db, s)
         students_data.append({
             "id": s.id,
             "name": s.student_name,
@@ -1425,10 +1439,15 @@ def login_school(data: LoginSchema, db: Session = Depends(get_db)):
             "bornDate": s.student_born_date or "",
             "bornWhere": s.student_born_place or "",
             "permi": s.student_n_permanent or "",
-            "classId": s.class_id
+            "classId": s.class_id,
+            "suiviCode": suivi_code,
+            "suiviResultsAllowed": is_suivi_results_allowed(db, school.school_id, s),
+            "suiviIndividualAccessAllowed": bool(s.suivi_results_allowed)
         })
         if s.student_n_permanent:
             student_id_map[s.student_n_permanent] = s.id
+    # Persiste également les codes Suivi attribués lors du premier chargement Manager/PrimeInk.
+    db.commit()
 
     # 3. Chargement des cours
     courses_data = []
@@ -1479,7 +1498,14 @@ def login_school(data: LoginSchema, db: Session = Depends(get_db)):
             "name": school.name_school,
             "code": school.code,
             "city": school.city,
-            "commune": school.commune
+            "commune": school.commune,
+            "province": school.province or "",
+            "headName": school.head_name or "",
+            "schoolYear": school.school_year or "",
+            "responsable": school.name_responsable or "",
+            "phone": school.num_tel or "",
+            "email": school.email or "",
+            "address": school.adresse_physique or ""
         },
         "classes": classes_data,
         "students": students_data,
@@ -1515,6 +1541,78 @@ class PrimeNetLoadSchema(BaseModel):
 def load_primenet_state(data: PrimeNetLoadSchema, db: Session = Depends(get_db)):
     """PrimeInk envoie { school_id, password } : même logique que /api/auth/school/login."""
     return login_school(LoginSchema(identifier=data.school_id, password=data.password), db)
+
+
+@app.post("/api/manager/login")
+def manager_login(data: LoginSchema, db: Session = Depends(get_db)):
+    """
+    Connexion Manager avec les mêmes identifiants que PrimeInk.
+    Les données sont renvoyées sans cache HTTP ; le client les garde uniquement en mémoire.
+    """
+    result = login_school(data, db)
+    if result.get("status") and isinstance(result.get("data"), dict):
+        state = result["data"]
+        # Manager n'a pas besoin des signatures ou images d'identité intégrées aux bulletins.
+        for teacher in state.get("teachers", []):
+            teacher.pop("signature", None)
+        school_data = state.get("school") or {}
+        for key in ("seal", "headSignature", "armoiries"):
+            school_data.pop(key, None)
+        state.pop("signatureBook", None)
+    return JSONResponse(
+        content=result,
+        headers={
+            "Cache-Control": "no-store, private, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+            "Vary": "Authorization",
+        },
+    )
+
+
+@app.put("/api/manager/schedule")
+def manager_publish_schedule(
+    payload: dict,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(require_active_school),
+):
+    """PrimeInk publie l'horaire généré afin que Manager puisse le consulter depuis le serveur."""
+    school_id = str(claims.get("school_id") or "")
+    if str(payload.get("school_id") or "") != school_id:
+        raise HTTPException(status_code=403, detail="Accès refusé aux données d'une autre école.")
+    schedule = payload.get("schedule")
+    if not isinstance(schedule, dict):
+        raise HTTPException(status_code=422, detail="Horaire manquant ou invalide.")
+    result = schedule.get("result")
+    schedules = result.get("schedules") if isinstance(result, dict) else None
+    if not isinstance(schedules, dict) or not isinstance(schedules.get("classes"), list):
+        raise HTTPException(status_code=422, detail="Le résultat de l'horaire est incomplet.")
+    try:
+        serialized_size = len(json.dumps(schedule, ensure_ascii=False))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=422, detail="L'horaire contient des données non valides.")
+    if serialized_size > 1500000:
+        raise HTTPException(status_code=413, detail="L'horaire est trop volumineux pour être publié.")
+    school = db.query(SchoolInformation).filter(SchoolInformation.school_id == school_id).first()
+    if not school:
+        raise HTTPException(status_code=404, detail="Établissement introuvable.")
+    stored = {
+        "academicYear": str(schedule.get("academicYear") or school.school_year or "")[:30],
+        "generatedAt": str(schedule.get("generatedAt") or datetime.utcnow().isoformat())[:60],
+        "config": schedule.get("config") if isinstance(schedule.get("config"), dict) else {},
+        "slots": schedule.get("slots") if isinstance(schedule.get("slots"), list) else [],
+        "teachers": schedule.get("teachers") if isinstance(schedule.get("teachers"), list) else [],
+        "result": result,
+    }
+    extra = dict(school.pn_extra or {})
+    extra["managerSchedule"] = stored
+    school.pn_extra = extra
+    db.commit()
+    return JSONResponse(
+        content={"status": True, "message": "Horaire publié pour ClassInk Manager."},
+        headers={"Cache-Control": "no-store, private, max-age=0", "Pragma": "no-cache", "Expires": "0"},
+    )
+
 
 # ---------------------------------------------------------
 # 7. GESTION DES CODES À USAGE UNIQUE (119 BITS)
@@ -2026,7 +2124,7 @@ IMAGE_DATAURL_RE = re.compile(r"^data:image/(png|jpeg|webp|gif);base64,[A-Za-z0-
 MAX_IMAGE_CHARS = 450000
 BULLETIN_MODELS = ("classink", "ige010", "repechage")
 SIGNATURE_SOURCES = ("titulaire", "responsable", "default", "none")
-PN_EXTRA_KEYS = ("signatureBook", "repechage", "printSettings", "behaviour")
+PN_EXTRA_KEYS = ("signatureBook", "repechage", "printSettings", "behaviour", "managerSchedule")
 PERIOD_TO_KEY = {"P1": "p1", "P2": "p2", "EX1": "ex1", "P3": "p3", "P4": "p4", "EX2": "ex2"}
 
 
@@ -2056,6 +2154,13 @@ def clean_pn_extra(extra):
     settings = extra.get("printSettings")
     if isinstance(settings, dict):
         out["printSettings"] = {"paper": "A3" if settings.get("paper") == "A3" else "A4"}
+    manager_schedule = extra.get("managerSchedule")
+    if isinstance(manager_schedule, dict):
+        try:
+            if len(json.dumps(manager_schedule, ensure_ascii=False)) <= 1500000:
+                out["managerSchedule"] = manager_schedule
+        except (TypeError, ValueError):
+            pass
     return out
 
 
@@ -2104,6 +2209,8 @@ def school_state_extras(db, school):
             out[key] = extra[key]
     if behaviour:
         out["behaviour"] = behaviour
+    if isinstance(extra.get("managerSchedule"), dict):
+        out["managerSchedule"] = extra["managerSchedule"]
     return out
 
 
@@ -2283,6 +2390,29 @@ def teacher_matches_school_roster(teacher, roster_entry: dict) -> bool:
     )
 
 
+SUIVI_CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
+
+def generate_suivi_student_code() -> str:
+    """Code parent lisible et non séquentiel : 75 bits d'entropie."""
+    raw = "".join(secrets.choice(SUIVI_CODE_ALPHABET) for _ in range(15))
+    return "CI-" + raw[:5] + "-" + raw[5:10] + "-" + raw[10:]
+
+
+def ensure_suivi_student_code(db: Session, student: SchoolStudentInformation) -> str:
+    """Attribue une seule fois un identifiant parent à l'élève et évite les collisions."""
+    if student.suivi_code:
+        return student.suivi_code
+    for _ in range(12):
+        code = generate_suivi_student_code()
+        exists = db.query(SchoolStudentInformation.id).filter(
+            SchoolStudentInformation.suivi_code == code
+        ).first()
+        if not exists:
+            student.suivi_code = code
+            return code
+    raise HTTPException(status_code=503, detail="Impossible de générer un identifiant parent unique. Réessayez.")
+
+
 def store_school_class_catalog(db: Session, school: SchoolInformation, catalog: dict) -> dict:
     """Met à jour les classes, élèves et cours sans toucher aux notes ni aux données locales des enseignants."""
     school_data = catalog["school"]
@@ -2336,6 +2466,7 @@ def store_school_class_catalog(db: Session, school: SchoolInformation, catalog: 
         row.student_born_date = item["bornDate"] or ""
         row.student_born_place = item["bornWhere"] or ""
         row.student_n_permanent = permanent
+        ensure_suivi_student_code(db, row)
     db.flush()
 
     for item in catalog["courses"]:
@@ -2573,6 +2704,323 @@ def get_teacher_classroom_information(
         raise HTTPException(status_code=403, detail=blocked)
     context = build_teacher_classroom_context(db, teacher)
     return {"status": True, "data": context}
+
+def is_suivi_results_allowed(db: Session, school_id: str, student: SchoolStudentInformation) -> bool:
+    """L'accès parent exige le feu vert individuel ET l'autorisation des règles scolaires applicables."""
+    if not bool(student.suivi_results_allowed):
+        return False
+    rules = db.query(GradeAccessRule).filter(
+        GradeAccessRule.school_id == school_id,
+        GradeAccessRule.audience == "suivi",
+    ).all()
+    return all(
+        resolve_grade_access(rules, student.class_id, period, "suivi", default=True)
+        for period in PERIODS
+    )
+
+
+def build_suivi_results_payload(db: Session, school: SchoolInformation, student: SchoolStudentInformation) -> dict:
+    """Construit le suivi parent depuis les notes PrimeInk et les évaluations ClassInk."""
+    classe = db.query(ClasseInformation).filter(
+        ClasseInformation.id == student.class_id,
+        ClasseInformation.school_id == school.school_id,
+    ).first()
+    courses = db.query(CourseInformation).filter(
+        CourseInformation.school_id == school.school_id,
+        CourseInformation.class_id == student.class_id,
+    ).order_by(CourseInformation.course_name.asc()).all()
+
+    # Notes semestrielles / périodes enregistrées par PrimeInk.
+    official_rows = db.query(TeacherEvaluation).filter(
+        TeacherEvaluation.school_id == school.school_id,
+        TeacherEvaluation.student_n_permanent == (student.student_n_permanent or student.id),
+    ).all()
+    official_by_course = {str(row.course_id): row for row in official_rows}
+
+    # Les notes détaillées ClassInk sont indexées par l'identifiant local transmis par l'enseignant.
+    linked_ids = [student.id]
+    links = db.query(StudentLink).filter(
+        StudentLink.school_id == school.school_id,
+        StudentLink.student_id == student.id,
+    ).all()
+    linked_ids.extend(link.classink_student_id for link in links if link.classink_student_id)
+    teacher_emails = [
+        email for (email,) in db.query(Teacher.email).filter(
+            Teacher.school_id == school.school_id
+        ).all()
+    ]
+    detailed_rows = []
+    if linked_ids and teacher_emails:
+        detailed_rows = db.query(StudentGrade).filter(
+            StudentGrade.student_id.in_(list(set(linked_ids))),
+            StudentGrade.teacher_email.in_(teacher_emails),
+        ).order_by(StudentGrade.updated_at.asc()).all()
+
+    details_by_course = {}
+    for row in detailed_rows:
+        key = normalize_name(row.course_name)
+        details_by_course.setdefault(key, []).append({
+            "period": row.period,
+            "title": row.eval_name,
+            "date": row.updated_at.isoformat() if row.updated_at else "",
+            "max": float(row.max_score),
+            "obtained": float(row.score),
+            "content": "",
+        })
+
+    result_courses = []
+    for course in courses:
+        official = official_by_course.get(str(course.id))
+        scores = {}
+        if official:
+            for period, attr in (
+                ("P1", "p1"), ("P2", "p2"), ("EX1", "ex1"),
+                ("P3", "p3"), ("P4", "p4"), ("EX2", "ex2"),
+            ):
+                value = getattr(official, attr, None)
+                if value is not None:
+                    scores[period] = float(value)
+        # Les résultats par évaluation sont aussi affichés quand les notes viennent de ClassInk.
+        evals = details_by_course.get(normalize_name(course.course_name), [])
+        result_courses.append({
+            "name": course.course_name,
+            "category": course.category or "",
+            "subCategory": course.sub_category or "",
+            "maxPer": float(course.max_per or 0),
+            "scores": scores,
+            "evaluations": evals,
+        })
+
+    behaviour = {"app": {}, "cond": {}}
+    conduct_rows = db.query(StudentConduct).filter(
+        StudentConduct.school_id == school.school_id,
+        StudentConduct.student_id == student.id,
+    ).all()
+    for row in conduct_rows:
+        if row.kind in ("app", "cond"):
+            behaviour[row.kind][row.period] = row.value
+
+    return {
+        "courses": result_courses,
+        "totals": {},
+        "behaviour": behaviour,
+    }
+
+
+@app.get("/api/suivi/schools")
+def suivi_search_schools(q: str = "", db: Session = Depends(get_db)):
+    """Recherche publique limitée des écoles inscrites à Class-Ink Suivi."""
+    query = str(q or "").strip()
+    if len(query) < 2:
+        return {"status": True, "data": []}
+    if len(query) > 100:
+        raise HTTPException(status_code=422, detail="Recherche trop longue.")
+    pattern = "%" + query.replace("%", "\\%").replace("_", "\\_") + "%"
+    rows = db.query(SchoolInformation).filter(
+        SchoolInformation.is_locked.is_(False),
+        (
+            SchoolInformation.name_school.ilike(pattern)
+            | SchoolInformation.city.ilike(pattern)
+            | SchoolInformation.school_id.ilike(pattern)
+            | SchoolInformation.code.ilike(pattern)
+        ),
+    ).order_by(SchoolInformation.name_school.asc()).limit(20).all()
+    visible = [row for row in rows if not licence_state(row)["locked"]]
+    return {
+        "status": True,
+        "data": [
+            {"id": row.school_id, "name": row.name_school, "city": row.city or ""}
+            for row in visible
+        ],
+    }
+
+
+@app.post("/api/suivi/student")
+def suivi_get_student(payload: dict, request: Request, db: Session = Depends(get_db)):
+    """
+    Vérifie le code parent et renvoie le dossier d'un seul élève.
+    Les notes ne sont sérialisées que si l'école a explicitement autorisé leur affichage.
+    """
+    school_id = str(payload.get("school_id") or "").strip()
+    code = str(payload.get("student_code") or "").strip().upper()
+    if not school_id or not code or len(code) > 40:
+        raise HTTPException(status_code=422, detail="École ou identifiant élève manquant.")
+
+    remote = request.client.host if request.client else "unknown"
+    rate_key = "suivi:" + remote + ":" + school_id
+    if SUIVI_LOOKUP_LIMITER.is_blocked(rate_key):
+        raise HTTPException(status_code=429, detail="Trop d'essais. Réessayez dans 15 minutes.")
+
+    school = db.query(SchoolInformation).filter(
+        SchoolInformation.school_id == school_id
+    ).first()
+    if not school or licence_state(school)["locked"]:
+        SUIVI_LOOKUP_LIMITER.record(rate_key)
+        raise HTTPException(status_code=404, detail="École ou élève introuvable.")
+
+    student = db.query(SchoolStudentInformation).filter(
+        SchoolStudentInformation.school_id == school_id,
+        func.upper(SchoolStudentInformation.suivi_code) == code,
+    ).first()
+    if not student:
+        SUIVI_LOOKUP_LIMITER.record(rate_key)
+        # Même réponse pour un code inconnu et une école non disponible : pas d'énumération.
+        raise HTTPException(status_code=404, detail="École ou élève introuvable.")
+
+    SUIVI_LOOKUP_LIMITER.reset(rate_key)
+    if not student.suivi_code:
+        ensure_suivi_student_code(db, student)
+        db.commit()
+
+    results_allowed = is_suivi_results_allowed(db, school_id, student)
+
+    classe = db.query(ClasseInformation).filter(
+        ClasseInformation.id == student.class_id,
+        ClasseInformation.school_id == school_id,
+    ).first()
+
+    if results_allowed:
+        results = build_suivi_results_payload(db, school, student)
+        access_reason = ""
+    else:
+        # Ne pas inclure les notes, évaluations, rangs ou conduite lorsqu'ils sont bloqués.
+        results = None
+        access_reason = "school"
+
+    return {
+        "status": True,
+        "data": {
+            "student": {
+                "name": " ".join(part for part in (
+                    student.student_name or "",
+                    student.student_post_name or "",
+                    student.student_pre_name or "",
+                ) if part).strip(),
+                "className": classe.class_name if classe else "",
+                "year": school.school_year or "",
+                "code": student.suivi_code,
+            },
+            "school": {
+                "id": school.school_id,
+                "name": school.name_school,
+                "city": school.city or "",
+                "phone": school.num_tel or "",
+                "payInfo": "",
+            },
+            "fees": {
+                "configured": False,
+                "currency": "USD",
+                "total": None,
+                "paid": None,
+                "minRequired": None,
+                "tranches": [],
+                "payments": [],
+            },
+            "results": results,
+            "resultsAccess": {
+                "allowed": results_allowed,
+                "reason": access_reason,
+                "message": (
+                    "" if results_allowed else
+                    "L'établissement n'a pas encore autorisé l'affichage des résultats de cet élève."
+                ),
+            },
+            "communications": [],
+            "teacherNotes": [],
+            "updatedAt": datetime.utcnow().isoformat() + "Z",
+        },
+    }
+
+
+@app.get("/api/suivi/school/classes/{class_id}/students")
+def suivi_school_class_students(
+    class_id: str,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(require_active_school),
+):
+    """Liste sécurisée des élèves d'une classe, avec leur code parent et l'état d'accès."""
+    school_id = str(claims.get("school_id") or "")
+    classe = db.query(ClasseInformation).filter(
+        ClasseInformation.id == class_id,
+        ClasseInformation.school_id == school_id,
+    ).first()
+    if not classe:
+        raise HTTPException(status_code=404, detail="Classe introuvable dans cette école.")
+
+    rows = db.query(SchoolStudentInformation).filter(
+        SchoolStudentInformation.school_id == school_id,
+        SchoolStudentInformation.class_id == class_id,
+    ).order_by(
+        SchoolStudentInformation.student_name.asc(),
+        SchoolStudentInformation.student_post_name.asc(),
+        SchoolStudentInformation.student_pre_name.asc(),
+    ).all()
+
+    students = []
+    for row in rows:
+        code = ensure_suivi_student_code(db, row)
+        students.append({
+            "id": row.id,
+            "code": code,
+            "name": " ".join(part for part in (
+                row.student_name or "", row.student_post_name or "", row.student_pre_name or ""
+            ) if part).strip(),
+            "classId": row.class_id,
+            "resultsAllowed": is_suivi_results_allowed(db, school_id, row),
+            "individualAccessAllowed": bool(row.suivi_results_allowed),
+        })
+    db.commit()
+    return {
+        "status": True,
+        "data": {
+            "classId": classe.id,
+            "className": classe.class_name,
+            "students": students,
+        },
+    }
+
+
+@app.put("/api/suivi/school/students/{student_id}/access")
+def suivi_school_set_student_access(
+    student_id: str,
+    payload: dict,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(require_active_school),
+):
+    """L'administration de l'école seule peut bloquer ou autoriser les résultats d'un élève."""
+    if not isinstance(payload.get("is_allowed"), bool):
+        raise HTTPException(status_code=422, detail="is_allowed doit être un booléen.")
+    school_id = str(claims.get("school_id") or "")
+    student = db.query(SchoolStudentInformation).filter(
+        SchoolStudentInformation.id == student_id,
+        SchoolStudentInformation.school_id == school_id,
+    ).first()
+    if not student:
+        raise HTTPException(status_code=404, detail="Élève introuvable dans cette école.")
+
+    ensure_suivi_student_code(db, student)
+    student.suivi_results_allowed = payload["is_allowed"]
+    student.suivi_results_updated_at = datetime.utcnow()
+    student.suivi_results_updated_by = school_id
+    db.commit()
+    effective_allowed = is_suivi_results_allowed(db, school_id, student)
+    return {
+        "status": True,
+        "message": (
+            "Les résultats sont maintenant visibles dans Class-Ink Suivi."
+            if effective_allowed else
+            "Le choix individuel est enregistré, mais une règle scolaire bloque encore l'affichage des résultats."
+            if student.suivi_results_allowed else
+            "Les résultats sont maintenant bloqués dans Class-Ink Suivi."
+        ),
+        "data": {
+            "studentId": student.id,
+            "studentCode": student.suivi_code,
+            "resultsAllowed": effective_allowed,
+            "individualAccessAllowed": bool(student.suivi_results_allowed),
+        },
+    }
+
 
 def find_class_by_name(db, school_id, class_name):
     wanted = normalize_name(class_name)
@@ -2865,6 +3313,7 @@ def sync_primenet(payload: dict, db: Session = Depends(get_db), claims: dict = D
         student_obj.student_born_place = st.get("bornWhere", "")
         student_obj.student_n_permanent = permi
         student_obj.class_id = st.get("classId")
+        ensure_suivi_student_code(db, student_obj)
 
     # 5. Rapprochement des enseignants
     teachers_payload = payload.get("teachers", [])

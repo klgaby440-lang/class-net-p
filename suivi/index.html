@@ -1,615 +1,942 @@
 <!DOCTYPE html>
 <html lang="fr" data-theme="dark">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Class-Ink S (Suivi)</title>
-    <style>
-        :root {
-            --bg-gradient: linear-gradient(135deg, #7c3aed, #2563eb);
-            --bg-main: #0f172a;
-            --bg-card: #1e293b;
-            --text-main: #f8fafc;
-            --text-muted: #94a3b8;
-            --accent: #7c3aed;
-            --accent-hover: #6d28d9;
-            --border: #334155;
-            --danger: #ef4444;
-            --success: #22c55e;
-        }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e0f14">
+<meta name="color-scheme" content="dark light">
+<title>Class-Ink Suivi</title>
+<style>
+:root {
+    --bg: #0e0f14; --surface: #171923; --surface-2: #1f2230; --border: rgba(255,255,255,.09);
+    --text: #f2f3f8; --muted: #9aa0b4; --accent: #7c5cff; --accent-2: #2f80ff;
+    --grad: linear-gradient(135deg, #7c5cff, #2f80ff);
+    --ok: #22c55e; --warn: #f59e0b; --bad: #ef4444;
+    --shadow: 0 10px 30px rgba(0,0,0,.35);
+    --radius: 16px;
+}
+[data-theme="light"] {
+    --bg: #f4f5fa; --surface: #ffffff; --surface-2: #eef0f7; --border: rgba(20,24,40,.10);
+    --text: #12141c; --muted: #5d6478; --shadow: 0 10px 30px rgba(30,40,80,.12);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html { scroll-behavior: smooth; }
+body {
+    background: var(--bg); color: var(--text); min-height: 100vh;
+    font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-size: 15px; line-height: 1.5;
+    padding-bottom: calc(110px + env(safe-area-inset-bottom));
+    transition: background .25s, color .25s;
+}
+button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; }
+input { font: inherit; color: inherit; }
+h1, h2, h3, h4 { line-height: 1.25; }
+.hidden { display: none !important; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+svg.i { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 
-        [data-theme="light"] {
-            --bg-main: #f1f5f9;
-            --bg-card: #ffffff;
-            --text-main: #0f172a;
-            --text-muted: #64748b;
-            --border: #cbd5e1;
-        }
+/* ---------- Splash ---------- */
+#splash { position: fixed; inset: 0; z-index: 1000; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; transition: opacity .5s ease, visibility .5s; }
+#splash.done { opacity: 0; visibility: hidden; }
+#splash .logo { width: 92px; height: 92px; filter: drop-shadow(0 14px 30px rgba(124,92,255,.45)); animation: pop .7s cubic-bezier(.2,.9,.3,1.2) both; }
+#splash h1 { font-size: 1.7rem; letter-spacing: -.02em; animation: rise .6s .15s ease both; }
+#splash p { color: var(--muted); font-size: .9rem; animation: rise .6s .3s ease both; }
+#splash .bar { width: 120px; height: 3px; border-radius: 3px; background: var(--surface-2); overflow: hidden; margin-top: 10px; }
+#splash .bar i { display: block; height: 100%; width: 40%; background: var(--grad); border-radius: 3px; animation: slide 1.1s ease-in-out infinite; }
+@keyframes pop { from { transform: scale(.6); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes rise { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(300%); } }
 
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            font-family: 'Inter', system-ui, -apple-system, sans-serif;
-            transition: background 0.3s, color 0.3s;
-        }
+/* ---------- Structure ---------- */
+header.top { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 10px; padding: calc(12px + env(safe-area-inset-top)) 16px 12px; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); }
+header.top .logo { width: 30px; height: 30px; }
+header.top .brand { font-weight: 700; letter-spacing: -.01em; }
+header.top .brand small { display: block; font-weight: 500; color: var(--muted); font-size: .72rem; margin-top: -2px; }
+header.top .sp { flex: 1; }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--ok); }
+.dot.off { background: var(--warn); }
+.icon-btn { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; color: var(--muted); }
+.icon-btn:hover { background: var(--surface-2); color: var(--text); }
+.icon-btn.spin svg { animation: turn .8s linear infinite; }
+@keyframes turn { to { transform: rotate(360deg); } }
+main { max-width: 720px; margin: 0 auto; padding: 16px; }
+.view > * + * { margin-top: 14px; }
+.banner { padding: 10px 14px; border-radius: 12px; font-size: .85rem; background: rgba(245,158,11,.14); color: var(--warn); border: 1px solid rgba(245,158,11,.3); }
+.banner.demo { background: rgba(124,92,255,.14); color: #b3a1ff; border-color: rgba(124,92,255,.35); }
+[data-theme="light"] .banner.demo { color: #5a3fe0; }
 
-        body {
-            background-color: var(--bg-main);
-            color: var(--text-main);
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            padding-bottom: 90px;
-        }
+/* ---------- Cartes et éléments ---------- */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; }
+.card h2 { font-size: 1.05rem; margin-bottom: 4px; }
+.card h3 { font-size: .98rem; }
+.card .sub { color: var(--muted); font-size: .85rem; }
+.card.lock { border-color: rgba(239,68,68,.4); background: linear-gradient(180deg, rgba(239,68,68,.08), transparent), var(--surface); }
+.hero { background: var(--grad); color: #fff; border: 0; position: relative; overflow: hidden; }
+.hero .sub { color: rgba(255,255,255,.82); }
+.hero h2 { font-size: 1.3rem; }
+.hero .chip { background: rgba(255,255,255,.2); color: #fff; }
+.grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.stat { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px; }
+.stat small { color: var(--muted); font-size: .75rem; display: block; }
+.stat strong { font-size: 1.35rem; letter-spacing: -.02em; }
+.stat span { color: var(--muted); font-size: .78rem; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: .75rem; font-weight: 600; background: var(--surface-2); color: var(--muted); }
+.chip.ok { background: rgba(34,197,94,.15); color: var(--ok); }
+.chip.warn { background: rgba(245,158,11,.15); color: var(--warn); }
+.chip.bad { background: rgba(239,68,68,.15); color: var(--bad); }
+.row { display: flex; align-items: center; gap: 10px; }
+.row.sb { justify-content: space-between; }
+.wrap { flex-wrap: wrap; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 11px 18px; border-radius: 12px; font-weight: 600; background: var(--grad); color: #fff; transition: transform .1s, opacity .2s; }
+.btn:hover { opacity: .92; }
+.btn:active { transform: scale(.98); }
+.btn.ghost { background: transparent; border: 1px solid var(--border); color: var(--text); }
+.btn.danger { background: var(--bad); }
+.btn.sm { padding: 7px 12px; font-size: .85rem; border-radius: 10px; }
+.btn[disabled] { opacity: .5; pointer-events: none; }
+.field { display: block; }
+.field > span { display: block; font-size: .78rem; color: var(--muted); margin-bottom: 6px; font-weight: 600; letter-spacing: .02em; }
+.input { width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface-2); outline: none; }
+.input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(124,92,255,.22); }
+.list > * + * { border-top: 1px solid var(--border); }
+.item { display: flex; align-items: center; gap: 12px; padding: 12px 0; width: 100%; text-align: left; }
+.item .grow { flex: 1; min-width: 0; }
+.item .t { font-weight: 600; }
+.item .m { color: var(--muted); font-size: .82rem; }
+.chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
+.chips::-webkit-scrollbar { display: none; }
+.pill { flex: none; padding: 7px 14px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); font-size: .85rem; font-weight: 600; color: var(--muted); white-space: nowrap; }
+.pill.on { background: var(--grad); color: #fff; border-color: transparent; }
+.bar { height: 8px; border-radius: 8px; background: var(--surface-2); overflow: hidden; }
+.bar > i { display: block; height: 100%; border-radius: 8px; }
+.empty { text-align: center; padding: 34px 18px; color: var(--muted); }
+.empty .big { font-size: 2.2rem; margin-bottom: 8px; }
+.seg { display: flex; background: var(--surface-2); border-radius: 12px; padding: 3px; gap: 3px; }
+.seg button { flex: 1; padding: 8px; border-radius: 10px; font-weight: 600; font-size: .85rem; color: var(--muted); }
+.seg button.on { background: var(--surface); color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,.2); }
+.badge-dot { position: absolute; top: 4px; right: 10px; width: 9px; height: 9px; border-radius: 50%; background: var(--bad); }
+table.t { width: 100%; border-collapse: collapse; font-size: .88rem; }
+table.t th, table.t td { padding: 8px 6px; text-align: center; border-bottom: 1px solid var(--border); }
+table.t th { color: var(--muted); font-weight: 600; font-size: .75rem; }
+table.t td:first-child, table.t th:first-child { text-align: left; }
+.num { font-variant-numeric: tabular-nums; }
+.chart { width: 100%; height: auto; display: block; }
 
-        header {
-            background: var(--bg-gradient);
-            color: white;
-            padding: 20px;
-            text-align: center;
-            font-size: 1.25rem;
-            font-weight: 700;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        }
+/* ---------- Bouton flottant et menu (style Think) ---------- */
+.fab { position: fixed; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); z-index: 60; width: 56px; height: 56px; border-radius: 50%; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow); display: grid; place-items: center; transition: transform .2s; }
+.fab:active { transform: scale(.94); }
+.fab svg { width: 28px; height: 28px; grid-area: 1/1; transition: opacity .2s, transform .3s; }
+.fab .x { opacity: 0; transform: rotate(-90deg) scale(.6); }
+.fab.open .dots { opacity: 0; transform: rotate(90deg) scale(.6); }
+.fab.open .x { opacity: 1; transform: none; }
+.dock { position: fixed; z-index: 55; right: 16px; bottom: calc(84px + env(safe-area-inset-bottom)); left: 16px; display: flex; justify-content: space-between; gap: 2px; padding: 8px; border-radius: 22px; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow); opacity: 0; visibility: hidden; transform: translateY(14px) scale(.97); transform-origin: bottom right; transition: opacity .2s, transform .25s, visibility .25s; }
+.dock.open { opacity: 1; visibility: visible; transform: none; }
+.dock button { position: relative; flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 9px 4px; border-radius: 14px; font-size: .68rem; font-weight: 600; color: var(--muted); }
+.dock button.on { color: var(--accent); background: rgba(124,92,255,.12); }
+@media (min-width: 640px) {
+    .dock { left: auto; bottom: calc(16px + env(safe-area-inset-bottom)); right: 84px; gap: 6px; padding: 7px 10px; transform-origin: right center; }
+    .dock button { flex: none; width: 92px; font-size: .72rem; }
+}
 
-        .container {
-            max-width: 800px;
-            margin: 20px auto;
-            padding: 0 15px;
-            width: 100%;
-            flex: 1;
-        }
+/* ---------- Fenêtres de message ---------- */
+#modal { position: fixed; inset: 0; z-index: 500; display: flex; align-items: flex-end; justify-content: center; background: rgba(5,6,12,.6); padding: 12px; opacity: 0; visibility: hidden; transition: opacity .2s, visibility .2s; }
+#modal.open { opacity: 1; visibility: visible; }
+#modal .box { width: 100%; max-width: 440px; background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 20px; box-shadow: var(--shadow); max-height: 86vh; overflow: auto; transform: translateY(20px); transition: transform .25s; }
+#modal.open .box { transform: none; }
+#modal h3 { margin-bottom: 8px; }
+#modal .body { color: var(--muted); font-size: .92rem; white-space: pre-wrap; margin-bottom: 14px; }
+#modal .acts { display: flex; gap: 10px; justify-content: flex-end; margin-top: 14px; }
+@media (min-width: 640px) { #modal { align-items: center; } }
+#toast { position: fixed; left: 50%; bottom: calc(92px + env(safe-area-inset-bottom)); transform: translate(-50%, 10px); z-index: 400; background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 12px; font-size: .85rem; font-weight: 600; opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; max-width: 90vw; text-align: center; }
+#toast.on { opacity: 1; transform: translate(-50%, 0); }
 
-        .card {
-            background-color: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
-        }
+/* ---------- Écran de verrouillage ---------- */
+#lock { position: fixed; inset: 0; z-index: 900; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 24px; text-align: center; }
+#lock .logo { width: 64px; height: 64px; }
+#lock form { width: 100%; max-width: 280px; display: flex; flex-direction: column; gap: 10px; }
+#lock input { text-align: center; letter-spacing: .5em; font-size: 1.3rem; }
+#lock .err { color: var(--bad); font-size: .85rem; min-height: 1.2em; }
 
-        input[type="text"] {
-            width: 100%;
-            padding: 12px 16px;
-            border-radius: 8px;
-            border: 1px solid var(--border);
-            background: var(--bg-main);
-            color: var(--text-main);
-            font-size: 1rem;
-            margin-bottom: 12px;
-        }
-
-        button {
-            background: var(--bg-gradient);
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-
-        button:hover {
-            opacity: 0.9;
-        }
-
-        .btn-secondary {
-            background: transparent;
-            border: 1px solid var(--border);
-            color: var(--text-main);
-        }
-
-        .btn-danger {
-            background: var(--danger);
-        }
-
-        .tab-content {
-            display: none;
-        }
-
-        .tab-content.active {
-            display: block;
-        }
-
-        /* IDs list & Pills */
-        .id-pills {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-            margin-bottom: 15px;
-        }
-
-        .id-pill {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            background: var(--bg-main);
-            border: 1px solid var(--border);
-            padding: 6px 12px;
-            border-radius: 20px;
-            cursor: pointer;
-        }
-
-        .id-pill span.delete-id {
-            color: var(--danger);
-            font-weight: bold;
-            cursor: pointer;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 10px;
-            margin-bottom: 20px;
-        }
-
-        th, td {
-            padding: 10px;
-            border-bottom: 1px solid var(--border);
-            text-align: left;
-            font-size: 0.95rem;
-        }
-
-        th {
-            color: var(--text-muted);
-            font-weight: 600;
-        }
-
-        .fee-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 10px 0;
-            border-bottom: 1px solid var(--border);
-        }
-
-        .locked-banner {
-            background: rgba(239, 68, 68, 0.15);
-            border: 1px solid var(--danger);
-            color: var(--danger);
-            padding: 15px;
-            border-radius: 8px;
-            text-align: center;
-            font-weight: 600;
-            margin-bottom: 15px;
-        }
-
-        /* Navigation Flottante */
-        nav {
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 1000;
-        }
-
-        .nav-toggle-btn {
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            background: var(--bg-gradient);
-            color: white;
-            border: none;
-            font-size: 1.5rem;
-            cursor: pointer;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .nav-menu {
-            display: none;
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            padding: 10px;
-            border-radius: 30px;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.2);
-            gap: 10px;
-            align-items: center;
-        }
-
-        .nav-menu.active {
-            display: flex;
-        }
-
-        .nav-menu button {
-            background: transparent;
-            color: var(--text-main);
-            box-shadow: none;
-            padding: 8px 16px;
-            border-radius: 20px;
-        }
-
-        .nav-menu button.active-tab {
-            background: var(--bg-gradient);
-            color: white;
-        }
-
-        .modal {
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.6);
-            display: none;
-            align-items: center;
-            justify-content: center;
-            z-index: 2000;
-        }
-
-        .modal.active {
-            display: flex;
-        }
-
-        .modal-card {
-            background: var(--bg-card);
-            padding: 25px;
-            border-radius: 12px;
-            width: 90%;
-            max-width: 400px;
-            border: 1px solid var(--border);
-        }
-    </style>
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
 </head>
 <body>
 
-    <header>Class-Ink S (Suivi)</header>
+<!-- Logo partagé -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+        <linearGradient id="lgrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7c5cff"/><stop offset="1" stop-color="#2f80ff"/></linearGradient>
+        <linearGradient id="fgrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff5fa2"/><stop offset=".5" stop-color="#ffb84d"/><stop offset="1" stop-color="#38d9a9"/></linearGradient>
+    </defs>
+    <symbol id="logo" viewBox="0 0 96 96">
+        <rect width="96" height="96" rx="27" fill="url(#lgrad)"/>
+        <path d="M48 17C48 17 28 38 28 54a20 20 0 0 0 40 0C68 38 48 17 48 17z" fill="#fff"/>
+        <path d="M39 56a9 9 0 0 0 9 9" stroke="#5a6cff" stroke-width="4.5" fill="none" stroke-linecap="round"/>
+        <rect x="27" y="77" width="42" height="4.5" rx="2.25" fill="#fff" opacity=".85"/>
+    </symbol>
+</svg>
 
-    <div class="container">
+<!-- Écran de démarrage -->
+<div id="splash" role="status" aria-label="Chargement de Class-Ink Suivi">
+    <svg class="logo"><use href="#logo"/></svg>
+    <h1>Class-Ink Suivi</h1>
+    <p>Suivez la réussite de votre enfant</p>
+    <div class="bar"><i></i></div>
+</div>
 
-        <!-- Onglet Accueil / Recherche -->
-        <div id="tab-accueil" class="tab-content active">
-            <div class="card">
-                <h3>Rechercher une école</h3>
-                <p style="color: var(--text-muted); margin-bottom: 12px; font-size: 0.9rem;">Trouvez votre établissement pour accéder au suivi.</p>
-                <input type="text" id="school-search" placeholder="Nom de l'école ou ID..." oninput="handleSchoolSearch()">
-                <div id="school-results" style="margin-top: 10px;"></div>
-            </div>
+<header class="top">
+    <svg class="logo"><use href="#logo"/></svg>
+    <div class="brand">Class-Ink Suivi<small id="subtitle">Espace parents</small></div>
+    <div class="sp"></div>
+    <span class="dot" id="netdot" title="Connexion"></span>
+    <button class="icon-btn" id="refreshBtn" aria-label="Actualiser" data-act="refresh"><svg class="i" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg></button>
+</header>
 
-            <div class="card" id="student-id-card" style="display:none;">
-                <h3 id="selected-school-title">École sélectionnée</h3>
-                <p style="color: var(--text-muted); margin: 8px 0 12px 0; font-size: 0.9rem;">Entrez l'identifiant unique de l'élève.</p>
-                <input type="text" id="student-id-input" placeholder="Ex: CL-2026-8942">
-                <div style="display: flex; gap: 10px;">
-                    <button onclick="validerEleve()">Valider</button>
-                    <button class="btn-secondary" onclick="annulerRecherche()">Annuler</button>
-                </div>
-            </div>
-        </div>
+<main><div id="view" class="view"></div></main>
 
-        <!-- Onglet Notes -->
-        <div id="tab-notes" class="tab-content">
-            <div class="card">
-                <h3>Élèves consultés récemment</h3>
-                <div class="id-pills" id="recent-ids-notes"></div>
-            </div>
+<!-- Menu flottant -->
+<nav class="dock" id="dock" aria-label="Navigation principale" aria-hidden="true">
+    <button data-go="home"><svg class="i" viewBox="0 0 24 24"><path d="M3 12l9-9 9 9M5 10v10h5v-6h4v6h5V10"/></svg>Accueil</button>
+    <button data-go="notes"><svg class="i" viewBox="0 0 24 24"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>Notes</button>
+    <button data-go="fees"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="14" rx="3"/><path d="M3 10h18"/><circle cx="16.5" cy="15" r="1.2"/></svg>Frais</button>
+    <button data-go="messages"><svg class="i" viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>Messages<i class="badge-dot hidden" id="msgDot"></i></button>
+    <button data-go="settings"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>Réglages</button>
+</nav>
+<button class="fab" id="fab" aria-label="Ouvrir le menu" aria-expanded="false" aria-controls="dock">
+    <svg class="dots" viewBox="0 0 28 28"><circle cx="14" cy="5" r="2.6" fill="#7c5cff"/><circle cx="22" cy="10" r="2.6" fill="#2f80ff"/><circle cx="22" cy="18" r="2.6" fill="#38d9a9"/><circle cx="14" cy="23" r="2.6" fill="#ffb84d"/><circle cx="6" cy="18" r="2.6" fill="#ff5fa2"/><circle cx="6" cy="10" r="2.6" fill="#a78bfa"/></svg>
+    <svg class="x" viewBox="0 0 28 28" fill="none" stroke-linecap="round" stroke-width="3"><path d="M7 7l14 14" stroke="#7c5cff"/><path d="M21 7L7 21" stroke="#ff5fa2"/></svg>
+</button>
 
-            <div id="notes-container">
-                <div class="card" style="text-align: center; color: var(--text-muted);">
-                    Aucun élève sélectionné. Rendez-vous à l'accueil ou choisissez un ID ci-dessus.
-                </div>
-            </div>
-        </div>
+<div id="modal" role="dialog" aria-modal="true" aria-hidden="true"><div class="box" id="modalBox"></div></div>
+<div id="toast" role="status" aria-live="polite"></div>
+<div id="lock" class="hidden" role="dialog" aria-modal="true" aria-label="Session verrouillée"></div>
 
-        <!-- Onglet Frais -->
-        <div id="tab-frais" class="tab-content">
-            <div class="card">
-                <h3>Élèves consultés récemment</h3>
-                <div class="id-pills" id="recent-ids-frais"></div>
-            </div>
+<script>
+(function () {
+'use strict';
 
-            <div id="frais-container">
-                <div class="card" style="text-align: center; color: var(--text-muted);">
-                    Aucun élève sélectionné.
-                </div>
-            </div>
-        </div>
+/* =====================================================================================================
+   CONTRAT AVEC LE SERVEUR CLASSNET (routes Suivi intégrées)
 
-        <!-- Onglet Communications & Historique -->
-        <div id="tab-comms" class="tab-content">
-            <div class="card">
-                <h3>Communications Officielles</h3>
-                <div id="comms-list" style="margin-top: 15px;">
-                    <p style="color: var(--text-muted);">Sélectionnez un élève pour voir les notes de service de son école.</p>
-                </div>
-            </div>
-            <div class="card">
-                <h3>Historique des consultations</h3>
-                <div id="history-list" style="margin-top: 15px;">
-                    <p style="color: var(--text-muted);">Aucun historique récent.</p>
-                </div>
-            </div>
-        </div>
+   Toutes les réponses : { "status": true|false, "message": "...", "data": ... }
+   Erreurs : 404 = élève ou école introuvable, 403 = accès refusé, 429 = trop d'essais.
 
-        <!-- Onglet Paramètres -->
-        <div id="tab-parametres" class="tab-content">
-            <div class="card">
-                <h3>Paramètres de l'application</h3>
-                <div class="fee-row" style="align-items: center; margin-top: 15px;">
-                    <span>Mode Sombre / Clair</span>
-                    <button onclick="toggleTheme()" class="btn-secondary">Changer de thème</button>
-                </div>
-                <div class="fee-row" style="align-items: center; margin-top: 15px;">
-                    <span>Effacer tous les identités enregistrées</span>
-                    <button onclick="clearSavedIds()" class="btn-danger">Effacer</button>
-                </div>
-            </div>
-        </div>
+   1) GET  {API}/api/suivi/schools?q=texte
+        -> data: [ { "id": "63017630119000656", "name": "Ecole Internationale Enfants du Monde", "city": "Bukavu" } ]
 
-    </div>
+   2) POST {API}/api/suivi/student     corps : { "school_id": "...", "student_code": "..." }
+        -> data: {
+             "student": { "name": "NSIMWA Paul Junior", "className": "4ème Scientifique", "year": "2026 – 2027" },
+             "school":  { "id": "...", "name": "...", "city": "...", "phone": "+243...", "payInfo": "Comment payer (texte libre)" },
+             "fees": { "currency": "$", "total": 700, "paid": 350, "minRequired": 300,
+                       "tranches": [ { "label": "Première tranche", "amount": 300, "dueDate": "2026-11-12" } ],
+                       "payments": [ { "date": "2026-09-05", "amount": 300, "label": "Tranche 1", "receipt": "R-0012" } ] },
+             "results": null            // le SERVEUR met null tant que le minimum payé n'est pas atteint
+                  ou { "courses": [ { "name": "Algèbre", "category": "Domaine des sciences", "maxPer": 30,
+                                      "scores": { "P1": 26, "P2": 19, "EX1": 49 },
+                                      "evaluations": [ { "period": "P1", "title": "Interro 1", "date": "2026-09-20", "max": 10, "obtained": 8, "content": "..." } ] } ],
+                       "totals": { "P1": { "rank": 3, "of": 28 }, "S1": { "rank": 2, "of": 28 }, "TG": {...} },   // facultatif
+                       "behaviour": { "app": { "P1": "E" }, "cond": { "P1": "TB" } } },                              // vérifié côté serveur
+             "communications": [ { "id": "c1", "date": "2026-10-10", "title": "...", "message": "...", "from": "Direction" } ],
+             "teacherNotes":   [ { "id": "n1", "date": "2026-10-12", "teacher": "Prof. X", "course": "Maths", "message": "..." } ],
+             "updatedAt": "2026-10-25T10:00:00Z"
+           }
+   Le blocage des résultats est décidé et appliqué PAR LE SERVEUR : cette interface ne fait qu'afficher le résultat.
+   ===================================================================================================== */
+const API_BASE = String(window.CLASSINK_SUIVI_API || 'https://class-net-p.onrender.com').replace(/\/$/, '');
+const VERSION = '0.2 bêta';
+const STORE_KEY = 'classink_suivi_v1';
+const CACHE_PREFIX = 'classink_suivi_cache_';
+const DEMO_FLAG = 'classink_suivi_demo';
+const PERIODS = ['P1', 'P2', 'EX1', 'P3', 'P4', 'EX2'];
+const LABELS = { P1: '1ère période', P2: '2ème période', EX1: 'Examens S1', S1: 'Semestre 1', P3: '3ème période', P4: '4ème période', EX2: 'Examens S2', S2: 'Semestre 2', TG: 'Année' };
+const SHORT = { P1: 'P1', P2: 'P2', EX1: 'Ex. 1', S1: 'Sem. 1', P3: 'P3', P4: 'P4', EX2: 'Ex. 2', S2: 'Sem. 2', TG: 'Année' };
+const VIEWS = ['home', 'notes', 'fees', 'messages', 'settings'];
+const IDLE_LOCK_MS = 5 * 60 * 1000;
 
-    <!-- Modal d'affichage du contenu d'une interrogation -->
-    <div class="modal" id="eval-modal">
-        <div class="modal-card">
-            <h3>Détails de l'évaluation</h3>
-            <p id="modal-eval-content" style="margin: 15px 0; color: var(--text-muted);"></p>
-            <button onclick="closeModal()">Fermer</button>
-        </div>
-    </div>
+/* ---------- Outils ---------- */
+const $ = s => document.querySelector(s);
+const esc = v => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+const num = v => (typeof v === 'number' && isFinite(v)) ? v : null;
+const fmt = n => (Math.round(n * 10) / 10).toString().replace('.', ',');
+const money = (n, cur) => fmt(n) + '\u00a0' + esc(cur || '$');
+function fdate(iso) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ''));
+    return m ? m[3] + '/' + m[2] + '/' + m[1] : String(iso || '');
+}
+function ago(ts) {
+    if (!ts) return '';
+    const min = Math.round((Date.now() - ts) / 60000);
+    if (min < 1) return 'à l’instant';
+    if (min < 60) return 'il y a ' + min + ' min';
+    const h = Math.round(min / 60);
+    if (h < 24) return 'il y a ' + h + ' h';
+    return 'il y a ' + Math.round(h / 24) + ' j';
+}
+const tone = p => p >= 70 ? 'var(--ok)' : p >= 50 ? 'var(--warn)' : 'var(--bad)';
+const icon = (d, extra) => '<svg class="i" viewBox="0 0 24 24"' + (extra || '') + '>' + d + '</svg>';
 
-    <!-- Navigation Flottante -->
-    <nav>
-        <button class="nav-toggle-btn" id="nav-toggler" onclick="toggleNavMenu()">⚙️</button>
-        <div class="nav-menu" id="nav-menu">
-            <button onclick="switchTab('accueil')" class="active-tab" id="btn-tab-accueil">Accueil</button>
-            <button onclick="switchTab('notes')" id="btn-tab-notes">Notes</button>
-            <button onclick="switchTab('frais')" id="btn-tab-frais">Frais</button>
-            <button onclick="switchTab('comms')" id="btn-tab-comms">Comms & Historique</button>
-            <button onclick="switchTab('parametres')" id="btn-tab-parametres">Paramètres</button>
-        </div>
-    </nav>
+/* ---------- Stockage ---------- */
+const store = {
+    get(key) { try { return localStorage.getItem(key); } catch (e) { return null; } },
+    set(key, value) { try { localStorage.setItem(key, value); return true; } catch (e) { return false; } },
+    del(key) { try { localStorage.removeItem(key); } catch (e) { /* indisponible */ } }
+};
+const defaults = () => ({ theme: 'auto', pin: null, kids: [], active: '', history: [], read: [] });
+function loadState() {
+    try { const raw = store.get(STORE_KEY); if (raw) return Object.assign(defaults(), JSON.parse(raw)); } catch (e) { /* données illisibles : on repart de zéro */ }
+    return defaults();
+}
+let S = loadState();
+const saveState = () => store.set(STORE_KEY, JSON.stringify(S));
 
-    <script>
-        // État global simulé (Stockage local des ID enregistrés)
-        let savedStudents = JSON.parse(localStorage.getItem('class_ink_saved_students') || '[]');
-        let currentStudentData = null;
-        let selectedSchool = null;
+let DEMO = false;
+try { DEMO = sessionStorage.getItem(DEMO_FLAG) === '1'; } catch (e) { DEMO = false; }
+const demoCache = {};
+const demoState = { kids: [], active: '', read: [] };
 
-        // Gestion de la Navigation Flottante
-        function toggleNavMenu() {
-            const menu = document.getElementById('nav-menu');
-            const toggler = document.getElementById('nav-toggler');
-            if (menu.style.display === 'flex') {
-                menu.style.display = 'none';
-                toggler.style.display = 'flex';
-            } else {
-                menu.style.display = 'flex';
-                toggler.style.display = 'none';
-            }
-        }
+const kids = () => DEMO ? demoState.kids : S.kids;
+const activeKey = () => DEMO ? demoState.active : S.active;
+const activeKid = () => kids().find(k => k.key === activeKey()) || null;
+const readIds = () => DEMO ? demoState.read : S.read;
+// Les résultats autorisés restent uniquement en mémoire vive. Le cache local ne conserve
+// jamais les notes : une révocation côté école doit être appliquée au prochain rafraîchissement.
+const liveData = new Map();
+function redactedParentData(data) {
+    const safe = Object.assign({}, data || {});
+    safe.results = null;
+    safe.resultsAccess = {
+        allowed: false,
+        reason: 'offline',
+        message: 'Reconnectez-vous pour vérifier que l’école autorise toujours l’affichage des résultats.'
+    };
+    return safe;
+}
+function cacheGet(key) {
+    if (DEMO) return demoCache[key] || null;
+    try {
+        const entry = JSON.parse(store.get(CACHE_PREFIX + key) || 'null');
+        if (!entry || !entry.data) return entry;
+        const safe = Object.assign({}, entry, { data: redactedParentData(entry.data) });
+        store.set(CACHE_PREFIX + key, JSON.stringify(safe));
+        return safe;
+    } catch (e) { return null; }
+}
+function cacheSet(key, entry) {
+    if (DEMO) { demoCache[key] = entry; return; }
+    liveData.set(key, entry);
+    const safe = Object.assign({}, entry, { data: redactedParentData(entry.data) });
+    store.set(CACHE_PREFIX + key, JSON.stringify(safe));
+}
+const curData = () => {
+    const k = activeKid();
+    if (!k) return null;
+    if (DEMO) return (demoCache[k.key] || {}).data || null;
+    if (!V.offline && liveData.has(k.key)) return liveData.get(k.key).data;
+    const cached = cacheGet(k.key);
+    return cached ? cached.data : null;
+};
 
-        function switchTab(tabId) {
-            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-            document.querySelectorAll('.nav-menu button').forEach(el => el.classList.remove('active-tab'));
+/* ---------- Journal des consultations (sur cet appareil) ---------- */
+function logHistory(text) {
+    if (DEMO) return;
+    S.history.unshift({ at: Date.now(), text });
+    S.history = S.history.slice(0, 80);
+    saveState();
+}
 
-            document.getElementById('tab-' + tabId).classList.add('active');
-            document.getElementById('btn-tab-' + tabId).classList.add('active-tab');
+/* ---------- Thème ---------- */
+const media = window.matchMedia ? window.matchMedia('(prefers-color-scheme: light)') : null;
+function applyTheme() {
+    const t = S.theme === 'auto' ? (media && media.matches ? 'light' : 'dark') : S.theme;
+    document.documentElement.setAttribute('data-theme', t);
+    const meta = document.querySelector('meta[name=theme-color]');
+    if (meta) meta.setAttribute('content', t === 'light' ? '#f4f5fa' : '#0e0f14');
+}
+if (media && media.addEventListener) media.addEventListener('change', () => { if (S.theme === 'auto') applyTheme(); });
 
-            // Fermer le menu après sélection sur mobile
-            document.getElementById('nav-menu').style.display = 'none';
-            document.getElementById('nav-toggler').style.display = 'flex';
-
-            renderPills();
-        }
-
-        // Recherche d'école simulée
-        function handleSchoolSearch() {
-            const query = document.getElementById('school-search').value.toLowerCase();
-            const resultsDiv = document.getElementById('school-results');
-            if (!query) {
-                resultsDiv.innerHTML = '';
-                return;
-            }
-            // Simulation de résultats
-            resultsDiv.innerHTML = `
-                <div style="padding: 10px; background: var(--bg-main); border-radius: 8px; cursor: pointer; border: 1px solid var(--border);" onclick="selectSchool('Complexe Scolaire Excellence')">
-                    <strong>Complexe Scolaire Excellence</strong> (Paris, FR)
-                </div>
-            `;
-        }
-
-        function selectSchool(schoolName) {
-            selectedSchool = schoolName;
-            document.getElementById('selected-school-title').innerText = "École : " + schoolName;
-            document.getElementById('student-id-card').style.display = 'block';
-            document.getElementById('school-results').innerHTML = '';
-        }
-
-        function annulerRecherche() {
-            selectedSchool = null;
-            document.getElementById('student-id-card').style.display = 'none';
-            document.getElementById('school-search').value = '';
-        }
-
-        // Validation et appel API simulé
-        function validerEleve() {
-            const studentId = document.getElementById('student-id-input').value.trim();
-            if (!studentId) return alert('Veuillez entrer un ID valide.');
-
-            // Simulation de données retournées par le serveur
-            currentStudentData = {
-                id: studentId,
-                name: "Jean Dupont (" + studentId + ")",
-                school: selectedSchool || "École Partenaire",
-                payment: {
-                    amountPaid: 350,
-                    totalFee: 700,
-                    minRequired: 300,
-                    tranches: [
-                        { label: "Première tranche", amount: 300, dueDate: "12/11/2026", status: "Payé" },
-                        { label: "Deuxième tranche", amount: 230, dueDate: "12/02/2027", status: "En attente" },
-                        { label: "Troisième tranche", amount: 170, dueDate: "12/04/2027", status: "En attente" }
-                    ]
-                },
-                grades: [
-                    {
-                        course: "Mathématiques",
-                        evaluations: [
-                            { title: "Interro 1", date: "12/03/2026", max: 10, obtained: 8, content: "Contenu détaillé de l'interrogation de maths 1..." },
-                            { title: "Interro 2", date: "25/03/2026", max: 20, obtained: 15, content: "Contenu détaillé de l'interrogation de maths 2..." }
-                        ]
-                    },
-                    {
-                        course: "Physique",
-                        evaluations: [
-                            { title: "TP Optique", date: "14/03/2026", max: 10, obtained: 7, content: "Compte rendu du TP optique..." }
-                        ]
-                    }
-                ],
-                communications: [
-                    { date: "10/10/2026", title: "Réunion des parents", message: "Présence obligatoire ce vendredi." }
-                ],
-                history: [
-                    { timestamp: new Date().toLocaleString(), action: "Consultation du dossier " + studentId }
-                ]
+/* =====================================================================================================
+   MESSAGES À L'ÉCRAN : fenêtre d'information, de confirmation et de saisie (aucun alert / prompt natif)
+   ===================================================================================================== */
+const ui = (() => {
+    let chain = Promise.resolve();
+    const modal = $('#modal'), box = $('#modalBox');
+    function open(kind, o) {
+        const run = () => new Promise(resolve => {
+            const id = 'm' + Math.random().toString(36).slice(2, 7);
+            box.innerHTML = '<h3>' + esc(o.title) + '</h3><div class="body">' + esc(o.message || '') + '</div>' +
+                (kind === 'prompt' ? '<input class="input" id="' + id + '" type="' + (o.type || 'text') + '" inputmode="' + (o.inputmode || 'text') + '" maxlength="' + (o.maxLength || 60) + '" placeholder="' + esc(o.placeholder || '') + '" autocomplete="off">' : '') +
+                (o.html || '') +
+                '<div class="acts">' + (kind === 'alert' ? '' : '<button class="btn ghost" data-r="no">Annuler</button>') +
+                '<button class="btn' + (o.danger ? ' danger' : '') + '" data-r="yes">' + esc(o.ok || (kind === 'confirm' ? 'Confirmer' : 'Ok')) + '</button></div>';
+            modal.classList.add('open'); modal.setAttribute('aria-hidden', 'false');
+            const input = kind === 'prompt' ? box.querySelector('#' + id) : null;
+            const finish = value => {
+                modal.classList.remove('open'); modal.setAttribute('aria-hidden', 'true');
+                box.onclick = null; document.removeEventListener('keydown', onKey, true);
+                resolve(value);
             };
+            const accept = () => finish(kind === 'prompt' ? input.value.trim() : true);
+            const cancel = () => finish(kind === 'prompt' ? null : false);
+            const onKey = e => { if (e.key === 'Escape') { e.preventDefault(); kind === 'alert' ? accept() : cancel(); } else if (e.key === 'Enter' && kind !== 'alert') { e.preventDefault(); accept(); } };
+            box.onclick = e => { const b = e.target.closest('[data-r]'); if (b) b.dataset.r === 'yes' ? accept() : cancel(); };
+            document.addEventListener('keydown', onKey, true);
+            (input || box.querySelector('[data-r=yes]')).focus();
+        });
+        const result = chain.then(run);
+        chain = result.catch(() => {});
+        return result;
+    }
+    return {
+        alert: (message, title) => open('alert', { message, title: title || 'Class-Ink Suivi' }),
+        confirm: (message, title, opts) => open('confirm', Object.assign({ message, title: title || 'Confirmation' }, opts || {})),
+        prompt: (message, opts) => open('prompt', Object.assign({ message, title: 'Saisie requise' }, opts || {})),
+        sheet: (title, html) => open('alert', { title, html, ok: 'Fermer' })
+    };
+})();
+let toastTimer = null;
+function toast(text) {
+    const t = $('#toast'); t.textContent = text; t.classList.add('on');
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 2600);
+}
 
-            // Sauvegarder dans la liste récente si absent
-            if (!savedStudents.includes(studentId)) {
-                savedStudents.push(studentId);
-                localStorage.setItem('class_ink_saved_students', JSON.stringify(savedStudents));
-            }
+/* =====================================================================================================
+   ACCÈS AU SERVEUR
+   ===================================================================================================== */
+class ApiError extends Error { constructor(kind, message) { super(message); this.kind = kind; } }
+async function request(method, path, body) {
+    let response;
+    try {
+        response = await fetch(API_BASE + path, {
+            method, headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(20000)
+        });
+    } catch (e) { throw new ApiError('network', 'Impossible de joindre le serveur. Vérifiez votre connexion internet.'); }
+    let payload = {};
+    try { payload = await response.json(); } catch (e) { /* réponse sans corps JSON */ }
+    const detail = payload.message || payload.detail || '';
+    if (response.status === 429) throw new ApiError('ratelimit', 'Trop d’essais. Patientez quelques minutes avant de réessayer.');
+    if (response.status === 403) throw new ApiError('forbidden', detail || 'Accès refusé.');
+    if (response.status === 404) throw new ApiError('notfound', 'Élève introuvable. Vérifiez l’ID donné par l’école. Si le problème continue, le service de suivi n’est peut-être pas encore ouvert pour cette école.');
+    if (!response.ok) throw new ApiError('server', detail || 'Le serveur a rencontré une erreur (' + response.status + ').');
+    if (payload.status === false) throw new ApiError('notfound', detail || 'Élève introuvable. Vérifiez l’ID donné par l’école.');
+    return payload.data;
+}
+const Api = {
+    searchSchools: q => DEMO ? Demo.searchSchools(q) : request('GET', '/api/suivi/schools?q=' + encodeURIComponent(q)),
+    student: (schoolId, code) => DEMO ? Demo.student(schoolId, code) : request('POST', '/api/suivi/student', { school_id: schoolId, student_code: code })
+};
 
-            renderStudentData();
-            switchTab('notes');
+/* =====================================================================================================
+   MODE DÉMONSTRATION (données fictives, uniquement pour essayer l'interface ; rien n'est enregistré)
+   ===================================================================================================== */
+const Demo = (() => {
+    const schools = [{ id: 'demo-ecole', name: 'École de démonstration (fictive)', city: 'Bukavu' }];
+    const COURSES = [['Algèbre', 'Domaine des sciences', 30], ['Géométrie', 'Domaine des sciences', 20], ['Chimie', 'Domaine des sciences', 30], ['Physique', 'Domaine des sciences', 30], ['Biologie', 'Domaine des sciences', 20], ['Français', 'Domaine des langues', 50], ['Anglais', 'Domaine des langues', 30], ['Histoire', 'Domaine social', 20], ['Géographie', 'Domaine social', 20], ['Éducation physique', 'Développement personnel', 10]];
+    function build(seed, paid) {
+        let s = seed; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+        const courses = COURSES.map(([name, category, maxPer]) => {
+            const scores = {
+                P1: Math.round(maxPer * (0.5 + rnd() * 0.45)), P2: Math.round(maxPer * (0.45 + rnd() * 0.5)),
+                EX1: Math.round(2 * maxPer * (0.4 + rnd() * 0.5)), P3: Math.round(maxPer * (0.5 + rnd() * 0.45))
+            };
+            const evaluations = [
+                { period: 'P1', title: 'Interrogation 1', date: '2026-09-21', max: 10, obtained: Math.round(10 * (0.5 + rnd() * 0.5)), content: 'Chapitres 1 et 2 : définitions, propriétés et exercices du cahier (pages 4 à 11).' },
+                { period: 'P2', title: 'Devoir de contrôle', date: '2026-10-19', max: 20, obtained: Math.round(20 * (0.4 + rnd() * 0.55)), content: 'Chapitre 3 en entier. Réviser les exemples faits en classe.' },
+                { period: 'P3', title: 'Interrogation 3', date: '2026-11-23', max: 10, obtained: Math.round(10 * (0.5 + rnd() * 0.5)), content: 'À venir : chapitres 4 et 5.' }
+            ];
+            return { name, category, maxPer, scores, evaluations };
+        });
+        return {
+            student: { name: seed === 11 ? 'KAMBALE Joël' : 'MWAMBA Sarah', className: '4ème Scientifique', year: '2026 – 2027' },
+            school: { id: 'demo-ecole', name: 'École de démonstration (fictive)', city: 'Bukavu', phone: '+243000000000', payInfo: 'Paiement à la caisse de l’école ou par mobile money. Indiquez toujours l’ID de l’élève comme référence. (Texte d’exemple.)' },
+            fees: {
+                currency: '$', total: 700, paid, minRequired: 300,
+                tranches: [{ label: 'Première tranche', amount: 300, dueDate: '2026-09-15' }, { label: 'Deuxième tranche', amount: 230, dueDate: '2027-01-15' }, { label: 'Troisième tranche', amount: 170, dueDate: '2027-04-15' }],
+                payments: paid ? [{ date: '2026-09-05', amount: Math.min(paid, 300), label: 'Tranche 1', receipt: 'R-0012' }].concat(paid > 300 ? [{ date: '2026-10-02', amount: paid - 300, label: 'Tranche 2 (acompte)', receipt: 'R-0098' }] : []) : []
+            },
+            results: paid >= 300 ? {
+                courses, totals: { P1: { rank: 5, of: 28 }, P2: { rank: 4, of: 28 }, EX1: { rank: 6, of: 28 }, S1: { rank: 5, of: 28 }, P3: { rank: 4, of: 28 } },
+                behaviour: { app: { P1: 'TB', P2: 'TB', P3: 'E' }, cond: { P1: 'B', P2: 'TB', P3: 'TB' } }
+            } : null,
+            communications: [
+                { id: 'c1', date: '2026-10-10', title: 'Réunion des parents', message: 'La réunion des parents aura lieu ce vendredi à 15 h dans la cour de l’école.', from: 'Direction' },
+                { id: 'c2', date: '2026-10-22', title: 'Calendrier des examens du 1er semestre', message: 'Les examens commenceront le lundi 7 décembre. Le calendrier détaillé sera affiché à l’école.', from: 'Préfecture des études' }
+            ],
+            teacherNotes: [
+                { id: 'n1', date: '2026-10-20', teacher: 'Prof. Mwamba', course: 'Algèbre', message: 'Bonne participation en classe. À revoir : les équations du second degré.' },
+                { id: 'n2', date: '2026-10-24', teacher: 'Mme Alice', course: 'Français', message: 'Peut mieux faire en orthographe. Lecture à la maison conseillée.' }
+            ],
+            updatedAt: new Date().toISOString()
+        };
+    }
+    return {
+        searchSchools: async q => schools.filter(s => s.name.toLowerCase().includes(q.toLowerCase()) || 'démonstration'.includes(q.toLowerCase())),
+        student: async (schoolId, code) => {
+            await new Promise(r => setTimeout(r, 350));
+            if (code === 'DEMO-OK') return build(11, 350);
+            if (code === 'DEMO-BLOQUE') return build(23, 100);
+            throw new ApiError('notfound', 'Élève introuvable. En démonstration, utilisez DEMO-OK ou DEMO-BLOQUE.');
         }
+    };
+})();
 
-        function loadStudentById(studentId) {
-            document.getElementById('student-id-input').value = studentId;
-            validerEleve();
+/* =====================================================================================================
+   CALCULS
+   ===================================================================================================== */
+const maxOf = (p, maxPer) => (p === 'EX1' || p === 'EX2') ? 2 * maxPer : (p === 'S1' || p === 'S2') ? 4 * maxPer : p === 'TG' ? 8 * maxPer : maxPer;
+const partsOf = key => key === 'S1' ? ['P1', 'P2', 'EX1'] : key === 'S2' ? ['P3', 'P4', 'EX2'] : key === 'TG' ? PERIODS : [key];
+// Points obtenus et maximum correspondant, sur les périodes pour lesquelles une note existe
+function scoreOf(course, key) {
+    let got = 0, max = 0, n = 0;
+    partsOf(key).forEach(p => { const v = num((course.scores || {})[p]); if (v !== null) { got += v; max += maxOf(p, course.maxPer); n++; } });
+    return n ? { got, max, pct: max ? got / max * 100 : 0 } : null;
+}
+function totalOf(courses, key) {
+    let got = 0, max = 0;
+    (courses || []).forEach(c => { const s = scoreOf(c, key); if (s) { got += s.got; max += s.max; } });
+    return max ? { got, max, pct: got / max * 100 } : null;
+}
+function passAdvice(course) {
+    const total = 8 * course.maxPer, goal = total / 2;
+    const done = scoreOf(course, 'TG');
+    const got = done ? done.got : 0, doneMax = done ? done.max : 0, left = total - doneMax, need = goal - got;
+    if (!done) return 'Aucune note pour le moment.';
+    if (need <= 0) return 'L’objectif de réussite (50 % de l’année) est déjà atteint. Continuez ainsi.';
+    if (need > left) return 'Même avec le maximum aux évaluations restantes, les 50 % de l’année ne peuvent plus être atteints.';
+    return 'Pour atteindre 50 % sur l’année, il faut encore ' + fmt(need) + ' point(s) sur les ' + fmt(left) + ' restants (' + fmt(need / left * 100) + ' % des points restants). Estimation.';
+}
+function feeStatus(fees) {
+    let rest = num(fees.paid) || 0;
+    const today = new Date().toISOString().slice(0, 10);
+    return (fees.tranches || []).map(t => {
+        const paid = Math.min(rest, t.amount); rest -= paid;
+        const status = t.status || (paid >= t.amount ? 'paid' : (t.dueDate && t.dueDate < today ? 'late' : 'due'));
+        return Object.assign({}, t, { paid, status });
+    });
+}
+
+/* =====================================================================================================
+   ÉTAT DE L'ÉCRAN
+   ===================================================================================================== */
+const V = { tab: 'home', period: 'TG', msgTab: 'school', busy: false, offline: false, link: { q: '', results: null, school: null, loading: false } };
+const IC = {
+    plus: '<path d="M12 5v14M5 12h14"/>', lock: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
+    check: '<path d="M5 12l5 5 9-10"/>', alert: '<path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17v.5"/>', phone: '<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/>',
+    trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>'
+};
+
+/* ---------- Barre des enfants ---------- */
+function kidBar() {
+    const list = kids();
+    if (!list.length) return '';
+    return '<div class="chips" role="group" aria-label="Choisir un enfant">' +
+        list.map(k => '<button class="pill' + (k.key === activeKey() ? ' on' : '') + '" data-act="kid" data-key="' + esc(k.key) + '">' + esc((k.name || k.code).split(' ')[0]) + '</button>').join('') +
+        '<button class="pill" data-act="addkid" aria-label="Ajouter un enfant">' + icon(IC.plus, ' style="width:16px;height:16px;vertical-align:-3px"') + ' Ajouter</button></div>';
+}
+const demoBanner = () => DEMO ? '<div class="banner demo"><strong>Mode démonstration</strong> : données fictives. Rien n’est enregistré. <button class="btn sm ghost" data-act="demo-off" style="margin-left:6px">Quitter</button></div>' : '';
+const offlineBanner = () => (V.offline && activeKid()) ? '<div class="banner">Hors connexion. Dernière mise à jour : ' + esc(ago((cacheGet(activeKid().key) || {}).at)) + '.</div>' : '';
+
+/* =====================================================================================================
+   VUES
+   ===================================================================================================== */
+function viewLink() {
+    const L = V.link;
+    let body = '';
+    if (!L.school) {
+        body = '<label class="field"><span>ÉCOLE DE VOTRE ENFANT</span><input class="input" id="schoolQ" placeholder="Tapez le nom de l’école" value="' + esc(L.q) + '" autocomplete="off"></label>' +
+            '<div id="schoolRes" class="list" style="margin-top:8px">' + schoolResults() + '</div>';
+    } else {
+        body = '<div class="row sb"><div><div class="m" style="color:var(--muted);font-size:.8rem">École choisie</div><strong>' + esc(L.school.name) + '</strong></div><button class="btn sm ghost" data-act="school-cancel">Changer</button></div>' +
+            '<label class="field" style="margin-top:14px"><span>ID DE L’ÉLÈVE (REMIS PAR L’ÉCOLE)</span><input class="input" id="studentCode" placeholder="Ex. 7630119-0042" autocomplete="off" maxlength="40" style="text-transform:uppercase"></label>' +
+            '<div class="row" style="margin-top:14px"><button class="btn" data-act="link" id="linkBtn"' + (V.busy ? ' disabled' : '') + '>' + (V.busy ? 'Vérification…' : 'Afficher le suivi') + '</button><button class="btn ghost" data-act="school-cancel">Annuler</button></div>';
+    }
+    return '<div class="card"><h2>Lier mon enfant</h2><p class="sub" style="margin-bottom:14px">Choisissez l’école, puis saisissez l’ID de l’élève communiqué par l’école. Seuls ces éléments sont gardés sur cet appareil.</p>' + body +
+        (DEMO ? '<p class="sub" style="margin-top:12px">Démonstration : école fictive, ID <strong>DEMO-OK</strong> (résultats visibles) ou <strong>DEMO-BLOQUE</strong> (résultats verrouillés).</p>' : '') + '</div>';
+}
+function schoolResults() {
+    const L = V.link;
+    if (L.loading) return '<p class="sub" style="padding:10px 0">Recherche…</p>';
+    if (L.results === null) return '';
+    if (!L.results.length) return '<p class="sub" style="padding:10px 0">Aucune école trouvée. Vérifiez l’orthographe ou demandez à l’école si elle utilise Class-Ink.</p>';
+    return L.results.map((s, i) => '<button class="item" data-act="school" data-i="' + i + '"><div class="grow"><div class="t">' + esc(s.name) + '</div><div class="m">' + esc(s.city || '') + '</div></div>' + icon('<path d="M9 6l6 6-6 6"/>') + '</button>').join('');
+}
+
+function viewHome() {
+    const k = activeKid(), d = curData();
+    if (!k || !d) {
+        return demoBanner() + '<div class="card" style="text-align:center"><svg class="logo" style="width:64px;height:64px"><use href="#logo"/></svg><h2 style="margin-top:10px">Bienvenue</h2><p class="sub">Suivez les résultats, les frais et les messages de l’école de votre enfant, où que vous soyez.</p></div>' + (kids().length ? kidBar() : '') + viewLink() +
+            (DEMO ? '' : '<div style="text-align:center"><button class="btn sm ghost" data-act="demo-on">Essayer avec des données de démonstration</button></div>');
+    }
+    const r = d.results, fees = d.fees || {};
+    const due = Math.max(0, (num(fees.total) || 0) - (num(fees.paid) || 0));
+    let out = demoBanner() + offlineBanner() + kidBar();
+    out += '<div class="card hero"><div class="row sb wrap"><div><div class="sub">' + esc(d.school && d.school.name || k.schoolName) + '</div><h2>' + esc(d.student.name) + '</h2><div class="sub">' + esc(d.student.className || '') + ' · ' + esc(d.student.year || '') + '</div><div class="sub" style="margin-top:5px">Identifiant élève : <strong>' + esc(d.student.code || k.code) + '</strong></div></div>' +
+        '<span class="chip">' + (r ? 'Résultats disponibles' : 'Résultats verrouillés') + '</span></div></div>';
+    if (!r) {
+        const need = Math.max(0, (num(fees.minRequired) || 0) - (num(fees.paid) || 0));
+        const lockMessage = d.resultsAccess && d.resultsAccess.message
+            ? esc(d.resultsAccess.message)
+            : 'Pour consulter les résultats, au moins <strong>' + money(fees.minRequired || 0, fees.currency) + '</strong> doivent être payés. Déjà payé : <strong>' + money(fees.paid || 0, fees.currency) + '</strong>' + (need ? '. Il manque <strong>' + money(need, fees.currency) + '</strong>' : '') + '.';
+        out += '<div class="card lock"><div class="row" style="gap:12px;align-items:flex-start"><div style="color:var(--bad)">' + icon(IC.lock) + '</div><div><h3>Résultats verrouillés</h3><p class="sub" style="margin:4px 0 12px">' + lockMessage + '</p>' + (fees.configured === false ? '' : '<button class="btn sm" data-go="fees">Voir les frais</button>') + '</div></div></div>';
+    } else {
+        const t = totalOf(r.courses, 'TG');
+        const lastKey = ['P1', 'P2', 'EX1', 'P3', 'P4', 'EX2'].filter(p => totalOf(r.courses, p)).pop();
+        const lastTot = lastKey ? totalOf(r.courses, lastKey) : null;
+        const rank = (r.totals && lastKey && r.totals[lastKey]) || null;
+        const beh = r.behaviour || {};
+        const cond = lastKey && beh.cond && beh.cond[lastKey];
+        out += '<div class="grid">' +
+            '<div class="stat"><small>Pourcentage de l’année</small><strong style="color:' + (t ? tone(t.pct) : 'inherit') + '">' + (t ? fmt(t.pct) + ' %' : '—') + '</strong><span>' + (t ? fmt(t.got) + ' / ' + fmt(t.max) + ' pts' : '') + '</span></div>' +
+            '<div class="stat"><small>' + (lastKey ? esc(LABELS[lastKey]) : 'Dernière période') + '</small><strong>' + (lastTot ? fmt(lastTot.pct) + ' %' : '—') + '</strong><span>' + (rank ? 'Place : ' + esc(rank.rank) + ' / ' + esc(rank.of) : '&nbsp;') + '</span></div>' +
+            '<div class="stat"><small>Conduite</small><strong>' + esc(cond || '—') + '</strong><span>' + esc(lastKey ? LABELS[lastKey] : '') + '</span></div>' +
+            (fees.configured === false
+                ? '<div class="stat"><small>Frais scolaires</small><strong style="font-size:1rem">Non configurés</strong><span>Informations indisponibles</span></div>'
+                : '<div class="stat"><small>Reste à payer</small><strong style="color:' + (due ? 'var(--warn)' : 'var(--ok)') + '">' + money(due, fees.currency) + '</strong><span>' + (due ? 'sur ' + money(fees.total || 0, fees.currency) : 'Tout est payé') + '</span></div>') + '</div>';
+        out += '<div class="card"><h3>Évolution du pourcentage</h3><p class="sub" style="margin-bottom:8px">Par période, sur l’ensemble des cours.</p>' + chart(r.courses) + '</div>';
+        out += '<div class="card"><h3>Résultat par cours</h3><p class="sub" style="margin-bottom:12px">Depuis le début de l’année.</p>' + r.courses.map(c => {
+            const s = scoreOf(c, 'TG');
+            return s ? '<div style="margin-bottom:12px"><div class="row sb" style="font-size:.88rem"><span>' + esc(c.name) + '</span><strong class="num">' + fmt(s.pct) + ' %</strong></div><div class="bar" style="margin-top:5px"><i style="width:' + Math.min(100, s.pct) + '%;background:' + tone(s.pct) + '"></i></div></div>' : '';
+        }).join('') + '</div>';
+    }
+    const lastCom = (d.communications || [])[0];
+    if (lastCom) out += '<div class="card"><div class="row sb"><h3>Dernier message de l’école</h3><button class="btn sm ghost" data-go="messages">Tout voir</button></div><p class="sub" style="margin:6px 0 2px">' + esc(fdate(lastCom.date)) + ' · ' + esc(lastCom.from || '') + '</p><strong>' + esc(lastCom.title) + '</strong><p style="font-size:.9rem;margin-top:4px">' + esc(lastCom.message) + '</p></div>';
+    return out;
+}
+
+function chart(courses) {
+    const pts = PERIODS.map(p => ({ p, t: totalOf(courses, p) })).filter(x => x.t);
+    if (pts.length < 1) return '<p class="sub">Pas encore assez de notes.</p>';
+    const W = 320, H = 130, pad = 26, n = pts.length;
+    const X = i => n === 1 ? W / 2 : pad + i * (W - 2 * pad) / (n - 1), Y = v => H - 22 - (v / 100) * (H - 44);
+    const line = pts.map((x, i) => (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(x.t.pct).toFixed(1)).join(' ');
+    const grid = [0, 50, 100].map(v => '<line x1="' + pad + '" x2="' + (W - pad) + '" y1="' + Y(v) + '" y2="' + Y(v) + '" stroke="currentColor" opacity="' + (v === 50 ? '.35' : '.12') + '" ' + (v === 50 ? 'stroke-dasharray="4 4"' : '') + '/><text x="2" y="' + (Y(v) + 3) + '" font-size="9" fill="currentColor" opacity=".6">' + v + '</text>').join('');
+    const dots = pts.map((x, i) => '<circle cx="' + X(i).toFixed(1) + '" cy="' + Y(x.t.pct).toFixed(1) + '" r="4.5" fill="var(--surface)" stroke="' + tone(x.t.pct) + '" stroke-width="2.5"/><text x="' + X(i).toFixed(1) + '" y="' + (Y(x.t.pct) - 9).toFixed(1) + '" font-size="10" font-weight="700" text-anchor="middle" fill="currentColor">' + fmt(x.t.pct) + '</text><text x="' + X(i).toFixed(1) + '" y="' + (H - 6) + '" font-size="9" text-anchor="middle" fill="currentColor" opacity=".65">' + SHORT[x.p] + '</text>').join('');
+    return '<svg class="chart" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Évolution du pourcentage par période" style="color:var(--text)">' + grid + '<path d="' + line + '" fill="none" stroke="url(#lgrad)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>' + dots + '</svg>';
+}
+
+function viewNotes() {
+    const k = activeKid(), d = curData();
+    if (!k || !d) return demoBanner() + kidBar() + needKid();
+    const r = d.results, fees = d.fees || {};
+    let out = demoBanner() + offlineBanner() + kidBar();
+    if (!r) {
+        const need = Math.max(0, (num(fees.minRequired) || 0) - (num(fees.paid) || 0));
+        const lockMessage = d.resultsAccess && d.resultsAccess.message
+            ? esc(d.resultsAccess.message)
+            : 'Le montant payé (' + money(fees.paid || 0, fees.currency) + ') est inférieur au minimum requis (' + money(fees.minRequired || 0, fees.currency) + ')' + (need ? '. Il manque ' + money(need, fees.currency) + '.' : '.');
+        return out + '<div class="card lock" style="text-align:center"><div style="color:var(--bad);margin-bottom:6px">' + icon(IC.lock, ' style="width:34px;height:34px"') + '</div><h2>Notes verrouillées</h2><p class="sub" style="margin:6px 0 14px">' + lockMessage + '</p>' + (fees.configured === false ? '' : '<button class="btn" data-go="fees">Voir les frais</button>') + '</div>';
+    }
+    const keys = ['TG', 'S1', 'S2', 'P1', 'P2', 'EX1', 'P3', 'P4', 'EX2'];
+    out += '<div class="chips" role="group" aria-label="Choisir une période">' + keys.map(p => '<button class="pill' + (V.period === p ? ' on' : '') + '" data-act="period" data-p="' + p + '">' + esc(LABELS[p]) + '</button>').join('') + '</div>';
+    const tot = totalOf(r.courses, V.period), rk = r.totals && r.totals[V.period];
+    out += '<div class="card"><div class="row sb wrap"><div><div class="sub">' + esc(LABELS[V.period]) + '</div><h2 class="num" style="color:' + (tot ? tone(tot.pct) : 'inherit') + '">' + (tot ? fmt(tot.pct) + ' %' : 'Aucune note') + '</h2>' + (tot ? '<div class="sub">' + fmt(tot.got) + ' / ' + fmt(tot.max) + ' points</div>' : '') + '</div><div style="text-align:right">' +
+        (rk ? '<span class="chip">Place ' + esc(rk.rank) + ' / ' + esc(rk.of) + '</span>' : '') +
+        ((r.behaviour && r.behaviour.cond && r.behaviour.cond[V.period]) ? '<div class="sub" style="margin-top:6px">Conduite : <strong>' + esc(r.behaviour.cond[V.period]) + '</strong>' + ((r.behaviour.app && r.behaviour.app[V.period]) ? ' · Application : <strong>' + esc(r.behaviour.app[V.period]) + '</strong>' : '') + '</div>' : '') + '</div></div></div>';
+    const groups = {};
+    r.courses.forEach((c, i) => { (groups[c.category || 'Cours'] = groups[c.category || 'Cours'] || []).push([c, i]); });
+    Object.keys(groups).forEach(cat => {
+        out += '<div class="card"><h3 style="margin-bottom:6px">' + esc(cat) + '</h3><div class="list">' + groups[cat].map(([c, i]) => {
+            const s = scoreOf(c, V.period);
+            return '<button class="item" data-act="course" data-i="' + i + '"><div class="grow"><div class="t">' + esc(c.name) + '</div>' + (s ? '<div class="bar" style="margin-top:6px"><i style="width:' + Math.min(100, s.pct) + '%;background:' + tone(s.pct) + '"></i></div>' : '<div class="m">Pas de note</div>') + '</div><div style="text-align:right" class="num">' + (s ? '<strong>' + fmt(s.got) + '</strong><span style="color:var(--muted)"> / ' + fmt(s.max) + '</span><div class="m">' + fmt(s.pct) + ' %</div>' : '—') + '</div></button>';
+        }).join('') + '</div></div>';
+    });
+    return out;
+}
+const needKid = () => '<div class="card empty"><div class="big">👨‍👩‍👧</div><p>Liez d’abord un enfant depuis l’Accueil pour voir cette page.</p><p style="margin-top:12px"><button class="btn" data-go="home">Aller à l’Accueil</button></p></div>';
+
+function courseSheet(i) {
+    const d = curData(); if (!d || !d.results) return;
+    const c = d.results.courses[i]; if (!c) return;
+    const row = PERIODS.map(p => { const v = num((c.scores || {})[p]); return '<tr><td>' + esc(LABELS[p]) + '</td><td class="num">' + (v === null ? '—' : fmt(v)) + '</td><td class="num">' + fmt(maxOf(p, c.maxPer)) + '</td></tr>'; }).join('');
+    const evs = (c.evaluations || []).slice().sort((a, b) => String(b.date).localeCompare(String(a.date)));
+    const html = '<table class="t"><thead><tr><th>Période</th><th>Points</th><th>Maximum</th></tr></thead><tbody>' + row + '</tbody></table>' +
+        '<p class="sub" style="margin:12px 0"><strong>Pour réussir.</strong> ' + esc(passAdvice(c)) + '</p>' +
+        (evs.length ? '<h4 style="margin:14px 0 4px">Évaluations</h4><div class="list">' + evs.map(e => '<div class="item" style="display:block"><div class="row sb"><span class="t">' + esc(e.title) + '</span><strong class="num">' + (num(e.obtained) === null ? '—' : fmt(e.obtained)) + ' / ' + fmt(e.max) + '</strong></div><div class="m">' + esc(fdate(e.date)) + (e.period ? ' · ' + esc(LABELS[e.period] || e.period) : '') + '</div>' + (e.content ? '<div class="m" style="margin-top:4px;color:var(--text)">' + esc(e.content) + '</div>' : '') + '</div>').join('') + '</div>' : '');
+    ui.sheet(c.name, html);
+}
+
+function viewFees() {
+    const k = activeKid(), d = curData();
+    if (!k || !d) return demoBanner() + kidBar() + needKid();
+    const f = d.fees || {}, cur = f.currency, total = num(f.total) || 0, paid = num(f.paid) || 0, due = Math.max(0, total - paid), p = total ? Math.min(100, paid / total * 100) : 0;
+    const min = num(f.minRequired), unlocked = !!d.results, tr = feeStatus(f);
+    if (f.configured === false) {
+        return demoBanner() + offlineBanner() + kidBar() +
+            '<div class="card"><h2>Suivi des frais</h2><p class="sub" style="margin-top:8px">L’établissement n’a pas encore configuré le suivi des paiements dans Class-Ink Suivi. Contactez le secrétariat pour obtenir ces informations.</p></div>';
+    }
+    const chipFor = s => s === 'paid' ? '<span class="chip ok">Payé</span>' : s === 'late' ? '<span class="chip bad">En retard</span>' : s === 'partial' ? '<span class="chip warn">Partiel</span>' : '<span class="chip">À venir</span>';
+    let out = demoBanner() + offlineBanner() + kidBar();
+    out += '<div class="card"><div class="sub">Frais scolaires de ' + esc(d.student.name) + '</div><div class="row sb" style="margin:6px 0 10px"><h2 class="num">' + money(paid, cur) + ' <span class="sub">payés sur ' + money(total, cur) + '</span></h2></div><div class="bar" style="height:12px"><i style="width:' + p + '%;background:var(--grad)"></i></div><div class="row sb" style="margin-top:10px"><span class="sub">Reste à payer</span><strong class="num" style="color:' + (due ? 'var(--warn)' : 'var(--ok)') + '">' + money(due, cur) + '</strong></div></div>';
+    if (min !== null) out += '<div class="card ' + (unlocked ? '' : 'lock') + '"><div class="row" style="gap:12px;align-items:flex-start"><div style="color:' + (unlocked ? 'var(--ok)' : 'var(--bad)') + '">' + icon(unlocked ? IC.check : IC.lock) + '</div><div><h3>' + (unlocked ? 'Résultats accessibles' : 'Résultats verrouillés') + '</h3><p class="sub">' + (unlocked ? 'Le minimum de ' + money(min, cur) + ' est atteint : vous pouvez consulter les notes.' : 'Un minimum de ' + money(min, cur) + ' est nécessaire pour afficher les notes. Il manque ' + money(Math.max(0, min - paid), cur) + '.') + '</p></div></div></div>';
+    if (tr.length) out += '<div class="card"><h3 style="margin-bottom:4px">Tranches</h3><div class="list">' + tr.map(t => '<div class="item"><div class="grow"><div class="t">' + esc(t.label) + '</div><div class="m">Échéance : ' + esc(fdate(t.dueDate)) + ' · ' + money(t.amount, cur) + (t.paid && t.paid < t.amount ? ' (payé ' + money(t.paid, cur) + ')' : '') + '</div></div>' + chipFor(t.paid && t.paid < t.amount && t.status !== 'paid' ? 'partial' : t.status) + '</div>').join('') + '</div></div>';
+    if ((f.payments || []).length) out += '<div class="card"><h3 style="margin-bottom:4px">Paiements reçus</h3><div class="list">' + f.payments.map(x => '<div class="item"><div class="grow"><div class="t">' + esc(x.label || 'Paiement') + '</div><div class="m">' + esc(fdate(x.date)) + (x.receipt ? ' · reçu ' + esc(x.receipt) : '') + '</div></div><strong class="num">' + money(x.amount, cur) + '</strong></div>').join('') + '</div></div>';
+    const sch = d.school || {};
+    out += '<div class="card"><h3>Comment payer</h3><p class="sub" style="margin:6px 0 12px">' + esc(sch.payInfo || 'Adressez-vous au secrétariat de l’école.') + '</p>' + (sch.phone ? '<a class="btn sm ghost" href="tel:' + esc(String(sch.phone).replace(/[^+\d]/g, '')) + '">' + icon(IC.phone, ' style="width:16px;height:16px"') + ' Appeler l’école</a>' : '') + '</div>';
+    return out;
+}
+
+function viewMessages() {
+    const k = activeKid(), d = curData();
+    if (!k || !d) return demoBanner() + kidBar() + needKid();
+    const tabs = [['school', 'École'], ['teachers', 'Professeurs'], ['history', 'Historique']];
+    let out = demoBanner() + offlineBanner() + kidBar() + '<div class="seg" role="tablist">' + tabs.map(t => '<button class="' + (V.msgTab === t[0] ? 'on' : '') + '" data-act="msgtab" data-t="' + t[0] + '">' + t[1] + '</button>').join('') + '</div>';
+    const isRead = id => readIds().includes(id);
+    if (V.msgTab === 'school') {
+        const list = d.communications || [];
+        out += list.length ? '<div class="card"><div class="list">' + list.map(c => '<div class="item" style="display:block"><div class="row sb"><span class="t">' + (isRead('c:' + c.id) ? '' : '<span class="dot" style="display:inline-block;margin-right:6px;background:var(--bad)"></span>') + esc(c.title) + '</span><span class="m">' + esc(fdate(c.date)) + '</span></div><div class="m">' + esc(c.from || 'École') + '</div><p style="margin-top:6px;font-size:.92rem">' + esc(c.message) + '</p></div>').join('') + '</div></div>' : '<div class="card empty"><p>Aucun message de l’école pour le moment.</p></div>';
+    } else if (V.msgTab === 'teachers') {
+        const list = d.teacherNotes || [];
+        out += list.length ? '<div class="card"><div class="list">' + list.map(n => '<div class="item" style="display:block"><div class="row sb"><span class="t">' + (isRead('n:' + n.id) ? '' : '<span class="dot" style="display:inline-block;margin-right:6px;background:var(--bad)"></span>') + esc(n.teacher) + (n.course ? ' · ' + esc(n.course) : '') + '</span><span class="m">' + esc(fdate(n.date)) + '</span></div><p style="margin-top:6px;font-size:.92rem">' + esc(n.message) + '</p></div>').join('') + '</div></div>' : '<div class="card empty"><p>Aucune appréciation des professeurs pour le moment.</p></div>';
+    } else {
+        const h = DEMO ? [] : S.history;
+        out += h.length ? '<div class="card"><p class="sub" style="margin-bottom:6px">Actions faites sur cet appareil.</p><div class="list">' + h.map(x => '<div class="item"><div class="grow"><div class="t" style="font-weight:500">' + esc(x.text) + '</div><div class="m">' + esc(new Date(x.at).toLocaleString('fr-FR')) + '</div></div></div>').join('') + '</div></div>' : '<div class="card empty"><p>' + (DEMO ? 'Pas d’historique en démonstration.' : 'Aucune action enregistrée pour le moment.') + '</p></div>';
+    }
+    return out;
+}
+
+function viewSettings() {
+    const themes = [['auto', 'Auto'], ['dark', 'Sombre'], ['light', 'Clair']];
+    let out = demoBanner();
+    out += '<div class="card"><h3 style="margin-bottom:10px">Apparence</h3><div class="seg">' + themes.map(t => '<button class="' + (S.theme === t[0] ? 'on' : '') + '" data-act="theme" data-t="' + t[0] + '">' + t[1] + '</button>').join('') + '</div></div>';
+    out += '<div class="card"><h3>Code PIN</h3><p class="sub" style="margin:4px 0 12px">' + (S.pin ? 'Le PIN protège l’affichage du suivi sur cet appareil. Il se verrouille aussi après 5 minutes sans activité.' : 'Ajoutez un PIN pour masquer le suivi si quelqu’un d’autre utilise votre téléphone.') + '</p><div class="row wrap"><button class="btn sm" data-act="pin-set">' + (S.pin ? 'Changer le PIN' : 'Créer un PIN') + '</button>' + (S.pin ? '<button class="btn sm ghost" data-act="lock-now">Verrouiller maintenant</button><button class="btn sm ghost" data-act="pin-off">Retirer</button>' : '') + '</div><p class="sub" style="margin-top:10px;font-size:.78rem">Le PIN est un simple verrou d’écran : il ne remplace pas la sécurité de votre téléphone.</p></div>';
+    const list = kids();
+    out += '<div class="card"><h3 style="margin-bottom:4px">Enfants liés</h3>' + (list.length ? '<div class="list">' + list.map(k => '<div class="item"><div class="grow"><div class="t">' + esc(k.name || k.code) + '</div><div class="m">' + esc(k.schoolName || '') + (k.className ? ' · ' + esc(k.className) : '') + '</div></div><button class="icon-btn" data-act="unlink" data-key="' + esc(k.key) + '" aria-label="Retirer ' + esc(k.name || k.code) + '">' + icon(IC.trash) + '</button></div>').join('') + '</div>' : '<p class="sub">Aucun enfant lié.</p>') + '<div style="margin-top:12px"><button class="btn sm ghost" data-act="addkid">' + icon(IC.plus, ' style="width:16px;height:16px"') + ' Lier un enfant</button></div></div>';
+    out += '<div class="card"><h3>Démonstration</h3><p class="sub" style="margin:4px 0 12px">Essayez l’application avec des données fictives. Rien n’est enregistré.</p><button class="btn sm ghost" data-act="' + (DEMO ? 'demo-off' : 'demo-on') + '">' + (DEMO ? 'Quitter la démonstration' : 'Activer la démonstration') + '</button></div>';
+    out += '<div class="card"><h3>Données de cet appareil</h3><p class="sub" style="margin:4px 0 12px">Efface les enfants liés, l’historique, le PIN et les résultats gardés pour la lecture hors connexion.</p><button class="btn sm danger" data-act="erase">Tout effacer</button></div>';
+    out += '<p class="sub" style="text-align:center;font-size:.78rem">Class-Ink Suivi · version ' + VERSION + '<br>Serveur : ' + esc(API_BASE.replace(/^https?:\/\//, '')) + '</p>';
+    return out;
+}
+
+/* =====================================================================================================
+   AFFICHAGE
+   ===================================================================================================== */
+function updateMsgDot() {
+    const d = curData(), dot = $('#msgDot');
+    if (!d) { dot.classList.add('hidden'); return; }
+    const ids = (d.communications || []).map(c => 'c:' + c.id).concat((d.teacherNotes || []).map(n => 'n:' + n.id));
+    dot.classList.toggle('hidden', !ids.some(id => !readIds().includes(id)));
+}
+function render() {
+    const view = $('#view');
+    const fn = { home: viewHome, notes: viewNotes, fees: viewFees, messages: viewMessages, settings: viewSettings }[V.tab] || viewHome;
+    view.innerHTML = fn();
+    document.querySelectorAll('#dock button').forEach(b => b.classList.toggle('on', b.dataset.go === V.tab));
+    const k = activeKid();
+    $('#subtitle').textContent = k ? (k.name || k.code).split(' ')[0] + ' · ' + (k.className || 'Espace parents') : 'Espace parents';
+    $('#netdot').classList.toggle('off', V.offline);
+    $('#netdot').title = V.offline ? 'Hors connexion' : 'En ligne';
+    updateMsgDot();
+}
+function go(tab) {
+    if (!VIEWS.includes(tab)) return;
+    V.tab = tab;
+    if (tab === 'messages') markRead();
+    render();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    toggleDock(false);
+}
+function markRead() {
+    const d = curData(); if (!d) return;
+    const ids = (d.communications || []).map(c => 'c:' + c.id).concat((d.teacherNotes || []).map(n => 'n:' + n.id));
+    const store_ = readIds();
+    // l'ancien état « non lu » reste visible pendant cette visite, puis est marqué comme lu
+    setTimeout(() => { ids.forEach(id => { if (!store_.includes(id)) store_.push(id); }); if (!DEMO) saveState(); updateMsgDot(); }, 1500);
+}
+
+/* ---------- Menu flottant ---------- */
+function toggleDock(force) {
+    const open = typeof force === 'boolean' ? force : !$('#dock').classList.contains('open');
+    $('#dock').classList.toggle('open', open); $('#dock').setAttribute('aria-hidden', String(!open));
+    $('#fab').classList.toggle('open', open); $('#fab').setAttribute('aria-expanded', String(open));
+    $('#fab').setAttribute('aria-label', open ? 'Fermer le menu' : 'Ouvrir le menu');
+}
+$('#fab').addEventListener('click', e => { e.stopPropagation(); toggleDock(); });
+document.addEventListener('click', e => { if (!e.target.closest('#dock') && !e.target.closest('#fab')) toggleDock(false); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#dock').classList.contains('open')) { toggleDock(false); $('#fab').focus(); } });
+
+/* =====================================================================================================
+   ACTIONS
+   ===================================================================================================== */
+function handleApiError(e) {
+    const text = e instanceof ApiError ? e.message : 'Une erreur inattendue est survenue. Réessayez.';
+    return ui.alert(text, e && e.kind === 'network' ? 'Connexion impossible' : 'Class-Ink Suivi');
+}
+
+async function linkKid() {
+    const L = V.link, input = $('#studentCode');
+    const code = (input ? input.value : '').trim().toUpperCase();
+    if (!L.school) return;
+    if (!code) { await ui.alert('Saisissez l’ID de l’élève remis par l’école.'); return; }
+    V.busy = true; render();
+    try {
+        const data = await Api.student(L.school.id, code);
+        const key = L.school.id + '|' + code;
+        const kid = { key, schoolId: L.school.id, schoolName: (data.school && data.school.name) || L.school.name, code, name: data.student.name, className: data.student.className };
+        const list = kids();
+        const i = list.findIndex(k => k.key === key);
+        if (i >= 0) list[i] = kid; else list.push(kid);
+        cacheSet(key, { at: Date.now(), data });
+        if (DEMO) demoState.active = key; else { S.active = key; }
+        logHistory('Enfant lié : ' + kid.name + ' (' + kid.schoolName + ')');
+        if (!DEMO) saveState();
+        V.link = { q: '', results: null, school: null, loading: false };
+        V.offline = false; V.tab = 'home';
+    } catch (e) { V.busy = false; render(); await handleApiError(e); return; }
+    V.busy = false; render();
+    toast('Suivi affiché');
+}
+
+async function refreshKid(silent) {
+    const k = activeKid(); if (!k) { if (!silent) toast('Aucun enfant lié'); return; }
+    const btn = $('#refreshBtn'); btn.classList.add('spin');
+    try {
+        const data = await Api.student(k.schoolId, k.code);
+        cacheSet(k.key, { at: Date.now(), data });
+        k.name = data.student.name; k.className = data.student.className;
+        if (!DEMO) saveState();
+        V.offline = false;
+        if (!silent) toast('À jour');
+    } catch (e) {
+        liveData.delete(k.key);
+        V.offline = true;
+        if (e && e.kind === 'network') {
+            if (!silent) toast('Hors connexion : les résultats restent masqués jusqu’à une nouvelle vérification.');
+        } else if (!silent) {
+            await handleApiError(e);
         }
+    }
+    btn.classList.remove('spin'); render();
+}
 
-        function removeStudentId(studentId, event) {
-            event.stopPropagation();
-            savedStudents = savedStudents.filter(id => id !== studentId);
-            localStorage.setItem('class_ink_saved_students', JSON.stringify(savedStudents));
-            renderPills();
+function selectKid(key) {
+    if (DEMO) demoState.active = key; else { S.active = key; saveState(); }
+    V.period = 'TG'; V.offline = false; render(); refreshKid(true);
+}
+
+async function unlinkKid(key) {
+    const k = kids().find(x => x.key === key); if (!k) return;
+    if (!(await ui.confirm('Retirer « ' + (k.name || k.code) + ' » de cet appareil ? Ses résultats gardés pour la lecture hors connexion seront effacés.', 'Retirer cet enfant', { danger: true, ok: 'Retirer' }))) return;
+    const list = kids(); list.splice(list.findIndex(x => x.key === key), 1);
+    if (DEMO) { delete demoCache[key]; if (demoState.active === key) demoState.active = list[0] ? list[0].key : ''; }
+    else { liveData.delete(key); store.del(CACHE_PREFIX + key); if (S.active === key) S.active = list[0] ? list[0].key : ''; logHistory('Enfant retiré : ' + (k.name || k.code)); saveState(); }
+    render();
+}
+
+let schoolTimer = null;
+function onSchoolInput(value) {
+    const L = V.link; L.q = value;
+    clearTimeout(schoolTimer);
+    if (value.trim().length < 2) { L.results = null; L.loading = false; const r = $('#schoolRes'); if (r) r.innerHTML = ''; return; }
+    L.loading = true; $('#schoolRes').innerHTML = schoolResults();
+    schoolTimer = setTimeout(async () => {
+        try { L.results = await Api.searchSchools(value.trim()); }
+        catch (e) { L.results = null; L.loading = false; const r = $('#schoolRes'); if (r) r.innerHTML = ''; await handleApiError(e); return; }
+        L.loading = false; const r = $('#schoolRes'); if (r) r.innerHTML = schoolResults();
+    }, 350);
+}
+
+/* ---------- PIN ---------- */
+async function sha(text) {
+    try {
+        if (window.crypto && crypto.subtle) {
+            const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+            return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
         }
+    } catch (e) { /* repli ci-dessous */ }
+    let h = 2166136261; for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return 'f' + (h >>> 0).toString(16);
+}
+async function setPin() {
+    const first = await ui.prompt('Choisissez un code PIN de 4 à 6 chiffres.', { title: S.pin ? 'Nouveau PIN' : 'Créer un PIN', type: 'password', inputmode: 'numeric', maxLength: 6, placeholder: '••••' });
+    if (first === null) return;
+    if (!/^\d{4,6}$/.test(first)) { await ui.alert('Le PIN doit contenir de 4 à 6 chiffres.'); return; }
+    const second = await ui.prompt('Saisissez à nouveau le PIN pour confirmer.', { title: 'Confirmer le PIN', type: 'password', inputmode: 'numeric', maxLength: 6, placeholder: '••••' });
+    if (second === null) return;
+    if (second !== first) { await ui.alert('Les deux codes ne sont pas identiques. Le PIN n’a pas été enregistré.'); return; }
+    const salt = Math.random().toString(36).slice(2) + Date.now().toString(36);
+    S.pin = { salt, hash: await sha(salt + first) }; saveState(); armIdle(); render(); toast('PIN enregistré');
+}
+async function removePin() {
+    if (!(await ui.confirm('Retirer le code PIN ? Le suivi ne sera plus protégé par un code.', 'Retirer le PIN', { ok: 'Retirer' }))) return;
+    S.pin = null; saveState(); clearTimeout(idleTimer); render(); toast('PIN retiré');
+}
+let lockFails = 0, lockUntil = 0, idleTimer = null;
+function showLock() {
+    if (!S.pin) return;
+    toggleDock(false);
+    const box = $('#lock');
+    box.innerHTML = '<svg class="logo"><use href="#logo"/></svg><h2>Session verrouillée</h2><p class="sub">Saisissez votre PIN pour afficher le suivi.</p><form id="lockForm" autocomplete="off"><input class="input" id="lockPin" type="password" inputmode="numeric" maxlength="6" placeholder="••••" aria-label="Code PIN"><button class="btn" type="submit">Déverrouiller</button><div class="err" id="lockErr" role="alert"></div></form>';
+    box.classList.remove('hidden');
+    $('#lockForm').addEventListener('submit', async e => {
+        e.preventDefault();
+        const wait = lockUntil - Date.now();
+        if (wait > 0) { $('#lockErr').textContent = 'Trop d’essais. Patientez ' + Math.ceil(wait / 1000) + ' s.'; return; }
+        const ok = (await sha(S.pin.salt + $('#lockPin').value)) === S.pin.hash;
+        if (ok) { lockFails = 0; box.classList.add('hidden'); box.innerHTML = ''; armIdle(); }
+        else { lockFails++; $('#lockPin').value = ''; if (lockFails >= 5) { lockUntil = Date.now() + 30000; lockFails = 0; $('#lockErr').textContent = 'Trop d’essais. Patientez 30 s.'; } else $('#lockErr').textContent = 'PIN incorrect.'; }
+    });
+    setTimeout(() => { const i = $('#lockPin'); if (i) i.focus(); }, 50);
+}
+function armIdle() { clearTimeout(idleTimer); if (S.pin) idleTimer = setTimeout(showLock, IDLE_LOCK_MS); }
+['pointerdown', 'keydown', 'scroll'].forEach(ev => document.addEventListener(ev, () => { if (S.pin && $('#lock').classList.contains('hidden')) armIdle(); }, { passive: true }));
 
-        function renderPills() {
-            const containers = ['recent-ids-notes', 'recent-ids-frais'];
-            containers.forEach(containerId => {
-                const el = document.getElementById(containerId);
-                if (!el) return;
-                if (savedStudents.length === 0) {
-                    el.innerHTML = '<span style="color: var(--text-muted); font-size: 0.85rem;">Aucun ID enregistré.</span>';
-                    return;
-                }
-                el.innerHTML = savedStudents.map(id => `
-                    <div class="id-pill" onclick="loadStudentById('${id}')">
-                        <span>${id}</span>
-                        <span class="delete-id" onclick="removeStudentId('${id}', event)">&times;</span>
-                    </div>
-                `).join('');
-            });
-        }
+async function eraseAll() {
+    if (!(await ui.confirm('Effacer tous les enfants liés, l’historique, le PIN et les résultats gardés sur cet appareil ? Cette action est définitive.', 'Tout effacer', { danger: true, ok: 'Tout effacer' }))) return;
+    try { Object.keys(localStorage).filter(k => k.indexOf(CACHE_PREFIX) === 0).forEach(k => store.del(k)); } catch (e) { /* stockage indisponible */ }
+    store.del(STORE_KEY); liveData.clear(); S = defaults(); clearTimeout(idleTimer); V.tab = 'home'; V.period = 'TG'; applyTheme(); render(); toast('Données effacées');
+}
 
-        function renderStudentData() {
-            if (!currentStudentData) return;
+function setDemo(on) {
+    DEMO = on;
+    try { on ? sessionStorage.setItem(DEMO_FLAG, '1') : sessionStorage.removeItem(DEMO_FLAG); } catch (e) { /* indisponible */ }
+    demoState.kids = []; demoState.active = ''; demoState.read = []; Object.keys(demoCache).forEach(k => delete demoCache[k]);
+    V.tab = 'home'; V.period = 'TG'; V.offline = false; V.link = { q: '', results: null, school: null, loading: false };
+    render(); toast(on ? 'Mode démonstration activé' : 'Mode démonstration quitté');
+}
 
-            // Rendu Notes
-            const notesContainer = document.getElementById('notes-container');
-            let notesHtml = `<div class="card"><h3>Élève : ${currentStudentData.name}</h3></div>`;
+/* ---------- Clics (délégation) ---------- */
+document.addEventListener('click', async e => {
+    const goBtn = e.target.closest('[data-go]');
+    if (goBtn) { go(goBtn.dataset.go); return; }
+    const b = e.target.closest('[data-act]'); if (!b) return;
+    const act = b.dataset.act;
+    switch (act) {
+        case 'refresh': refreshKid(false); break;
+        case 'kid': selectKid(b.dataset.key); break;
+        case 'addkid': V.tab = 'home'; V.link = { q: '', results: null, school: null, loading: false }; V.addMode = true; { const prev = activeKey(); if (DEMO) demoState.active = ''; else S.active = ''; V.prevActive = prev; } render(); break;
+        case 'school': V.link.school = V.link.results[+b.dataset.i]; render(); setTimeout(() => { const i = $('#studentCode'); if (i) i.focus(); }, 30); break;
+        case 'school-cancel': V.link.school = null; V.link.results = null; V.link.q = ''; if (V.prevActive) { if (DEMO) demoState.active = V.prevActive; else S.active = V.prevActive; V.prevActive = null; } render(); break;
+        case 'link': linkKid(); break;
+        case 'period': V.period = b.dataset.p; render(); break;
+        case 'course': courseSheet(+b.dataset.i); break;
+        case 'msgtab': V.msgTab = b.dataset.t; render(); break;
+        case 'theme': S.theme = b.dataset.t; saveState(); applyTheme(); render(); break;
+        case 'pin-set': setPin(); break;
+        case 'pin-off': removePin(); break;
+        case 'lock-now': showLock(); break;
+        case 'unlink': unlinkKid(b.dataset.key); break;
+        case 'erase': eraseAll(); break;
+        case 'demo-on': setDemo(true); break;
+        case 'demo-off': setDemo(false); break;
+        default: break;
+    }
+});
+document.addEventListener('input', e => { if (e.target.id === 'schoolQ') onSchoolInput(e.target.value); });
+document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id === 'studentCode') { e.preventDefault(); linkKid(); } });
+window.addEventListener('online', () => { if (V.offline) refreshKid(true); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden && activeKid()) { const c = cacheGet(activeKid().key); if (!c || Date.now() - c.at > 10 * 60 * 1000) refreshKid(true); } });
 
-            // Vérification du montant minimum payé
-            const isUnlocked = currentStudentData.payment.amountPaid >= currentStudentData.payment.minRequired;
-
-            if (!isUnlocked) {
-                notesHtml += `
-                    <div class="locked-banner">
-                        🔒 Notes verrouillées : Le montant payé (${currentStudentData.payment.amountPaid} $) est inférieur au minimum requis (${currentStudentData.payment.minRequired} $) pour afficher les résultats.
-                    </div>
-                `;
-            } else {
-                currentStudentData.grades.forEach(course => {
-                    notesHtml += `
-                        <div class="card">
-                            <h4>${course.course}</h4>
-                            <table>
-                                <tr>
-                                    <th>Nom Evaluation</th>
-                                    <th>Date</th>
-                                    <th>Max</th>
-                                    <th>Pts obtenus</th>
-                                    <th>Actions</th>
-                                </tr>
-                                ${course.evaluations.map(ev => `
-                                    <tr>
-                                        <td>${ev.title}</td>
-                                        <td>${ev.date}</td>
-                                        <td>${ev.max}</td>
-                                        <td>${ev.obtained}</td>
-                                        <td><button style="padding: 5px 10px; font-size: 0.8rem;" onclick="showEvalContent('${encodeURIComponent(ev.content)}')">Afficher</button></td>
-                                    </tr>
-                                `).join('')}
-                            </table>
-                        </div>
-                    `;
-                });
-            }
-            notesContainer.innerHTML = notesHtml;
-
-            // Rendu Frais
-            const fraisContainer = document.getElementById('frais-container');
-            fraisContainer.innerHTML = `
-                <div class="card">
-                    <h3>Suivi Financier - ${currentStudentData.name}</h3>
-                    <div class="fee-row"><span>Somme Payée</span><strong>${currentStudentData.payment.amountPaid} $</strong></div>
-                    <div class="fee-row"><span>Somme Due</span><strong>${currentStudentData.payment.totalFee - currentStudentData.payment.amountPaid} $</strong></div>
-                    <div class="fee-row"><span>Frais Scolaire Total</span><strong>${currentStudentData.payment.totalFee} $</strong></div>
-                    ${currentStudentData.payment.tranches.map(t => `
-                        <div class="fee-row">
-                            <span>${t.label} (${t.dueDate})</span>
-                            <span><strong>${t.amount} $</strong> [${t.status}]</span>
-                        </div>
-                    `).join('')}
-                </div>
-            `;
-
-            // Rendu Communications
-            const commsList = document.getElementById('comms-list');
-            commsList.innerHTML = currentStudentData.communications.map(c => `
-                <div style="padding: 10px 0; border-bottom: 1px solid var(--border);">
-                    <small style="color: var(--text-muted);">${c.date}</small>
-                    <h5 style="margin: 4px 0;">${c.title}</h5>
-                    <p style="font-size: 0.9rem;">${c.message}</p>
-                </div>
-            `).join('');
-
-            // Rendu Historique
-            const historyList = document.getElementById('history-list');
-            historyList.innerHTML = currentStudentData.history.map(h => `
-                <div style="padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 0.9rem;">
-                    <span style="color: var(--text-muted);">${h.timestamp}</span> - ${h.action}
-                </div>
-            `).join('');
-        }
-
-        function showEvalContent(content) {
-            document.getElementById('modal-eval-content').innerText = decodeURIComponent(content);
-            document.getElementById('eval-modal').classList.add('active');
-        }
-
-        function closeModal() {
-            document.getElementById('eval-modal').classList.remove('active');
-        }
-
-        function toggleTheme() {
-            const html = document.documentElement;
-            const currentTheme = html.getAttribute('data-theme');
-            html.setAttribute('data-theme', currentTheme === 'dark' ? 'light' : 'dark');
-        }
-
-        function clearSavedIds() {
-            savedStudents = [];
-            localStorage.removeItem('class_ink_saved_students');
-            renderPills();
-            alert('Tous les identifiants enregistrés ont été supprimés.');
-        }
-
-        // Initialisation
-        renderPills();
-    </script>
+/* =====================================================================================================
+   DÉMARRAGE
+   ===================================================================================================== */
+applyTheme();
+render();
+setTimeout(() => {
+    $('#splash').classList.add('done');
+    if (S.pin) showLock(); else armIdle();
+    if (activeKid() && !DEMO) refreshKid(true);
+}, 1500);
+})();
+</script>
 </body>
 </html>
