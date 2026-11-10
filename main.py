@@ -1167,7 +1167,7 @@ async def crypt_observe_client_requests(request: Request, call_next):
         or not path.startswith("/api/")
         or path.startswith("/api/crypt-console/")
         or path in ("/api/telemetry/events", "/api/telemetry/complaints")
-        or app_name not in ("primeink", "classink", "suivi")
+        or app_name not in ("primeink", "classink", "suivi", "manager")
         or not re.fullmatch(r"[A-Za-z0-9._:-]{8,100}", device_id)
     ):
         return response
