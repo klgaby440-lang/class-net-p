@@ -62,3 +62,40 @@ def test_crypt_manager_login_preserves_rate_limit_response():
     manager = source.split('@app.post("/api/manager/login")', 1)[1].split('@app.put("/api/manager/schedule")', 1)[0]
     assert "isinstance(result, JSONResponse)" in manager
     assert "status_code=result.status_code" in manager
+
+
+def test_crypt_sql_rejects_json_row_serialization_and_database_introspection():
+    for query in (
+        "SELECT to_jsonb(s) FROM school_information s",
+        "SELECT current_setting('DATABASE_URL') FROM school_information",
+        "SELECT current_user FROM school_information",
+    ):
+        with pytest.raises(HTTPException):
+            validate_crypt_read_query(query)
+
+
+def test_crypt_login_wrappers_preserve_rate_limit_response_and_disable_cache(monkeypatch):
+    import json
+    import main
+    from fastapi.responses import JSONResponse
+    from main import LoginSchema, PrimeNetLoadSchema
+
+    limited = JSONResponse(status_code=429, content={"status": False, "message": "Trop de tentatives."})
+    monkeypatch.setattr(main, "login_school", lambda *_args: limited)
+
+    manager_response = main.manager_login(LoginSchema(identifier="school-1", password="secret"), db=None)
+    assert manager_response.status_code == 429
+    assert json.loads(manager_response.body)["message"] == "Trop de tentatives."
+    assert manager_response.headers["cache-control"].startswith("no-store")
+
+    prime_response = main.load_primenet_state(PrimeNetLoadSchema(school_id="school-1", password="secret"), db=None)
+    assert prime_response.status_code == 429
+    assert json.loads(prime_response.body)["message"] == "Trop de tentatives."
+    assert prime_response.headers["cache-control"].startswith("no-store")
+
+
+def test_crypt_admin_dependency_rejects_non_admin_claims():
+    import main
+    with pytest.raises(HTTPException) as error:
+        main.require_crypt_admin({"role": "school", "school_id": "school-1"})
+    assert error.value.status_code == 403
