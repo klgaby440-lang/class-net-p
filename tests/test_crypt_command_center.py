@@ -124,3 +124,58 @@ def test_llink_assistant_requires_authenticated_manager_and_crypt_sessions():
 def test_llink_assistant_rate_limiter_is_defined():
     import main
     assert isinstance(main.CRYPT_LLINK_LIMITER, main.AttemptLimiter)
+
+ 
+def test_llink_assistant_relays_velora_stream_without_school_context(monkeypatch):
+    import main
+    from fastapi.testclient import TestClient
+
+    captured = {}
+    main.CRYPT_LLINK_LIMITER.reset("llink-assist:testclient")
+
+    class FakeUpstream:
+        status_code = 200
+
+        async def aiter_raw(self):
+            yield b"Bonjour "
+            yield b"depuis Llink."
+
+        async def aclose(self):
+            captured["upstream_closed"] = True
+
+    class FakeAsyncClient:
+        def __init__(self, **_kwargs):
+            pass
+
+        def build_request(self, method, url, json, headers):
+            captured["method"] = method
+            captured["url"] = url
+            captured["payload"] = json
+            return object()
+
+        async def send(self, _request, stream=False):
+            captured["stream"] = stream
+            return FakeUpstream()
+
+        async def aclose(self):
+            captured["client_closed"] = True
+
+    monkeypatch.setattr(main.httpx, "AsyncClient", FakeAsyncClient)
+    manager_token = main.create_token({"role": "school", "school_id": "ci-school"}, 3600)
+    with TestClient(main.app) as client:
+        response = client.post(
+            "/api/llink/assist",
+            headers={"X-CRYPT-App": "manager", "Authorization": "Bearer " + manager_token},
+            json={"message": "Comment actualiser l'horaire ?", "history": []},
+        )
+
+    assert response.status_code == 200
+    assert response.text == "Bonjour depuis Llink."
+    assert captured["url"] == "https://llink-usz9.onrender.com/api/chat"
+    assert captured["stream"] is True
+    assert captured["payload"]["model"] == "velora"
+    assert captured["payload"]["level"] == "velora"
+    assert captured["payload"]["data_collection_consent"] is False
+    assert "aucune donnée de l'école" in captured["payload"]["preferences"]
+    assert captured["upstream_closed"] is True
+    assert captured["client_closed"] is True
