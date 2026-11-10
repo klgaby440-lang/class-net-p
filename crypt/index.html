@@ -159,7 +159,7 @@ $('#loginForm').addEventListener('submit',async e=>{
  catch(err){$('#loginError').textContent=err.message||'Connexion impossible.';}finally{btn.disabled=false;}
 });
 $('#logoutBtn').addEventListener('click',()=>logout(true));
-window.addEventListener('pagehide',()=>{token=null;window.__CRYPT_ADMIN_TOKEN__=null;schools=[];devices=[];events=[];tickets=[];createdAccount=null;});
+window.addEventListener('pagehide',()=>{token=null;window.__CRYPT_ADMIN_TOKEN__=null;schools=[];devices=[];events=[];tickets=[];createdAccount=null;const panel=document.getElementById('createdAccountPanel');if(panel)panel.classList.add('hidden');['createdSchoolId','createdBulletinId','createdSchoolPassword'].forEach(id=>{const node=document.getElementById(id);if(node)node.textContent='';});});
 document.addEventListener('click',e=>{const b=e.target.closest('[data-page]');if(b)go(b.dataset.page);if(e.target.closest('[data-refresh]'))loadOverview();});
 async function loadOverview(){
  try{const r=await api('/api/crypt-console/overview');const d=r.data;
@@ -190,7 +190,7 @@ function generateSchoolPassword(){
  if(!window.crypto||typeof window.crypto.getRandomValues!=='function')throw new Error('Génération sécurisée indisponible dans ce navigateur.');
  const bytes=new Uint8Array(18);window.crypto.getRandomValues(bytes);
  $('#schoolPasswordInput').value=Array.from(bytes,b=>chars[b%chars.length]).join('');
- $('#schoolPasswordInput').type='text';
+ $('#schoolPasswordInput').type='password';
 }
 async function copyConsoleText(value){
  const text=String(value||'');if(!text)return false;
