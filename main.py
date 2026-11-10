@@ -455,7 +455,7 @@ class SchoolStudentInformation(Base):
     student_born_place = Column(String, nullable=True)
     student_n_permanent = Column(String, unique=True, index=True)
     # Identifiant public, imprévisible et permanent communiqué aux parents.
-    suivi_code = Column(String(40), nullable=True, unique=True, index=True)
+    suivi_code = Column(String(40), nullable=True)
     # Les résultats restent invisibles aux parents tant que l'école ne les autorise pas.
     suivi_results_allowed = Column(Boolean, nullable=False, default=False, server_default="false")
     suivi_results_updated_at = Column(DateTime, nullable=True)
@@ -2613,6 +2613,20 @@ def get_teacher_classroom_information(
     context = build_teacher_classroom_context(db, teacher)
     return {"status": True, "data": context}
 
+def is_suivi_results_allowed(db: Session, school_id: str, student: SchoolStudentInformation) -> bool:
+    """L'accès parent exige le feu vert individuel ET l'autorisation des règles scolaires applicables."""
+    if not bool(student.suivi_results_allowed):
+        return False
+    rules = db.query(GradeAccessRule).filter(
+        GradeAccessRule.school_id == school_id,
+        GradeAccessRule.audience == "suivi",
+    ).all()
+    return all(
+        resolve_grade_access(rules, student.class_id, period, "suivi", default=True)
+        for period in PERIODS
+    )
+
+
 def build_suivi_results_payload(db: Session, school: SchoolInformation, student: SchoolStudentInformation) -> dict:
     """Construit le suivi parent depuis les notes PrimeInk et les évaluations ClassInk."""
     classe = db.query(ClasseInformation).filter(
@@ -2639,7 +2653,7 @@ def build_suivi_results_payload(db: Session, school: SchoolInformation, student:
     ).all()
     linked_ids.extend(link.classink_student_id for link in links if link.classink_student_id)
     teacher_emails = [
-        row.email for row in db.query(Teacher.email).filter(
+        email for (email,) in db.query(Teacher.email).filter(
             Teacher.school_id == school.school_id
         ).all()
     ]
@@ -2766,15 +2780,7 @@ def suivi_get_student(payload: dict, request: Request, db: Session = Depends(get
         ensure_suivi_student_code(db, student)
         db.commit()
 
-    rules = db.query(GradeAccessRule).filter(
-        GradeAccessRule.school_id == school_id,
-        GradeAccessRule.audience == "suivi",
-    ).all()
-    rule_allows = all(
-        resolve_grade_access(rules, student.class_id, period, "suivi", default=True)
-        for period in PERIODS
-    )
-    results_allowed = bool(student.suivi_results_allowed) and rule_allows
+    results_allowed = is_suivi_results_allowed(db, school_id, student)
 
     classe = db.query(ClasseInformation).filter(
         ClasseInformation.id == student.class_id,
@@ -2868,7 +2874,8 @@ def suivi_school_class_students(
                 row.student_name or "", row.student_post_name or "", row.student_pre_name or ""
             ) if part).strip(),
             "classId": row.class_id,
-            "resultsAllowed": bool(row.suivi_results_allowed),
+            "resultsAllowed": is_suivi_results_allowed(db, school_id, row),
+            "individualAccessAllowed": bool(row.suivi_results_allowed),
         })
     db.commit()
     return {
@@ -2904,17 +2911,21 @@ def suivi_school_set_student_access(
     student.suivi_results_updated_at = datetime.utcnow()
     student.suivi_results_updated_by = school_id
     db.commit()
+    effective_allowed = is_suivi_results_allowed(db, school_id, student)
     return {
         "status": True,
         "message": (
             "Les résultats sont maintenant visibles dans Class-Ink Suivi."
+            if effective_allowed else
+            "Le choix individuel est enregistré, mais une règle scolaire bloque encore l'affichage des résultats."
             if student.suivi_results_allowed else
             "Les résultats sont maintenant bloqués dans Class-Ink Suivi."
         ),
         "data": {
             "studentId": student.id,
             "studentCode": student.suivi_code,
-            "resultsAllowed": bool(student.suivi_results_allowed),
+            "resultsAllowed": effective_allowed,
+            "individualAccessAllowed": bool(student.suivi_results_allowed),
         },
     }
 
