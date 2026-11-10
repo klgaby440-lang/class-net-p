@@ -217,5 +217,29 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn("finalPreview.duplicates", source)
 
 
+    def test_manager_html_is_authenticated_readonly_and_never_persists_school_data(self):
+        source = (ROOT / "manager/index.html").read_text(encoding="utf-8")
+        self.inspect_file("manager/index.html")
+        for storage_api in ("localStorage", "sessionStorage", "indexedDB", "serviceWorker"):
+            self.assertNotIn(storage_api, source)
+        self.assertIn("/api/manager/login", source)
+        self.assertIn("cache:'no-store'", source)
+        self.assertIn("pagehide", source)
+        self.assertIn("LECTURE SEULE", source)
+        self.assertNotIn("Institut Horizon", source)
+        self.assertNotIn("Aline Mukendi", source)
+
+    def test_manager_and_primeink_publish_server_schedule_and_share_suivi_access(self):
+        server = (ROOT / "main.py").read_text(encoding="utf-8")
+        prime = (ROOT / "prime/index.html").read_text(encoding="utf-8")
+        self.assertIn('@app.post("/api/manager/login")', server)
+        self.assertIn('@app.put("/api/manager/schedule")', server)
+        self.assertIn('"Cache-Control": "no-store, private, max-age=0"', server)
+        self.assertIn('"managerSchedule"', server)
+        self.assertIn('"suiviIndividualAccessAllowed": bool(s.suivi_results_allowed)', server)
+        self.assertIn("/api/manager/schedule", prime)
+        self.assertIn("suiviResultsAllowed", server)
+
+
 if __name__ == "__main__":
     unittest.main()
