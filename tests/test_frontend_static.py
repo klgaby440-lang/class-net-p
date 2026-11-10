@@ -139,6 +139,26 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn("db.user && db.user.isLoggedIn && db.user.id", source)
         self.assertIn("db.user && db.user.isLoggedIn ? String(db.user.id || '')", source)
 
+    def test_primeink_prints_all_students_from_the_active_class(self):
+        source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
+        self.assertIn("window.printClassBulletins = function()", source)
+        self.assertIn("const classCandidates = [activeClassId, bpDisplayedClassId]", source)
+        self.assertIn("const students = appState.students.filter(student =>", source)
+        self.assertIn("bpPrint(students.map(student => student.id), cls.id);", source)
+        self.assertNotIn("bpPrint(getSortedStudentsByClass(activeClassId).map(s => s.id), activeClassId)", source)
+
+    def test_primeink_deliberation_lists_students_of_the_selected_class(self):
+        source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
+        self.assertIn('id="delibStudentListSidebar"', source)
+        self.assertIn('id="delibStudentSearch"', source)
+        self.assertIn("function renderDeliberationStudentList(classId)", source)
+        self.assertIn('String(student.classId ?? "") === String(cls.id ?? "")', source)
+        self.assertIn('button.addEventListener("click", () => {', source)
+        self.assertIn('delibStudentSearch.addEventListener("input"', source)
+        self.assertIn("renderDeliberationStudentList(activeClassId);", source)
+        self.assertIn("renderDeliberationView(activeStudentId, false);", source)
+
+
     def test_primeink_photo_import_duplicate_keys_and_student_name_split(self):
         source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
         self.assertIn("function primeInkImportNormalize(value)", source)
