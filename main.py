@@ -2337,7 +2337,7 @@ async def classink_llink_assist(payload: dict, request: Request):
     }
     CRYPT_LLINK_LIMITER.record(limiter_key)
 
-    client = httpx.AsyncClient(timeout=httpx.Timeout(connect=12.0, read=90.0, write=20.0, pool=12.0))
+    client = httpx.AsyncClient(timeout=httpx.Timeout(connect=30.0, read=90.0, write=20.0, pool=12.0))
     url = os.getenv("LLINK_API_BASE_URL", "https://llink-usz9.onrender.com").rstrip("/") + "/api/chat"
     try:
         upstream = await client.send(
