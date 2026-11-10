@@ -1264,6 +1264,18 @@ body {
                     <span class="bp-autosave-hint" title="Les cases sont sauvegardées automatiquement sur cet appareil.">✓ Sauvegarde automatique · Flèches pour naviguer</span>
                     <span class="bp-warn" id="bpWarn"></span>
                 </div>
+                <div id="primeInkSuiviAccessPanel" role="region" aria-live="polite"
+                     style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:0 0 .8rem;padding:.75rem .9rem;border:1px solid var(--border-color);border-radius:10px;background:var(--bg-card);">
+                    <div style="min-width:210px;flex:1">
+                        <strong style="display:block;font-size:.88rem;">Class-Ink Suivi · Accès du parent</strong>
+                        <span id="primeInkSuiviStudentCode" style="font-size:.82rem;opacity:.8;">Sélectionnez un élève pour afficher son identifiant parent.</span>
+                        <span id="primeInkSuiviAccessStatus" style="display:block;font-size:.78rem;margin-top:2px;opacity:.8;"></span>
+                    </div>
+                    <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;">
+                        <button id="primeInkSuiviCopyCode" type="button" class="btn-secondary" onclick="bpSuiviCopyCode()" disabled>Copier l'identifiant</button>
+                        <button id="primeInkSuiviToggle" type="button" class="btn-primary" onclick="bpSuiviToggleAccess()" disabled>Autoriser les résultats</button>
+                    </div>
+                </div>
                 <div class="bp-screen-frame" id="bulletinScreenFrame">
                     <div id="officialBulletinArea"></div>
                 </div>
@@ -2804,6 +2816,7 @@ window.alert = function(message) { showCustomAlert(message); };
                     bpRendering = false;
                     bpSyncToolbar(cls);
                     bpFitScreen();
+                    if (typeof bpSuiviRenderAccessPanel === 'function') bpSuiviRenderAccessPanel(student);
                 };
 
                 // Bulletin vierge d'une classe sans élève : il montre le modèle et les cours de CETTE classe
@@ -2817,6 +2830,7 @@ window.alert = function(message) { showCustomAlert(message); };
                     bpRendering = false;
                     bpSyncToolbar(cls);
                     bpFitScreen();
+                    if (typeof bpSuiviRenderAccessPanel === 'function') bpSuiviRenderAccessPanel(null);
                 };
 
                 // Redessine ce qui est affiché : le bulletin de l'élève actif, ou le bulletin vierge de la classe
@@ -3302,11 +3316,162 @@ async function bpServerCall(method, path, body) {
         const response = await window.primeInkFetchWithTimeout(API_BASE_URL + path, { method, headers, body: JSON.stringify(body) }, 20000);
         let data = {};
         try { data = await response.json(); } catch (e) { /* réponse sans détail */ }
-        return { ok: response.ok && data.status !== false, status: response.status, message: data.message || data.detail || '' };
+        return { ok: response.ok && data.status !== false, status: response.status, message: data.message || data.detail || '', data: data.data || null };
     } catch (e) {
         return { ok: false, offline: true };
     }
 }
+// ------------------------------------------------------------------
+ // CLASS-INK SUIVI : codes parents et blocage individuel des résultats.
+ // Le serveur attribue le code et reste l'autorité pour l'accès aux notes.
+ // ------------------------------------------------------------------
+const bpSuiviRosterCache = Object.create(null);
+const bpSuiviRosterPending = Object.create(null);
+let bpSuiviCurrentStudentId = '';
+
+function bpSuiviCurrentStudent() {
+    return (appState.students || []).find(student =>
+        String(student.id ?? '') === String(bpSuiviCurrentStudentId || activeStudentId || '')
+    ) || null;
+}
+
+function bpSuiviStudentName(student) {
+    return [student && student.name, student && student.postname, student && student.prename]
+        .filter(Boolean).join(' ');
+}
+
+function bpSuiviGetRosterRow(student) {
+    if (!student) return null;
+    const rows = bpSuiviRosterCache[String(student.classId)] || [];
+    return rows.find(row => String(row.id) === String(student.id)) || null;
+}
+
+function bpSuiviRenderAccessPanel(student) {
+    const panel = document.getElementById('primeInkSuiviAccessPanel');
+    const codeNode = document.getElementById('primeInkSuiviStudentCode');
+    const statusNode = document.getElementById('primeInkSuiviAccessStatus');
+    const copyButton = document.getElementById('primeInkSuiviCopyCode');
+    const toggleButton = document.getElementById('primeInkSuiviToggle');
+    if (!panel || !codeNode || !statusNode || !copyButton || !toggleButton) return;
+
+    bpSuiviCurrentStudentId = student ? String(student.id) : '';
+    const row = bpSuiviGetRosterRow(student);
+    if (!student) {
+        codeNode.textContent = 'Aucun élève sélectionné.';
+        statusNode.textContent = '';
+        copyButton.disabled = true;
+        toggleButton.disabled = true;
+        panel.style.opacity = '.72';
+        return;
+    }
+    panel.style.opacity = '1';
+    if (!row || !row.code) {
+        codeNode.textContent = 'Identifiant parent : non attribué';
+        statusNode.textContent = 'Synchronisez les informations de cette classe avec ClassNet pour générer les identifiants.';
+        copyButton.disabled = true;
+        toggleButton.disabled = true;
+        return;
+    }
+
+    codeNode.textContent = 'ID parent : ' + row.code + ' · ' + bpSuiviStudentName(student);
+    statusNode.textContent = row.resultsAllowed
+        ? 'Résultats visibles pour le parent.'
+        : 'Résultats bloqués pour le parent.';
+    statusNode.style.color = row.resultsAllowed ? '#16a34a' : '#dc6b24';
+    copyButton.disabled = false;
+    toggleButton.disabled = false;
+    toggleButton.textContent = row.resultsAllowed ? 'Bloquer les résultats' : 'Autoriser les résultats';
+    toggleButton.style.backgroundColor = row.resultsAllowed ? '#dc2626' : '#16a34a';
+}
+
+function bpSuiviRenderSidebarCodes(classId) {
+    const rows = bpSuiviRosterCache[String(classId)] || [];
+    const byId = new Map(rows.map(row => [String(row.id), row]));
+    document.querySelectorAll('#studentListSidebar .list-item[data-student-id]').forEach(button => {
+        const row = byId.get(String(button.dataset.studentId));
+        if (!row || !row.code) return;
+        const student = (appState.students || []).find(item => String(item.id) === String(row.id));
+        if (!student) return;
+        button.innerHTML =
+            '<span style="display:block;font-weight:600;">' + safeHTML(bpSuiviStudentName(student)) + '</span>' +
+            '<small style="display:block;margin-top:3px;opacity:.78;font-size:.72rem;">ID parent : ' + safeHTML(row.code) +
+            ' · ' + (row.resultsAllowed ? 'Résultats visibles' : 'Bloqués') + '</small>';
+    });
+}
+
+async function bpSuiviLoadRoster(classId) {
+    if (classId === null || classId === undefined || String(classId) === '') return;
+    const key = String(classId);
+    if (bpSuiviRosterPending[key]) return bpSuiviRosterPending[key];
+    bpSuiviRosterPending[key] = (async () => {
+        const result = await bpServerCall(
+            'GET',
+            '/api/suivi/school/classes/' + encodeURIComponent(key) + '/students',
+            null
+        );
+        if (!result.ok) {
+            if (!result.offline && result.status !== 401 && result.status !== 403) {
+                showCustomAlert(result.message || 'Impossible de charger les identifiants Class-Ink Suivi.');
+            }
+            const panel = document.getElementById('primeInkSuiviStudentCode');
+            const status = document.getElementById('primeInkSuiviAccessStatus');
+            if (panel) panel.textContent = 'Identifiants parent indisponibles';
+            if (status) status.textContent = result.message || 'Connectez PrimeInk au serveur, puis réessayez.';
+            return;
+        }
+        const data = result.data || {};
+        bpSuiviRosterCache[key] = Array.isArray(data.students) ? data.students : [];
+        bpSuiviRenderSidebarCodes(key);
+        const student = bpSuiviCurrentStudent();
+        if (student && String(student.classId) === key) bpSuiviRenderAccessPanel(student);
+    })().finally(() => { delete bpSuiviRosterPending[key]; });
+    return bpSuiviRosterPending[key];
+}
+
+window.bpSuiviCopyCode = async function() {
+    const student = bpSuiviCurrentStudent();
+    const row = bpSuiviGetRosterRow(student);
+    if (!row || !row.code) return;
+    try {
+        await navigator.clipboard.writeText(row.code);
+        if (typeof showCustomAlert === 'function') showCustomAlert('Identifiant parent copié : ' + row.code);
+    } catch (e) {
+        if (typeof showCustomAlert === 'function') showCustomAlert('Identifiant parent : ' + row.code);
+    }
+};
+
+window.bpSuiviToggleAccess = async function() {
+    const student = bpSuiviCurrentStudent();
+    const row = bpSuiviGetRosterRow(student);
+    if (!student || !row || !row.code) {
+        if (typeof showCustomAlert === 'function') showCustomAlert('Chargez d’abord les identifiants de la classe.');
+        return;
+    }
+    const next = !row.resultsAllowed;
+    const question = next
+        ? 'Autoriser le parent de ' + bpSuiviStudentName(student) + ' à consulter ses résultats dans Class-Ink Suivi ?'
+        : 'Bloquer immédiatement l’affichage des résultats de ' + bpSuiviStudentName(student) + ' dans Class-Ink Suivi ?';
+    if (typeof showCustomConfirm === 'function' && !(await showCustomConfirm(question, 'Class-Ink Suivi'))) return;
+
+    const button = document.getElementById('primeInkSuiviToggle');
+    if (button) { button.disabled = true; button.textContent = 'Enregistrement…'; }
+    const result = await bpServerCall(
+        'PUT',
+        '/api/suivi/school/students/' + encodeURIComponent(student.id) + '/access',
+        { is_allowed: next }
+    );
+    if (!result.ok) {
+        if (button) button.disabled = false;
+        bpSuiviRenderAccessPanel(student);
+        if (typeof showCustomAlert === 'function') showCustomAlert(result.message || 'Impossible de modifier les droits du parent.');
+        return;
+    }
+    row.resultsAllowed = next;
+    bpSuiviRenderSidebarCodes(student.classId);
+    bpSuiviRenderAccessPanel(student);
+    if (typeof showCustomAlert === 'function') showCustomAlert(result.message || 'Accès parent mis à jour.');
+};
+
 async function bpPushSchoolSettings(partial) {
     const result = await bpServerCall('PUT', '/api/school/settings', partial);
     if (!result.ok && !result.offline && result.message) showCustomAlert(result.message);
@@ -3512,6 +3677,7 @@ async function bpPushClassBulletin(cls) {
                 students.forEach(st => {
                     const btn = document.createElement('button');
                     btn.className = `list-item ${st.id === activeStudentId ? 'active' : ''}`;
+                    btn.dataset.studentId = String(st.id);
                     btn.textContent = `${st.name} ${st.postname} ${st.prename}`;
                     btn.addEventListener('click', () => {
                         document.querySelectorAll('#studentListSidebar .list-item').forEach(b => b.classList.remove('active'));
@@ -3531,6 +3697,7 @@ async function bpPushClassBulletin(cls) {
 
                 renderCoursesSidebar(classId);
                 renderStatsSidebar(classId);
+                if (typeof bpSuiviLoadRoster === 'function') bpSuiviLoadRoster(classId);
             }
 
             function renderCoursesSidebar(classId) {
