@@ -3805,6 +3805,8 @@ async function bpPushClassBulletin(cls) {
                     button.style.cssText = 'padding:.25rem .5rem;font-size:.72rem;';
                     button.addEventListener('click', () => {
                         primeInkStudentPages[key] = nextPage;
+                        const nextStudent = students[(nextPage - 1) * PRIMEINK_STUDENTS_PER_PAGE];
+                        if (nextStudent) activeStudentId = nextStudent.id;
                         loadClassData(classId);
                     });
                     return button;
