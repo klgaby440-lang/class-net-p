@@ -2199,7 +2199,9 @@ def crypt_telemetry_event(payload: dict, request: Request, db: Session = Depends
     event_type = str(payload.get("event_type") or "feature").lower()
     if event_type not in ("feature", "client_error", "sync_error", "login_error"):
         event_type = "feature"
-    _crypt_touch_public_device(db, request, app_name, device_id)
+    device = _crypt_touch_public_device(db, request, app_name, device_id)
+    school_id = school_id or (device.school_id if device else None)
+    account = account or (device.account_identifier if device else None)
     db.add(CryptTelemetryEvent(
         device_id=device_id, app=app_name, school_id=school_id, account_identifier=account,
         event_type=event_type, feature=feature, message=message,
@@ -2234,8 +2236,8 @@ def crypt_telemetry_complaint(payload: dict, request: Request, db: Session = Dep
         claims = verify_token(authorization[7:].strip()) or {}
     ticket = CryptSupportTicket(
         app=app_name, device_id=device_id,
-        school_id=str(claims.get("school_id") or request.headers.get("x-crypt-school") or "")[:100] or None,
-        account_identifier=str(claims.get("email") or claims.get("school_id") or "")[:180] or None,
+        school_id=str(claims.get("school_id") or request.headers.get("x-crypt-school") or (device.school_id if device else "") or "")[:100] or None,
+        account_identifier=str(claims.get("email") or claims.get("school_id") or (device.account_identifier if device else "") or "")[:180] or None,
         contact=clean_text(payload.get("contact"), 180),
         category=clean_text(payload.get("category") or "support", 60),
         subject=subject, message=message, status="open",
