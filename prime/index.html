@@ -7635,10 +7635,13 @@ window.primeInkFetchWithTimeout = async function(url, options = {}, timeoutMs = 
   'use strict';
   const APP = 'primeink';
   const API = 'https://class-net-p.onrender.com';
-  const SESSION = (typeof window.__PRIMEINK_DEVICE_SESSION__ !== 'undefined' && window.__PRIMEINK_DEVICE_SESSION__)
-    ? window.__PRIMEINK_DEVICE_SESSION__
-    : ((typeof crypto !== 'undefined' && crypto.randomUUID)
-      ? crypto.randomUUID() : APP + '-' + Math.random().toString(36).slice(2) + Date.now().toString(36));
+  const makeSessionId = () => (typeof crypto !== 'undefined' && crypto.randomUUID)
+    ? crypto.randomUUID() : APP + '-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+  const SESSION = (() => {
+    const key = 'crypt_install_id_primeink';
+    try { let value = localStorage.getItem(key); if (!value) { value = makeSessionId(); localStorage.setItem(key, value); } return value; }
+    catch (_) { return makeSessionId(); }
+  })();
   window.__PRIMEINK_DEVICE_SESSION__ = SESSION;
   window.__CRYPT_DEVICE_SESSION__ = SESSION;
   window.__CRYPT_FEATURE__ = 'interface';
