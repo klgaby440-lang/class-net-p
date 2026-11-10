@@ -6,6 +6,8 @@ from fastapi import HTTPException
 from main import (
     apply_teacher_classroom_context,
     compose_teacher_classroom_context,
+    generate_suivi_student_code,
+    is_suivi_results_allowed,
     teacher_has_verified_school_access,
     teacher_is_titulaire,
     teacher_matches_school_roster,
@@ -295,3 +297,65 @@ def test_teacher_roster_link_does_not_grant_access_by_school_name_or_name_alone(
     assert teacher_matches_school_roster(teacher, {"uniqueId": "other-code", "name": "Aline Mukendi"}) is False
     # The unique ID is the account credential for linking; a display-name difference must not reject it.
     assert teacher_matches_school_roster(teacher, {"uniqueId": "prof-123456", "name": "Aline Mukendi (enseignante)"}) is True
+
+
+class _StaticRulesQuery:
+    def __init__(self, rows):
+        self.rows = rows
+
+    def filter(self, *_args):
+        return self
+
+    def all(self):
+        return self.rows
+
+
+class _StaticRulesDatabase:
+    def __init__(self, rows):
+        self.rows = rows
+
+    def query(self, _model):
+        return _StaticRulesQuery(self.rows)
+
+
+def test_suivi_student_codes_are_unique_format_and_not_sequential():
+    import re
+
+    first = generate_suivi_student_code()
+    second = generate_suivi_student_code()
+    pattern = re.compile(r"^CI-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{5}-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{5}-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{5}$")
+
+    assert pattern.fullmatch(first)
+    assert pattern.fullmatch(second)
+    assert first != second
+
+
+def test_suivi_results_require_the_individual_student_switch():
+    student = SimpleNamespace(class_id="class-1", suivi_results_allowed=False)
+    db = _StaticRulesDatabase([])
+
+    assert is_suivi_results_allowed(db, "school-1", student) is False
+
+
+def test_suivi_results_are_visible_only_when_individual_and_school_rules_allow_them():
+    student = SimpleNamespace(class_id="class-1", suivi_results_allowed=True)
+    db = _StaticRulesDatabase([])
+
+    assert is_suivi_results_allowed(db, "school-1", student) is True
+
+
+def test_suivi_global_or_period_rule_can_still_block_parent_results():
+    student = SimpleNamespace(class_id="class-1", suivi_results_allowed=True)
+    rules = [
+        SimpleNamespace(
+            audience="suivi",
+            class_id="class-1",
+            period="P1",
+            is_allowed=False,
+            updated_at=None,
+        )
+    ]
+    db = _StaticRulesDatabase(rules)
+
+    assert is_suivi_results_allowed(db, "school-1", student) is False
+
