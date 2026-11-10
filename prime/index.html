@@ -1372,10 +1372,9 @@ body {
                     <div style="display: flex; flex-direction: column; gap: 0.5rem;">
                         <button class="btn-primary" onclick="renderinterface('ajouter_classe')">AJOUTER UNE CLASSE</button>
                         <button class="btn-primary" style="background-color: #0284c7;" onclick="fetchServerData()">Récupérer les données sur Internet</button>
-                        <button class="btn-primary" style="background-color: #16a34a;" onclick="saveDatabaseOnline({manual:true})">Synchroniser avec le serveur</button>
+                        <button class="btn-primary" style="background-color: #16a34a;" onclick="saveDatabaseOnline()">Save data base OnLine</button>
                         <button class="btn-primary" style="background-color:#7c3aed;" id="prepareClassInformationBtn" onclick="prepareClassInformation()">Préparer les informations des classes</button>
                         <small id="prepareClassInformationStatus" style="font-size:0.78rem;color:var(--text-secondary);" aria-live="polite">Publie les classes, élèves, cours et titulaires pour les comptes ClassInk de cette école.</small>
-                        <button class="btn-secondary" onclick="submitPrimeInkComplaint()">Signaler un problème à CRYPT</button>
                         <button class="btn-secondary" onclick="loadSchoolData()">Charger les données de l'école</button>
                     </div>
                 </div>
@@ -1950,62 +1949,11 @@ window.alert = function(message) { showCustomAlert(message); };
 
 
 
-        // PrimeInk ne conserve aucune donnée métier sur l'appareil.
-        const PRIMEINK_STUDENT_IDS_KEY = 'primeink_student_ids';
-        let primeInkCloudToken = null;
-        let primeInkSyncTimer = null;
-        let primeInkSyncBusy = false;
-        let primeInkSyncPending = false;
-        let primeInkFeature = 'application';
-        const primeInkDeviceSessionId = (typeof crypto !== 'undefined' && crypto.randomUUID)
-            ? crypto.randomUUID()
-            : 'pi-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+        // Ancien verrou local : on retire le drapeau laissé par l'ancienne commande secrète.
+        // Le verrouillage d'une école se fait désormais uniquement depuis le serveur (administrateur).
+        try { localStorage.removeItem('crypt_sys_ban'); } catch (e) { /* stockage indisponible */ }
 
-        function clearPrimeInkLegacyStorage() {
-            try {
-                for (let i = localStorage.length - 1; i >= 0; i--) {
-                    const key = localStorage.key(i);
-                    if (key && key !== PRIMEINK_STUDENT_IDS_KEY) localStorage.removeItem(key);
-                }
-            } catch (error) { console.warn('[PrimeInk] Nettoyage local impossible.', error); }
-        }
-        function persistPrimeInkStudentIds() {
-            try {
-                const ids = [...new Set((appState.students || []).map(st => String(st && st.id || '').trim()).filter(Boolean))];
-                localStorage.setItem(PRIMEINK_STUDENT_IDS_KEY, JSON.stringify(ids));
-            } catch (error) { console.warn('[PrimeInk] Identifiants élèves non conservés.', error); }
-        }
-        clearPrimeInkLegacyStorage();
-
-        window.trackPrimeInkEvent = function(feature, eventType = 'feature', message = '', details = {}) {
-            if (!primeInkCloudToken) return;
-            fetch(API_BASE_URL + '/api/telemetry/events', {
-                method: 'POST', headers: cloudAuthHeaders(),
-                body: JSON.stringify({app:'primeink',device_id:primeInkDeviceSessionId,event_type:String(eventType||'feature'),feature:String(feature||'').slice(0,160),message:String(message||'').slice(0,700),details:details&&typeof details==='object'?details:{}}),
-                cache:'no-store',credentials:'omit'
-            }).catch(() => {});
-        };
-        async function submitPrimeInkComplaint() {
-            const subject = await showCustomPrompt('Décris brièvement le problème ou la réclamation :', '', 'Contacter CRYPT');
-            if (!subject || !String(subject).trim()) return;
-            const message = await showCustomPrompt('Explique ce qui s’est passé et la fonction concernée :', '', 'Détails de la réclamation');
-            if (!message || String(message).trim().length < 10) return showCustomAlert('Le message doit contenir au moins 10 caractères.');
-            const contact = await showCustomPrompt('Moyen de contact facultatif (téléphone ou e-mail) :', '', 'Coordonnées');
-            try {
-                const response = await fetch(API_BASE_URL + '/api/telemetry/complaints', {
-                    method:'POST',headers:cloudAuthHeaders(),
-                    body:JSON.stringify({app:'primeink',device_id:primeInkDeviceSessionId,subject:String(subject).trim(),message:String(message).trim(),contact:String(contact||'').trim(),category:'support'}),
-                    cache:'no-store',credentials:'omit'
-                });
-                const result = await response.json().catch(()=>({}));
-                if (!response.ok || !result.status) throw new Error(result.detail || result.message || 'Réclamation non transmise.');
-                showCustomAlert('Réclamation transmise à CRYPT. Référence : ' + result.ticket_id);
-            } catch (error) { showCustomAlert('Impossible de transmettre la réclamation : ' + error.message); }
-        }
-        window.addEventListener('error',event=>{if(window.trackPrimeInkEvent)window.trackPrimeInkEvent(primeInkFeature,'client_error',event.message||'Erreur JavaScript',{file:event.filename||'',line:event.lineno||0});});
-        window.addEventListener('unhandledrejection',event=>{if(window.trackPrimeInkEvent)window.trackPrimeInkEvent(primeInkFeature,'client_error',String(event.reason||'Erreur asynchrone'));});
-
-        // État Global de l'Application : les données restent en mémoire uniquement
+        // État Global de l'Application avec persistance LocalStorage et gestion Enseignants
         const defaultState = {
             school: { name: "", id: "", code: "", city: "", commune: "" },
             classes: [],
@@ -2037,7 +1985,8 @@ window.alert = function(message) { showCustomAlert(message); };
         };
 
         let primeInkStorageAvailable = true;
-        const primeInkIsOperaMini = false;
+        const primeInkIsOperaMini = /Opera Mini/i.test((navigator && navigator.userAgent) || "")
+            || (typeof window !== "undefined" && typeof window.operamini !== "undefined");
 
         function showPrimeInkStorageNotice(message) {
             const display = () => {
@@ -2056,10 +2005,21 @@ window.alert = function(message) { showCustomAlert(message); };
         }
 
         function loadPrimeInkState() {
-            // Aucune base historique n'est restaurée depuis le navigateur.
-            return JSON.parse(JSON.stringify(defaultState));
+            try {
+                const saved = window.localStorage.getItem('classnet_p_db');
+                if (!saved) return JSON.parse(JSON.stringify(defaultState));
+                const parsed = JSON.parse(saved);
+                return parsed && typeof parsed === "object" ? parsed : JSON.parse(JSON.stringify(defaultState));
+            } catch (error) {
+                primeInkStorageAvailable = false;
+                return JSON.parse(JSON.stringify(defaultState));
+            }
         }
+
         let appState = loadPrimeInkState();
+        if (primeInkIsOperaMini || !primeInkStorageAvailable) {
+            showPrimeInkStorageNotice("ATTENTION : Opera Mini n'est pas compatible avec le stockage local utilisé par PrimeInk. Les données saisies peuvent être perdues. Pour tester ou travailler, ouvrez PrimeInk avec Chrome, Edge, Firefox ou Opera normal.");
+        }
 
         // Patch de sécurité pour les anciennes versions stockées en local
         if (!appState.teachers) appState.teachers = defaultState.teachers;
@@ -2117,21 +2077,21 @@ window.alert = function(message) { showCustomAlert(message); };
 
         function saveState() {
             sortStudentsAlphabetically(appState);
-            persistPrimeInkStudentIds();
-            if (primeInkCloudToken && appState.school && appState.school.id) {
-                clearTimeout(primeInkSyncTimer);
-                primeInkSyncTimer = setTimeout(() => {
-                    saveDatabaseOnline().catch(error => {
-                        console.error('[PrimeInk sync]',error);
-                        if(window.trackPrimeInkEvent)window.trackPrimeInkEvent(primeInkFeature,'sync_error',error.message||'Échec de synchronisation');
-                    });
-                },900);
+            try {
+                window.localStorage.setItem('classnet_p_db', JSON.stringify(appState));
+                primeInkStorageAvailable = true;
+                return true;
+            } catch (error) {
+                primeInkStorageAvailable = false;
+                showPrimeInkStorageNotice("ATTENTION : PrimeInk n'a pas pu sauvegarder sur cet appareil. N'effectuez aucune saisie importante dans ce navigateur. Utilisez Chrome, Edge, Firefox ou Opera normal (pas Opera Mini).");
+                return false;
             }
-            return true;
         }
 
-        // Normalisation alphabétique en mémoire uniquement.
+        // Migration automatique : réorganise aussi les élèves des anciennes bases locales.
+        // Cette sauvegarde intervient dès le démarrage, sans toucher aux notes ni aux identifiants.
         sortStudentsAlphabetically(appState);
+        saveState();
 
         // Retire les données de démonstration des anciennes versions (classes, élèves, cours, notes et enseignants fictifs),
         // seulement si elles n'ont pas été modifiées. Les vraies données ne sont jamais touchées.
@@ -3037,7 +2997,12 @@ window.alert = function(message) { showCustomAlert(message); };
                     bpPrint(students.map(student => student.id), cls.id);
                 };
                 window.exportClassBulletinsPDF = function() {
-                    alert("Dans la fenêtre d'impression, choisissez « Enregistrer au format PDF » comme imprimante. L'orientation paysage et le format sont déjà réglés.");
+                    try {
+                        if (!localStorage.getItem('bp_pdf_hint_seen')) {
+                            localStorage.setItem('bp_pdf_hint_seen', '1');
+                            alert("Dans la fenêtre d'impression, choisissez « Enregistrer au format PDF » comme imprimante. L'orientation paysage et le format sont déjà réglés.");
+                        }
+                    } catch (e) { /* stockage indisponible */ }
                     window.printClassBulletins();
                 };
 
@@ -3741,25 +3706,6 @@ async function bpPushClassBulletin(cls) {
                 renderStatsSidebar(classId);
                 if (typeof bpSuiviLoadRoster === 'function') bpSuiviLoadRoster(classId);
             }
-
-            // Réaffiche les données reçues en mémoire, sans recharger la page (le jeton ne quitte jamais la mémoire).
-            window.refreshPrimeInkAfterLogin = function() {
-                renderClassesTable();
-                renderTeachersTable();
-                const firstClass = appState.classes && appState.classes[0];
-                if (!firstClass) {
-                    activeClassId = '';
-                    activeStudentId = '';
-                    return;
-                }
-                activeClassId = firstClass.id;
-                const titleElem = document.getElementById('bulletinSidebarTitle');
-                if (titleElem) titleElem.textContent = 'BULLETIN ' + firstClass.name;
-                loadClassData(firstClass.id);
-                document.querySelectorAll('.app-section').forEach(section => section.classList.remove('active'));
-                const detail = document.getElementById('section-class-detail');
-                if (detail) detail.classList.add('active');
-            };
 
             function renderCoursesSidebar(classId) {
                 const courseListSidebar = document.getElementById('courseListSidebar');
@@ -5964,16 +5910,13 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
             }
         }
 
-        // Jeton de session uniquement en mémoire ; l'identifiant de session appareil est temporaire.
+        // Jeton de session Cloud reçu au chargement de l'école. Stocké à part de appState pour ne jamais être renvoyé dans les synchronisations.
         function cloudAuthHeaders() {
-            const headers = {
-                'Content-Type': 'application/json',
-                'X-CRYPT-App': 'primeink',
-                'X-CRYPT-Device': primeInkDeviceSessionId,
-                'X-CRYPT-Version': '1.0',
-                'X-CRYPT-School': (typeof appState !== 'undefined' && appState.school && appState.school.id) ? String(appState.school.id) : ''
-            };
-            if (primeInkCloudToken) headers['Authorization'] = 'Bearer ' + primeInkCloudToken;
+            const headers = { 'Content-Type': 'application/json' };
+            try {
+                const token = localStorage.getItem('primeink_cloud_token');
+                if (token) headers['Authorization'] = 'Bearer ' + token;
+            } catch (e) { /* stockage indisponible */ }
             return headers;
         }
 
@@ -6004,37 +5947,28 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
             }
         }
 
-        // Synchronisation serveur : aucun export local ni stockage de base dans le navigateur.
-        async function saveDatabaseOnline(options = {}) {
-            if (!primeInkCloudToken || !appState.school || !appState.school.id) {
-                primeInkSyncPending = true;
-                return false;
-            }
-            if (primeInkSyncBusy) {
-                primeInkSyncPending = true;
-                return false;
-            }
-            primeInkSyncBusy = true;
-            primeInkSyncPending = false;
+        // 2. Fonction pour sauvegarder toute la base de données en ligne
+        async function saveDatabaseOnline() {
             try {
+                // Envoyer également la version alphabétiquement normalisée de la base.
+                saveState();
                 const response = await fetch(`${API_BASE_URL}/api/sync/primenet`, {
-                    method: 'POST', headers: cloudAuthHeaders(),
-                    body: JSON.stringify(appState), cache: 'no-store'
+                    method: 'POST',
+                    headers: cloudAuthHeaders(),
+                    body: JSON.stringify(appState)
                 });
-                const res = await response.json().catch(()=>({status:false,message:'Réponse serveur illisible.'}));
-                if (!response.ok || !res.status) throw new Error(res.message || res.detail || 'Échec de la synchronisation.');
-                if (options.manual) await showCustomAlert('Base synchronisée avec le serveur CRYPT.');
-                if (window.trackPrimeInkEvent) window.trackPrimeInkEvent(primeInkFeature, 'feature', 'Synchronisation de la base école réussie');
-                return true;
-            } catch (err) {
-                if (options.manual) await showCustomAlert('Échec de synchronisation : ' + err.message);
-                throw err;
-            } finally {
-                primeInkSyncBusy = false;
-                if (primeInkSyncPending) {
-                    clearTimeout(primeInkSyncTimer);
-                    primeInkSyncTimer = setTimeout(()=>saveDatabaseOnline().catch(()=>{}), 500);
+                if (response.status === 401 || response.status === 403) {
+                    alert("🔒 Session absente ou expirée : rechargez d'abord les données de l'école avec le mot de passe.");
+                    return;
                 }
+                const res = await response.json();
+                if (res.status) {
+                    alert("✅ " + res.message);
+                } else {
+                    alert("❌ Échec de la synchronisation.");
+                }
+            } catch (err) {
+                alert("❌ Erreur lors de l'envoi vers le serveur : " + err.message);
             }
         }
 
@@ -6059,7 +5993,11 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
                 await showCustomAlert("Aucune classe à publier. Créez ou chargez d'abord les classes de l'école.");
                 return;
             }
-            // Publication directe des informations vers le serveur, sans sauvegarde locale.
+            if (!saveState()) {
+                await showCustomAlert("La base locale n'a pas pu être sauvegardée. Aucune donnée n'a été envoyée.");
+                return;
+            }
+
             const payload = {
                 school: {
                     id: schoolId,
@@ -6563,15 +6501,18 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
                 }
 
                 const importedSchoolId = String(appState.school && appState.school.id || '');
-                if (previousSchoolId !== importedSchoolId) primeInkCloudToken = null;
+                if (previousSchoolId !== importedSchoolId) {
+                    try { localStorage.removeItem('primeink_cloud_token'); } catch (e) { /* stockage indisponible */ }
+                }
 
-                setPrimeInkExcelStatus('Importation chargée en mémoire. Aucune donnée métier n’est stockée sur cet appareil.', false);
-                if (typeof window.refreshPrimeInkAfterLogin === 'function') window.refreshPrimeInkAfterLogin();
+                setPrimeInkExcelStatus('Importation réussie. Rechargement de PrimeInk…', false);
                 await showCustomAlert(
-                    'Importation chargée uniquement en mémoire : ' + studentCount + ' élève(s), ' + classCount +
-                    ' classe(s) et ' + courseCount + ' cours. Connectez-vous puis synchronisez vers le serveur.',
+                    'Importation terminée. ' + studentCount + ' élève(s), ' + classCount +
+                    ' classe(s) et ' + courseCount + ' cours chargé(s). La base locale a été remplacée. ' +
+                    'Pour mettre à jour le serveur, utilisez ensuite « Save data base OnLine ».',
                     'Import Excel terminé'
                 );
+                location.reload();
             } catch (error) {
                 console.error('[PrimeInk Excel Import]', error);
                 setPrimeInkExcelStatus(error.message || "Échec de l'import Excel.", true);
@@ -6591,24 +6532,26 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
             try {
                 const response = await fetch(`${API_BASE_URL}/api/primenet/load`, {
                     method: 'POST',
-                    headers: cloudAuthHeaders(),
-                    body: JSON.stringify({ school_id: schoolId, password: password }),
-                    cache: 'no-store', credentials: 'omit'
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ school_id: schoolId, password: password })
                 });
                 
                 const result = await response.json();
                 if (result.status && result.data) {
-                    primeInkCloudToken = result.token || null;
+                    if (result.token) {
+                        try { localStorage.setItem('primeink_cloud_token', result.token); } catch (e) { /* stockage indisponible */ }
+                    }
+                    const previousState = appState;
+                    const bpLocalOnly = bpSnapshotLocalOnly();
                     appState = result.data;
-                    sortStudentsAlphabetically(appState);
-                    persistPrimeInkStudentIds();
-                    activeClassId = '';
-                    activeStudentId = '';
-                    if (typeof window.refreshPrimeInkAfterLogin === 'function') window.refreshPrimeInkAfterLogin();
-                    if (window.trackPrimeInkEvent) window.trackPrimeInkEvent('auth.login', 'feature', 'Connexion PrimeInk réussie');
-                    const passwordInput = document.getElementById('appPasswordInput');
-                    if (passwordInput) passwordInput.value = '';
-                    await showCustomAlert("✅ Base chargée depuis le serveur. Elle reste en mémoire uniquement jusqu'à la fermeture de cette page.");
+                    bpRestoreLocalOnly(appState, bpLocalOnly);
+                    if (!saveState()) {
+                        appState = previousState;
+                        await showCustomAlert("La base a été reçue, mais ce navigateur ne peut pas la sauvegarder. Ouvrez PrimeInk avec Chrome, Edge, Firefox ou Opera normal avant de poursuivre.");
+                        return;
+                    }
+                    await showCustomAlert("✅ Base de données de l'école chargée avec succès !");
+                    location.reload(); // Recharge pour appliquer le nouvel état
                 } else {
                     alert("❌ " + (result.detail || result.message || "Impossible de charger les données."));
                 }
@@ -6632,6 +6575,7 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
                 const data = await response.json();
                 if (data.status) {
                     appState.expiration_date = data.expiration_date;
+                    saveState();
                     alert(`🎉 ${data.message}\nNouvelle date d'expiration : ${data.expiration_date}`);
                     updateExpirationLabel();
                     
@@ -7645,7 +7589,6 @@ window.primeInkFetchWithTimeout = async function(url, options = {}, timeoutMs = 
     }
 };
 </script>
-
 <script id="crypt-client-telemetry">
 (() => {
   'use strict';
@@ -7745,6 +7688,5 @@ window.primeInkFetchWithTimeout = async function(url, options = {}, timeoutMs = 
             if (event.persisted) location.reload();
         });
 </script>
-
 </body>
 </html>
