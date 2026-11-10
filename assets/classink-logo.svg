@@ -1,0 +1,20 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#0F2040"/><stop offset="100%" stop-color="#0A1628"/></linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#3B82F6"/><stop offset="100%" stop-color="#06B6D4"/></linearGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="200" fill="url(#bg)"/>
+  <g transform="translate(512,512) scale(1.1) translate(-280,-320)">
+    <rect x="60" y="40" width="340" height="480" rx="12" fill="none" stroke="white" stroke-width="14" stroke-linecap="round"/>
+    <line x1="60" y1="520" x2="400" y2="520" stroke="white" stroke-width="14" stroke-linecap="round"/>
+    <path d="M 60 280 Q 220 280 360 520" fill="none" stroke="white" stroke-width="18" stroke-linecap="round"/>
+    <path d="M 60 380 Q 170 380 260 520" fill="none" stroke="white" stroke-width="18" stroke-linecap="round"/>
+    <path d="M 60 470 A 70 70 0 0 1 130 520 L 60 520 Z" fill="white"/>
+    <path d="M 60 280 Q 220 280 360 520" fill="none" stroke="url(#accent)" stroke-width="18" stroke-linecap="round" opacity="0.9"/>
+    <g transform="translate(460, 40)">
+      <rect x="0" y="40" width="28" height="400" rx="6" fill="none" stroke="white" stroke-width="10"/>
+      <path d="M 0 40 L 14 0 L 28 40 Z" fill="none" stroke="white" stroke-width="10" stroke-linejoin="round"/>
+      <rect x="0" y="440" width="28" height="28" rx="4" fill="#3B82F6"/>
+    </g>
+  </g>
+</svg>
