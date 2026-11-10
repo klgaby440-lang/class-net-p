@@ -99,3 +99,28 @@ def test_crypt_admin_dependency_rejects_non_admin_claims():
     with pytest.raises(HTTPException) as error:
         main.require_crypt_admin({"role": "school", "school_id": "school-1"})
     assert error.value.status_code == 403
+
+
+def test_llink_assistant_requires_authenticated_manager_and_crypt_sessions():
+    from fastapi.testclient import TestClient
+    import main
+
+    with TestClient(main.app) as client:
+        manager = client.post(
+            "/api/llink/assist",
+            headers={"X-CRYPT-App": "manager"},
+            json={"message": "Comment actualiser l'horaire ?", "history": []},
+        )
+        assert manager.status_code == 401
+
+        crypt = client.post(
+            "/api/llink/assist",
+            headers={"X-CRYPT-App": "crypt"},
+            json={"message": "Comment lire les erreurs ?", "history": []},
+        )
+        assert crypt.status_code == 403
+
+
+def test_llink_assistant_rate_limiter_is_defined():
+    import main
+    assert isinstance(main.CRYPT_LLINK_LIMITER, main.AttemptLimiter)
