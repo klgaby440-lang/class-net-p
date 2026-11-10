@@ -1682,8 +1682,16 @@ class PrimeNetLoadSchema(BaseModel):
 
 @app.post("/api/primenet/load")
 def load_primenet_state(data: PrimeNetLoadSchema, db: Session = Depends(get_db)):
-    """PrimeInk envoie { school_id, password } : même logique que /api/auth/school/login."""
-    return login_school(LoginSchema(identifier=data.school_id, password=data.password), db)
+    """PrimeInk envoie { school_id, password } ; le navigateur ne met jamais la réponse en cache."""
+    result = login_school(LoginSchema(identifier=data.school_id, password=data.password), db)
+    headers = {"Cache-Control": "no-store, private, max-age=0", "Pragma": "no-cache", "Expires": "0"}
+    if isinstance(result, JSONResponse):
+        try:
+            payload = json.loads(result.body.decode("utf-8"))
+        except Exception:
+            payload = {"status": False, "message": "Réponse du serveur illisible."}
+        return JSONResponse(content=payload, status_code=result.status_code, headers=headers)
+    return JSONResponse(content=result, headers=headers)
 
 
 @app.post("/api/manager/login")
@@ -2106,7 +2114,7 @@ def crypt_console_db_query(payload: dict, db: Session = Depends(get_db), _admin:
     if re.search(r"\b(information_schema|pg_catalog|sqlite_master|pg_toast)\b", sql, re.IGNORECASE):
         raise HTTPException(status_code=403, detail="Les catalogues système ne sont pas accessibles depuis cet explorateur.")
     allowed_tables = set(Base.metadata.tables.keys()) - {"otp_codes", "access_codes"}
-    referenced = re.findall(r"\b(?:FROM|JOIN)\s+[\""]?([A-Za-z_][A-Za-z0-9_]*)[\""]?", sql, re.IGNORECASE)
+    referenced = re.findall(r'\\b(?:FROM|JOIN)\\s+["]?([A-Za-z_][A-Za-z0-9_]*)["]?', sql, re.IGNORECASE)
     if not referenced or any(name not in allowed_tables for name in referenced):
         raise HTTPException(status_code=403, detail="La requête doit cibler uniquement les tables applicatives autorisées.")
     query_hash = hashlib.sha256(sql.encode("utf-8")).hexdigest()
