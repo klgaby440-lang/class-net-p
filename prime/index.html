@@ -1183,7 +1183,7 @@ body {
                         <span class="sidebar-title">DÉLIBÉRATION DES ÉLÈVES</span>
                         <button class="toggle-sidebar-btn">◀</button>
                     </div>
-                    <input type="text" placeholder="Rechercher un élève..." class="search-input">
+                    <input type="text" id="delibStudentSearch" placeholder="Rechercher un élève..." class="search-input" autocomplete="off">
                     <div class="item-list" id="delibStudentListSidebar"></div>
                 </nav>
 
@@ -2959,7 +2959,28 @@ window.alert = function(message) { showCustomAlert(message); };
                     alert("Choisissez d'abord une classe.");
                 };
                 window.printClassBulletins = function() {
-                    bpPrint(getSortedStudentsByClass(activeClassId).map(s => s.id), activeClassId);
+                    const classCandidates = [activeClassId, bpDisplayedClassId]
+                        .filter(value => value !== null && value !== undefined && String(value) !== "");
+                    const cls = classCandidates
+                        .map(classId => appState.classes.find(item => String(item.id ?? "") === String(classId)))
+                        .find(Boolean);
+                    if (!cls) {
+                        alert("Choisissez d'abord une classe avant d'imprimer ses bulletins.");
+                        return;
+                    }
+
+                    if (!Array.isArray(appState.students)) appState.students = [];
+                    sortStudentsAlphabetically(appState);
+                    const students = appState.students.filter(student =>
+                        String(student.classId ?? "") === String(cls.id ?? "") &&
+                        student.id !== null && student.id !== undefined && String(student.id) !== ""
+                    );
+                    if (!students.length) {
+                        alert("Cette classe ne contient aucun élève à imprimer.");
+                        return;
+                    }
+
+                    bpPrint(students.map(student => student.id), cls.id);
                 };
                 window.exportClassBulletinsPDF = function() {
                     try {
@@ -5500,7 +5521,14 @@ function updateScheduleResultTables(joursCount, heuresCount) {
             });
 
             // 2. Navigation Sous-Views (Bulletin, Fiches, Stats)
-            document.querySelectorAll('.sub-nav-btn').forEach(btn => {
+            const delibStudentSearch = document.getElementById("delibStudentSearch");
+if (delibStudentSearch) {
+    delibStudentSearch.addEventListener("input", () => {
+        renderDeliberationStudentList(activeClassId);
+    });
+}
+
+document.querySelectorAll('.sub-nav-btn').forEach(btn => {
                 btn.addEventListener('click', () => {
                     const parent = btn.closest('.app-section');
                     parent.querySelectorAll('.sub-nav-btn').forEach(b => b.classList.remove('active'));
@@ -6587,19 +6615,111 @@ function validatePendingDeliberationTransfers(studentId) {
     return { ok: true, student, entries, deltas, touchedCourses };
 }
 
-function renderDeliberationView(studentId) {
-    const student = appState.students.find(item => String(item.id) === String(studentId));
+function renderDeliberationStudentList(classId) {
+    const list = document.getElementById("delibStudentListSidebar");
+    if (!list) return [];
+
+    const resolvedClassId = classId !== null && classId !== undefined && String(classId) !== ""
+        ? String(classId)
+        : String(activeClassId ?? "");
+    const cls = (appState.classes || []).find(item => String(item.id ?? "") === resolvedClassId);
+    if (!cls) {
+        list.innerHTML = '<small style="display:block;padding:.8rem;color:var(--text-secondary);">Choisissez une classe pour afficher ses élèves.</small>';
+        return [];
+    }
+
+    sortStudentsAlphabetically(appState);
+    const students = (appState.students || []).filter(student =>
+        String(student.classId ?? "") === String(cls.id ?? "")
+    );
+    let selected = students.find(student => String(student.id) === String(activeStudentId));
+    if (!selected && students.length) {
+        selected = students[0];
+        if (String(activeStudentId) !== String(selected.id)) {
+            pendingTransfers = {};
+            currentSourceCourseId = null;
+        }
+        activeStudentId = selected.id;
+    }
+
+    const search = document.getElementById("delibStudentSearch");
+    const query = String(search && search.value || "").trim().normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase();
+    const visibleStudents = students.filter(student => {
+        const fullName = [student.name, student.postname, student.prename].filter(Boolean).join(" ");
+        const normalized = fullName.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase();
+        return !query || normalized.includes(query);
+    });
+
+    list.innerHTML = "";
+    if (!students.length) {
+        list.innerHTML = '<small style="display:block;padding:.8rem;color:var(--text-secondary);">Aucun élève dans cette classe.</small>';
+        return students;
+    }
+    if (!visibleStudents.length) {
+        list.innerHTML = '<small style="display:block;padding:.8rem;color:var(--text-secondary);">Aucun élève ne correspond à cette recherche.</small>';
+        return students;
+    }
+
+    visibleStudents.forEach(student => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "list-item" +
+            (String(student.id) === String(activeStudentId) ? " active" : "");
+        button.textContent = [student.name, student.postname, student.prename].filter(Boolean).join(" ");
+        button.addEventListener("click", () => {
+            if (String(activeStudentId) !== String(student.id)) {
+                pendingTransfers = {};
+                currentSourceCourseId = null;
+            }
+            activeStudentId = student.id;
+            renderDeliberationStudentList(student.classId);
+            renderDeliberationView(student.id, false);
+        });
+        list.appendChild(button);
+    });
+    return students;
+}
+
+function renderDeliberationView(studentId, refreshSidebar = true) {
+    const requestedStudent = (appState.students || []).find(item => String(item.id) === String(studentId));
+    const currentClassId = requestedStudent
+        ? requestedStudent.classId
+        : activeClassId;
+    const classStudents = (appState.students || []).filter(item =>
+        String(item.classId ?? "") === String(currentClassId ?? "")
+    );
+    const student = requestedStudent || classStudents.find(item =>
+        String(item.id) === String(activeStudentId)
+    ) || classStudents[0] || null;
+
     if (!student) {
+        activeStudentId = "";
+        const name = document.getElementById("delibStudentName");
         const tbody = document.getElementById("delibTableBody");
-        if (tbody) tbody.innerHTML = '<tr><td colspan="5">Sélectionnez un élève.</td></tr>';
+        if (name) name.textContent = "-";
+        if (tbody) tbody.innerHTML = '<tr><td colspan="5">Aucun élève disponible dans cette classe.</td></tr>';
+        if (refreshSidebar) renderDeliberationStudentList(currentClassId);
         return;
     }
+
+    if (String(activeStudentId) !== String(student.id)) {
+        pendingTransfers = {};
+        currentSourceCourseId = null;
+    }
     activeStudentId = student.id;
-    document.getElementById("delibStudentName").textContent =
+    activeClassId = student.classId;
+    if (refreshSidebar) renderDeliberationStudentList(student.classId);
+
+    const name = document.getElementById("delibStudentName");
+    if (name) name.textContent =
         [student.name, student.postname, student.prename].filter(Boolean).join(" ");
 
-    const classCourses = appState.courses.filter(course => String(course.classId) === String(student.classId));
+    const classCourses = (appState.courses || []).filter(course =>
+        String(course.classId) === String(student.classId)
+    );
     const tbody = document.getElementById("delibTableBody");
+    if (!tbody) return;
     tbody.innerHTML = "";
 
     classCourses.forEach(course => {
@@ -6746,7 +6866,8 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
         
         // Si l'utilisateur clique sur l'onglet Délibérer
         if (targetSubId === 'view-deliberation' && typeof renderDeliberationView === 'function') {
-            renderDeliberationView(activeStudentId);
+            renderDeliberationStudentList(activeClassId);
+            renderDeliberationView(activeStudentId, false);
         }
     });
 });
