@@ -2103,9 +2103,9 @@ def crypt_console_db_query(payload: dict, db: Session = Depends(get_db), _admin:
     sql = query.rstrip().rstrip(";").strip()
     if ";" in sql:
         raise HTTPException(status_code=422, detail="Une seule instruction SQL est autorisée.")
-    if not re.match(r"^SELECT\\b", sql, re.IGNORECASE):
+    if not re.match(r"^SELECT\b", sql, re.IGNORECASE):
         raise HTTPException(status_code=403, detail="Seules les requêtes SELECT simples sont autorisées.")
-    forbidden = r"\\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|GRANT|REVOKE|COPY|DO|CALL|EXECUTE|LOCK|SET|VACUUM|ANALYZE|INTO|NEXTVAL|SETVAL)\\b|\\bFOR\\s+(UPDATE|SHARE)\\b|\\b(pg_sleep|pg_read_file|pg_write_file|pg_ls_dir|pg_advisory_lock|pg_advisory_xact_lock|pg_notify|dblink|lo_export|lo_import|set_config)\\s*\\("
+    forbidden = r"\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|GRANT|REVOKE|COPY|DO|CALL|EXECUTE|LOCK|SET|VACUUM|ANALYZE|INTO|NEXTVAL|SETVAL)\b|\bFOR\s+(UPDATE|SHARE)\b|\b(pg_sleep|pg_read_file|pg_write_file|pg_ls_dir|pg_advisory_lock|pg_advisory_xact_lock|pg_notify|dblink|lo_export|lo_import|set_config)\s*\("
     if re.search(forbidden, sql, re.IGNORECASE):
         raise HTTPException(status_code=403, detail="Instruction ou fonction interdite dans l'explorateur.")
     secret_columns = r"\b(pass_word|password|secret|token|signature|head_signature|api_key|otp)\b"
