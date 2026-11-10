@@ -2205,7 +2205,7 @@ def crypt_telemetry_event(payload: dict, request: Request, db: Session = Depends
         raise HTTPException(status_code=429, detail="Trop d'événements envoyés.")
     CRYPT_TELEMETRY_LIMITER.record(limiter_key)
     app_name = str(request.headers.get("x-crypt-app") or payload.get("app") or "unknown").lower()
-    if app_name not in ("primeink", "classink", "suivi"):
+    if app_name not in ("primeink", "classink", "suivi", "manager"):
         raise HTTPException(status_code=422, detail="Application inconnue.")
     device_id = str(request.headers.get("x-crypt-device") or payload.get("device_id") or "")[:100]
     if not re.fullmatch(r"[A-Za-z0-9._:-]{8,100}", device_id):
@@ -2240,7 +2240,7 @@ def crypt_telemetry_complaint(payload: dict, request: Request, db: Session = Dep
     if CRYPT_TICKET_LIMITER.is_blocked(limiter_key):
         raise HTTPException(status_code=429, detail="Trop de réclamations depuis cette connexion. Réessayez plus tard.")
     app_name = str(request.headers.get("x-crypt-app") or payload.get("app") or "unknown").lower()
-    if app_name not in ("primeink", "classink", "suivi"):
+    if app_name not in ("primeink", "classink", "suivi", "manager"):
         raise HTTPException(status_code=422, detail="Application inconnue.")
     message = clean_text(payload.get("message"), 5000)
     subject = clean_text(payload.get("subject"), 180)
