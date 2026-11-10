@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
 import httpx
 from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, status, Header, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, EmailStr
 from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, Text, JSON, Float, text, func, UniqueConstraint, CheckConstraint
@@ -2276,6 +2276,101 @@ def crypt_telemetry_complaint(payload: dict, request: Request, db: Session = Dep
     ))
     db.commit()
     return {"status": True, "ticket_id": ticket.id, "message": "Réclamation transmise à CRYPT."}
+
+
+@app.post("/api/llink/assist")
+async def classink_llink_assist(payload: dict, request: Request):
+    """Relais Llink limité à VELORA ; aucune donnée scolaire n'est ajoutée au contexte."""
+    app_name = str(request.headers.get("x-crypt-app") or "").strip().lower()
+    if app_name not in ("suivi", "manager", "crypt"):
+        raise HTTPException(status_code=403, detail="Application non autorisée pour Llink.")
+
+    authorization = request.headers.get("authorization", "")
+    claims = verify_token(authorization[7:].strip()) if authorization.lower().startswith("bearer ") else None
+    claims = claims or {}
+    if app_name == "manager" and claims.get("role") != "school":
+        raise HTTPException(status_code=401, detail="Connectez-vous à Manager avant d'utiliser Llink.")
+    if app_name == "crypt" and claims.get("role") != "crypt_admin":
+        raise HTTPException(status_code=403, detail="Session CRYPT administrateur requise.")
+
+    remote = request.client.host if request.client else "unknown"
+    limiter_key = "llink-assist:" + remote
+    if CRYPT_LLINK_LIMITER.is_blocked(limiter_key):
+        raise HTTPException(status_code=429, detail="Limite Llink atteinte. Réessayez dans quelques minutes.")
+
+    message = str(payload.get("message") or "").strip()
+    if not message or len(message) > 5000:
+        raise HTTPException(status_code=422, detail="Votre question doit contenir entre 1 et 5 000 caractères.")
+
+    history = []
+    raw_history = payload.get("history")
+    if isinstance(raw_history, list):
+        for turn in raw_history[-8:]:
+            if not isinstance(turn, dict):
+                continue
+            role = str(turn.get("role") or "").strip().lower()
+            text_value = turn.get("text")
+            if role not in ("user", "assistant") or not isinstance(text_value, str):
+                continue
+            text_value = text_value.strip()[-2500:]
+            if text_value:
+                history.append({"role": role, "text": text_value})
+    if sum(len(item["text"]) for item in history) > 12000:
+        history = history[-4:]
+
+    context_by_app = {
+        "suivi": "Tu es Llink, l'assistant d'aide de Class-Ink Suivi, destiné aux parents. Explique simplement l'utilisation de l'application et les notions générales. Tu ne reçois aucun dossier d'élève, aucune note et aucune identité. Ne prétends jamais consulter le compte du parent. Réponds en français sauf si la personne écrit dans une autre langue.",
+        "manager": "Tu es Llink, l'assistant d'aide de ClassInk Manager, destiné aux responsables d'établissement. Explique la consultation des classes, élèves, indicateurs, accès Suivi et horaires. Tu ne reçois aucune donnée de l'école ni aucun dossier. Ne prétends pas voir l'écran ou exécuter une action.",
+        "crypt": "Tu es Llink, l'assistant du centre de contrôle CRYPT. Aide à comprendre les fonctions de supervision et à diagnostiquer des problèmes généraux. Tu ne reçois ni les données du tableau de bord, ni les journaux, ni les réclamations, ni le contenu de la base. N'invente aucune observation.",
+    }
+    request_payload = {
+        "message": message,
+        "history": history,
+        "model": "velora",
+        "level": "velora",
+        "effort": "normal",
+        "mode": "chat",
+        "source": "classink_" + app_name,
+        "preferences": context_by_app[app_name] + " Les données scolaires et personnelles ne doivent jamais être demandées ni supposées. Ne demande pas à l'utilisateur de coller de notes, noms, identifiants ou informations confidentielles.",
+        "data_collection_consent": False,
+    }
+    CRYPT_LLINK_LIMITER.record(limiter_key)
+
+    client = httpx.AsyncClient(timeout=httpx.Timeout(connect=12.0, read=90.0, write=20.0, pool=12.0))
+    url = os.getenv("LLINK_API_BASE_URL", "https://llink-usz9.onrender.com").rstrip("/") + "/api/chat"
+    try:
+        upstream = await client.send(
+            client.build_request(
+                "POST", url, json=request_payload,
+                headers={"Accept": "text/event-stream", "Cache-Control": "no-cache"},
+            ),
+            stream=True,
+        )
+    except httpx.HTTPError as exc:
+        await client.aclose()
+        raise HTTPException(status_code=503, detail="Le serveur Llink est injoignable. Réessayez.") from exc
+
+    if upstream.status_code >= 400:
+        status_code = upstream.status_code if upstream.status_code in (401, 403, 422, 429, 503) else 502
+        raw_error = (await upstream.aread()).decode("utf-8", "replace")[:500]
+        await upstream.aclose()
+        await client.aclose()
+        raise HTTPException(status_code=status_code, detail="Llink : " + (raw_error or "service indisponible"))
+
+    async def relay_llink_stream():
+        try:
+            async for chunk in upstream.aiter_raw():
+                if chunk:
+                    yield chunk
+        finally:
+            await upstream.aclose()
+            await client.aclose()
+
+    return StreamingResponse(
+        relay_llink_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache, no-store", "X-Accel-Buffering": "no", "Connection": "keep-alive"},
+    )
 
 
 
