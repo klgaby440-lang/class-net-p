@@ -1150,7 +1150,6 @@ body {
                         <th>CLASSE</th>
                         <th>TITULAIRE</th>
                         <th>NOMBRE D'ÉLÈVES</th>
-                        <th>ACTIONS</th>
                     </tr>
                 </thead>
                 <tbody id="classesTableBody">
@@ -1158,7 +1157,6 @@ body {
                 </tbody>
             </table>
             <div class="action-toolbar">
-                <button class="btn-secondary" id="editClassBtn" onclick="openEditClassModal()">ÉDITER LA CLASSE</button>
                 <button class="btn-primary" onclick="renderinterface('ajouter_classe')">AJOUTER UNE CLASSE</button>
             </div>
         </div>
@@ -3731,25 +3729,15 @@ async function bpPushClassBulletin(cls) {
                         <td>${safeHTML(cls.name)}</td>
                         <td>${safeHTML(cls.titulaire)}</td>
                         <td>${safeHTML(count)}</td>
-                        <td style="white-space:nowrap;">
-                            <button type="button" class="btn-secondary" data-class-action="edit" style="padding:0.3rem 0.55rem;font-size:0.75rem;">Modifier</button>
-                            <button type="button" class="btn-secondary" data-class-action="delete" style="padding:0.3rem 0.55rem;font-size:0.75rem;background:#dc2626;">Supprimer</button>
-                        </td>
                     `;
+                    tr.setAttribute('aria-label', 'Ouvrir la classe ' + cls.name);
                     tr.addEventListener('click', () => {
                         activeClassId = cls.id;
                         const titleElem = document.getElementById('bulletinSidebarTitle');
                         if (titleElem) titleElem.textContent = `BULLETIN ${cls.name}`;
+                        document.getElementById('studentSidebarSearch').value = '';
                         loadClassData(cls.id);
                         switchMainSection('section-class-detail');
-                    });
-                    tr.querySelector('[data-class-action="edit"]').addEventListener('click', (event) => {
-                        event.stopPropagation();
-                        window.editClassById(cls.id);
-                    });
-                    tr.querySelector('[data-class-action="delete"]').addEventListener('click', (event) => {
-                        event.stopPropagation();
-                        window.deleteManagedClass(cls.id);
                     });
                     tbody.appendChild(tr);
                 });
