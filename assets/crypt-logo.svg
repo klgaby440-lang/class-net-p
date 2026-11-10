@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 520" width="600" height="520">
+  <defs>
+    <style>
+      .bg{fill:#0D0E12}.stroke-main{fill:none;stroke:#FFFFFF;stroke-width:8;stroke-linecap:round;stroke-linejoin:round}
+      .stroke-loop{fill:none;stroke:#FFFFFF;stroke-width:8;stroke-linecap:round;stroke-linejoin:round}
+      .dot-anchor{fill:#2e3030}.math-text{fill:none;stroke:#FFFFFF;stroke-width:5;stroke-linecap:round;stroke-linejoin:round}
+      .math-double{fill:none;stroke:#2d3030;stroke-width:4;stroke-linecap:round}
+    </style>
+  </defs>
+  <rect width="600" height="520" class="bg" rx="12"/>
+  <g transform="translate(0, 10)">
+    <path d="M 195 280 C 180 300 215 305 230 275 L 390 110 C 435 60 475 35 450 25 C 420 30 375 70 197 278" class="stroke-loop"/>
+    <path d="M 130 130 L 470 130" class="stroke-main"/>
+    <path d="M 230 130 L 230 280" class="stroke-main"/>
+    <path d="M 350 130 L 350 270 Q 350 285 365 285" class="stroke-main"/>
+    <circle cx="245" cy="260" r="20" class="dot-anchor"/>
+  </g>
+  <g transform="translate(115, 400)">
+    <g transform="translate(0, 0)"><path d="M 40 10 C 15 10 5 25 5 45 C 5 65 15 80 40 80" class="math-text"/><path d="M 20 22 L 20 68" class="math-double"/></g>
+    <g transform="translate(85, 0)"><path d="M 10 80 L 10 10 L 38 10 C 55 10 55 42 38 42 L 10 42 M 35 42 L 55 80" class="math-text"/><path d="M 22 10 L 22 80" class="math-double"/></g>
+    <g transform="translate(170, 0)"><path d="M 8 10 L 28 42 L 28 80 M 48 10 L 28 42" class="math-text"/><path d="M 35 42 L 35 80" class="math-double"/></g>
+    <g transform="translate(245, 0)"><path d="M 10 80 L 10 10 L 38 10 C 55 10 55 42 38 42 L 10 42" class="math-text"/><path d="M 22 10 L 22 80" class="math-double"/></g>
+    <g transform="translate(325, 0)"><path d="M 5 10 L 55 10 M 30 10 L 30 80" class="math-text"/><path d="M 40 10 L 40 80" class="math-double"/></g>
+  </g>
+</svg>

@@ -3540,13 +3540,28 @@ def suivi_get_student(payload: dict, request: Request, db: Session = Depends(get
         ClasseInformation.school_id == school_id,
     ).first()
 
+    individual_access_allowed = bool(student.suivi_results_allowed)
     if results_allowed:
         results = build_suivi_results_payload(db, school, student)
         access_reason = ""
+        access_message = ""
     else:
         # Ne pas inclure les notes, évaluations, rangs ou conduite lorsqu'ils sont bloqués.
+        # Un blocage individuel sert de verrou de paiement : aucune donnée de notes ne part au parent.
         results = None
-        access_reason = "school"
+        if not individual_access_allowed:
+            access_reason = "payment_required"
+            access_message = (
+                "Les notes de cet élève sont bloquées. Pour les consulter, le parent doit régler "
+                "les frais auprès de l'établissement. Après confirmation du paiement, l'école pourra "
+                "réautoriser l'affichage des résultats."
+            )
+        else:
+            access_reason = "school_policy"
+            access_message = (
+                "Les résultats sont temporairement masqués par une règle de l'établissement. "
+                "Veuillez contacter l'administration scolaire."
+            )
 
     return {
         "status": True,
@@ -3581,10 +3596,8 @@ def suivi_get_student(payload: dict, request: Request, db: Session = Depends(get
             "resultsAccess": {
                 "allowed": results_allowed,
                 "reason": access_reason,
-                "message": (
-                    "" if results_allowed else
-                    "L'établissement n'a pas encore autorisé l'affichage des résultats de cet élève."
-                ),
+                "paymentRequired": bool(not results_allowed and not individual_access_allowed),
+                "message": access_message,
             },
             "communications": [],
             "teacherNotes": [],
