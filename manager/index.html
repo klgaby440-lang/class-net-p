@@ -181,17 +181,16 @@ async function refreshSchedule(){
  }catch(error){showToast(error.message||'Impossible de récupérer les horaires.');}
  finally{if(button){button.disabled=false;button.textContent='Actualiser l’horaire';}}
 }
-function clearMemory(){managerToken=null;managerData=null;classes=[];students=[];courses=[];teachers=[];grades={};managerSchedule=null;document.body.classList.remove('manager-ready');$('#appRoot').hidden=true;$('#authScreen').hidden=false;$('#loginForm').reset();$('#loginError').textContent='';$('#modalBackdrop').classList.remove('open');}
+function clearMemory(){managerToken=null;window.__CLASSINK_MANAGER_TOKEN__=null;managerData=null;classes=[];students=[];courses=[];teachers=[];grades={};managerSchedule=null;document.body.classList.remove('manager-ready');$('#appRoot').hidden=true;$('#authScreen').hidden=false;$('#loginForm').reset();$('#loginError').textContent='';$('#modalBackdrop').classList.remove('open');}
 function applyData(payload){managerData=payload.data||{};const state=managerData;classes=Array.isArray(state.classes)?state.classes:[];students=Array.isArray(state.students)?state.students:[];courses=Array.isArray(state.courses)?state.courses:[];teachers=Array.isArray(state.teachers)?state.teachers:[];grades=state.grades&&typeof state.grades==='object'?state.grades:{};managerSchedule=state.managerSchedule||null;const school=state.school||{};$('#schoolNameSidebar').textContent=school.name||'Établissement';$('#schoolCitySidebar').textContent=[school.city,school.province].filter(Boolean).join(' · ')||'Informations non renseignées';$('#schoolAvatar').textContent=initials(school.name);$('#breadcrumbSchool').textContent=(school.name||'Établissement')+' / Contrôle';$('#blockedNavCount').textContent=students.filter(s=>!s.suiviResultsAllowed).length;$('#blockedNavCount').hidden=!students.some(s=>!s.suiviResultsAllowed);fillFilters();document.body.classList.add('manager-ready');$('#authScreen').hidden=true;$('#appRoot').hidden=false;renderDashboard();renderClasses();renderStudents();renderReports();renderSchedule();renderBlocked();renderTeachers();renderSchool();}
-async function login(event){event.preventDefault();const identifier=$('#schoolIdentifier').value.trim(),password=$('#schoolPassword').value;const btn=$('#loginBtn'),err=$('#loginError');if(!identifier||!password)return;btn.disabled=true;btn.textContent='Connexion…';err.textContent='';try{const response=await fetch(API_BASE_URL+'/api/manager/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({identifier,password}),cache:'no-store',credentials:'omit',referrerPolicy:'no-referrer'});const result=await response.json().catch(()=>({status:false,message:'Réponse du serveur illisible.'}));if(!response.ok||!result.status||!result.data||!result.token)throw new Error(result.message||result.detail||'Identifiants incorrects.');managerToken=result.token;$('#schoolPassword').value='';applyData(result);}catch(e){clearMemory();err.textContent=e.message||'Impossible de joindre le serveur.';}finally{btn.disabled=false;btn.textContent='Se connecter';}}
+async function login(event){event.preventDefault();const identifier=$('#schoolIdentifier').value.trim(),password=$('#schoolPassword').value;const btn=$('#loginBtn'),err=$('#loginError');if(!identifier||!password)return;btn.disabled=true;btn.textContent='Connexion…';err.textContent='';try{const response=await fetch(API_BASE_URL+'/api/manager/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({identifier,password}),cache:'no-store',credentials:'omit',referrerPolicy:'no-referrer'});const result=await response.json().catch(()=>({status:false,message:'Réponse du serveur illisible.'}));if(!response.ok||!result.status||!result.data||!result.token)throw new Error(result.message||result.detail||'Identifiants incorrects.');managerToken=result.token;window.__CLASSINK_MANAGER_TOKEN__=managerToken;$('#schoolPassword').value='';applyData(result);}catch(e){clearMemory();err.textContent=e.message||'Impossible de joindre le serveur.';}finally{btn.disabled=false;btn.textContent='Se connecter';}}
 function logout(show=true){clearMemory();if(show){showToast('Session fermée. Les données ont été effacées de la mémoire de la page.');$('#schoolIdentifier').focus();}}
 $('#loginForm').addEventListener('submit',login);$('#logoutBtn').addEventListener('click',()=>logout(true));$('#nav').addEventListener('click',e=>{const b=e.target.closest('[data-page]');if(b)navigate(b.dataset.page)});document.querySelectorAll('[data-goto]').forEach(b=>b.addEventListener('click',()=>navigate(b.dataset.goto)));$('#themeBtn').addEventListener('click',()=>{document.documentElement.dataset.theme=document.documentElement.dataset.theme==='light'?'dark':'light'});$('#menuBtn').addEventListener('click',()=>{$('#sidebar').classList.toggle('open');$('#scrim').classList.toggle('open')});$('#scrim').addEventListener('click',()=>{$('#sidebar').classList.remove('open');$('#scrim').classList.remove('open')});$('#modalClose').addEventListener('click',closeModal);$('#modalBackdrop').addEventListener('click',e=>{if(e.target===$('#modalBackdrop'))closeModal()});document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
 $('#classSearch').addEventListener('input',renderClasses);$('#classSort').addEventListener('change',renderClasses);['studentSearch','studentClassFilter','studentStatusFilter'].forEach(id=>$('#'+id).addEventListener(id==='studentSearch'?'input':'change',()=>{studentPage=1;renderStudents()}));$('#studentPrev').addEventListener('click',()=>{studentPage=Math.max(1,studentPage-1);renderStudents()});$('#studentNext').addEventListener('click',()=>{studentPage++;renderStudents()});$('#periodFilter').addEventListener('change',()=>{renderDashboard();renderClasses()});$('#reportPeriod').addEventListener('change',renderReports);$('#refreshSchedule').addEventListener('click',refreshSchedule);$('#scheduleClass').addEventListener('change',renderSchedule);$('#scheduleView').addEventListener('change',renderSchedule);$('#blockedSearch').addEventListener('input',renderBlocked);$('#blockedReason').addEventListener('change',renderBlocked);$('#teacherSearch').addEventListener('input',renderTeachers);$('#teacherStatus').addEventListener('change',renderTeachers);
 $('#globalSearch').addEventListener('keydown',e=>{if(e.key!=='Enter')return;const q=e.target.value.trim().toLowerCase();if(!q)return;const st=students.find(s=>(fullName(s)+' '+s.id+' '+(s.suiviCode||'')+' '+(s.permi||'')).toLowerCase().includes(q));const cl=classes.find(c=>c.name.toLowerCase().includes(q));if(st){navigate('students');$('#studentSearch').value=q;studentPage=1;renderStudents();studentDetails(st.id)}else if(cl){navigate('classes');$('#classSearch').value=q;renderClasses();classDetails(cl.id)}else{navigate('students');$('#studentSearch').value=q;renderStudents();showToast('Aucun résultat correspondant.')}});
 // Ne jamais réutiliser la base affichée après une navigation ou un retour du cache arrière.
 window.addEventListener('pagehide',()=>{clearMemory();});
-window.addEventListener('pageshow',event=>{if(event.persisted)window.location.reload();});
-window.addEventListener('pageshow',event=>{if(event.persisted)clearMemory();});
+window.addEventListener('pageshow',event=>{if(event.persisted){clearMemory();window.location.reload();}});
 $('#appRoot').hidden=true;
 })();
 </script>
@@ -280,6 +279,115 @@ $('#appRoot').hidden=true;
     });
     document.body.appendChild(button);
   });
+})();
+</script>
+
+
+<style id="llink-assist-widget-style">
+#llink-assist-root{position:fixed;left:18px;bottom:18px;z-index:99980;font:13px/1.45 Inter,system-ui,sans-serif;color:#edf2fb}
+#llink-assist-toggle{border:1px solid #5379cb;background:#172b4b;color:#fff;border-radius:24px;padding:11px 16px;font-weight:750;box-shadow:0 8px 25px #0003;cursor:pointer}
+#llink-assist-toggle:hover{background:#203b64}
+#llink-assist-panel{position:absolute;left:0;bottom:58px;width:min(370px,calc(100vw - 36px));height:min(520px,calc(100vh - 115px));background:#101a2b;border:1px solid #304361;border-radius:16px;box-shadow:0 18px 55px #0007;display:flex;flex-direction:column;overflow:hidden}
+#llink-assist-panel[hidden]{display:none}
+#llink-assist-head{padding:13px 15px;background:#172842;border-bottom:1px solid #304361;display:flex;align-items:center;justify-content:space-between;gap:10px}
+#llink-assist-head strong{display:block;font-size:13px}#llink-assist-head small{display:block;color:#aab8ce;font-size:10px;margin-top:2px}
+#llink-assist-close{border:0;background:transparent;color:#cbd5e1;font-size:20px;padding:2px 7px;cursor:pointer}
+#llink-assist-messages{flex:1;overflow:auto;padding:12px;display:flex;flex-direction:column;gap:9px}
+.llink-assist-message{max-width:92%;padding:9px 11px;border-radius:12px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}
+.llink-assist-message.assistant{align-self:flex-start;background:#1c2a40;color:#edf2fb;border:1px solid #2c405d}
+.llink-assist-message.user{align-self:flex-end;background:#315ca0;color:#fff}
+#llink-assist-foot{border-top:1px solid #304361;padding:10px;background:#111d30}
+#llink-assist-warning{font-size:10px;line-height:1.4;color:#aab8ce;margin:0 0 8px}
+#llink-assist-form{display:flex;gap:7px;align-items:flex-end}
+#llink-assist-input{min-width:0;flex:1;min-height:42px;max-height:100px;resize:vertical;background:#0b1423;color:#edf2fb;border:1px solid #344862;border-radius:10px;padding:9px;font:12px/1.4 inherit}
+#llink-assist-send{border:0;border-radius:10px;padding:10px 12px;background:#477fe5;color:#fff;font-weight:750;cursor:pointer}
+#llink-assist-send:disabled,#llink-assist-input:disabled{opacity:.5;cursor:wait}
+@media(max-width:600px){#llink-assist-root{left:12px;bottom:12px}#llink-assist-panel{width:calc(100vw - 24px);height:min(68vh,560px)}}
+</style>
+<div id="llink-assist-root" data-app="manager">
+ <button type="button" id="llink-assist-toggle" aria-expanded="false" aria-controls="llink-assist-panel">✦ Demander à Llink</button>
+ <section id="llink-assist-panel" hidden aria-label="Llink · Assistant Manager">
+  <header id="llink-assist-head"><div><strong>Llink · Assistant Manager</strong><small>VELORA · Réponse en ligne</small></div><button type="button" id="llink-assist-close" aria-label="Fermer">×</button></header>
+  <div id="llink-assist-messages" aria-live="polite"><div class="llink-assist-message assistant">Demandez de l’aide pour utiliser ClassInk Manager. Je ne reçois pas automatiquement les notes ni les dossiers de l’école.</div></div>
+  <div id="llink-assist-foot">
+   <p id="llink-assist-warning">N’envoyez pas de nom d’élève, de note, de code d’accès ou d’information personnelle.</p>
+   <form id="llink-assist-form"><textarea id="llink-assist-input" rows="2" maxlength="5000" placeholder="Écrivez votre question…" required></textarea><button id="llink-assist-send" type="submit">Envoyer</button></form>
+  </div>
+ </section>
+</div>
+<script id="llink-assist-widget">
+(() => {
+ 'use strict';
+ const root=document.getElementById('llink-assist-root');
+ if(!root||root.dataset.ready==='1')return;
+ root.dataset.ready='1';
+ const APP=root.dataset.app,API='https://class-net-p.onrender.com';
+ const toggle=document.getElementById('llink-assist-toggle');
+ const panel=document.getElementById('llink-assist-panel');
+ const close=document.getElementById('llink-assist-close');
+ const form=document.getElementById('llink-assist-form');
+ const input=document.getElementById('llink-assist-input');
+ const send=document.getElementById('llink-assist-send');
+ const messages=document.getElementById('llink-assist-messages');
+ const history=[];
+ let busy=false;
+ const addMessage=(role,text)=>{
+  const el=document.createElement('div');
+  el.className='llink-assist-message '+role;
+  el.textContent=text||'';
+  messages.appendChild(el);
+  messages.scrollTop=messages.scrollHeight;
+  return el;
+ };
+ const setOpen=value=>{
+  panel.hidden=!value;
+  toggle.setAttribute('aria-expanded',String(value));
+  if(value)input.focus();
+ };
+ toggle.addEventListener('click',()=>setOpen(panel.hidden));
+ close.addEventListener('click',()=>setOpen(false));
+ const sessionToken=()=>{
+  if(APP==='manager')return window.__CLASSINK_MANAGER_TOKEN__||'';
+  if(APP==='crypt')return window.__CRYPT_ADMIN_TOKEN__||'';
+  return '';
+ };
+ form.addEventListener('submit',async event=>{
+  event.preventDefault();
+  const message=input.value.trim();
+  if(!message||busy)return;
+  if(APP==='manager'&&!sessionToken()){addMessage('assistant','Connectez-vous à ClassInk Manager pour utiliser Llink.');return;}
+  if(APP==='crypt'&&!sessionToken()){addMessage('assistant','Connectez-vous au centre de contrôle pour utiliser Llink.');return;}
+  addMessage('user',message);
+  input.value='';
+  busy=true;send.disabled=true;input.disabled=true;send.textContent='…';
+  const answer=addMessage('assistant','Llink réfléchit…');
+  try{
+   const headers=new Headers({'Content-Type':'application/json','X-CRYPT-App':APP,'Accept':'text/event-stream'});
+   const token=sessionToken();if(token)headers.set('Authorization','Bearer '+token);
+   const response=await fetch(API+'/api/llink/assist',{
+    method:'POST',headers,cache:'no-store',credentials:'omit',referrerPolicy:'no-referrer',
+    body:JSON.stringify({message,history:history.slice(-8),source:APP})
+   });
+   if(!response.ok){
+    const raw=await response.text();
+    let detail=raw;try{const parsed=JSON.parse(raw);detail=parsed.detail||parsed.message||raw;}catch(_){}
+    throw new Error(detail||('Erreur HTTP '+response.status));
+   }
+   answer.textContent='';
+   if(response.body&&response.body.getReader){
+    const reader=response.body.getReader(),decoder=new TextDecoder();
+    while(true){const part=await reader.read();if(part.done)break;answer.textContent+=decoder.decode(part.value,{stream:true});messages.scrollTop=messages.scrollHeight;}
+    answer.textContent+=decoder.decode();
+   }else answer.textContent=await response.text();
+   if(!answer.textContent.trim())answer.textContent='Llink n’a pas retourné de réponse. Réessayez.';
+   history.push({role:'user',text:message},{role:'assistant',text:answer.textContent});
+   if(history.length>12)history.splice(0,history.length-12);
+  }catch(error){
+   answer.textContent='Llink est momentanément indisponible : '+(error.message||'erreur réseau');
+  }finally{
+   busy=false;send.disabled=false;input.disabled=false;send.textContent='Envoyer';input.focus();
+  }
+ });
 })();
 </script>
 </body>
