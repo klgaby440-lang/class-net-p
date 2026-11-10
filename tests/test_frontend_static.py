@@ -144,7 +144,7 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn("document.execCommand('copy')", copy_logic)
         self.assertIn("Identifiant parent copié", copy_logic)
         self.assertIn("toggleButton.textContent = row.individualAccessAllowed ? 'Bloquer les notes' : 'Autoriser les résultats';", source)
-        self.assertIn("le parent sera informé qu’il doit régler les frais", source)
+        self.assertIn("parent sera informé qu’il doit régler les frais", source)
 
     def test_suivi_individual_block_hides_results_and_requests_payment(self):
         source = (ROOT / "main.py").read_text(encoding="utf-8")
