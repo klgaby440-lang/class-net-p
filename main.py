@@ -924,6 +924,7 @@ SUIVI_LOOKUP_LIMITER = AttemptLimiter(max_attempts=10, window_seconds=900) # 10 
 CRYPT_CONSOLE_LOGIN_LIMITER = AttemptLimiter(max_attempts=5, window_seconds=900)
 CRYPT_TELEMETRY_LIMITER = AttemptLimiter(max_attempts=180, window_seconds=60)
 CRYPT_TICKET_LIMITER = AttemptLimiter(max_attempts=5, window_seconds=3600)
+CRYPT_LLINK_LIMITER = AttemptLimiter(max_attempts=12, window_seconds=300)
 
 
 
