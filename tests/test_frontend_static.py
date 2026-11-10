@@ -116,9 +116,9 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn('data-sub="view-settings">PARAMÈTRES</button>', source)
         self.assertIn('id="view-settings"', source)
         for action in (
-            "Ajouter des élèves depuis une liste",
+            "Ajouter un élève / importer une liste",
             "Gérer les élèves existants",
-            "Ajouter des cours depuis un bulletin",
+            "Ajouter un cours / importer un bulletin",
             "Gérer les cours existants",
             "Éditer la classe",
             "Imprimer les bulletins de la classe",
@@ -215,6 +215,51 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn("const students = appState.students.filter(student =>", source)
         self.assertIn("bpPrint(students.map(student => student.id), cls.id);", source)
         self.assertNotIn("bpPrint(getSortedStudentsByClass(activeClassId).map(s => s.id), activeClassId)", source)
+
+    def test_primeink_manual_add_chooser_reuses_legacy_student_and_course_forms(self):
+        source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
+        self.assertIn('id="primeInkManualAddButton"', source)
+        self.assertIn('id="primeInkManualAddChooser"', source)
+        self.assertIn("window.openPrimeInkManualAdd = function()", source)
+        self.assertIn("window.openPrimeInkManualStudent = function()", source)
+        self.assertIn("window.openPrimeInkManualCourse = function()", source)
+        self.assertIn("document.getElementById('interface-eleve').classList.remove('hidden')", source)
+        self.assertIn("document.getElementById('interface-cours').classList.remove('hidden')", source)
+        self.assertIn('id="interface-eleve"', source)
+        self.assertIn('id="interface-cours"', source)
+        self.assertIn("populateCategoryDropdown()", source)
+
+    def test_primeink_class_list_has_no_inline_edit_or_delete_actions(self):
+        source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
+        self.assertNotIn('data-class-action="edit"', source)
+        self.assertNotIn('data-class-action="delete"', source)
+        self.assertIn("window.editClassById(activeClassId)", source)
+        self.assertIn("window.deleteManagedClass(activeClassId)", source)
+
+    def test_primeink_global_settings_are_grouped_without_removing_existing_controls(self):
+        source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
+        settings = source.split('<div id="section-settings" class="app-section">', 1)[1].split(
+            '<!-- Interface Tools', 1
+        )[0]
+        for heading in (
+            "GESTION ET SYNCHRONISATION",
+            "SAUVEGARDE ET RESTAURATION",
+            "LICENCE ET APPARENCE",
+            "À PROPOS DE PRIMEINK",
+            "INFORMATIONS DE L'ÉTABLISSEMENT",
+        ):
+            self.assertIn(heading, settings)
+        for control_id in (
+            "prepareClassInformationBtn",
+            "primeInkExcelImportInput",
+            "activationCodeInput",
+            "themeSelect",
+            "syncModeSelect",
+            "identityCard",
+            "teacherUniqueIdInput",
+            "teachersTableBody",
+        ):
+            self.assertIn(f'id="{control_id}"', settings)
 
     def test_primeink_deliberation_lists_students_of_the_selected_class(self):
         source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
