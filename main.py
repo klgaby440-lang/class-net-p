@@ -2083,7 +2083,7 @@ def crypt_console_tickets(status_filter: Optional[str] = None, limit: int = 100,
     rows = query.order_by(CryptSupportTicket.created_at.desc()).limit(limit).all()
     return {"status": True, "data": [{
         "id": t.id, "app": t.app, "school_id": t.school_id, "account": t.account_identifier,
-        "contact": t.contact, "category": t.category, "subject": t.subject,
+        "device_id": t.device_id, "contact": t.contact, "category": t.category, "subject": t.subject,
         "message": t.message, "status": t.status, "admin_note": t.admin_note,
         "created_at": t.created_at.isoformat() + "Z" if t.created_at else "",
         "updated_at": t.updated_at.isoformat() + "Z" if t.updated_at else "",
@@ -2131,7 +2131,7 @@ def validate_crypt_read_query(query: str) -> str:
         raise HTTPException(status_code=403, detail="Une seule instruction sans commentaires SQL est autorisée.")
     if not re.match(r"^SELECT\b", sql, re.IGNORECASE):
         raise HTTPException(status_code=403, detail="Seules les requêtes SELECT simples sont autorisées.")
-    forbidden = r"\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|GRANT|REVOKE|COPY|DO|CALL|EXECUTE|LOCK|SET|VACUUM|ANALYZE|INTO|NEXTVAL|SETVAL)\b|\bFOR\s+(UPDATE|SHARE)\b|\b(pg_[a-z0-9_]*|lo_[a-z0-9_]*|dblink|set_config|current_setting|current_user|session_user|current_database|version|to_json|to_jsonb|row_to_json|json_agg|jsonb_agg|json_build_object|jsonb_build_object|hstore)\s*\("
+    forbidden = r"\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|GRANT|REVOKE|COPY|DO|CALL|EXECUTE|LOCK|SET|VACUUM|ANALYZE|INTO|NEXTVAL|SETVAL|CURRENT_USER|SESSION_USER|CURRENT_ROLE|SESSION_ROLE|CURRENT_SCHEMA|CURRENT_CATALOG)\b|\bFOR\s+(UPDATE|SHARE)\b|\b(pg_[a-z0-9_]*|lo_[a-z0-9_]*|dblink|set_config|current_setting|current_database|version|to_json|to_jsonb|row_to_json|json_agg|jsonb_agg|json_build_object|jsonb_build_object|hstore)\s*\("
     if re.search(forbidden, sql, re.IGNORECASE):
         raise HTTPException(status_code=403, detail="Instruction ou fonction interdite dans l'explorateur.")
     secret_columns = r"\b(pass_word|password|secret|token|signature|head_signature|api_key|otp)\b"
