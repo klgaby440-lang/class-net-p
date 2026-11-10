@@ -247,6 +247,25 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertNotIn("Institut Horizon", source)
         self.assertNotIn("Aline Mukendi", source)
 
+    def test_crypt_command_center_frontend_is_interactive_and_has_no_storage(self):
+        source = (ROOT / "crypt/index.html").read_text(encoding="utf-8")
+        self.inspect_file("crypt/index.html")
+        for storage_api in ("localStorage", "sessionStorage", "indexedDB", "document.cookie"):
+            self.assertNotIn(storage_api, source)
+        for route in (
+            "/api/crypt-console/login",
+            "/api/crypt-console/overview",
+            "/api/crypt-console/schools",
+            "/api/crypt-console/devices",
+            "/api/crypt-console/events",
+            "/api/crypt-console/tickets",
+            "/api/crypt-console/db/query",
+        ):
+            self.assertIn(route, source)
+        self.assertIn("Seules les requêtes SELECT", source)
+        self.assertIn("Créer un établissement", source)
+        self.assertIn("Déconnexion", source)
+
     def test_manager_has_crypt_telemetry_and_no_persistent_storage(self):
         source = (ROOT / "manager/index.html").read_text(encoding="utf-8")
         self.assertIn("const APP = 'manager'", source)
