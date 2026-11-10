@@ -176,7 +176,7 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn("const memoryStore = new Map()", source)
         self.assertIn("cache: 'no-store'", source)
         self.assertIn("pagehide", source)
-        main_script_end = source.index("})();\\n</script>")
+        main_script_end = source.index("</script>", source.index("const memoryStore"))
         cleanup_handler = source.index("window.addEventListener('pagehide'", source.index("const memoryStore"))
         self.assertLess(cleanup_handler, main_script_end)
         self.assertNotIn("liveData.clear();", source[source.rfind("</script>"):])
