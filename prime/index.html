@@ -5158,6 +5158,32 @@ window.updateHoraireStructure = function() {
                 }, 60000);
                 if (!response.ok) return alert(await bpServerErrorMessage(response));
                 const result = await response.json();
+
+                // Publie l'horaire côté serveur afin que ClassInk Manager le consulte
+                // sans dépendre de la sauvegarde locale de PrimeInk.
+                try {
+                    const managerPublish = await window.primeInkFetchWithTimeout(API_BASE_URL + '/api/manager/schedule', {
+                        method: 'PUT',
+                        headers,
+                        body: JSON.stringify({
+                            school_id: appState.school.id,
+                            schedule: {
+                                academicYear: appState.school.schoolYear || bpDefaultSchoolYear(),
+                                generatedAt: result.generated_at || new Date().toISOString(),
+                                config: { jours: collected.jours, heures: collected.heures },
+                                slots: collected.slots,
+                                teachers: collected.teachers,
+                                result
+                            }
+                        })
+                    }, 30000);
+                    if (!managerPublish.ok) {
+                        alert("L'horaire a été généré dans PrimeInk, mais sa publication pour ClassInk Manager a échoué : " + await bpServerErrorMessage(managerPublish));
+                    }
+                } catch (publishError) {
+                    alert("L'horaire est généré dans PrimeInk, mais il n'a pas pu être publié pour ClassInk Manager. Vérifiez la connexion et réessayez.");
+                }
+
                 const names = {};
                 collected.teachers.forEach(t => names[t.teacher_id] = t.name);
                 __lastSchedule = { result, jours: collected.jours, heures: collected.heures, slots: collected.slots, names };
