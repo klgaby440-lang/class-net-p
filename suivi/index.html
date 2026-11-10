@@ -1031,9 +1031,13 @@ setTimeout(() => {
 window.addEventListener('pagehide', () => {
     liveData.clear();
     memoryStore.clear();
-    demoCache && Object.keys(demoCache).forEach(key => delete demoCache[key]);
+    Object.keys(demoCache).forEach(key => delete demoCache[key]);
     S = defaults();
     DEMO = false;
+    if (typeof render === 'function') render();
+});
+window.addEventListener('pageshow', event => {
+    if (event.persisted) window.location.reload();
 });
 </body>
 </html>
