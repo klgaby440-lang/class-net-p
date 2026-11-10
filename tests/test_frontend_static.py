@@ -176,6 +176,10 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn("const memoryStore = new Map()", source)
         self.assertIn("cache: 'no-store'", source)
         self.assertIn("pagehide", source)
+        main_script_end = source.index("})();\\n</script>")
+        cleanup_handler = source.index("window.addEventListener('pagehide'", source.index("const memoryStore"))
+        self.assertLess(cleanup_handler, main_script_end)
+        self.assertNotIn("liveData.clear();", source[source.rfind("</script>"):])
 
     def test_primeink_keeps_local_database_persistence(self):
         source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
@@ -246,6 +250,8 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn("LECTURE SEULE", source)
         self.assertNotIn("Institut Horizon", source)
         self.assertNotIn("Aline Mukendi", source)
+        self.assertIn("window.__CLASSINK_MANAGER_TOKEN__=managerToken", source)
+        self.assertIn('id="llink-assist-widget"', source)
 
     def test_crypt_command_center_frontend_is_interactive_and_has_no_storage(self):
         source = (ROOT / "crypt/index.html").read_text(encoding="utf-8")
@@ -265,6 +271,18 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn("Seules les requêtes SELECT", source)
         self.assertIn("Créer un établissement", source)
         self.assertIn("Déconnexion", source)
+        self.assertIn("window.__CRYPT_ADMIN_TOKEN__=token", source)
+        self.assertIn('id="llink-assist-widget"', source)
+
+    def test_llink_assist_is_embedded_without_persisting_conversation_data(self):
+        for relative in ("suivi/index.html", "manager/index.html", "crypt/index.html"):
+            source = (ROOT / relative).read_text(encoding="utf-8")
+            self.inspect_file(relative)
+            self.assertIn('id="llink-assist-widget"', source)
+            self.assertIn("/api/llink/assist", source)
+            self.assertIn("history.slice(-8)", source)
+            self.assertNotIn("localStorage", source)
+            self.assertNotIn("sessionStorage", source)
 
     def test_manager_has_crypt_telemetry_and_no_persistent_storage(self):
         source = (ROOT / "manager/index.html").read_text(encoding="utf-8")
@@ -284,6 +302,10 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn("horaire.generatedSchedules", snapshot)
         self.assertIn("mixage.generatedSchedules", snapshot)
         self.assertIn("target.generatedSchedules = combined.filter", restore)
+        self.assertIn("localSchoolId === remoteSchoolId", source)
+        self.assertIn("_managerSchedule", source)
+        self.assertIn("slots: Array.isArray(scheduleMeta.slots)", source)
+        self.assertIn("['surveillants', 'salles', 'coursProgrammes']", source)
 
     def test_manager_and_primeink_publish_server_schedule_and_share_suivi_access(self):
         server = (ROOT / "main.py").read_text(encoding="utf-8")
