@@ -3742,6 +3742,25 @@ async function bpPushClassBulletin(cls) {
                 if (typeof bpSuiviLoadRoster === 'function') bpSuiviLoadRoster(classId);
             }
 
+            // Réaffiche les données reçues en mémoire, sans recharger la page (le jeton ne quitte jamais la mémoire).
+            window.refreshPrimeInkAfterLogin = function() {
+                renderClassesTable();
+                renderTeachersTable();
+                const firstClass = appState.classes && appState.classes[0];
+                if (!firstClass) {
+                    activeClassId = '';
+                    activeStudentId = '';
+                    return;
+                }
+                activeClassId = firstClass.id;
+                const titleElem = document.getElementById('bulletinSidebarTitle');
+                if (titleElem) titleElem.textContent = 'BULLETIN ' + firstClass.name;
+                loadClassData(firstClass.id);
+                document.querySelectorAll('.app-section').forEach(section => section.classList.remove('active'));
+                const detail = document.getElementById('section-class-detail');
+                if (detail) detail.classList.add('active');
+            };
+
             function renderCoursesSidebar(classId) {
                 const courseListSidebar = document.getElementById('courseListSidebar');
                 courseListSidebar.innerHTML = '';
@@ -6571,8 +6590,9 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
             try {
                 const response = await fetch(`${API_BASE_URL}/api/primenet/load`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ school_id: schoolId, password: password })
+                    headers: cloudAuthHeaders(),
+                    body: JSON.stringify({ school_id: schoolId, password: password }),
+                    cache: 'no-store', credentials: 'omit'
                 });
                 
                 const result = await response.json();
