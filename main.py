@@ -1732,6 +1732,23 @@ def manager_login(data: LoginSchema, db: Session = Depends(get_db)):
     return JSONResponse(content=result, headers=headers)
 
 
+@app.get("/api/manager/schedule")
+def manager_get_schedule(
+    db: Session = Depends(get_db),
+    claims: dict = Depends(require_active_school),
+):
+    """Manager récupère le dernier horaire publié par PrimeInk pour l'établissement connecté."""
+    school_id = str(claims.get("school_id") or "")
+    school = db.query(SchoolInformation).filter(SchoolInformation.school_id == school_id).first()
+    if not school:
+        raise HTTPException(status_code=404, detail="Établissement introuvable.")
+    schedule = (school.pn_extra or {}).get("managerSchedule")
+    return JSONResponse(
+        content={"status": True, "data": schedule if isinstance(schedule, dict) else None},
+        headers={"Cache-Control": "no-store, private, max-age=0", "Pragma": "no-cache", "Expires": "0"},
+    )
+
+
 @app.put("/api/manager/schedule")
 def manager_publish_schedule(
     payload: dict,
