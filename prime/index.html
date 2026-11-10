@@ -1372,7 +1372,7 @@ body {
                     <div style="display: flex; flex-direction: column; gap: 0.5rem;">
                         <button class="btn-primary" onclick="renderinterface('ajouter_classe')">AJOUTER UNE CLASSE</button>
                         <button class="btn-primary" style="background-color: #0284c7;" onclick="fetchServerData()">Récupérer les données sur Internet</button>
-                        <button class="btn-primary" style="background-color: #16a34a;" onclick="saveDatabaseOnline()">Save data base OnLine</button>
+                        <button class="btn-primary" style="background-color: #16a34a;" onclick="saveDatabaseOnline({manual:true})">Synchroniser avec le serveur</button>
                         <button class="btn-primary" style="background-color:#7c3aed;" id="prepareClassInformationBtn" onclick="prepareClassInformation()">Préparer les informations des classes</button>
                         <small id="prepareClassInformationStatus" style="font-size:0.78rem;color:var(--text-secondary);" aria-live="polite">Publie les classes, élèves, cours et titulaires pour les comptes ClassInk de cette école.</small>
                         <button class="btn-secondary" onclick="submitPrimeInkComplaint()">Signaler un problème à CRYPT</button>
@@ -5970,7 +5970,8 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
                 'Content-Type': 'application/json',
                 'X-CRYPT-App': 'primeink',
                 'X-CRYPT-Device': primeInkDeviceSessionId,
-                'X-CRYPT-Version': '1.0'
+                'X-CRYPT-Version': '1.0',
+                'X-CRYPT-School': (typeof appState !== 'undefined' && appState.school && appState.school.id) ? String(appState.school.id) : ''
             };
             if (primeInkCloudToken) headers['Authorization'] = 'Bearer ' + primeInkCloudToken;
             return headers;
@@ -7650,8 +7651,11 @@ window.primeInkFetchWithTimeout = async function(url, options = {}, timeoutMs = 
   'use strict';
   const APP = 'primeink';
   const API = 'https://class-net-p.onrender.com';
-  const SESSION = (typeof crypto !== 'undefined' && crypto.randomUUID)
-    ? crypto.randomUUID() : APP + '-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+  const SESSION = (typeof window.__PRIMEINK_DEVICE_SESSION__ !== 'undefined' && window.__PRIMEINK_DEVICE_SESSION__)
+    ? window.__PRIMEINK_DEVICE_SESSION__
+    : ((typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID() : APP + '-' + Math.random().toString(36).slice(2) + Date.now().toString(36));
+  window.__PRIMEINK_DEVICE_SESSION__ = SESSION;
   window.__CRYPT_DEVICE_SESSION__ = SESSION;
   window.__CRYPT_FEATURE__ = 'interface';
   const originalFetch = window.fetch.bind(window);
@@ -7731,6 +7735,15 @@ window.primeInkFetchWithTimeout = async function(url, options = {}, timeoutMs = 
     document.body.appendChild(button);
   });
 })();
+        window.addEventListener('pagehide', () => {
+            primeInkCloudToken = null;
+            if (typeof appState !== 'undefined') appState = JSON.parse(JSON.stringify(defaultState));
+            activeClassId = '';
+            activeStudentId = '';
+        });
+        window.addEventListener('pageshow', event => {
+            if (event.persisted) location.reload();
+        });
 </script>
 
 </body>
