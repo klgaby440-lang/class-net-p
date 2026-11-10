@@ -171,6 +171,24 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn("safe.results = null", source)
         self.assertIn("Hors connexion : les résultats restent masqués", source)
         self.assertIn("f.configured === false", source)
+        for storage_api in ("localStorage", "sessionStorage", "indexedDB", "document.cookie"):
+            self.assertNotIn(storage_api, source)
+        self.assertIn("const memoryStore = new Map()", source)
+        self.assertIn("cache: 'no-store'", source)
+        self.assertIn("pagehide", source)
+
+    def test_primeink_keeps_local_database_persistence(self):
+        source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
+        self.assertIn("classnet_p_db", source)
+        self.assertIn("primeink_cloud_token", source)
+        self.assertIn("window.localStorage.setItem('classnet_p_db'", source)
+        self.assertIn("window.localStorage.getItem('classnet_p_db'", source)
+        self.assertIn('id="crypt-client-telemetry"', source)
+
+    def test_classink_app_keeps_local_persistence(self):
+        source = (ROOT / "app/index.html").read_text(encoding="utf-8")
+        self.assertTrue("localStorage" in source or "indexedDB" in source)
+        self.assertIn('id="crypt-client-telemetry"', source)
 
     def test_primeink_exposes_parent_code_and_controls_student_result_access(self):
         source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
@@ -228,6 +246,20 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn("LECTURE SEULE", source)
         self.assertNotIn("Institut Horizon", source)
         self.assertNotIn("Aline Mukendi", source)
+
+    def test_manager_has_crypt_telemetry_and_no_persistent_storage(self):
+        source = (ROOT / "manager/index.html").read_text(encoding="utf-8")
+        self.assertIn("const APP = 'manager'", source)
+        self.assertIn("/api/telemetry/complaints", source)
+        self.assertIn("window.addEventListener('pagehide'", source)
+        for storage_api in ("localStorage", "sessionStorage", "indexedDB"):
+            self.assertNotIn(storage_api, source)
+
+    def test_primeink_has_legacy_schedule_publication(self):
+        source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
+        self.assertIn("publishExistingScheduleToManager", source)
+        self.assertIn("/api/manager/schedule", source)
+        self.assertIn("generatedSchedules", source)
 
     def test_manager_and_primeink_publish_server_schedule_and_share_suivi_access(self):
         server = (ROOT / "main.py").read_text(encoding="utf-8")
