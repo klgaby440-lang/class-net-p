@@ -3511,6 +3511,9 @@ async function bpPushClassBulletin(cls) {
                     s.classes.forEach(c => classNameById[c.id] = c.name);
                     const school = {};
                     ['name', 'code', 'city', 'commune', 'province', 'seal', 'headSignature', 'armoiries', 'headName', 'schoolYear'].forEach(k => { if (s.school && s.school[k] !== undefined && s.school[k] !== null && s.school[k] !== '') school[k] = s.school[k]; });
+                    const tools = s.tools || {};
+                    const horaire = tools.horaire || {};
+                    const mixage = tools.mixage || {};
                     return {
                         school,
                         bulletinPlaces: s.bulletinPlaces || {},
@@ -3518,7 +3521,20 @@ async function bpPushClassBulletin(cls) {
                         signatureBook: s.signatureBook, repechage: s.repechage,
                         courses: s.courses.filter(c => c.subCategory).map(c => ({ id: c.id, name: c.name, className: classNameById[c.classId], subCategory: c.subCategory })),
                         signatures: (s.teachers || []).filter(t => t.signature).map(t => ({ uniqueId: t.uniqueId, signature: t.signature })),
-                        printSettings: s.printSettings
+                        printSettings: s.printSettings,
+                        // Les horaires générés avant la connexion restent disponibles pour une publication manuelle dans Manager.
+                        horaire: {
+                            config: horaire.config || {},
+                            profsDispo: Array.isArray(horaire.profsDispo) ? horaire.profsDispo : [],
+                            generatedSchedules: Array.isArray(horaire.generatedSchedules) ? horaire.generatedSchedules : []
+                        },
+                        mixage: {
+                            config: mixage.config || {},
+                            surveillants: Array.isArray(mixage.surveillants) ? mixage.surveillants : [],
+                            salles: Array.isArray(mixage.salles) ? mixage.salles : [],
+                            coursProgrammes: Array.isArray(mixage.coursProgrammes) ? mixage.coursProgrammes : [],
+                            generatedSchedules: Array.isArray(mixage.generatedSchedules) ? mixage.generatedSchedules : []
+                        }
                     };
                 }
                 function bpRestoreLocalOnly(ns, snap) {
@@ -3544,6 +3560,28 @@ async function bpPushClassBulletin(cls) {
                         if (old && !t.signature) t.signature = old.signature;
                     });
                     if (!ns.printSettings && snap.printSettings) ns.printSettings = snap.printSettings;
+                    if (!ns.tools) ns.tools = {};
+                    ['horaire', 'mixage'].forEach(toolName => {
+                        const saved = snap[toolName];
+                        if (!saved) return;
+                        if (!ns.tools[toolName]) ns.tools[toolName] = {};
+                        const target = ns.tools[toolName];
+                        if (!target.config || !Object.keys(target.config).length) target.config = saved.config || {};
+                        if (toolName === 'horaire' && (!Array.isArray(target.profsDispo) || !target.profsDispo.length)) {
+                            target.profsDispo = saved.profsDispo || [];
+                        }
+                        const currentSchedules = Array.isArray(target.generatedSchedules) ? target.generatedSchedules : [];
+                        const oldSchedules = Array.isArray(saved.generatedSchedules) ? saved.generatedSchedules : [];
+                        const combined = [...currentSchedules, ...oldSchedules];
+                        const seen = new Set();
+                        target.generatedSchedules = combined.filter(item => {
+                            if (!item || typeof item !== 'object') return false;
+                            const key = String(item.generated_at || item.generatedAt || item.id || JSON.stringify(item).slice(0, 180));
+                            if (seen.has(key)) return false;
+                            seen.add(key);
+                            return true;
+                        }).sort((a, b) => String(b.generated_at || b.generatedAt || '').localeCompare(String(a.generated_at || a.generatedAt || '')));
+                    });
                     ['signatureBook', 'repechage'].forEach(k => {
                         if (!snap[k]) return;
                         if (!ns[k]) ns[k] = {};
