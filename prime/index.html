@@ -3510,7 +3510,7 @@ async function bpPushClassBulletin(cls) {
                     const classNameById = {};
                     s.classes.forEach(c => classNameById[c.id] = c.name);
                     const school = {};
-                    ['name', 'code', 'city', 'commune', 'province', 'seal', 'headSignature', 'armoiries', 'headName', 'schoolYear'].forEach(k => { if (s.school && s.school[k] !== undefined && s.school[k] !== null && s.school[k] !== '') school[k] = s.school[k]; });
+                    ['id', 'name', 'code', 'city', 'commune', 'province', 'seal', 'headSignature', 'armoiries', 'headName', 'schoolYear'].forEach(k => { if (s.school && s.school[k] !== undefined && s.school[k] !== null && s.school[k] !== '') school[k] = s.school[k]; });
                     const tools = s.tools || {};
                     const horaire = tools.horaire || {};
                     const mixage = tools.mixage || {};
@@ -3569,6 +3569,11 @@ async function bpPushClassBulletin(cls) {
                         if (!target.config || !Object.keys(target.config).length) target.config = saved.config || {};
                         if (toolName === 'horaire' && (!Array.isArray(target.profsDispo) || !target.profsDispo.length)) {
                             target.profsDispo = saved.profsDispo || [];
+                        }
+                        if (toolName === 'mixage') {
+                            ['surveillants', 'salles', 'coursProgrammes'].forEach(key => {
+                                if (!Array.isArray(target[key]) || target[key].length === 0) target[key] = saved[key] || [];
+                            });
                         }
                         const currentSchedules = Array.isArray(target.generatedSchedules) ? target.generatedSchedules : [];
                         const oldSchedules = Array.isArray(saved.generatedSchedules) ? saved.generatedSchedules : [];
@@ -5229,7 +5234,14 @@ window.updateHoraireStructure = function() {
                 __lastSchedule = { result, jours: collected.jours, heures: collected.heures, slots: collected.slots, names };
                 if (!appState.tools) appState.tools = {};
                 if (!appState.tools.horaire) appState.tools.horaire = {};
-                appState.tools.horaire.generatedSchedules = [result];
+                appState.tools.horaire.generatedSchedules = [{
+                    ...result,
+                    _managerSchedule: {
+                        config: { jours: collected.jours, heures: collected.heures },
+                        slots: Array.isArray(collected.slots) ? collected.slots : [],
+                        teachers: Array.isArray(collected.teachers) ? collected.teachers : []
+                    }
+                }];
                 saveState();
                 bpRenderSchedule();
                 showScheduleResultsView();
@@ -5246,9 +5258,12 @@ window.updateHoraireStructure = function() {
                 return showCustomAlert("Connectez d'abord PrimeInk à l'établissement avec « Charger les données de l'école ».");
             }
             const savedSchedules = appState.tools && appState.tools.horaire && appState.tools.horaire.generatedSchedules;
-            const scheduleResult = Array.isArray(savedSchedules)
+            const savedSchedule = Array.isArray(savedSchedules)
                 ? savedSchedules.find(item => item && item.schedules && Array.isArray(item.schedules.classes))
                 : null;
+            const scheduleResult = savedSchedule && savedSchedule.result && savedSchedule.result.schedules
+                ? savedSchedule.result : savedSchedule;
+            const scheduleMeta = savedSchedule && savedSchedule._managerSchedule || {};
             if (!scheduleResult) {
                 return showCustomAlert("Aucun ancien horaire complet n'a été trouvé dans la sauvegarde PrimeInk de cet appareil.");
             }
@@ -5261,9 +5276,9 @@ window.updateHoraireStructure = function() {
                         schedule: {
                             academicYear: appState.school.schoolYear || bpDefaultSchoolYear(),
                             generatedAt: scheduleResult.generated_at || new Date().toISOString(),
-                            config: (appState.tools.horaire && appState.tools.horaire.config) || {},
-                            slots: [],
-                            teachers: [],
+                            config: scheduleMeta.config || (appState.tools.horaire && appState.tools.horaire.config) || {},
+                            slots: Array.isArray(scheduleMeta.slots) ? scheduleMeta.slots : [],
+                            teachers: Array.isArray(scheduleMeta.teachers) ? scheduleMeta.teachers : [],
                             result: scheduleResult
                         }
                     }),
@@ -6623,7 +6638,12 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
                     const previousState = appState;
                     const bpLocalOnly = bpSnapshotLocalOnly();
                     appState = result.data;
-                    bpRestoreLocalOnly(appState, bpLocalOnly);
+                    const localSchoolId = String(bpLocalOnly.school && bpLocalOnly.school.id || '').trim();
+                    const remoteSchoolId = String(appState.school && appState.school.id || '').trim();
+                    // Ne jamais réinjecter les réglages ou horaires locaux d'une autre école.
+                    if (localSchoolId && remoteSchoolId && localSchoolId === remoteSchoolId) {
+                        bpRestoreLocalOnly(appState, bpLocalOnly);
+                    }
                     if (!saveState()) {
                         appState = previousState;
                         await showCustomAlert("La base a été reçue, mais ce navigateur ne peut pas la sauvegarder. Ouvrez PrimeInk avec Chrome, Edge, Firefox ou Opera normal avant de poursuivre.");
