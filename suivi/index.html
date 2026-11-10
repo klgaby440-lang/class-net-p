@@ -276,10 +276,12 @@ const tone = p => p >= 70 ? 'var(--ok)' : p >= 50 ? 'var(--warn)' : 'var(--bad)'
 const icon = (d, extra) => '<svg class="i" viewBox="0 0 24 24"' + (extra || '') + '>' + d + '</svg>';
 
 /* ---------- Stockage ---------- */
+// Stockage éphémère en mémoire vive : rien n'est écrit dans le navigateur.
+const memoryStore = new Map();
 const store = {
-    get(key) { try { return localStorage.getItem(key); } catch (e) { return null; } },
-    set(key, value) { try { localStorage.setItem(key, value); return true; } catch (e) { return false; } },
-    del(key) { try { localStorage.removeItem(key); } catch (e) { /* indisponible */ } }
+    get(key) { return memoryStore.has(key) ? memoryStore.get(key) : null; },
+    set(key, value) { memoryStore.set(key, String(value)); return true; },
+    del(key) { memoryStore.delete(key); }
 };
 const defaults = () => ({ theme: 'auto', pin: null, kids: [], active: '', history: [], read: [] });
 function loadState() {
@@ -289,8 +291,7 @@ function loadState() {
 let S = loadState();
 const saveState = () => store.set(STORE_KEY, JSON.stringify(S));
 
-let DEMO = false;
-try { DEMO = sessionStorage.getItem(DEMO_FLAG) === '1'; } catch (e) { DEMO = false; }
+let DEMO = false; // Mode démonstration conservé uniquement en mémoire.
 const demoCache = {};
 const demoState = { kids: [], active: '', read: [] };
 
@@ -408,7 +409,8 @@ async function request(method, path, body) {
     try {
         response = await fetch(API_BASE + path, {
             method, headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-            body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(20000)
+            body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(20000),
+            cache: 'no-store', credentials: 'omit', referrerPolicy: 'no-referrer'
         });
     } catch (e) { throw new ApiError('network', 'Impossible de joindre le serveur. Vérifiez votre connexion internet.'); }
     let payload = {};
@@ -882,13 +884,12 @@ function armIdle() { clearTimeout(idleTimer); if (S.pin) idleTimer = setTimeout(
 
 async function eraseAll() {
     if (!(await ui.confirm('Effacer tous les enfants liés, l’historique, le PIN et les résultats gardés sur cet appareil ? Cette action est définitive.', 'Tout effacer', { danger: true, ok: 'Tout effacer' }))) return;
-    try { Object.keys(localStorage).filter(k => k.indexOf(CACHE_PREFIX) === 0).forEach(k => store.del(k)); } catch (e) { /* stockage indisponible */ }
-    store.del(STORE_KEY); liveData.clear(); S = defaults(); clearTimeout(idleTimer); V.tab = 'home'; V.period = 'TG'; applyTheme(); render(); toast('Données effacées');
+    for (const key of Array.from(memoryStore.keys())) if (key === STORE_KEY || key.startsWith(CACHE_PREFIX)) store.del(key);
+    liveData.clear(); S = defaults(); clearTimeout(idleTimer); V.tab = 'home'; V.period = 'TG'; applyTheme(); render(); toast('Données effacées');
 }
 
 function setDemo(on) {
-    DEMO = on;
-    try { on ? sessionStorage.setItem(DEMO_FLAG, '1') : sessionStorage.removeItem(DEMO_FLAG); } catch (e) { /* indisponible */ }
+    DEMO = !!on;
     demoState.kids = []; demoState.active = ''; demoState.read = []; Object.keys(demoCache).forEach(k => delete demoCache[k]);
     V.tab = 'home'; V.period = 'TG'; V.offline = false; V.link = { q: '', results: null, school: null, loading: false };
     render(); toast(on ? 'Mode démonstration activé' : 'Mode démonstration quitté');
@@ -1027,5 +1028,12 @@ setTimeout(() => {
 })();
 </script>
 
+window.addEventListener('pagehide', () => {
+    liveData.clear();
+    memoryStore.clear();
+    demoCache && Object.keys(demoCache).forEach(key => delete demoCache[key]);
+    S = defaults();
+    DEMO = false;
+});
 </body>
 </html>
