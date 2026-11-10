@@ -322,6 +322,21 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn("window.__CLASSINK_MANAGER_TOKEN__=managerToken", source)
         self.assertIn('id="llink-assist-widget"', source)
 
+    def test_classink_and_crypt_brand_assets_are_wired_into_frontends_and_heads(self):
+        classink_logo = (ROOT / "assets/classink-logo.svg").read_text(encoding="utf-8")
+        crypt_logo = (ROOT / "assets/crypt-logo.svg").read_text(encoding="utf-8")
+        prime = (ROOT / "prime/index.html").read_text(encoding="utf-8")
+        crypt = (ROOT / "crypt/index.html").read_text(encoding="utf-8")
+        self.assertIn("<svg", classink_logo)
+        self.assertIn("<svg", crypt_logo)
+        self.assertIn("../assets/classink-logo.svg", prime)
+        self.assertIn("../assets/crypt-logo.svg", prime)
+        self.assertIn('rel="icon"', prime)
+        self.assertIn("../assets/crypt-logo.svg", crypt)
+        self.assertIn('rel="icon"', crypt)
+        self.assertIn('alt="Logo CRYPT"', crypt)
+        self.assertIn('alt="Logo ClassInk"', prime)
+
     def test_crypt_command_center_frontend_is_interactive_and_has_no_storage(self):
         source = (ROOT / "crypt/index.html").read_text(encoding="utf-8")
         self.inspect_file("crypt/index.html")
