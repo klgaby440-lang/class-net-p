@@ -233,8 +233,8 @@ class FrontendStaticTests(unittest.TestCase):
         source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
         self.assertNotIn('data-class-action="edit"', source)
         self.assertNotIn('data-class-action="delete"', source)
-        self.assertIn("window.editClassById(activeClassId)", source)
-        self.assertIn("window.deleteManagedClass(activeClassId)", source)
+        self.assertIn("editClassById(activeClassId)", source)
+        self.assertIn("deleteManagedClass(activeClassId)", source)
 
     def test_primeink_global_settings_are_grouped_without_removing_existing_controls(self):
         source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
