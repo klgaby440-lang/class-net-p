@@ -1375,6 +1375,7 @@ body {
                         <button class="btn-primary" style="background-color: #16a34a;" onclick="saveDatabaseOnline()">Save data base OnLine</button>
                         <button class="btn-primary" style="background-color:#7c3aed;" id="prepareClassInformationBtn" onclick="prepareClassInformation()">Préparer les informations des classes</button>
                         <small id="prepareClassInformationStatus" style="font-size:0.78rem;color:var(--text-secondary);" aria-live="polite">Publie les classes, élèves, cours et titulaires pour les comptes ClassInk de cette école.</small>
+                        <button class="btn-secondary" onclick="submitPrimeInkComplaint()">Signaler un problème à CRYPT</button>
                         <button class="btn-secondary" onclick="loadSchoolData()">Charger les données de l'école</button>
                     </div>
                 </div>
@@ -3036,12 +3037,7 @@ window.alert = function(message) { showCustomAlert(message); };
                     bpPrint(students.map(student => student.id), cls.id);
                 };
                 window.exportClassBulletinsPDF = function() {
-                    try {
-                        if (!localStorage.getItem('bp_pdf_hint_seen')) {
-                            localStorage.setItem('bp_pdf_hint_seen', '1');
-                            alert("Dans la fenêtre d'impression, choisissez « Enregistrer au format PDF » comme imprimante. L'orientation paysage et le format sont déjà réglés.");
-                        }
-                    } catch (e) { /* stockage indisponible */ }
+                    alert("Dans la fenêtre d'impression, choisissez « Enregistrer au format PDF » comme imprimante. L'orientation paysage et le format sont déjà réglés.");
                     window.printClassBulletins();
                 };
 
@@ -5949,13 +5945,15 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
             }
         }
 
-        // Jeton de session Cloud reçu au chargement de l'école. Stocké à part de appState pour ne jamais être renvoyé dans les synchronisations.
+        // Jeton de session uniquement en mémoire ; l'identifiant de session appareil est temporaire.
         function cloudAuthHeaders() {
-            const headers = { 'Content-Type': 'application/json' };
-            try {
-                const token = localStorage.getItem('primeink_cloud_token');
-                if (token) headers['Authorization'] = 'Bearer ' + token;
-            } catch (e) { /* stockage indisponible */ }
+            const headers = {
+                'Content-Type': 'application/json',
+                'X-CRYPT-App': 'primeink',
+                'X-CRYPT-Device': primeInkDeviceSessionId,
+                'X-CRYPT-Version': '1.0'
+            };
+            if (primeInkCloudToken) headers['Authorization'] = 'Bearer ' + primeInkCloudToken;
             return headers;
         }
 
@@ -5986,28 +5984,37 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
             }
         }
 
-        // 2. Fonction pour sauvegarder toute la base de données en ligne
-        async function saveDatabaseOnline() {
+        // Synchronisation serveur : aucun export local ni stockage de base dans le navigateur.
+        async function saveDatabaseOnline(options = {}) {
+            if (!primeInkCloudToken || !appState.school || !appState.school.id) {
+                primeInkSyncPending = true;
+                return false;
+            }
+            if (primeInkSyncBusy) {
+                primeInkSyncPending = true;
+                return false;
+            }
+            primeInkSyncBusy = true;
+            primeInkSyncPending = false;
             try {
-                // Envoyer également la version alphabétiquement normalisée de la base.
-                saveState();
                 const response = await fetch(`${API_BASE_URL}/api/sync/primenet`, {
-                    method: 'POST',
-                    headers: cloudAuthHeaders(),
-                    body: JSON.stringify(appState)
+                    method: 'POST', headers: cloudAuthHeaders(),
+                    body: JSON.stringify(appState), cache: 'no-store'
                 });
-                if (response.status === 401 || response.status === 403) {
-                    alert("🔒 Session absente ou expirée : rechargez d'abord les données de l'école avec le mot de passe.");
-                    return;
-                }
-                const res = await response.json();
-                if (res.status) {
-                    alert("✅ " + res.message);
-                } else {
-                    alert("❌ Échec de la synchronisation.");
-                }
+                const res = await response.json().catch(()=>({status:false,message:'Réponse serveur illisible.'}));
+                if (!response.ok || !res.status) throw new Error(res.message || res.detail || 'Échec de la synchronisation.');
+                if (options.manual) await showCustomAlert('Base synchronisée avec le serveur CRYPT.');
+                if (window.trackPrimeInkEvent) window.trackPrimeInkEvent(primeInkFeature, 'feature', 'Synchronisation de la base école réussie');
+                return true;
             } catch (err) {
-                alert("❌ Erreur lors de l'envoi vers le serveur : " + err.message);
+                if (options.manual) await showCustomAlert('Échec de synchronisation : ' + err.message);
+                throw err;
+            } finally {
+                primeInkSyncBusy = false;
+                if (primeInkSyncPending) {
+                    clearTimeout(primeInkSyncTimer);
+                    primeInkSyncTimer = setTimeout(()=>saveDatabaseOnline().catch(()=>{}), 500);
+                }
             }
         }
 
@@ -6032,11 +6039,7 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
                 await showCustomAlert("Aucune classe à publier. Créez ou chargez d'abord les classes de l'école.");
                 return;
             }
-            if (!saveState()) {
-                await showCustomAlert("La base locale n'a pas pu être sauvegardée. Aucune donnée n'a été envoyée.");
-                return;
-            }
-
+            // Publication directe des informations vers le serveur, sans sauvegarde locale.
             const payload = {
                 school: {
                     id: schoolId,
@@ -6540,18 +6543,15 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
                 }
 
                 const importedSchoolId = String(appState.school && appState.school.id || '');
-                if (previousSchoolId !== importedSchoolId) {
-                    try { localStorage.removeItem('primeink_cloud_token'); } catch (e) { /* stockage indisponible */ }
-                }
+                if (previousSchoolId !== importedSchoolId) primeInkCloudToken = null;
 
-                setPrimeInkExcelStatus('Importation réussie. Rechargement de PrimeInk…', false);
+                setPrimeInkExcelStatus('Importation chargée en mémoire. Aucune donnée métier n’est stockée sur cet appareil.', false);
+                if (typeof window.refreshPrimeInkAfterLogin === 'function') window.refreshPrimeInkAfterLogin();
                 await showCustomAlert(
-                    'Importation terminée. ' + studentCount + ' élève(s), ' + classCount +
-                    ' classe(s) et ' + courseCount + ' cours chargé(s). La base locale a été remplacée. ' +
-                    'Pour mettre à jour le serveur, utilisez ensuite « Save data base OnLine ».',
+                    'Importation chargée uniquement en mémoire : ' + studentCount + ' élève(s), ' + classCount +
+                    ' classe(s) et ' + courseCount + ' cours. Connectez-vous puis synchronisez vers le serveur.',
                     'Import Excel terminé'
                 );
-                location.reload();
             } catch (error) {
                 console.error('[PrimeInk Excel Import]', error);
                 setPrimeInkExcelStatus(error.message || "Échec de l'import Excel.", true);
@@ -6577,20 +6577,17 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
                 
                 const result = await response.json();
                 if (result.status && result.data) {
-                    if (result.token) {
-                        try { localStorage.setItem('primeink_cloud_token', result.token); } catch (e) { /* stockage indisponible */ }
-                    }
-                    const previousState = appState;
-                    const bpLocalOnly = bpSnapshotLocalOnly();
+                    primeInkCloudToken = result.token || null;
                     appState = result.data;
-                    bpRestoreLocalOnly(appState, bpLocalOnly);
-                    if (!saveState()) {
-                        appState = previousState;
-                        await showCustomAlert("La base a été reçue, mais ce navigateur ne peut pas la sauvegarder. Ouvrez PrimeInk avec Chrome, Edge, Firefox ou Opera normal avant de poursuivre.");
-                        return;
-                    }
-                    await showCustomAlert("✅ Base de données de l'école chargée avec succès !");
-                    location.reload(); // Recharge pour appliquer le nouvel état
+                    sortStudentsAlphabetically(appState);
+                    persistPrimeInkStudentIds();
+                    activeClassId = '';
+                    activeStudentId = '';
+                    if (typeof window.refreshPrimeInkAfterLogin === 'function') window.refreshPrimeInkAfterLogin();
+                    if (window.trackPrimeInkEvent) window.trackPrimeInkEvent('auth.login', 'feature', 'Connexion PrimeInk réussie');
+                    const passwordInput = document.getElementById('appPasswordInput');
+                    if (passwordInput) passwordInput.value = '';
+                    await showCustomAlert("✅ Base chargée depuis le serveur. Elle reste en mémoire uniquement jusqu'à la fermeture de cette page.");
                 } else {
                     alert("❌ " + (result.detail || result.message || "Impossible de charger les données."));
                 }
@@ -6614,7 +6611,6 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
                 const data = await response.json();
                 if (data.status) {
                     appState.expiration_date = data.expiration_date;
-                    saveState();
                     alert(`🎉 ${data.message}\nNouvelle date d'expiration : ${data.expiration_date}`);
                     updateExpirationLabel();
                     
