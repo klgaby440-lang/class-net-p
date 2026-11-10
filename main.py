@@ -2108,18 +2108,18 @@ def validate_crypt_read_query(query: str) -> str:
     sql = sql.rstrip().rstrip(";").strip()
     if ";" in sql or "--" in sql or "/*" in sql or "*/" in sql:
         raise HTTPException(status_code=403, detail="Une seule instruction sans commentaires SQL est autorisée.")
-    if not re.match(r"^SELECT\\b", sql, re.IGNORECASE):
+    if not re.match(r"^SELECT\b", sql, re.IGNORECASE):
         raise HTTPException(status_code=403, detail="Seules les requêtes SELECT simples sont autorisées.")
-    forbidden = r"\\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|GRANT|REVOKE|COPY|DO|CALL|EXECUTE|LOCK|SET|VACUUM|ANALYZE|INTO|NEXTVAL|SETVAL)\\b|\\bFOR\\s+(UPDATE|SHARE)\\b|\\b(pg_[a-z0-9_]*|lo_[a-z0-9_]*|dblink|set_config)\\s*\\("
+    forbidden = r"\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|GRANT|REVOKE|COPY|DO|CALL|EXECUTE|LOCK|SET|VACUUM|ANALYZE|INTO|NEXTVAL|SETVAL)\b|\bFOR\s+(UPDATE|SHARE)\b|\b(pg_[a-z0-9_]*|lo_[a-z0-9_]*|dblink|set_config)\s*\("
     if re.search(forbidden, sql, re.IGNORECASE):
         raise HTTPException(status_code=403, detail="Instruction ou fonction interdite dans l'explorateur.")
-    secret_columns = r"\\b(pass_word|password|secret|token|signature|head_signature|api_key|otp)\\b"
+    secret_columns = r"\b(pass_word|password|secret|token|signature|head_signature|api_key|otp)\b"
     if re.search(secret_columns, sql, re.IGNORECASE):
-        raise HTTPException(status_code=403, detail="Les colonnes d'authentification, signatures et secrets sont masquées.")
-    if re.search(r"\\b(information_schema|pg_catalog|sqlite_master|pg_toast)\\b", sql, re.IGNORECASE):
+        raise HTTPException(status_code=403, detail="Les colonnes sensibles sont masquées.")
+    if re.search(r"\b(information_schema|pg_catalog|sqlite_master|pg_toast)\b", sql, re.IGNORECASE):
         raise HTTPException(status_code=403, detail="Les catalogues système ne sont pas accessibles depuis cet explorateur.")
     allowed_tables = set(Base.metadata.tables.keys()) - {"otp_codes", "access_codes"}
-    referenced = re.findall(r'\\b(?:FROM|JOIN)\\s+["]?([A-Za-z_][A-Za-z0-9_]*)["]?', sql, re.IGNORECASE)
+    referenced = re.findall(r'\b(?:FROM|JOIN)\s+["]?([A-Za-z_][A-Za-z0-9_]*)["]?', sql, re.IGNORECASE)
     if not referenced or any(name not in allowed_tables for name in referenced):
         raise HTTPException(status_code=403, detail="La requête doit cibler uniquement les tables applicatives autorisées.")
     return sql
