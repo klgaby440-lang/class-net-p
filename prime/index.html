@@ -515,8 +515,46 @@ body {
 /* Paramètres Grid */
 .settings-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-    gap: 1.5rem;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 310px), 1fr));
+    gap: 1rem;
+    align-items: start;
+}
+.settings-grid > .settings-card {
+    min-width: 0;
+}
+.settings-grid > .settings-card[style*="grid-column: 1 / -1"] {
+    grid-column: 1 / -1;
+}
+#section-settings .settings-card h2 {
+    margin-bottom: 1rem;
+}
+#section-settings .settings-card .form-group {
+    margin-bottom: .85rem;
+}
+#section-settings .settings-card .btn-primary,
+#section-settings .settings-card .btn-secondary {
+    min-height: 42px;
+}
+#section-settings .about-card {
+    border-top: 1px solid var(--border-color);
+    padding-top: .25rem;
+}
+#section-settings .about-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .55rem 1rem;
+    margin-top: .8rem;
+    font-size: .78rem;
+    color: var(--text-secondary);
+}
+.sub-navbar {
+    flex-wrap: wrap;
+    align-items: center;
+}
+@media (max-width: 680px) {
+    .sub-navbar { gap: .25rem; }
+    .sub-nav-btn { padding: .55rem .7rem; font-size: .78rem; }
+    #primeInkManualAddButton { margin-left: 0 !important; width: 100%; }
 }
 
 .settings-card {
@@ -1174,6 +1212,7 @@ body {
             <button class="sub-nav-btn" data-sub="view-stats">STATISTIQUES</button>
             <button class="sub-nav-btn" data-sub="view-deliberation">DELIBERER</button>
             <button class="sub-nav-btn" data-sub="view-settings">PARAMÈTRES</button>
+            <button type="button" class="btn-primary" id="primeInkManualAddButton" style="margin-left:auto;white-space:nowrap;align-self:center;" onclick="openPrimeInkManualAdd()" aria-haspopup="dialog" aria-controls="primeInkManualAddChooser">＋ AJOUTER MANUELLEMENT</button>
         </nav>
         
             <!-- Vue Délibération (dans section-class-detail) -->
@@ -1361,17 +1400,17 @@ body {
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;align-items:start;">
                 <article class="settings-card">
                     <h3>Élèves</h3>
-                    <p style="color:var(--text-secondary);font-size:.86rem;">Ajoutez une fiche ou importez une liste photographiée, puis gérez les élèves déjà inscrits.</p>
+                    <p style="color:var(--text-secondary);font-size:.86rem;">Ajoutez un élève avec le formulaire classique ou importez une liste photographiée, puis gérez les élèves déjà inscrits.</p>
                     <div style="display:grid;gap:.55rem;margin-top:.8rem;">
-                        <button type="button" class="btn-primary" onclick="renderinterface('ajouter_eleve')">＋ Ajouter des élèves depuis une liste</button>
+                        <button type="button" class="btn-primary" onclick="renderinterface('ajouter_eleve')">＋ Ajouter un élève / importer une liste</button>
                         <button type="button" class="btn-secondary" onclick="openManageStudentsModal(activeClassId)">Gérer les élèves existants</button>
                     </div>
                 </article>
                 <article class="settings-card">
                     <h3>Cours</h3>
-                    <p style="color:var(--text-secondary);font-size:.86rem;">Ajoutez des cours manuellement ou lisez les cours d’un bulletin avec Llink.</p>
+                    <p style="color:var(--text-secondary);font-size:.86rem;">Ajoutez un cours avec le formulaire classique ou lisez les cours d’un bulletin avec Llink.</p>
                     <div style="display:grid;gap:.55rem;margin-top:.8rem;">
-                        <button type="button" class="btn-primary" onclick="renderinterface('ajouter_cours')">＋ Ajouter des cours depuis un bulletin</button>
+                        <button type="button" class="btn-primary" onclick="renderinterface('ajouter_cours')">＋ Ajouter un cours / importer un bulletin</button>
                         <button type="button" class="btn-secondary" onclick="openManageCoursesModal(activeClassId)">Gérer les cours existants</button>
                     </div>
                 </article>
@@ -1392,8 +1431,8 @@ body {
     <!-- Interface Paramètres Améliorée (v1.1.0 Inspired) -->
     <div id="section-settings" class="app-section">
         <div class="settings-grid">
-            <div class="settings-card">
-                <h2>PARAMÈTRES DE L'APPLICATION</h2>
+            <section class="settings-card">
+                <h2>GESTION ET SYNCHRONISATION</h2>
                 <div class="form-group">
                     <label>Action rapide</label>
                     <div style="display: flex; flex-direction: column; gap: 0.5rem;">
@@ -1407,7 +1446,17 @@ body {
                         <button class="btn-secondary" onclick="loadSchoolData()">Charger les données de l'école</button>
                     </div>
                 </div>
-
+                <div class="form-group">
+                    <label>Mode de synchronisation</label>
+                    <select class="form-control" id="syncModeSelect">
+                        <option value="intranet" selected>Intranet Local (Wi-Fi École)</option>
+                        <option value="internet">Serveur Internet (Cloud CRYPT)</option>
+                        <option value="hybride">Hybride (Intranet + Auto-Sync Cloud)</option>
+                    </select>
+                </div>
+            </section>
+            <section class="settings-card">
+                <h2>SAUVEGARDE ET RESTAURATION</h2>
                 <div class="form-group" style="margin-top: 1rem; border-top: 1px solid var(--border-color); padding-top: 0.8rem;">
                     <label>SAUVEGARDE ET RESTAURATION EXCEL</label>
                     <p style="font-size:0.82rem; color:var(--text-secondary); margin:0.25rem 0 0.7rem;">
@@ -1427,7 +1476,9 @@ body {
                         Format recommandé : fichier .xlsx exporté par PrimeInk.
                     </small>
                 </div>
-
+            </section>
+            <section class="settings-card">
+                <h2>LICENCE ET APPARENCE</h2>
                 <div class="form-group" style="margin-top: 1rem; border-top: 1px solid var(--border-color); padding-top: 0.8rem;">
                     <label>ACTIVATION & LICENCE CRYPT</label>
                     <div style="display: flex; gap: 0.5rem;">
@@ -1443,14 +1494,9 @@ body {
                         <option value="dark">SOMBRE</option>
                     </select>
                 </div>
-                <div class="form-group">
-                    <label>Mode de synchronisation</label>
-                    <select class="form-control" id="syncModeSelect">
-                        <option value="intranet" selected>Intranet Local (Wi-Fi École)</option>
-                        <option value="internet">Serveur Internet (Cloud CRYPT)</option>
-                        <option value="hybride">Hybride (Intranet + Auto-Sync Cloud)</option>
-                    </select>
-                </div>
+            </section>
+            <section class="settings-card">
+                <h2>À PROPOS DE PRIMEINK</h2>
                 <div class="about-card">
                     <h2>À Propos de PrimeInk</h2>
                     <p class="about-desc">
@@ -1467,9 +1513,9 @@ body {
                     </div>
                 </div>
             </div>
-
+            </section>
             <div class="settings-card">
-                <h2>PARAMÈTRES PERSONNELS</h2>
+                <h2>INFORMATIONS DE L'ÉTABLISSEMENT</h2>
                 <div class="form-group">
                     <label>IDENTIFIANT UNIQUE ÉCOLE</label>
                     <span class="id-badge">cnxcrypt_63017_63011_90006_56001</span>
@@ -1495,7 +1541,6 @@ body {
                     <input type="password" id="appPasswordInput" class="form-control" value="12345678">
                 </div>
             </div>
-
             <!-- IDENTITÉ DU BULLETIN, SCEAU ET SIGNATURES -->
             <div class="settings-card" style="grid-column: 1 / -1;" id="identityCard">
                 <h2>IDENTITÉ DE L’ÉCOLE ET DU BULLETIN, SCEAU ET SIGNATURES</h2>
@@ -1517,7 +1562,6 @@ body {
                 <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.6rem;">Une signature par enseignant (titulaires de classes et de cours). Chaque enseignant pourra aussi enregistrer la sienne depuis ClassInk : elle arrivera ici après la mise à jour des serveurs.</p>
                 <div id="identityTitulaires" style="display: flex; flex-direction: column; gap: 0.6rem;"></div>
             </div>
-
             <!-- NOUVELLE CARTE DE GESTION DES ENSEIGNANTS -->
             <div class="settings-card" style="grid-column: 1 / -1;">
                 <h2>GESTION DES ENSEIGNANTS DE L'ÉCOLE (INSPIRÉ v1.1.0)</h2>
@@ -1546,6 +1590,8 @@ body {
                     </table>
                 </div>
             </div>
+        </div>
+    </div>
         </div>
     </div>
 
@@ -1880,6 +1926,20 @@ body {
         </div>
     </div>
 
+    <!-- Choix de l'ajout manuel : réutilise les formulaires classiques -->
+    <div id="primeInkManualAddChooser" class="lock-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="primeInkManualAddTitle">
+        <div class="modal-box" style="max-width:460px;">
+            <button type="button" class="modal-close-btn" onclick="closePrimeInkManualAdd()" aria-label="Fermer">×</button>
+            <h3 id="primeInkManualAddTitle" style="margin-bottom:.5rem;color:var(--primary-color);">Ajouter manuellement</h3>
+            <p style="color:var(--text-secondary);margin:0 0 1.2rem;">Choisissez ce que vous souhaitez ajouter à la classe ouverte. Les formulaires classiques de PrimeInk seront utilisés.</p>
+            <div style="display:grid;gap:.7rem;">
+                <button type="button" class="btn-primary" onclick="openPrimeInkManualStudent()">＋ Ajouter un élève</button>
+                <button type="button" class="btn-primary" style="background:#0e7490;" onclick="openPrimeInkManualCourse()">＋ Ajouter un cours</button>
+                <button type="button" class="btn-secondary" onclick="closePrimeInkManualAdd()">Annuler</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal Sélection du Cours Destinataire -->
     <div id="modal-select-target-course" class="lock-overlay hidden">
         <div class="modal-box">
@@ -2163,6 +2223,36 @@ window.alert = function(message) { showCustomAlert(message); };
                         document.querySelector('#interface-classe').classList.toggle('hidden');
                     }
                 };
+
+        window.openPrimeInkManualAdd = function() {
+            const currentClass = appState.classes.find(cls => String(cls.id) === String(activeClassId));
+            if (!currentClass) {
+                alert("Ouvrez d'abord une classe avant d'ajouter des élèves ou des cours.");
+                return;
+            }
+            document.getElementById('primeInkManualAddChooser').classList.remove('hidden');
+        };
+
+        window.closePrimeInkManualAdd = function() {
+            document.getElementById('primeInkManualAddChooser').classList.add('hidden');
+        };
+
+        window.openPrimeInkManualStudent = function() {
+            if (!activeClassId) return alert("Ouvrez d'abord une classe.");
+            window.closePrimeInkManualAdd();
+            document.getElementById('interface-eleve').classList.remove('hidden');
+            const field = document.getElementById('name-student');
+            if (field) field.focus();
+        };
+
+        window.openPrimeInkManualCourse = function() {
+            if (!activeClassId) return alert("Ouvrez d'abord une classe.");
+            window.closePrimeInkManualAdd();
+            populateCategoryDropdown();
+            document.getElementById('interface-cours').classList.remove('hidden');
+            const field = document.getElementById('name-added-cours');
+            if (field) field.focus();
+        };
 
                 function populateCategoryDropdown() {
                     const select = document.getElementById('choix-categorie');
@@ -6003,10 +6093,6 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
                     <td><strong>${safeHTML(cls.name)}</strong></td>
                     <td>${safeHTML(cls.titulaire)}</td>
                     <td><span class="id-badge">${safeHTML(count)} élèves</span></td>
-                    <td style="white-space:nowrap;">
-                        <button type="button" class="btn-secondary" data-class-action="edit" style="padding:0.3rem 0.55rem;font-size:0.75rem;">Modifier</button>
-                        <button type="button" class="btn-secondary" data-class-action="delete" style="padding:0.3rem 0.55rem;font-size:0.75rem;background:#dc2626;">Supprimer</button>
-                    </td>
                 `;
                 tr.addEventListener('click', () => {
                     activeClassId = cls.id;
@@ -6015,14 +6101,6 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
                     renderClassDetails(cls.id);
                     document.querySelectorAll('.app-section').forEach(s => s.classList.remove('active'));
                     document.getElementById('section-class-detail').classList.add('active');
-                });
-                tr.querySelector('[data-class-action="edit"]').addEventListener('click', (event) => {
-                    event.stopPropagation();
-                    window.editClassById(cls.id);
-                });
-                tr.querySelector('[data-class-action="delete"]').addEventListener('click', (event) => {
-                    event.stopPropagation();
-                    window.deleteManagedClass(cls.id);
                 });
                 tbody.appendChild(tr);
             });
