@@ -247,7 +247,7 @@ $('#appRoot').hidden=true;
   document.addEventListener('click', e => {
     const el = e.target && e.target.closest ? e.target.closest('button,[role="button"]') : null;
     if (!el || el.disabled || el.id === 'cryptComplaintButton') return;
-    const text = String(el.getAttribute('data-feature') || el.getAttribute('aria-label') || el.textContent || 'Action').replace(/\s+/g,' ').trim().slice(0,120);
+    const text = String(el.getAttribute('data-feature') || el.getAttribute('data-act') || el.getAttribute('data-go') || el.getAttribute('aria-label') || el.id || 'action').replace(/\s+/g,' ').trim().slice(0,120);
     if (!text) return;
     window.__CRYPT_FEATURE__ = text;
     send('feature', text, 'Fonction activée par l’utilisateur');
