@@ -2118,6 +2118,10 @@ def validate_crypt_read_query(query: str) -> str:
         raise HTTPException(status_code=403, detail="Les colonnes sensibles sont masquées.")
     if re.search(r"\b(information_schema|pg_catalog|sqlite_master|pg_toast)\b", sql, re.IGNORECASE):
         raise HTTPException(status_code=403, detail="Les catalogues système ne sont pas accessibles depuis cet explorateur.")
+    from_prefix = re.split(r"\\b(?:WHERE|GROUP\\s+BY|ORDER\\s+BY|HAVING|LIMIT|OFFSET|UNION|INTERSECT|EXCEPT)\\b", sql, maxsplit=1, flags=re.IGNORECASE)[0]
+    from_clause = re.search(r"\\bFROM\\b(.*)$", from_prefix, re.IGNORECASE | re.DOTALL)
+    if from_clause and "," in from_clause.group(1):
+        raise HTTPException(status_code=403, detail="Utilisez des JOIN explicites ; les jointures implicites par virgule sont interdites.")
     allowed_tables = set(Base.metadata.tables.keys()) - {"otp_codes", "access_codes"}
     referenced = re.findall(r'\b(?:FROM|JOIN)\s+["]?([A-Za-z_][A-Za-z0-9_]*)["]?', sql, re.IGNORECASE)
     if not referenced or any(name not in allowed_tables for name in referenced):
