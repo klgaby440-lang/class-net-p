@@ -938,5 +938,94 @@ setTimeout(() => {
 }, 1500);
 })();
 </script>
+
+<script id="crypt-client-telemetry">
+(() => {
+  'use strict';
+  const APP = 'suivi';
+  const API = 'https://class-net-p.onrender.com';
+  const SESSION = (typeof crypto !== 'undefined' && crypto.randomUUID)
+    ? crypto.randomUUID() : APP + '-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+  window.__CRYPT_DEVICE_SESSION__ = SESSION;
+  window.__CRYPT_FEATURE__ = 'interface';
+  const originalFetch = window.fetch.bind(window);
+  const send = (type, feature, message, details = {}) => {
+    const headers = new Headers({
+      'Content-Type':'application/json',
+      'X-CRYPT-App':APP,
+      'X-CRYPT-Device':SESSION,
+      'X-CRYPT-Feature':String(feature || 'interface').slice(0,160)
+    });
+    const school = window.__CRYPT_SCHOOL__ || '';
+    if (school) headers.set('X-CRYPT-School', String(school).slice(0,100));
+    originalFetch(API + '/api/telemetry/events', {
+      method:'POST', headers, cache:'no-store', credentials:'omit',
+      body:JSON.stringify({app:APP,device_id:SESSION,event_type:type,feature:String(feature||'interface').slice(0,160),message:String(message||'').slice(0,700),details})
+    }).catch(()=>{});
+  };
+  window.CRYPTReportEvent = send;
+  window.fetch = async (input, init = {}) => {
+    let target = '';
+    try { target = typeof input === 'string' ? input : (input && input.url) || String(input); } catch (_) {}
+    let isApi = false;
+    try { const u = new URL(target, location.href); isApi = u.origin === new URL(API).origin && u.pathname.startsWith('/api/'); } catch (_) {}
+    if (!isApi || target.includes('/api/telemetry/')) return originalFetch(input, init);
+    const headers = new Headers(input instanceof Request ? input.headers : undefined);
+    new Headers(init.headers || {}).forEach((v,k)=>headers.set(k,v));
+    headers.set('X-CRYPT-App', APP);
+    headers.set('X-CRYPT-Device', SESSION);
+    headers.set('X-CRYPT-Feature', String(window.__CRYPT_FEATURE__ || 'application').slice(0,160));
+    headers.set('X-CRYPT-Version', '1.0');
+    if (window.__CRYPT_SCHOOL__) headers.set('X-CRYPT-School', String(window.__CRYPT_SCHOOL__).slice(0,100));
+    try {
+      const response = await originalFetch(input, {...init, headers, cache:'no-store'});
+      if (response.status >= 400) send('client_error', window.__CRYPT_FEATURE__, 'Réponse HTTP ' + response.status, {path:(new URL(target,location.href)).pathname,status:response.status});
+      return response;
+    } catch (error) {
+      send('client_error', window.__CRYPT_FEATURE__, error && error.message || 'Erreur réseau', {url:target.slice(0,220)});
+      throw error;
+    }
+  };
+  window.addEventListener('error', e => send('client_error', window.__CRYPT_FEATURE__, e.message || 'Erreur JavaScript', {file:e.filename||'',line:e.lineno||0}));
+  window.addEventListener('unhandledrejection', e => send('client_error', window.__CRYPT_FEATURE__, String(e.reason || 'Erreur asynchrone')));
+  document.addEventListener('click', e => {
+    const el = e.target && e.target.closest ? e.target.closest('button,[role="button"]') : null;
+    if (!el || el.disabled || el.id === 'cryptComplaintButton') return;
+    const text = String(el.getAttribute('data-feature') || el.getAttribute('aria-label') || el.textContent || 'Action').replace(/\s+/g,' ').trim().slice(0,120);
+    if (!text) return;
+    window.__CRYPT_FEATURE__ = text;
+    send('feature', text, 'Fonction activée par l’utilisateur');
+  }, true);
+  document.addEventListener('DOMContentLoaded', () => {
+    if (document.getElementById('cryptComplaintButton')) return;
+    const button = document.createElement('button');
+    button.id = 'cryptComplaintButton';
+    button.type = 'button';
+    button.textContent = 'Aide / Réclamation';
+    button.setAttribute('aria-label','Envoyer une réclamation à CRYPT');
+    button.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:99990;border:0;border-radius:24px;padding:10px 15px;background:#244d83;color:white;font:600 12px system-ui;box-shadow:0 6px 24px #0004;cursor:pointer';
+    button.addEventListener('click', async () => {
+      const subject = window.prompt('Sujet de votre réclamation ou demande :');
+      if (!subject || !subject.trim()) return;
+      const message = window.prompt('Décrivez le problème rencontré (10 caractères minimum) :');
+      if (!message || message.trim().length < 10) return window.alert('Le message est trop court.');
+      const contact = window.prompt('Téléphone ou e-mail pour vous recontacter (facultatif) :') || '';
+      try {
+        const headers = new Headers({'Content-Type':'application/json','X-CRYPT-App':APP,'X-CRYPT-Device':SESSION});
+        if (window.__CRYPT_SCHOOL__) headers.set('X-CRYPT-School',String(window.__CRYPT_SCHOOL__));
+        const response = await originalFetch(API + '/api/telemetry/complaints', {
+          method:'POST',headers,cache:'no-store',credentials:'omit',
+          body:JSON.stringify({app:APP,device_id:SESSION,subject:subject.trim(),message:message.trim(),contact:contact.trim(),category:'support'})
+        });
+        const result = await response.json().catch(()=>({}));
+        if (!response.ok || !result.status) throw new Error(result.detail || result.message || 'Envoi impossible.');
+        window.alert('Votre demande a été envoyée à CRYPT. Référence : ' + result.ticket_id);
+      } catch (error) { window.alert('La réclamation n’a pas été transmise : ' + error.message); }
+    });
+    document.body.appendChild(button);
+  });
+})();
+</script>
+
 </body>
 </html>
