@@ -74,6 +74,8 @@ body {
     letter-spacing: 1px;
 }
 
+.brand-classink-logo { width: 34px; height: 34px; object-fit: contain; border-radius: 8px; vertical-align: middle; }
+.brand-crypt-logo { width: 46px; height: 40px; object-fit: contain; border-radius: 5px; vertical-align: middle; }
 .brand-logo span {
     color: var(--primary-color);
 }
@@ -1088,13 +1090,15 @@ body {
 @media (max-width: 900px) { #view-fiches .detail-display-area { overflow-x: auto; } #view-fiches .data-table { min-width: 820px; } .bp-autosave-hint { margin-left: 0; width: 100%; } }
 
     </style>
+    <link rel="icon" type="image/svg+xml" href="../assets/classink-logo.svg">
+    <link rel="apple-touch-icon" href="../assets/classink-logo.svg">
 </head>
 
 <body class="theme-light">
 
     <!-- Barre de navigation principale (Haut) -->
     <nav class="main-navbar">
-        <div class="brand-logo">PrimeInk</div>
+        <div class="brand-logo"><img src="../assets/classink-logo.svg" alt="Logo ClassInk" class="brand-classink-logo"><span>PrimeInk</span><img src="../assets/crypt-logo.svg" alt="Logo CRYPT" class="brand-crypt-logo"></div>
         <div class="nav-links">
             <button class="nav-btn active" data-target="section-classes">CLASSES</button>
             <button class="nav-btn" data-target="section-about">TOOLS</button>
