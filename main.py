@@ -17,7 +17,7 @@ import random
 import re
 from classnet_common import (
     PERIODS, CONDUCT_KINDS, CONDUCT_MAX_LEN, SIGNER_ROLES, ACCESS_AUDIENCES, MATCH_METHODS, sql_in,
-    validate_conduct_value, normalize_name, name_tokens_key,
+    validate_conduct_value, normalize_name, name_tokens_key, resolve_grade_access,
 )
 
 import os
@@ -454,6 +454,12 @@ class SchoolStudentInformation(Base):
     student_born_date = Column(String, nullable=True)
     student_born_place = Column(String, nullable=True)
     student_n_permanent = Column(String, unique=True, index=True)
+    # Identifiant public, imprévisible et permanent communiqué aux parents.
+    suivi_code = Column(String(40), nullable=True, unique=True, index=True)
+    # Les résultats restent invisibles aux parents tant que l'école ne les autorise pas.
+    suivi_results_allowed = Column(Boolean, nullable=False, default=False, server_default="false")
+    suivi_results_updated_at = Column(DateTime, nullable=True)
+    suivi_results_updated_by = Column(String, nullable=True)
     school = relationship("SchoolInformation", back_populates="students")
     classe = relationship("ClasseInformation", back_populates="students")
 
@@ -852,6 +858,7 @@ class AttemptLimiter:
 LOGIN_LIMITER = AttemptLimiter(max_attempts=5, window_seconds=900)       # 5 échecs / 15 min
 OTP_REQUEST_LIMITER = AttemptLimiter(max_attempts=5, window_seconds=3600)  # 5 demandes de code / heure
 CODE_LIMITER = AttemptLimiter(max_attempts=10, window_seconds=900)          # 10 codes de licence faux / 15 min / adresse
+SUIVI_LOOKUP_LIMITER = AttemptLimiter(max_attempts=10, window_seconds=900) # 10 identifiants parent erronés / 15 min / adresse
 
 
 def get_bearer_claims(authorization: Optional[str] = Header(None)) -> dict:
@@ -987,6 +994,11 @@ with engine.connect() as conn:
     conn.execute(text("ALTER TABLE school_information ADD COLUMN IF NOT EXISTS armoiries TEXT;"))
     conn.execute(text("ALTER TABLE school_information ADD COLUMN IF NOT EXISTS pn_extra TEXT;"))
     conn.execute(text("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS signature TEXT;"))
+    conn.execute(text("ALTER TABLE school_student_informations ADD COLUMN IF NOT EXISTS suivi_code VARCHAR(40);"))
+    conn.execute(text("ALTER TABLE school_student_informations ADD COLUMN IF NOT EXISTS suivi_results_allowed BOOLEAN NOT NULL DEFAULT FALSE;"))
+    conn.execute(text("ALTER TABLE school_student_informations ADD COLUMN IF NOT EXISTS suivi_results_updated_at TIMESTAMP;"))
+    conn.execute(text("ALTER TABLE school_student_informations ADD COLUMN IF NOT EXISTS suivi_results_updated_by VARCHAR;"))
+    conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_school_student_suivi_code ON school_student_informations (suivi_code) WHERE suivi_code IS NOT NULL;"))
     conn.execute(text("""
     ALTER TABLE course_informations
     ADD COLUMN IF NOT EXISTS sub_category VARCHAR;"""))
@@ -1055,6 +1067,7 @@ with engine.connect() as conn:
 app = FastAPI(title="CRYPT Cloud Internet Node", version="3.1.0")
 origins = [
     "https://class-net-p.vercel.app",  # Ton frontend Vercel en production
+    "https://klgaby440-lang.github.io", # Class-Ink Suivi sur GitHub Pages
     "http://localhost:3000",            # Pour tes tests locaux
     "http://localhost:5173",            # Pour Vite / React local
     "http://localhost:8080"
@@ -1425,7 +1438,9 @@ def login_school(data: LoginSchema, db: Session = Depends(get_db)):
             "bornDate": s.student_born_date or "",
             "bornWhere": s.student_born_place or "",
             "permi": s.student_n_permanent or "",
-            "classId": s.class_id
+            "classId": s.class_id,
+            "suiviCode": s.suivi_code or "",
+            "suiviResultsAllowed": bool(s.suivi_results_allowed)
         })
         if s.student_n_permanent:
             student_id_map[s.student_n_permanent] = s.id
@@ -2283,6 +2298,29 @@ def teacher_matches_school_roster(teacher, roster_entry: dict) -> bool:
     )
 
 
+SUIVI_CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
+
+def generate_suivi_student_code() -> str:
+    """Code parent lisible et non séquentiel : 75 bits d'entropie."""
+    raw = "".join(secrets.choice(SUIVI_CODE_ALPHABET) for _ in range(15))
+    return "CI-" + raw[:5] + "-" + raw[5:10] + "-" + raw[10:]
+
+
+def ensure_suivi_student_code(db: Session, student: SchoolStudentInformation) -> str:
+    """Attribue une seule fois un identifiant parent à l'élève et évite les collisions."""
+    if student.suivi_code:
+        return student.suivi_code
+    for _ in range(12):
+        code = generate_suivi_student_code()
+        exists = db.query(SchoolStudentInformation.id).filter(
+            SchoolStudentInformation.suivi_code == code
+        ).first()
+        if not exists:
+            student.suivi_code = code
+            return code
+    raise HTTPException(status_code=503, detail="Impossible de générer un identifiant parent unique. Réessayez.")
+
+
 def store_school_class_catalog(db: Session, school: SchoolInformation, catalog: dict) -> dict:
     """Met à jour les classes, élèves et cours sans toucher aux notes ni aux données locales des enseignants."""
     school_data = catalog["school"]
@@ -2336,6 +2374,7 @@ def store_school_class_catalog(db: Session, school: SchoolInformation, catalog: 
         row.student_born_date = item["bornDate"] or ""
         row.student_born_place = item["bornWhere"] or ""
         row.student_n_permanent = permanent
+        ensure_suivi_student_code(db, row)
     db.flush()
 
     for item in catalog["courses"]:
@@ -2865,6 +2904,7 @@ def sync_primenet(payload: dict, db: Session = Depends(get_db), claims: dict = D
         student_obj.student_born_place = st.get("bornWhere", "")
         student_obj.student_n_permanent = permi
         student_obj.class_id = st.get("classId")
+        ensure_suivi_student_code(db, student_obj)
 
     # 5. Rapprochement des enseignants
     teachers_payload = payload.get("teachers", [])
