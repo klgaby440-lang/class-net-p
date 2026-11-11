@@ -23,9 +23,9 @@
   <form class="auth-card" id="loginForm">
     <div class="logo"><img src="../assets/crypt-logo.svg" alt="Logo CRYPT"></div><h1>CRYPT Command Center</h1>
     <p class="muted">Centre de supervision de l'écosystème CRYPT. Accès réservé à l'administration.</p>
-    <label for="adminKey">Clé administrative</label><input id="adminKey" type="password" autocomplete="current-password" required placeholder="ADMIN_API_KEY">
+    <label for="adminKey">Clé d'administration CRYPT</label><input id="adminKey" type="password" autocomplete="current-password" required placeholder="CRYPT_CONSOLE_ADMIN_KEY">
     <button class="btn wide" id="loginBtn">Ouvrir le centre de commande</button><div class="error" id="loginError"></div>
-    <p class="muted login-note">La clé est échangée contre une session temporaire. Elle n'est pas enregistrée sur cet appareil. Le jeton reste en mémoire et disparaît à la fermeture ou au rechargement.</p>
+    <p class="muted login-note">Utilise la clé dédiée du centre CRYPT. Elle est échangée contre une session temporaire, n'est pas stockée dans le navigateur et disparaît à la fermeture ou au rechargement.</p>
   </form>
 </section>
 <div class="shell" id="shell">
