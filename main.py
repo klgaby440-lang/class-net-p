@@ -7,6 +7,7 @@ from email.mime.text import MIMEText
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
 import httpx
+from urllib.parse import quote
 from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, status, Header, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -352,6 +353,20 @@ ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "klgaby440@gmail.com")  # adresse qui re�
 # Clé réservée à l'administrateur ClassNet. Sans elle, la création d'école, la génération de codes
 # et le verrouillage d'une école sont impossibles (routes fermées).
 ADMIN_API_KEY = os.getenv("ADMIN_API_KEY", "")
+# Clé distincte pour le centre d'administration global CRYPT.
+# L'ancienne ADMIN_API_KEY reste réservée aux opérations administratives ClassInk.
+CRYPT_CONSOLE_ADMIN_KEY = os.getenv("CRYPT_CONSOLE_ADMIN_KEY", "").strip()
+
+THINK_CONSOLE_API_URL = os.getenv(
+    "THINK_CONSOLE_API_URL", "https://think-crypt-entreprise.onrender.com"
+).strip().rstrip("/")
+THINK_CONSOLE_SERVICE_TOKEN = os.getenv("THINK_CONSOLE_SERVICE_TOKEN", "").strip()
+LLINK_CONSOLE_API_URL = os.getenv(
+    "LLINK_CONSOLE_API_URL", "https://llink-usz9.onrender.com"
+).strip().rstrip("/")
+LLINK_CONSOLE_SERVICE_TOKEN = os.getenv("LLINK_CONSOLE_SERVICE_TOKEN", "").strip()
+SOKO_DATABASE_READONLY_URL = os.getenv("SOKO_DATABASE_READONLY_URL", "").strip()
+_SOKO_CONSOLE_ENGINE = None
 
 # ---------------------------------------------------------
 # 2. MODÈLES DE BASE DE DONNÉES ENRICHIS
@@ -1960,9 +1975,10 @@ def crypt_console_login(payload: dict, request: Request, db: Session = Depends(g
     if CRYPT_CONSOLE_LOGIN_LIMITER.is_blocked(limiter_key):
         raise HTTPException(status_code=429, detail="Trop de tentatives. Réessayez dans 15 minutes.")
     supplied = str(payload.get("admin_key") or "")
-    if not ADMIN_API_KEY:
-        raise HTTPException(status_code=503, detail="Centre CRYPT désactivé : définissez ADMIN_API_KEY dans les variables Render.")
-    if not supplied or not hmac.compare_digest(supplied.encode("utf-8"), ADMIN_API_KEY.encode("utf-8")):
+    expected_admin_key = CRYPT_CONSOLE_ADMIN_KEY or ADMIN_API_KEY
+    if not expected_admin_key:
+        raise HTTPException(status_code=503, detail="Centre CRYPT désactivé : définissez CRYPT_CONSOLE_ADMIN_KEY dans les variables Render.")
+    if not supplied or not hmac.compare_digest(supplied.encode("utf-8"), expected_admin_key.encode("utf-8")):
         CRYPT_CONSOLE_LOGIN_LIMITER.record(limiter_key)
         raise HTTPException(status_code=401, detail="Clé administrative invalide.")
     CRYPT_CONSOLE_LOGIN_LIMITER.reset(limiter_key)
@@ -2200,6 +2216,314 @@ def crypt_console_db_query(payload: dict, db: Session = Depends(get_db), _admin:
         "truncated": truncated,
         "row_limit": 100,
     }
+
+
+
+
+# ---------------------------------------------------------------------------
+# CRYPT GLOBAL CONSOLE — integrations Think, Llink et Soko Market
+# ---------------------------------------------------------------------------
+
+def _crypt_remote_json(
+    service_name: str,
+    base_url: str,
+    service_token: str,
+    path: str,
+    *,
+    method: str = "GET",
+    payload: Optional[dict] = None,
+    params: Optional[dict] = None,
+) -> dict:
+    if not base_url:
+        raise HTTPException(status_code=503, detail=f"URL du service {service_name} non configurée.")
+    if len(service_token) < 32:
+        raise HTTPException(status_code=503, detail=f"Jeton de supervision {service_name} non configuré.")
+    try:
+        with httpx.Client(timeout=httpx.Timeout(8.0, connect=4.0)) as client:
+            response = client.request(
+                method,
+                base_url + path,
+                headers={
+                    "X-CRYPT-CONSOLE-TOKEN": service_token,
+                    "Accept": "application/json",
+                    "Cache-Control": "no-store",
+                },
+                json=payload,
+                params=params,
+            )
+        if response.status_code >= 400:
+            try:
+                details = response.json().get("detail", "")
+            except Exception:
+                details = ""
+            raise HTTPException(
+                status_code=response.status_code if response.status_code in (400, 401, 403, 404, 409, 422, 503) else 502,
+                detail=f"{service_name} : {str(details or 'service indisponible')[:240]}",
+            )
+        data = response.json()
+        if not isinstance(data, dict):
+            raise HTTPException(status_code=502, detail=f"Réponse invalide du service {service_name}.")
+        return data
+    except HTTPException:
+        raise
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail=f"Délai dépassé pour {service_name}.") from None
+    except httpx.RequestError:
+        raise HTTPException(status_code=502, detail=f"Impossible de joindre {service_name}.") from None
+    except ValueError:
+        raise HTTPException(status_code=502, detail=f"Réponse JSON invalide de {service_name}.") from None
+
+
+def _crypt_service_health(service_name: str, base_url: str) -> dict:
+    if not base_url:
+        return {"name": service_name, "status": "not_configured", "message": "URL absente"}
+    try:
+        with httpx.Client(timeout=httpx.Timeout(5.0, connect=3.0)) as client:
+            response = client.get(base_url + ("/health" if service_name == "Think" else "/"))
+        return {
+            "name": service_name,
+            "status": "online" if response.is_success else "degraded",
+            "http_status": response.status_code,
+            "message": "Réponse reçue" if response.is_success else "Le service a répondu avec une erreur",
+        }
+    except httpx.TimeoutException:
+        return {"name": service_name, "status": "offline", "message": "Délai dépassé"}
+    except httpx.RequestError:
+        return {"name": service_name, "status": "offline", "message": "Serveur injoignable"}
+
+
+def _get_soko_console_engine():
+    global _SOKO_CONSOLE_ENGINE
+    if not SOKO_DATABASE_READONLY_URL:
+        return None
+    if _SOKO_CONSOLE_ENGINE is not None:
+        return _SOKO_CONSOLE_ENGINE
+    database_url = SOKO_DATABASE_READONLY_URL
+    if database_url.startswith("postgres://"):
+        database_url = database_url.replace("postgres://", "postgresql://", 1)
+    _SOKO_CONSOLE_ENGINE = create_engine(
+        database_url,
+        pool_pre_ping=True,
+        pool_size=1,
+        max_overflow=0,
+        connect_args={"connect_timeout": 5},
+    )
+    return _SOKO_CONSOLE_ENGINE
+
+
+def _soko_read_query(sql: str, params: Optional[dict] = None):
+    soko_engine = _get_soko_console_engine()
+    if soko_engine is None:
+        raise HTTPException(status_code=503, detail="SOKO_DATABASE_READONLY_URL n'est pas configurée.")
+    try:
+        with soko_engine.connect() as connection:
+            connection.execute(text("SET TRANSACTION READ ONLY"))
+            connection.execute(text("SET LOCAL statement_timeout = '5000ms'"))
+            result = connection.execute(text(sql), params or {})
+            rows = [dict(row._mapping) for row in result.fetchall()]
+            connection.rollback()
+            return rows
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("CRYPT Console: lecture Soko Market impossible.")
+        raise HTTPException(status_code=503, detail="Lecture Soko Market indisponible. Vérifiez le compte PostgreSQL en lecture seule.") from exc
+
+
+@app.get("/api/crypt-console/ecosystem")
+def crypt_console_ecosystem(
+    db: Session = Depends(get_db),
+    _admin: dict = Depends(require_crypt_admin),
+):
+    now = datetime.utcnow()
+    classink = {
+        "name": "ClassInk / PrimeInk",
+        "status": "online",
+        "message": "Base et API ClassInk opérationnelles",
+        "metrics": {
+            "schools": db.query(SchoolInformation).count(),
+            "teachers": db.query(Teacher).count(),
+            "students": db.query(SchoolStudentInformation).count(),
+            "devices_online": db.query(CryptDeviceSession).filter(
+                CryptDeviceSession.last_seen >= now - timedelta(minutes=5)
+            ).count(),
+        },
+    }
+
+    think = _crypt_service_health("Think", THINK_CONSOLE_API_URL)
+    try:
+        overview = _crypt_remote_json(
+            "Think", THINK_CONSOLE_API_URL, THINK_CONSOLE_SERVICE_TOKEN,
+            "/api/internal/crypt-console/overview",
+        )
+        think["metrics"] = overview.get("data", {})
+        think["management"] = "connected"
+    except HTTPException as exc:
+        think["management"] = "not_configured" if exc.status_code == 503 else "unavailable"
+        think["management_message"] = exc.detail
+
+    llink = _crypt_service_health("Llink", LLINK_CONSOLE_API_URL)
+    try:
+        overview = _crypt_remote_json(
+            "Llink", LLINK_CONSOLE_API_URL, LLINK_CONSOLE_SERVICE_TOKEN,
+            "/api/internal/crypt-console/overview",
+        )
+        llink["metrics"] = overview.get("data", {})
+        llink["management"] = "connected"
+    except HTTPException as exc:
+        llink["management"] = "not_configured" if exc.status_code == 503 else "unavailable"
+        llink["management_message"] = exc.detail
+
+    soko = {
+        "name": "Soko Market",
+        "status": "not_configured",
+        "message": "Connexion PostgreSQL en lecture seule non configurée",
+        "management": "read_only",
+    }
+    if SOKO_DATABASE_READONLY_URL:
+        try:
+            products = _soko_read_query(
+                "SELECT COUNT(*) AS products, COALESCE(SUM(quantite), 0) AS units, "
+                "COUNT(*) FILTER (WHERE quantite <= seuil_critique) AS low_stock FROM products"
+            )[0]
+            sales = _soko_read_query(
+                "SELECT COUNT(*) AS sales, COALESCE(SUM(total_amount), 0) AS revenue FROM sales"
+            )[0]
+            accounts = _soko_read_query("SELECT COUNT(*) AS users FROM users")[0]
+            soko.update({
+                "status": "online",
+                "message": "Base Soko Market connectée en lecture seule",
+                "metrics": {
+                    "products": int(products["products"] or 0),
+                    "units": int(products["units"] or 0),
+                    "low_stock": int(products["low_stock"] or 0),
+                    "sales": int(sales["sales"] or 0),
+                    "revenue": float(sales["revenue"] or 0),
+                    "users": int(accounts["users"] or 0),
+                },
+            })
+        except HTTPException as exc:
+            soko.update({"status": "degraded", "message": exc.detail})
+
+    return {
+        "status": True,
+        "data": {
+            "apps": [classink, think, llink, soko],
+            "snapshot_at": now.isoformat() + "Z",
+        },
+    }
+
+
+@app.get("/api/crypt-console/identities")
+def crypt_console_identities(
+    query: str,
+    limit: int = 50,
+    _admin: dict = Depends(require_crypt_admin),
+):
+    return _crypt_remote_json(
+        "Think", THINK_CONSOLE_API_URL, THINK_CONSOLE_SERVICE_TOKEN,
+        "/api/internal/crypt-console/users",
+        params={"query": query, "limit": max(1, min(int(limit or 50), 100))},
+    )
+
+
+@app.patch("/api/crypt-console/identities/{crypt_id}/status")
+def crypt_console_identity_status(
+    crypt_id: str,
+    payload: dict,
+    _admin: dict = Depends(require_crypt_admin),
+):
+    result = _crypt_remote_json(
+        "Think", THINK_CONSOLE_API_URL, THINK_CONSOLE_SERVICE_TOKEN,
+        "/api/internal/crypt-console/users/" + quote(crypt_id, safe="") + "/status",
+        method="PATCH",
+        payload=payload,
+    )
+    _audit_db = SessionLocal()
+    try:
+        _crypt_audit(_audit_db, "think_identity_status_changed", crypt_id, payload)
+        _audit_db.commit()
+    finally:
+        _audit_db.close()
+    return result
+
+
+@app.get("/api/crypt-console/identities/{crypt_id}/llink")
+def crypt_console_identity_llink_wallet(
+    crypt_id: str,
+    _admin: dict = Depends(require_crypt_admin),
+):
+    identity = _crypt_remote_json(
+        "Think", THINK_CONSOLE_API_URL, THINK_CONSOLE_SERVICE_TOKEN,
+        "/api/internal/crypt-console/users",
+        params={"query": crypt_id, "limit": 1},
+    )
+    matches = identity.get("data") or []
+    if not matches:
+        raise HTTPException(status_code=404, detail="Identité CRYPT introuvable.")
+    think_id = str(matches[0].get("think_id") or "")
+    return _crypt_remote_json(
+        "Llink", LLINK_CONSOLE_API_URL, LLINK_CONSOLE_SERVICE_TOKEN,
+        "/api/internal/crypt-console/users/" + quote(think_id, safe="") + "/wallet",
+    )
+
+
+@app.patch("/api/crypt-console/identities/{crypt_id}/llink-status")
+def crypt_console_identity_llink_status(
+    crypt_id: str,
+    payload: dict,
+    _admin: dict = Depends(require_crypt_admin),
+):
+    identity = _crypt_remote_json(
+        "Think", THINK_CONSOLE_API_URL, THINK_CONSOLE_SERVICE_TOKEN,
+        "/api/internal/crypt-console/users",
+        params={"query": crypt_id, "limit": 1},
+    )
+    matches = identity.get("data") or []
+    if not matches:
+        raise HTTPException(status_code=404, detail="Identité CRYPT introuvable.")
+    think_id = str(matches[0].get("think_id") or "")
+    result = _crypt_remote_json(
+        "Llink", LLINK_CONSOLE_API_URL, LLINK_CONSOLE_SERVICE_TOKEN,
+        "/api/internal/crypt-console/users/" + quote(think_id, safe="") + "/status",
+        method="PATCH",
+        payload=payload,
+    )
+    _audit_db = SessionLocal()
+    try:
+        _crypt_audit(_audit_db, "llink_identity_status_changed", crypt_id, payload)
+        _audit_db.commit()
+    finally:
+        _audit_db.close()
+    return result
+
+
+@app.get("/api/crypt-console/soko/products")
+def crypt_console_soko_products(
+    limit: int = 100,
+    _admin: dict = Depends(require_crypt_admin),
+):
+    limit = max(1, min(int(limit or 100), 300))
+    rows = _soko_read_query(
+        "SELECT id, nom, quantite, p_a_u, p_v_u, seuil_critique, updated_at "
+        "FROM products ORDER BY nom ASC LIMIT :limit",
+        {"limit": limit},
+    )
+    return {"status": True, "data": rows}
+
+
+@app.get("/api/crypt-console/soko/sales")
+def crypt_console_soko_sales(
+    limit: int = 100,
+    _admin: dict = Depends(require_crypt_admin),
+):
+    limit = max(1, min(int(limit or 100), 300))
+    rows = _soko_read_query(
+        "SELECT id, user_id, total_amount, created_at FROM sales "
+        "ORDER BY created_at DESC LIMIT :limit",
+        {"limit": limit},
+    )
+    return {"status": True, "data": rows}
 
 
 @app.post("/api/telemetry/events")
