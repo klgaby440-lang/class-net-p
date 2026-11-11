@@ -1,8 +1,11 @@
 import os
+import logging
 import secrets
 import string
 import uuid
 import smtplib
+
+logger = logging.getLogger("crypt.console")
 from email.mime.text import MIMEText
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
