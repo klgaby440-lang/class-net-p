@@ -4,8 +4,6 @@ import secrets
 import string
 import uuid
 import smtplib
-
-logger = logging.getLogger("crypt.console")
 from email.mime.text import MIMEText
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
@@ -24,6 +22,8 @@ from classnet_common import (
     PERIODS, CONDUCT_KINDS, CONDUCT_MAX_LEN, SIGNER_ROLES, ACCESS_AUDIENCES, MATCH_METHODS, sql_in,
     validate_conduct_value, normalize_name, name_tokens_key, resolve_grade_access,
 )
+
+logger = logging.getLogger("crypt.console")
 
 import os
 import httpx
