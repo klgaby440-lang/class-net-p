@@ -88,6 +88,6 @@ La suspension Think et la désactivation Firebase Llink sont volontairement deux
 2. Créer l'utilisateur PostgreSQL Soko en lecture seule et renseigner son URL dans ClassInk.
 3. Déployer les branches/PR correspondantes de Think et Llink pour activer leurs routes internes.
 4. Déployer le backend ClassInk qui héberge la console.
-5. Ouvrir `https://class-net-p.onrender.com/crypt/` et utiliser `CRYPT_CONSOLE_ADMIN_KEY`.
+5. Ouvrir le dossier `/crypt/` sur le même domaine GitHub Pages qui sert le frontend ClassInk (chemin relatif au site du dépôt), puis utiliser `CRYPT_CONSOLE_ADMIN_KEY`. L'interface est un fichier statique ; le domaine exact dépend du domaine GitHub Pages configuré pour ce dépôt.
 
 Les statuts de service sont des contrôles de disponibilité. Il faut ensuite valider les connexions Think, Llink et Soko avec de vrais environnements Render avant d'utiliser les commandes de suspension sur des comptes réels.
