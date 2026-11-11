@@ -39,8 +39,9 @@ def test_global_ecosystem_dashboard_reports_local_classink_and_unconfigured_serv
     assert by_name["Soko Market"]["status"] == "not_configured"
 
 
-def test_crypt_console_identity_lookup_fails_closed_without_think_service_token(ecosystem_console):
+def test_crypt_console_identity_lookup_fails_closed_without_think_service_token(ecosystem_console, monkeypatch):
     client, headers = ecosystem_console
+    monkeypatch.setattr(main, "THINK_CONSOLE_API_URL", "https://think.example.test")
     response = client.get(
         "/api/crypt-console/identities?query=INK_ABCDEFGHJKLMNPQ",
         headers=headers,
