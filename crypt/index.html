@@ -34,6 +34,10 @@
     <div class="nav-label">Supervision</div>
     <nav class="nav" id="nav">
       <button class="active" data-page="overview">Vue d'ensemble</button>
+      <button data-page="ecosystem">Écosystème CRYPT</button>
+      <button data-page="identities">Identités INK</button>
+      <button data-page="finance">Finances & crédits</button>
+      <button data-page="soko">Soko Market</button>
       <button data-page="schools">Comptes PrimeInk</button>
       <button data-page="devices">Appareils & sessions</button>
       <button data-page="events">Activité & erreurs</button>
@@ -51,6 +55,48 @@
         <div class="grid kpis" id="kpis"></div>
         <div class="grid two"><article class="card"><h2>Derniers événements</h2><div id="recentEvents"></div></article><article class="card"><h2>Suivi opérationnel</h2><div class="muted" style="line-height:1.8;font-size:12px">Les sessions des appareils sont observées à chaque appel API portant les en-têtes CRYPT. Les identifiants de session sont temporaires côté client : le serveur ne prétend pas reconnaître physiquement un appareil après effacement de la session ou rechargement.</div><div class="notice" style="margin-top:14px">Les adresses IP et les agents navigateur sont des signaux techniques, pas une preuve d'identité physique. Plusieurs appareils peuvent partager une même adresse IP.</div></article></div>
       </section>
+      <section class="page" id="page-ecosystem">
+        <div class="page-head"><div><h1>Écosystème CRYPT</h1><p>État des applications et disponibilité de leurs services centraux.</p></div><button class="btn secondary" id="refreshEcosystem">Actualiser</button></div>
+        <div class="grid kpis" id="ecosystemCards"></div>
+        <article class="card"><h2>Matrice des produits</h2><div id="ecosystemDetails" class="grid two"></div></article>
+        <div class="notice" style="margin-top:14px">Les statuts indiquent la disponibilité technique et la réussite des connexions de supervision. Ils ne remplacent pas un test fonctionnel complet de chaque application.</div>
+      </section>
+
+      <section class="page" id="page-identities">
+        <div class="page-head"><div><h1>Identités CRYPT · INK ID</h1><p>Recherche des comptes Think et contrôle des accès aux produits liés.</p></div></div>
+        <div class="toolbar"><input id="identitySearch" placeholder="INK_XXXXXXXXXXXXXXX, THK-… ou e-mail"><button class="btn" id="identitySearchBtn">Rechercher</button></div>
+        <article class="card"><div class="table-wrap"><table><thead><tr><th>CRYPT ID</th><th>Nom</th><th>E-mail</th><th>Think ID</th><th>Compte Think</th><th>Action</th></tr></thead><tbody id="identitiesBody"><tr><td colspan="6" class="muted">Recherche un INK ID pour afficher les comptes liés.</td></tr></tbody></table></div></article>
+        <article class="card hidden" id="identityDetail" style="margin-top:14px">
+          <div class="row" style="justify-content:space-between"><h2>Détails de l'identité</h2><button class="btn secondary" id="closeIdentityDetail">Fermer</button></div>
+          <div id="identityProfile" class="grid two"></div>
+          <h2 style="margin-top:18px">Portefeuille Llink</h2>
+          <div id="identityLlinkWallet"></div>
+          <div class="row" style="margin-top:14px"><button class="btn secondary" id="toggleThinkStatus">Suspendre / réactiver Think</button><button class="btn secondary" id="toggleLlinkStatus">Suspendre / réactiver Llink</button></div>
+          <div class="muted" id="identityActionStatus" style="font-size:11px;margin-top:8px"></div>
+        </article>
+        <div class="notice" style="margin-top:14px">L'INK ID identifie le même compte central ; les autorisations et données de chaque produit restent séparées. Une suspension Think et une désactivation Firebase Llink sont deux actions distinctes.</div>
+      </section>
+
+      <section class="page" id="page-finance">
+        <div class="page-head"><div><h1>Finances & crédits</h1><p>Vue consolidée des portefeuilles Think et des crédits Llink. Consultation uniquement.</p></div><button class="btn secondary" id="refreshFinance">Actualiser</button></div>
+        <div class="grid kpis" id="financeKpis"></div>
+        <div class="grid two">
+          <article class="card"><h2>Portefeuilles monétaires Think</h2><div id="thinkBalances"></div></article>
+          <article class="card"><h2>Crédits Llink</h2><div id="llinkCreditTotals"></div></article>
+        </div>
+        <div class="notice" style="margin-top:14px">Aucune opération financière n'est exécutée depuis cette page. Les soldes et statistiques sont lus depuis les services propriétaires. Les ajustements de crédits et mouvements d'argent restent dans leurs parcours métier avec leurs propres contrôles.</div>
+      </section>
+
+      <section class="page" id="page-soko">
+        <div class="page-head"><div><h1>Soko Market</h1><p>Inventaire, seuils de stock et ventes récentes · base connectée en lecture seule.</p></div><button class="btn secondary" id="refreshSoko">Actualiser</button></div>
+        <div class="grid kpis" id="sokoKpis"></div>
+        <div class="grid two">
+          <article class="card"><h2>Catalogue et stock</h2><div class="table-wrap"><table><thead><tr><th>Produit</th><th>Quantité</th><th>Seuil</th><th>Prix vente</th><th>Statut</th></tr></thead><tbody id="sokoProductsBody"></tbody></table></div></article>
+          <article class="card"><h2>Ventes récentes</h2><div class="table-wrap"><table><thead><tr><th>Vente</th><th>Compte</th><th>Montant</th><th>Date</th></tr></thead><tbody id="sokoSalesBody"></tbody></table></div></article>
+        </div>
+        <div class="notice" style="margin-top:14px">Les données Soko sont exposées en lecture seule. La modification du stock, des produits ou des comptes vendeurs devra rester dans Soko Market.</div>
+      </section>
+
       <section class="page" id="page-schools">
         <div class="page-head"><div><h1>Comptes PrimeInk</h1><p>Créer les comptes d'établissement, consulter leur état et suspendre ou réactiver un accès.</p></div><button class="btn" id="showCreate">+ Créer un établissement</button></div>
         <article class="card hidden" id="createPanel">
@@ -151,8 +197,8 @@ async function api(path,options={}){
 function go(page){
  document.querySelectorAll('.page').forEach(x=>x.classList.toggle('active',x.id==='page-'+page));
  document.querySelectorAll('[data-page]').forEach(x=>x.classList.toggle('active',x.dataset.page===page));
- $('#title').textContent=({overview:"Vue d'ensemble",schools:"Comptes PrimeInk",devices:"Appareils & sessions",events:"Activité & erreurs",tickets:"Réclamations",database:"Explorateur de base"})[page]||page;
- ({overview:loadOverview,schools:loadSchools,devices:loadDevices,events:loadEvents,tickets:loadTickets,database:loadSchema})[page]?.();
+ $('#title').textContent=({overview:"Vue d'ensemble",ecosystem:"Écosystème CRYPT",identities:"Identités INK",finance:"Finances & crédits",soko:"Soko Market",schools:"Comptes PrimeInk",devices:"Appareils & sessions",events:"Activité & erreurs",tickets:"Réclamations",database:"Explorateur de base"})[page]||page;
+ ({overview:loadOverview,ecosystem:loadEcosystem,identities:loadIdentities,finance:loadFinance,soko:loadSoko,schools:loadSchools,devices:loadDevices,events:loadEvents,tickets:loadTickets,database:loadSchema})[page]?.();
 }
 function logout(show=true){token=null;window.__CRYPT_ADMIN_TOKEN__=null;schools=[];devices=[];events=[];tickets=[];$('#shell').style.display='none';$('#auth').classList.remove('hidden');$('#adminKey').value='';if(show)$('#loginError').textContent='Session fermée.';}
 $('#loginForm').addEventListener('submit',async e=>{
@@ -266,6 +312,131 @@ $('#refreshTickets').addEventListener('click',loadTickets);$('#ticketSearch').ad
 async function loadSchema(){if(schema.length)return renderSchema();try{const r=await api('/api/crypt-console/db/schema');schema=r.data;renderSchema();}catch(e){$('#schemaList').textContent=e.message;}}
 function renderSchema(){const box=$('#schemaList');box.innerHTML=schema.map(t=>'<button data-table="'+esc(t.name)+'">'+esc(t.name)+' ('+t.columns.length+')</button>').join('');box.addEventListener('click',e=>{const b=e.target.closest('[data-table]');if(!b)return;const t=schema.find(x=>x.name===b.dataset.table);$('#sqlQuery').value='SELECT '+t.columns.slice(0,10).map(c=>'"'+c.name+'"').join(', ')+' FROM "'+t.name+'" LIMIT 50;';},{once:false});}
 $('#runSql').addEventListener('click',async()=>{const btn=$('#runSql');btn.disabled=true;$('#sqlError').textContent='';$('#sqlStatus').textContent='Exécution…';$('#sqlResult').innerHTML='';try{const r=await api('/api/crypt-console/db/query',{method:'POST',body:JSON.stringify({query:$('#sqlQuery').value})});$('#sqlStatus').textContent=r.rows.length+' ligne(s)'+(r.truncated?' · résultat tronqué à 100 lignes':'');const cols=r.columns||[];$('#sqlResult').innerHTML=cols.length?'<div class="table-wrap"><table><thead><tr>'+cols.map(c=>'<th>'+esc(c)+'</th>').join('')+'</tr></thead><tbody>'+r.rows.map(row=>'<tr>'+cols.map(c=>'<td class="detail">'+esc(typeof row[c]==='object'?JSON.stringify(row[c]):row[c])+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>':'<div class="empty">Aucun résultat.</div>';}catch(e){$('#sqlError').textContent=e.message;$('#sqlStatus').textContent='Requête refusée ou en erreur.';}finally{btn.disabled=false;}});
+
+let ecosystemData=null, identities=[], selectedIdentity=null, selectedLlinkData=null;
+function statusClass(status){return status==='online'?'ok':status==='degraded'?'warn':status==='offline'?'bad':'';}
+function renderEcosystem(data){
+ ecosystemData=data;
+ const apps=data.apps||[];
+ $('#ecosystemCards').innerHTML=apps.map(app=>'<article class="card kpi"><small>'+esc(app.name)+'</small><strong>'+pill(app.status==='online'?'En ligne':app.status==='degraded'?'Dégradé':app.status==='offline'?'Hors ligne':'Non configuré',statusClass(app.status))+'</strong><em>'+esc(app.message||'')+'</em></article>').join('');
+ $('#ecosystemDetails').innerHTML=apps.map(app=>{
+   const metrics=app.metrics||{};
+   const labels=Object.entries(metrics).slice(0,8).map(([k,v])=>'<div class="row" style="justify-content:space-between;border-bottom:1px solid var(--line);padding:7px 0"><span class="muted">'+esc(k.replaceAll('_',' '))+'</span><b>'+esc(typeof v==='object'?JSON.stringify(v):v)+'</b></div>').join('');
+   return '<article class="card"><div class="row" style="justify-content:space-between"><h2>'+esc(app.name)+'</h2>'+pill(app.management==='connected'?'Données connectées':app.management==='read_only'?'Lecture seule':app.management==='not_configured'?'Configuration requise':app.status==='online'?'Connecté':'Indisponible',app.management==='connected'||app.status==='online'?'ok':'warn')+'</div><div class="muted" style="font-size:11px;margin-bottom:8px">'+esc(app.message||'')+'</div>'+(labels||'<div class="empty">Aucune statistique détaillée disponible.</div>')+'</article>';
+ }).join('');
+}
+async function loadEcosystem(){
+ $('#ecosystemCards').innerHTML='<div class="muted">Vérification des services…</div>';
+ try{const r=await api('/api/crypt-console/ecosystem');renderEcosystem(r.data);}
+ catch(e){$('#ecosystemCards').innerHTML='<div class="error">'+esc(e.message)+'</div>';}
+}
+function renderIdentities(){
+ const rows=identities||[];
+ $('#identitiesBody').innerHTML=rows.length?rows.map(u=>'<tr><td class="code"><b>'+esc(u.crypt_id)+'</b></td><td>'+esc(u.full_name)+'</td><td>'+esc(u.email)+'</td><td class="code">'+esc(u.think_id)+'</td><td>'+pill(u.is_active?'Actif':'Suspendu',u.is_active?'ok':'bad')+'</td><td><button class="btn secondary" data-identity="'+esc(u.crypt_id)+'">Détails</button></td></tr>').join(''):'<tr><td colspan="6" class="empty">Aucun compte trouvé.</td></tr>';
+}
+async function loadIdentities(){
+ const q=$('#identitySearch').value.trim();
+ if(q.length<3){$('#identitiesBody').innerHTML='<tr><td colspan="6" class="muted">Saisis au moins 3 caractères.</td></tr>';return;}
+ $('#identitiesBody').innerHTML='<tr><td colspan="6" class="muted">Recherche…</td></tr>';
+ try{const r=await api('/api/crypt-console/identities?query='+encodeURIComponent(q)+'&limit=50');identities=r.data||[];renderIdentities();}
+ catch(e){$('#identitiesBody').innerHTML='<tr><td colspan="6" class="error">'+esc(e.message)+'</td></tr>';}
+}
+async function openIdentity(cryptId){
+ selectedIdentity=identities.find(x=>x.crypt_id===cryptId)||null;
+ selectedLlinkData=null;
+ if(!selectedIdentity)return;
+ $('#identityDetail').classList.remove('hidden');
+ $('#identityActionStatus').textContent='Chargement des données Llink…';
+ $('#identityProfile').innerHTML=[
+  ['INK ID',selectedIdentity.crypt_id],['Think ID',selectedIdentity.think_id],
+  ['Nom',selectedIdentity.full_name],['E-mail',selectedIdentity.email],
+  ['Statut Think',selectedIdentity.is_active?'Actif':'Suspendu'],
+  ['Créé le',when(selectedIdentity.created_at)]
+ ].map(([k,v])=>'<div class="card"><small class="muted">'+esc(k)+'</small><div style="margin-top:7px;font-weight:700;overflow-wrap:anywhere">'+esc(v)+'</div></div>').join('');
+ const wallet=selectedIdentity.wallets||{};
+ $('#identityProfile').insertAdjacentHTML('beforeend',Object.entries(wallet).map(([currency,v])=>'<div class="card"><small class="muted">Think · '+esc(currency)+'</small><div style="margin-top:7px;font-weight:700">'+Number(v.available||0).toLocaleString('fr-FR')+' disponible</div><small class="muted">'+Number(v.reserved||0).toLocaleString('fr-FR')+' réservé</small></div>').join(''));
+ try{
+  const r=await api('/api/crypt-console/identities/'+encodeURIComponent(cryptId)+'/llink');
+  selectedLlinkData=r.data||{};
+  const d=selectedLlinkData;
+  const w=d.wallet||{};
+  $('#identityLlinkWallet').innerHTML='<div class="grid kpis">'+[['Crédits Online',w.online_balance],['Crédits Offline',w.offline_balance],['Crédits gratuits',w.daily_free_balance],['Crédits réservés',Number(w.reserved_online||0)+Number(w.reserved_free||0)],['Dette crédits',w.credit_debt]].map(([a,b])=>'<article class="card kpi"><small>'+esc(a)+'</small><strong>'+Number(b||0).toLocaleString('fr-FR')+'</strong></article>').join('')+'</div><div class="muted" style="font-size:11px;margin-top:8px">Firebase : '+(d.firebase?.exists?(d.firebase.disabled?'Compte désactivé':'Compte actif'):'Compte Firebase non créé')+'</div>';
+  $('#toggleLlinkStatus').disabled=!d.firebase?.exists;
+  $('#toggleLlinkStatus').textContent=d.firebase?.disabled?'Réactiver Llink':'Désactiver Llink';
+  $('#identityActionStatus').textContent='Portefeuille Llink chargé. Les soldes sont consultés sans modification.';
+ }catch(e){
+  $('#identityLlinkWallet').innerHTML='<div class="empty">'+esc(e.message)+'</div>';
+  $('#toggleLlinkStatus').disabled=true;
+  $('#identityActionStatus').textContent='Les données Llink ne sont pas disponibles.';
+ }
+ $('#toggleThinkStatus').textContent=selectedIdentity.is_active?'Suspendre le compte Think':'Réactiver le compte Think';
+}
+async function loadFinance(){
+ $('#financeKpis').innerHTML='<div class="muted">Chargement des données financières…</div>';
+ try{
+  const r=await api('/api/crypt-console/ecosystem');
+  const apps=r.data.apps||[];
+  const think=apps.find(x=>x.name==='Think')?.metrics||{};
+  const llink=apps.find(x=>x.name==='Llink')?.metrics||{};
+  const wallet=think.wallet_balances||{};
+  const credits=think.llink_credit_purchases||{};
+  const ltotals=llink.credit_totals||{};
+  const totalCredits=Number(ltotals.online_balance||0)+Number(ltotals.offline_balance||0)+Number(ltotals.daily_free_balance||0);
+  const kpis=[
+   ['Comptes Think',think.users_total],['Paiements Think acceptés',think.payments_accepted],
+   ['Achats Llink payés',credits.count_paid],['Crédits achetés',credits.credits_paid],
+   ['Crédits Llink disponibles',totalCredits],['Crédits en dette',ltotals.credit_debt]
+  ];
+  $('#financeKpis').innerHTML=kpis.map(([a,b])=>'<article class="card kpi"><small>'+esc(a)+'</small><strong>'+Number(b||0).toLocaleString('fr-FR')+'</strong></article>').join('');
+  $('#thinkBalances').innerHTML=Object.keys(wallet).length?Object.entries(wallet).map(([code,v])=>'<div class="row" style="justify-content:space-between;border-bottom:1px solid var(--line);padding:9px 0"><b>'+esc(code)+'</b><span>'+Number(v.available||0).toLocaleString('fr-FR')+' disponible</span><span class="muted">'+Number(v.reserved||0).toLocaleString('fr-FR')+' réservé</span></div>').join(''):'<div class="empty">Aucune donnée Think disponible.</div>';
+  $('#llinkCreditTotals').innerHTML=Object.entries(ltotals).map(([k,v])=>'<div class="row" style="justify-content:space-between;border-bottom:1px solid var(--line);padding:7px 0"><span class="muted">'+esc(k.replaceAll('_',' '))+'</span><b>'+esc(v)+'</b></div>').join('')||'<div class="empty">Portefeuille Llink non connecté.</div>';
+ }catch(e){$('#financeKpis').innerHTML='<div class="error">'+esc(e.message)+'</div>';}
+}
+async function loadSoko(){
+ $('#sokoProductsBody').innerHTML='<tr><td colspan="5" class="muted">Chargement…</td></tr>';
+ try{
+  const [ecosystem,products,sales]=await Promise.all([
+   api('/api/crypt-console/ecosystem'),
+   api('/api/crypt-console/soko/products?limit=100'),
+   api('/api/crypt-console/soko/sales?limit=50')
+  ]);
+  const soko=(ecosystem.data.apps||[]).find(x=>x.name==='Soko Market')?.metrics||{};
+  $('#sokoKpis').innerHTML=[['Produits',soko.products],['Unités en stock',soko.units],['Stock faible',soko.low_stock],['Ventes',soko.sales],['Chiffre d’affaires',Number(soko.revenue||0).toLocaleString('fr-FR')],['Comptes vendeurs',soko.users]].map(([a,b])=>'<article class="card kpi"><small>'+esc(a)+'</small><strong>'+esc(b??'—')+'</strong></article>').join('');
+  $('#sokoProductsBody').innerHTML=(products.data||[]).map(p=>'<tr><td>'+esc(p.nom)+'</td><td>'+Number(p.quantite||0)+'</td><td>'+Number(p.seuil_critique||0)+'</td><td>'+Number(p.p_v_u||0).toLocaleString('fr-FR')+'</td><td>'+pill(Number(p.quantite||0)<=Number(p.seuil_critique||0)?'Stock faible':'OK',Number(p.quantite||0)<=Number(p.seuil_critique||0)?'warn':'ok')+'</td></tr>').join('')||'<tr><td colspan="5" class="empty">Aucun produit.</td></tr>';
+  $('#sokoSalesBody').innerHTML=(sales.data||[]).map(s=>'<tr><td>#'+esc(s.id)+'</td><td>'+esc(s.user_id)+'</td><td>'+Number(s.total_amount||0).toLocaleString('fr-FR')+'</td><td>'+when(s.created_at)+'</td></tr>').join('')||'<tr><td colspan="4" class="empty">Aucune vente.</td></tr>';
+ }catch(e){$('#sokoProductsBody').innerHTML='<tr><td colspan="5" class="error">'+esc(e.message)+'</td></tr>';}
+}
+$('#refreshEcosystem').addEventListener('click',loadEcosystem);
+$('#identitySearchBtn').addEventListener('click',loadIdentities);
+$('#identitySearch').addEventListener('keydown',e=>{if(e.key==='Enter')loadIdentities();});
+$('#identitiesBody').addEventListener('click',e=>{const b=e.target.closest('[data-identity]');if(b)openIdentity(b.dataset.identity);});
+$('#closeIdentityDetail').addEventListener('click',()=>$('#identityDetail').classList.add('hidden'));
+$('#toggleThinkStatus').addEventListener('click',async()=>{
+ if(!selectedIdentity)return;
+ const wanted=!selectedIdentity.is_active;
+ const label=wanted?'réactiver':'suspendre';
+ if(!confirm('Confirmer la demande pour '+selectedIdentity.crypt_id+' : '+label+' le compte Think ?'))return;
+ try{
+  const r=await api('/api/crypt-console/identities/'+encodeURIComponent(selectedIdentity.crypt_id)+'/status',{method:'PATCH',body:JSON.stringify({is_active:wanted})});
+  selectedIdentity.is_active=Boolean(r.data?.is_active);
+  const item=identities.find(x=>x.crypt_id===selectedIdentity.crypt_id);if(item)item.is_active=selectedIdentity.is_active;
+  renderIdentities();await openIdentity(selectedIdentity.crypt_id);
+  $('#identityActionStatus').textContent='Statut Think modifié.';
+ }catch(e){$('#identityActionStatus').textContent=e.message;}
+});
+$('#toggleLlinkStatus').addEventListener('click',async()=>{
+ if(!selectedIdentity||!selectedLlinkData?.firebase?.exists)return;
+ const enabled=Boolean(selectedLlinkData.firebase.disabled);
+ if(!confirm((enabled?'Réactiver':'Désactiver')+' l’accès Llink de '+selectedIdentity.crypt_id+' ?'))return;
+ try{
+  const r=await api('/api/crypt-console/identities/'+encodeURIComponent(selectedIdentity.crypt_id)+'/llink-status',{method:'PATCH',body:JSON.stringify({enabled})});
+  $('#identityActionStatus').textContent=r.data?.enabled?'Compte Llink réactivé.':'Compte Llink désactivé.';
+  await openIdentity(selectedIdentity.crypt_id);
+ }catch(e){$('#identityActionStatus').textContent=e.message;}
+});
+$('#refreshFinance').addEventListener('click',loadFinance);
+$('#refreshSoko').addEventListener('click',loadSoko);
+
   window.addEventListener('pagehide',()=>{token=null;schools=[];devices=[];events=[];tickets=[];schema=[];});
   window.addEventListener('pageshow',event=>{if(event.persisted)window.location.reload();});
 })();
