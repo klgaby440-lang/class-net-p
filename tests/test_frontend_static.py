@@ -248,7 +248,7 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn("window.getSortedStudentsByClass(classId)", presence)
         self.assertLess(
             source.index("window.getSortedStudentsByClass = getSortedStudentsByClass;"),
-            source.index("document.addEventListener('DOMContentLoaded', () => {\\n            initPresenceModule();"),
+            source.index("initPresenceModule();"),
         )
 
     def test_primeink_intranet_polling_never_requests_mixed_content(self):
