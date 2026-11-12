@@ -462,6 +462,7 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn('multiple accept="image/jpeg,image/png,image/webp,image/*"', source)
         self.assertIn('window.Tesseract.createWorker("fra")', source)
         self.assertIn("/api/primeink/fiche-text-extract", source)
+        self.assertIn("ocr_text: item.ocrText", source)
         self.assertIn("getCoursesForClass(classId)", source)
         self.assertIn("applyGradesBatch(entries, overwrite)", source)
         self.assertIn("startPrimeInkBulkFicheImport", source)
