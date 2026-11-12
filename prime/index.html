@@ -8017,7 +8017,7 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
             '<div class="primeink-fiche-actions"><label class="primeink-fiche-overwrite"><input type="checkbox" id="primeInkFicheBulkOverwrite"> Remplacer aussi les notes déjà saisies</label>' +
             '<div class="primeink-fiche-actions-right"><button type="button" class="btn-secondary" onclick="closePrimeInkFicheReview()">Annuler</button>' +
             '<button type="button" class="btn-primary" onclick="applyPrimeInkBulkFicheExtraction()" ' + (tableRows.length ? "" : "disabled") + '>Appliquer toutes les fiches</button></div></div>' +
-            '<p>Les photos ne sont pas envoyées au serveur : seul le texte reconnu a été transmis. Rien n'est enregistré avant confirmation.</p>';
+            '<p>Les photos ne sont pas envoyées au serveur : seul le texte reconnu a été transmis. Aucune note ne sera enregistrée avant confirmation.</p>';
 
         sheets.forEach((sheet, sheetIndex) => {
             const extraction = sheet.extraction || {};
