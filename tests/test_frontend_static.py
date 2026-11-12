@@ -243,9 +243,13 @@ class FrontendStaticTests(unittest.TestCase):
         source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
         self.assertIn("window.getSortedStudentsByClass = getSortedStudentsByClass;", source)
         presence = source.split("window.renderPresencesEleveTable = function()", 1)[1].split(
-            "window.renderPresencesProfTable", 1
+            "function renderPresencesProfTable()", 1
         )[0]
         self.assertIn("window.getSortedStudentsByClass(classId)", presence)
+        self.assertLess(
+            source.index("window.getSortedStudentsByClass = getSortedStudentsByClass;"),
+            source.index("document.addEventListener('DOMContentLoaded', () => {\\n            initPresenceModule();"),
+        )
 
     def test_primeink_intranet_polling_never_requests_mixed_content(self):
         source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
