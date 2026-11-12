@@ -3851,6 +3851,11 @@ async function bpPushClassBulletin(cls) {
                 return appState.students.filter(st => String(st.classId ?? '') === String(classId ?? ''));
             }
 
+            // Le module Présences et les autres modules Tools sont initialisés dans
+            // des callbacks DOMContentLoaded distincts. On expose cette fonction
+            // (qui conserve la fermeture sur appState) pour éviter une ReferenceError.
+            window.getSortedStudentsByClass = getSortedStudentsByClass;
+
                     // Et sécurise le début de loadClassData() :
             const PRIMEINK_STUDENTS_PER_PAGE = 15;
             const primeInkStudentPages = Object.create(null);
@@ -3911,7 +3916,7 @@ async function bpPushClassBulletin(cls) {
             function loadClassData(classId) {
                 const studentList = document.getElementById('studentListSidebar');
                 if (!studentList) return;
-                let students = getSortedStudentsByClass(classId);
+                let students = window.getSortedStudentsByClass(classId);
                 const search = document.getElementById('studentSidebarSearch');
                 const query = String(search && search.value || '').normalize('NFD')
                     .replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
@@ -4025,7 +4030,7 @@ async function bpPushClassBulletin(cls) {
                 },
                 getStudents(courseId) {
                     const course = this.getCourse(courseId);
-                    return course ? getSortedStudentsByClass(course.classId) : [];
+                    return course ? window.getSortedStudentsByClass(course.classId) : [];
                 },
                 getActiveClass() {
                     return (Array.isArray(appState.classes) ? appState.classes : [])
@@ -4036,7 +4041,7 @@ async function bpPushClassBulletin(cls) {
                         .find(cls => String(cls.id) === String(classId)) || null;
                 },
                 getStudentsInClass(classId) {
-                    return getSortedStudentsByClass(classId);
+                    return window.getSortedStudentsByClass(classId);
                 },
                 getCoursesForClass(classId) {
                     return (Array.isArray(appState.courses) ? appState.courses : [])
@@ -4229,7 +4234,7 @@ async function bpPushClassBulletin(cls) {
                 applyGrades(courseId, rows, overwrite) {
                     const course = this.getCourse(courseId);
                     if (!course) throw new Error("Le cours n'existe plus dans la base locale.");
-                    const rosterIds = new Set(getSortedStudentsByClass(course.classId).map(student => String(student.id)));
+                    const rosterIds = new Set(window.getSortedStudentsByClass(course.classId).map(student => String(student.id)));
                     const seen = new Set();
                     const result = { updated: 0, skippedExisting: 0, skippedUnmatched: 0, skippedInvalid: 0 };
                     if (!appState.grades || typeof appState.grades !== "object") appState.grades = {};
@@ -4301,7 +4306,7 @@ async function bpPushClassBulletin(cls) {
                             result.skippedUnmatched += rows.length;
                             return;
                         }
-                        const rosterIds = new Set(getSortedStudentsByClass(course.classId).map(student => String(student.id)));
+                        const rosterIds = new Set(window.getSortedStudentsByClass(course.classId).map(student => String(student.id)));
                         rows.forEach(row => {
                             const studentId = String(row && row.studentId || "");
                             if (!studentId || !rosterIds.has(studentId)) {
@@ -4446,7 +4451,7 @@ async function bpPushClassBulletin(cls) {
                             <th>T.G. / ${safeHTML(ficheFmt(maxTG))}</th>
                         </tr>`;
                 }
-                const students = getSortedStudentsByClass(course.classId);
+                const students = window.getSortedStudentsByClass(course.classId);
                 const inputFields = [
                     { key: 'p1', max: maxPer, label: 'Points P1' },
                     { key: 'p2', max: maxPer, label: 'Points P2' },
@@ -4584,7 +4589,7 @@ async function bpPushClassBulletin(cls) {
                 const course = appState.courses.find(c => c.id === courseId);
                 if (!course) return;
 
-                const students = getSortedStudentsByClass(classId);
+                const students = window.getSortedStudentsByClass(classId);
                 const tbody = document.getElementById('statsTableBody');
                 tbody.innerHTML = '';
 
@@ -4900,9 +4905,22 @@ async function bpPushClassBulletin(cls) {
 
         // 1. Récupération des moyennes (Intranet Polling)
         // Même adresse que ClassInk (CONFIG.PRIMARY_URL). Le serveur Intranet écoute sur le port 5001.
-        const INTRANET_URL = window.PRIMEINK_INTRANET_URL || "http://serveur-class-net-prime.local:5001";
+        const DEFAULT_INTRANET_URL = "http://serveur-class-net-prime.local:5001";
+        const configuredIntranetUrl = String(window.PRIMEINK_INTRANET_URL || "").trim();
+        const INTRANET_URL = configuredIntranetUrl ||
+            (window.location && window.location.protocol === "https:" ? "" : DEFAULT_INTRANET_URL);
+        const INTRANET_SYNC_ENABLED = (() => {
+            if (!INTRANET_URL) return false;
+            try {
+                const endpoint = new URL(INTRANET_URL, window.location.href);
+                return !(window.location.protocol === "https:" && endpoint.protocol !== "https:");
+            } catch (error) {
+                return false;
+            }
+        })();
         let lastIntranetSnapshot = "";
         async function fetchIntranetAverages() {
+            if (!INTRANET_SYNC_ENABLED) return;
             try {
                 // Lecture NON destructive : /api/intranet/fetch marque les mises à jour comme lues, on ne l'utilise pas ici
                 let response = await window.primeInkFetchWithTimeout(`${INTRANET_URL}/api/primenet/sync`, { headers: cloudAuthHeaders() }, 4000);
@@ -4933,8 +4951,8 @@ async function bpPushClassBulletin(cls) {
             });
         }
 
-        // Vérifier l'Intranet toutes les 10 secondes
-        setInterval(fetchIntranetAverages, 10000);
+        // Vérifier l'Intranet toutes les 10 secondes uniquement lorsqu'une URL sûre est disponible.
+        if (INTRANET_SYNC_ENABLED) setInterval(fetchIntranetAverages, 10000);
 
         // 2. Contrôle de l'état de l'école auprès du serveur : suspension ou licence expirée
         async function checkSchoolStatus() {
@@ -5044,7 +5062,7 @@ async function bpPushClassBulletin(cls) {
             if(!select || !select.value) return;
             const classId = select.value;
 
-            const students = getSortedStudentsByClass(classId);
+            const students = window.getSortedStudentsByClass(classId);
             const courses = appState.courses.filter(c => c.classId === classId);
 
             const container = document.getElementById('presEleveCoursesContainer');
@@ -5800,7 +5818,7 @@ function updateScheduleResultTables(joursCount, heuresCount) {
                 if (typeof window.loadClassData === 'function') window.loadClassData(classId);
             } else if (appState.classes.length) {
                 activeClassId = appState.classes[0].id;
-                const firstStudent = getSortedStudentsByClass(activeClassId)[0];
+                const firstStudent = window.getSortedStudentsByClass(activeClassId)[0];
                 activeStudentId = firstStudent ? firstStudent.id : '';
                 if (typeof window.loadClassData === 'function') window.loadClassData(activeClassId);
             } else {
@@ -6003,7 +6021,7 @@ function updateScheduleResultTables(joursCount, heuresCount) {
             if (appState.repechage) Object.keys(appState.repechage).forEach(k => { if (k.startsWith(`${studentId}_`)) delete appState.repechage[k]; });
             if (appState.tools?.presences?.students) appState.tools.presences.students = appState.tools.presences.students.filter(p => p.studentId !== studentId);
             if (String(activeStudentId ?? '') === String(studentId ?? '')) {
-                const replacement = getSortedStudentsByClass(classId)[0];
+                const replacement = window.getSortedStudentsByClass(classId)[0];
                 activeStudentId = replacement ? replacement.id : '';
             }
             saveState();
@@ -6204,7 +6222,7 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
         // Chargement d'une classe dans l'interface détaillée
         function renderClassDetails(classId) {
             if (typeof window.loadClassData === 'function') return window.loadClassData(classId);   // version complète : cours, élèves, bulletin
-            const classStudents = getSortedStudentsByClass(classId);
+            const classStudents = window.getSortedStudentsByClass(classId);
             const sidebar = document.getElementById('studentListSidebar');
             if (!sidebar) return;
             sidebar.innerHTML = '';

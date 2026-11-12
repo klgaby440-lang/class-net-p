@@ -236,6 +236,29 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn("editClassById(activeClassId)", source)
         self.assertIn("deleteManagedClass(activeClassId)", source)
 
+
+
+
+    def test_primeink_presence_module_uses_shared_student_sort_helper(self):
+        source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
+        self.assertIn("window.getSortedStudentsByClass = getSortedStudentsByClass;", source)
+        presence = source.split("window.renderPresencesEleveTable = function()", 1)[1].split(
+            "function renderPresencesProfTable()", 1
+        )[0]
+        self.assertIn("window.getSortedStudentsByClass(classId)", presence)
+        self.assertLess(
+            source.index("window.getSortedStudentsByClass = getSortedStudentsByClass;"),
+            source.index("initPresenceModule();"),
+        )
+
+    def test_primeink_intranet_polling_never_requests_mixed_content(self):
+        source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
+        self.assertIn("const INTRANET_SYNC_ENABLED", source)
+        self.assertIn('window.location.protocol === "https:" ? "" : DEFAULT_INTRANET_URL', source)
+        self.assertIn('endpoint.protocol !== "https:"', source)
+        self.assertIn("if (!INTRANET_SYNC_ENABLED) return;", source)
+        self.assertIn("if (INTRANET_SYNC_ENABLED) setInterval(fetchIntranetAverages, 10000);", source)
+
     def test_primeink_global_settings_are_grouped_without_removing_existing_controls(self):
         source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
         settings = source.split('<div id="section-settings" class="app-section">', 1)[1].split(
