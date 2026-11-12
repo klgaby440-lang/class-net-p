@@ -6,6 +6,7 @@
     <title>PrimeInk — Saisie des notes type Excel | CRYPT Enterprise</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg width='1024' height='1024' viewBox='0 0 1024 1024' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3ClinearGradient id='bg' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%230F2040'/%3E%3Cstop offset='100%25' stop-color='%230A1628'/%3E%3C/linearGradient%3E%3ClinearGradient id='accent' x1='0%25' y1='0%25' x2='100%25' y2='0%25'%3E%3Cstop offset='0%25' stop-color='%233B82F6'/%3E%3Cstop offset='100%25' stop-color='%2306B6D4'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='1024' height='1024' rx='200' fill='url(%23bg)'/%3E%3Cg transform='translate(512,512) scale(1.1) translate(-280,-320)'%3E%3Crect x='60' y='40' width='340' height='480' rx='12' fill='none' stroke='white' stroke-width='14' stroke-linecap='round'/%3E%3Cline x1='60' y1='520' x2='400' y2='520' stroke='white' stroke-width='14' stroke-linecap='round'/%3E%3Cpath d='M 60 280 Q 220 280 360 520' fill='none' stroke='white' stroke-width='18' stroke-linecap='round'/%3E%3Cpath d='M 60 380 Q 170 380 260 520' fill='none' stroke='white' stroke-width='18' stroke-linecap='round'/%3E%3Cpath d='M 60 470 A 70 70 0 0 1 130 520 L 60 520 Z' fill='white'/%3E%3Cpath d='M 60 280 Q 220 280 360 520' fill='none' stroke='url(%23accent)' stroke-width='18' stroke-linecap='round' opacity='0.9'/%3E%3Cg transform='translate(460, 40)'%3E%3Crect x='0' y='40' width='28' height='400' rx='6' fill='none' stroke='white' stroke-width='10'/%3E%3Cpath d='M 0 40 L 14 0 L 28 40 Z' fill='none' stroke='white' stroke-width='10' stroke-linejoin='round'/%3E%3Crect x='0' y='440' width='28' height='28' rx='4' fill='%233B82F6'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/dist/tesseract.min.js"></script>
     <style> 
 /* ==========================================================================
    CLASSNET P - FEUILLE DE STYLE (CRYPT DESIGN & VISION)
@@ -1124,6 +1125,13 @@ body {
 .primeink-fiche-actions { display:flex; gap:.6rem; flex-wrap:wrap; align-items:center; justify-content:space-between; margin-top:.75rem; }
 .primeink-fiche-actions-right { display:flex; gap:.5rem; flex-wrap:wrap; }
 .primeink-fiche-overwrite { display:flex; gap:.45rem; align-items:center; font-size:.85rem; }
+.primeink-bulk-files { display:grid; gap:.55rem; margin:.75rem 0; }
+.primeink-bulk-file { display:grid; grid-template-columns:minmax(120px,1.3fr) minmax(180px,1fr) auto; gap:.55rem; align-items:center; padding:.6rem; border:1px solid var(--border-color); border-radius:8px; }
+.primeink-bulk-file small { display:block; overflow-wrap:anywhere; color:var(--text-secondary); }
+.primeink-bulk-file select { width:100%; min-width:0; padding:.45rem; border:1px solid var(--border-color); border-radius:6px; background:var(--bg-main); color:var(--text-primary); }
+.primeink-bulk-progress { height:7px; overflow:hidden; border-radius:99px; background:var(--border-color); margin:.55rem 0; }
+.primeink-bulk-progress > span { display:block; height:100%; width:0; background:var(--primary-color); transition:width .18s ease; }
+@media(max-width:650px){.primeink-bulk-file{grid-template-columns:1fr}.primeink-bulk-file button{justify-self:start}}
 .bp-autosave-hint { margin-left: auto; }
 @media (max-width: 900px) { #view-fiches .detail-display-area { overflow-x: auto; } #view-fiches .data-table { min-width: 820px; } .bp-autosave-hint { margin-left: 0; width: 100%; } }
 
@@ -1338,12 +1346,13 @@ body {
                     <div class="fiche-entry-hint">✓ Chaque note valide est enregistrée automatiquement · Flèches pour changer de cellule · Entrée pour descendre</div>
                     <div class="fiche-photo-controls">
                         <label class="btn-primary" style="position:relative;display:inline-flex;align-items:center;justify-content:center;overflow:hidden;cursor:pointer;">
-                            <span>📷 Remplir depuis une photo avec Llink</span>
+                            <span>📷 Remplir depuis une photo avec Tesseract.js</span>
                             <input id="primeInkFichePhotoInput" type="file" accept="image/jpeg,image/png,image/webp,image/*" capture="environment" aria-label="Prendre ou choisir une photo de fiche" onchange="handlePrimeInkFichePhotoInput(this)" style="position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;">
                         </label>
+                        <button type="button" class="btn-secondary" onclick="openPrimeInkBulkFicheModal()">＋ Ajouter plusieurs fiches</button>
                     </div>
                 </div>
-                <small id="primeInkFichePhotoStatus" class="fiche-photo-status" aria-live="polite">La photo sera analysée par Llink ; vérifiez les notes avant leur enregistrement.</small>
+                <small id="primeInkFichePhotoStatus" class="fiche-photo-status" aria-live="polite">Tesseract.js lit la photo sur cet appareil ; Llink structure le texte. Vérifiez toujours les notes avant leur enregistrement.</small>
                 <table class="data-table">
                     <thead>
                         <tr>
