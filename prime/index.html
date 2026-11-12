@@ -7569,6 +7569,7 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
                     fileName: item.fileName,
                     courseId: String(item.courseId),
                     courseName: item.courseName,
+                    ocrConfidence: Number(item.ocrConfidence) || 0,
                     extraction: parsed.extraction
                 });
             });
@@ -7951,7 +7952,8 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
                     courseId: item.courseId,
                     courseName: item.courseName,
                     maxPer: item.maxPer,
-                    ocrText: ocr.text
+                    ocrText: ocr.text,
+                    ocrConfidence: ocr.confidence
                 });
                 setProgress(((index + 1) / selected.length) * 70,
                     "Lecture terminée pour " + (index + 1) + "/" + selected.length + " fiche(s).");
@@ -7960,8 +7962,18 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
             const structured = await primeInkStructureFicheTexts(prepared, className, roster);
             const notRecognized = structured.filter(item => !item.extraction || item.extraction.document_type !== "fiche_notes");
             if (notRecognized.length) {
-                throw new Error("Fiche(s) non reconnue(s) : " + notRecognized.map(item => item.fileName).join(", ") +
-                    ". Aucune note n'a été enregistrée. Vérifiez le cadrage et réessayez.");
+                const details = notRecognized.map(item => {
+                    const extraction = item.extraction || {};
+                    const warnings = Array.isArray(extraction.warnings)
+                        ? extraction.warnings.filter(Boolean).slice(0, 2).join(" / ")
+                        : "";
+                    const confidence = Math.round(Math.max(0, Math.min(100, item.ocrConfidence || 0)));
+                    return item.fileName + " — " + item.courseName + " (OCR " + confidence + "%"
+                        + (warnings ? " ; " + warnings : "") + ")";
+                }).join(" ; ");
+                throw new Error("Llink n'a pas confirmé le type « fiche de notes » pour : " + details
+                    + ". Aucune note n'a été enregistrée. Une confiance OCR faible indique une photo difficile à lire ; "
+                    + "une confiance élevée avec ce rejet indique plutôt une classification à revoir.");
             }
             primeInkPendingFicheBatch = {sheets: structured};
             primeInkBulkFiles = [];
