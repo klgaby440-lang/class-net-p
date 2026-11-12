@@ -452,5 +452,28 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn("suiviResultsAllowed", server)
 
 
+    def test_primeink_grade_sheet_ocr_uses_tesseract_and_supports_bulk_course_assignment(self):
+        source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
+        self.inspect_file("prime/index.html")
+        self.assertIn("tesseract.js@7.0.0/dist/tesseract.min.js", source)
+        self.assertIn('id="primeInkFichePhotoInput"', source)
+        self.assertIn('id="primeInkFichePhotoStatus"', source)
+        self.assertIn("Ajouter plusieurs fiches", source)
+        self.assertIn('multiple accept="image/jpeg,image/png,image/webp,image/*"', source)
+        self.assertIn('window.Tesseract.createWorker("fra")', source)
+        self.assertIn("/api/primeink/fiche-text-extract", source)
+        self.assertIn("ocr_text: item.ocrText", source)
+        self.assertIn("getCoursesForClass(classId)", source)
+        self.assertIn("applyGradesBatch(entries, overwrite)", source)
+        self.assertIn("startPrimeInkBulkFicheImport", source)
+        self.assertIn("primeInkPendingFicheBatch", source)
+
+        fiche_module = source.split('<script id="primeink-fiche-photo-import">', 1)[1].split("</script>", 1)[0]
+        self.assertNotIn("/api/primeink/fiche-extract", fiche_module)
+        self.assertIn("imageBase64", source)  # Les imports distincts élèves/cours conservent leur ancien contrat.
+        self.assertIn('id="primeInkStudentPhotoInput"', source)
+        self.assertIn('id="primeInkCoursePhotoInput"', source)
+
+
 if __name__ == "__main__":
     unittest.main()
