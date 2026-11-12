@@ -4029,6 +4029,10 @@ async function bpPushClassBulletin(cls) {
                 getStudentsInClass(classId) {
                     return getSortedStudentsByClass(classId);
                 },
+                getCoursesForClass(classId) {
+                    return (Array.isArray(appState.courses) ? appState.courses : [])
+                        .filter(course => String(course.classId) === String(classId));
+                },
                 normalizeStudentRow(row) {
                     return primeInkNormalizeStudentRow(row);
                 },
@@ -4262,6 +4266,90 @@ async function bpPushClassBulletin(cls) {
                         saveState();
                         renderFicheNotes(course);
                         if (typeof renderCourseStats === "function") renderCourseStats(course.classId, course.id);
+                        if (typeof window.renderOfficialBulletin === "function" && activeStudentId) {
+                            window.renderOfficialBulletin(activeStudentId);
+                        }
+                    }
+                    return result;
+                },
+                applyGradesBatch(entries, overwrite) {
+                    const previousGrades = Object.assign({}, appState.grades || {});
+                    if (!appState.grades || typeof appState.grades !== "object") appState.grades = {};
+                    const seenPairs = new Set();
+                    const changedCourses = new Map();
+                    const result = {
+                        updated: 0,
+                        skippedExisting: 0,
+                        skippedUnmatched: 0,
+                        skippedInvalid: 0,
+                        skippedDuplicate: 0
+                    };
+
+                    (Array.isArray(entries) ? entries : []).forEach(entry => {
+                        const course = this.getCourse(entry && entry.courseId);
+                        const rows = Array.isArray(entry && entry.rows) ? entry.rows : [];
+                        if (!course) {
+                            result.skippedUnmatched += rows.length;
+                            return;
+                        }
+                        const rosterIds = new Set(getSortedStudentsByClass(course.classId).map(student => String(student.id)));
+                        rows.forEach(row => {
+                            const studentId = String(row && row.studentId || "");
+                            if (!studentId || !rosterIds.has(studentId)) {
+                                result.skippedUnmatched++;
+                                return;
+                            }
+                            const pairKey = String(course.id) + "::" + studentId;
+                            if (seenPairs.has(pairKey)) {
+                                result.skippedDuplicate++;
+                                return;
+                            }
+                            seenPairs.add(pairKey);
+
+                            const gradeKey = studentId + "_" + course.id;
+                            const current = appState.grades[gradeKey] && typeof appState.grades[gradeKey] === "object"
+                                ? Object.assign({}, appState.grades[gradeKey])
+                                : {};
+                            let changed = false;
+                            ["p1", "p2", "ex1", "p3", "p4", "ex2"].forEach(field => {
+                                const value = row.grades && row.grades[field];
+                                if (value === null || value === undefined || value === "") return;
+                                const number = Number(value);
+                                const maximum = field === "ex1" || field === "ex2"
+                                    ? (Number(course.maxPer) || 0) * 2
+                                    : (Number(course.maxPer) || 0);
+                                if (!Number.isFinite(number) || number < 0 || number > maximum) {
+                                    result.skippedInvalid++;
+                                    return;
+                                }
+                                const existing = current[field];
+                                if (!overwrite && existing !== null && existing !== undefined && String(existing).trim() !== "") {
+                                    result.skippedExisting++;
+                                    return;
+                                }
+                                current[field] = number;
+                                changed = true;
+                            });
+                            if (changed) {
+                                appState.grades[gradeKey] = current;
+                                changedCourses.set(String(course.id), course);
+                                result.updated++;
+                            }
+                        });
+                    });
+
+                    if (result.updated > 0) {
+                        if (!saveState()) {
+                            appState.grades = previousGrades;
+                            throw new Error("Les notes n'ont pas été modifiées : PrimeInk n'a pas pu sauvegarder les données sur cet appareil.");
+                        }
+                        const currentCourse = this.getCurrentCourse();
+                        if (currentCourse) renderFicheNotes(currentCourse);
+                        changedCourses.forEach(course => {
+                            if (typeof renderCourseStats === "function") {
+                                renderCourseStats(course.classId, course.id);
+                            }
+                        });
                         if (typeof window.renderOfficialBulletin === "function" && activeStudentId) {
                             window.renderOfficialBulletin(activeStudentId);
                         }
