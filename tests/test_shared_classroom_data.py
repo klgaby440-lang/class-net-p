@@ -9,6 +9,11 @@ from main import (
     generate_suivi_student_code,
     is_suivi_results_allowed,
     teacher_has_verified_school_access,
+    teacher_has_school_access,
+    teacher_school_spaces,
+    TeacherSchoolSpace,
+    ClassInkTeacherSpaceSnapshot,
+    StudentGrade,
     teacher_is_titulaire,
     teacher_matches_school_roster,
     validate_school_class_catalog,
@@ -359,3 +364,72 @@ def test_suivi_global_or_period_rule_can_still_block_parent_results():
 
     assert is_suivi_results_allowed(db, "school-1", student) is False
 
+
+
+
+class _SpaceQuery:
+    def __init__(self, rows):
+        self.rows = list(rows)
+
+    def filter(self, *_args):
+        return self
+
+    def first(self):
+        return self.rows[0] if self.rows else None
+
+    def all(self):
+        return list(self.rows)
+
+
+class _SpaceDatabase:
+    def __init__(self, associations=(), schools=()):
+        self.associations = list(associations)
+        self.schools = list(schools)
+
+    def query(self, model):
+        if model is TeacherSchoolSpace:
+            return _SpaceQuery(self.associations)
+        return _SpaceQuery(self.schools)
+
+
+def test_teacher_can_keep_two_verified_school_spaces_without_switching_legacy_primary():
+    teacher = SimpleNamespace(
+        email="teacher@example.cd",
+        school_id="school-a",
+        school_access_verified=True,
+    )
+    spaces = [
+        SimpleNamespace(teacher_email=teacher.email, school_id="school-a", is_verified=True),
+        SimpleNamespace(teacher_email=teacher.email, school_id="school-b", is_verified=True),
+    ]
+    schools = [
+        SimpleNamespace(school_id="school-a", name_school="École A", city="Bukavu"),
+        SimpleNamespace(school_id="school-b", name_school="École B", city="Goma"),
+    ]
+    db = _SpaceDatabase(spaces, schools)
+
+    assert teacher_has_school_access(db, teacher, "school-a") is True
+    assert teacher_has_school_access(db, teacher, "school-b") is True
+    assert teacher_has_school_access(db, teacher, "school-c") is False
+    assert [item["schoolId"] for item in teacher_school_spaces(db, teacher)] == ["school-a", "school-b"]
+    assert teacher.school_id == "school-a"
+
+
+def test_pending_teacher_school_space_does_not_grant_access_until_school_confirms():
+    teacher = SimpleNamespace(
+        email="teacher@example.cd",
+        school_id=None,
+        school_access_verified=False,
+    )
+    pending = SimpleNamespace(teacher_email=teacher.email, school_id="school-b", is_verified=False)
+    db = _SpaceDatabase([pending], [])
+
+    assert teacher_has_school_access(db, teacher, "school-b") is False
+    pending.is_verified = True
+    assert teacher_has_school_access(db, teacher, "school-b") is True
+
+
+def test_teacher_space_snapshot_and_grade_records_are_school_scoped():
+    assert "school_id" in ClassInkTeacherSpaceSnapshot.__table__.columns
+    assert "teacher_email" in ClassInkTeacherSpaceSnapshot.__table__.columns
+    assert "school_id" in StudentGrade.__table__.columns
