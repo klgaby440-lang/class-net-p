@@ -4423,7 +4423,7 @@ async function bpPushClassBulletin(cls) {
                     };
                     tr.innerHTML = `
                         <td>${safeHTML(name)}</td>
-                        <td><button type="button" class="student-note-access-placeholder" disabled title="Commande prévue dans une prochaine version">Bloquer / afficher les notes</button></td>
+                        <td><button type="button" class="student-note-access-button btn-secondary" data-student-id="${safeHTML(st.id)}" style="font-size:.7rem;padding:.35rem .5rem;">Contrôler l'accès</button></td>
                         ${gradeInput(inputFields[0])}
                         ${gradeInput(inputFields[1])}
                         ${gradeInput(inputFields[2])}
@@ -4435,6 +4435,34 @@ async function bpPushClassBulletin(cls) {
                         <td class="calc-cell fiche-total-tg ${v.tg === null ? 'fiche-total-missing' : ''}" style="color:var(--primary-color);">${v.tg === null ? `— / ${safeHTML(ficheFmt(maxTG))}` : `${safeHTML(ficheFmt(v.tg))} / ${safeHTML(ficheFmt(maxTG))}`}</td>
                     `;
                     tbody.appendChild(tr);
+                    const accessButton = tr.querySelector('.student-note-access-button');
+                    if (accessButton) {
+                        const cachedAccess = typeof bpSuiviGetRosterRow === 'function' ? bpSuiviGetRosterRow(st) : null;
+                        accessButton.textContent = cachedAccess
+                            ? (cachedAccess.individualAccessAllowed ? 'Bloquer les notes' : 'Autoriser les notes')
+                            : 'Charger l’accès';
+                        accessButton.addEventListener('click', async () => {
+                            if (accessButton.disabled) return;
+                            accessButton.disabled = true;
+                            accessButton.textContent = 'Vérification…';
+                            try {
+                                if (typeof bpSuiviCurrentStudentId !== 'undefined') bpSuiviCurrentStudentId = String(st.id);
+                                if (typeof bpSuiviGetRosterRow === 'function' && !bpSuiviGetRosterRow(st)) {
+                                    await bpSuiviLoadRoster(st.classId);
+                                }
+                                const access = typeof bpSuiviGetRosterRow === 'function' ? bpSuiviGetRosterRow(st) : null;
+                                if (!access || !access.code) {
+                                    throw new Error("Identifiant parent indisponible. Vérifiez la connexion au serveur et réessayez.");
+                                }
+                                await window.bpSuiviToggleAccess();
+                                renderFicheNotes(course);
+                            } catch (error) {
+                                accessButton.disabled = false;
+                                accessButton.textContent = 'Contrôler l’accès';
+                                if (typeof showCustomAlert === 'function') showCustomAlert(error.message || "Impossible de modifier l'accès aux notes.");
+                            }
+                        });
+                    }
                 });
 
                 // La saisie met à jour les données locales sans remplacer l'input sous le curseur.
