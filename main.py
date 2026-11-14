@@ -13,7 +13,7 @@ from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, status, He
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, EmailStr
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, Text, JSON, Float, text, func, UniqueConstraint, CheckConstraint
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, Text, JSON, Float, text, func, UniqueConstraint, CheckConstraint, or_
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session, relationship
 import random
@@ -426,6 +426,7 @@ class Teacher(Base):
     status = Column(String, default="Actif")
     school_id = Column(String, ForeignKey("school_information.school_id"), nullable=True)
     school_access_verified = Column(Boolean, nullable=False, default=False, server_default="false")
+    preferred_school_id = Column(String(100), nullable=True, index=True)
     llink_preferences = Column(Text, nullable=True)
     signature = Column(Text, nullable=True)  # photo de la signature, prise dans ClassInk
 
@@ -1050,11 +1051,52 @@ def require_active_school(claims: dict = Depends(require_school), db: Session = 
     return claims
 
 
-def teacher_school_block(db: Session, teacher) -> Optional[str]:
-    """Message de refus si l'école de l'enseignant est suspendue ou expirée, sinon None."""
-    if not teacher or not teacher.school_id:
+def teacher_has_school_access(db: Session, teacher, school_id: str) -> bool:
+    """Vérifie l'association explicite d'un enseignant à une école, avec compatibilité historique."""
+    school_id = str(school_id or "").strip()
+    if not teacher or not school_id:
+        return False
+    association = db.query(TeacherSchoolSpace).filter(
+        TeacherSchoolSpace.teacher_email == teacher.email,
+        TeacherSchoolSpace.school_id == school_id,
+        TeacherSchoolSpace.is_verified.is_(True),
+    ).first()
+    if association:
+        return True
+    return bool(
+        str(getattr(teacher, "school_id", "") or "") == school_id
+        and getattr(teacher, "school_access_verified", False)
+    )
+
+
+def teacher_school_spaces(db: Session, teacher) -> list:
+    """Retourne les espaces vérifiés de l'enseignant sans exposer les espaces d'autres comptes."""
+    if not teacher:
+        return []
+    associations = db.query(TeacherSchoolSpace).filter(
+        TeacherSchoolSpace.teacher_email == teacher.email,
+        TeacherSchoolSpace.is_verified.is_(True),
+    ).all()
+    ids = {str(item.school_id) for item in associations}
+    legacy_id = str(getattr(teacher, "school_id", "") or "")
+    if legacy_id and getattr(teacher, "school_access_verified", False):
+        ids.add(legacy_id)
+    if not ids:
+        return []
+    schools = db.query(SchoolInformation).filter(SchoolInformation.school_id.in_(sorted(ids))).all()
+    return [
+        {"schoolId": school.school_id, "schoolName": school.name_school, "city": school.city}
+        for school in sorted(schools, key=lambda item: (item.name_school or "").casefold())
+    ]
+
+
+def teacher_school_block(db: Session, teacher, school_id: Optional[str] = None) -> Optional[str]:
+    """Message de refus si l'école de l'espace actif est suspendue ou expirée."""
+    selected = str(school_id or getattr(teacher, "school_id", "") or "").strip()
+    if not teacher or not selected:
         return None
-    state = licence_state(db.query(SchoolInformation).filter(SchoolInformation.school_id == teacher.school_id).first())
+    school = db.query(SchoolInformation).filter(SchoolInformation.school_id == selected).first()
+    state = licence_state(school)
     return LICENCE_MESSAGES[state["reason"]] if state["locked"] else None
 
 def generate_20_char_code() -> str:
@@ -1104,6 +1146,8 @@ with engine.connect() as conn:
     conn.execute(text("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS status VARCHAR DEFAULT 'Actif';"))
     conn.execute(text("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS teacher_code VARCHAR(50);"))
     conn.execute(text("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS school_access_verified BOOLEAN NOT NULL DEFAULT FALSE;"))
+    conn.execute(text("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS preferred_school_id VARCHAR(100);"))
+    conn.execute(text("UPDATE student_grades sg SET school_id = t.school_id FROM teachers t WHERE sg.teacher_email = t.email AND sg.school_id IS NULL AND t.school_id IS NOT NULL;") )
     conn.execute(text("ALTER TABLE school_information ADD COLUMN IF NOT EXISTS email TEXT;"))
     conn.execute(text("ALTER TABLE school_information ADD COLUMN IF NOT EXISTS province VARCHAR(255);"))
     conn.execute(text("ALTER TABLE school_information ADD COLUMN IF NOT EXISTS province VARCHAR(255);"))
