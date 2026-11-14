@@ -2830,7 +2830,7 @@ function mergeServerDataIntoLocal(local, server) {
     server = server || {};
     const localSpace = String((local.schoolId || (local.user && local.user.schoolId) || '')).trim();
     const serverSpace = String((server.schoolId || (server.user && server.user.schoolId) || '')).trim();
-    if (localSpace && serverSpace && localSpace !== serverSpace) {
+    if (localSpace !== serverSpace && (localSpace || serverSpace)) {
         // Les données d'école ne doivent jamais être fusionnées entre deux espaces différents.
         const isolated = { ...server };
         isolated.user = { ...(server.user || {}), password: (local.user && local.user.password) || '' };
@@ -3144,7 +3144,10 @@ function prepareTeacherSpaceLogin() {
     const select = document.getElementById('setting-teacher-space-select');
     const schoolId = String(select?.value || '').trim();
     if (!schoolId) {
+        db.user.schoolId = '';
+        saveDB();
         openLoginModal();
+        switchAuthSubView('login');
         const field = document.getElementById('login-school-id');
         if (field) field.value = '';
         return;
