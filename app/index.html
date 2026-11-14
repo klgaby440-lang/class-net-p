@@ -3144,12 +3144,9 @@ function prepareTeacherSpaceLogin() {
     const select = document.getElementById('setting-teacher-space-select');
     const schoolId = String(select?.value || '').trim();
     if (!schoolId) {
-        db.user.schoolId = '';
-        saveDB();
-        openLoginModal();
-        switchAuthSubView('login');
-        const field = document.getElementById('login-school-id');
-        if (field) field.value = '';
+        if (typeof showCustomAlert === 'function') {
+            showCustomAlert("Sélectionnez un espace confirmé. Pour demander un nouvel espace, saisissez son identifiant masqué dans les paramètres.");
+        }
         return;
     }
     openLoginModal();
@@ -5208,7 +5205,6 @@ async function verifyAndSaveProfile() {
     db.user.age = document.getElementById('edit-profile-user-age').value.trim();
     const profileSchoolId = document.getElementById('edit-profile-school-code').value.trim();
     if (profileSchoolId) {
-        db.user.schoolId = profileSchoolId;
         const request = await requestTeacherSchoolSpace(profileSchoolId, false);
         if (!request.ok) await showCustomAlert(request.message || "La demande d'espace n'a pas pu être envoyée.");
     }
