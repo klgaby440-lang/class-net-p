@@ -442,6 +442,7 @@ class TeacherSchoolSpace(Base):
     teacher_email = Column(String, ForeignKey("teachers.email"), index=True, nullable=False)
     school_id = Column(String, ForeignKey("school_information.school_id"), index=True, nullable=False)
     is_verified = Column(Boolean, nullable=False, default=True, server_default="true")
+    schedule_data = Column(JSON, nullable=False, default=list)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
 
@@ -1168,6 +1169,7 @@ with engine.connect() as conn:
     conn.execute(text("ALTER TABLE primenet_payloads DROP CONSTRAINT IF EXISTS primenet_payloads_teacher_email_key;"))
     conn.execute(text("DROP INDEX IF EXISTS ix_primenet_payloads_teacher_email;"))
     conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_primenet_payload_school_teacher ON primenet_payloads (school_id, teacher_email);"))
+    conn.execute(text("ALTER TABLE teacher_school_spaces ADD COLUMN IF NOT EXISTS schedule_data JSON NOT NULL DEFAULT '[]'::json;"))
 
     conn.execute(text("ALTER TABLE school_student_informations ADD COLUMN IF NOT EXISTS suivi_code VARCHAR(40);"))
     conn.execute(text("ALTER TABLE school_student_informations ADD COLUMN IF NOT EXISTS suivi_results_allowed BOOLEAN NOT NULL DEFAULT FALSE;"))
@@ -3655,6 +3657,11 @@ def store_school_class_catalog(db: Session, school: SchoolInformation, catalog: 
             continue
         if pending_or_verified:
             pending_or_verified.is_verified = True
+        elif legacy_same_school:
+            pending_or_verified = TeacherSchoolSpace(
+                teacher_email=teacher.email, school_id=school.school_id, is_verified=True
+            )
+            db.add(pending_or_verified)
         # teacher.school_id reste la valeur historique par défaut : ne pas écraser
         # l'espace principal lorsqu'un enseignant travaille déjà dans une autre école.
         if not teacher.school_id or str(teacher.school_id) == str(school.school_id):
@@ -3920,6 +3927,70 @@ def get_teacher_spaces(db: Session = Depends(get_db), claims: dict = Depends(req
     if not teacher:
         raise HTTPException(status_code=404, detail="Compte enseignant introuvable.")
     return {"status": True, "data": teacher_school_spaces(db, teacher)}
+
+
+@app.get("/api/teacher/schedule")
+def get_teacher_schedule(db: Session = Depends(get_db), claims: dict = Depends(require_teacher)):
+    teacher = db.query(Teacher).filter(Teacher.email == claims.get("email")).first()
+    school_id = str(claims.get("school_id") or "").strip()
+    if not teacher or not school_id or not teacher_has_school_access(db, teacher, school_id):
+        raise HTTPException(status_code=403, detail="Aucun espace scolaire actif n'est autorisé pour cet enseignant.")
+    blocked = teacher_school_block(db, teacher, school_id)
+    if blocked:
+        raise HTTPException(status_code=403, detail=blocked)
+    space = db.query(TeacherSchoolSpace).filter(
+        TeacherSchoolSpace.teacher_email == teacher.email,
+        TeacherSchoolSpace.school_id == school_id,
+        TeacherSchoolSpace.is_verified.is_(True),
+    ).first()
+    return {"status": True, "data": {"schoolId": school_id, "schedule": list((space.schedule_data or []) if space else [])}}
+
+
+@app.put("/api/teacher/schedule")
+def save_teacher_schedule(payload: dict, db: Session = Depends(get_db), claims: dict = Depends(require_teacher)):
+    teacher = db.query(Teacher).filter(Teacher.email == claims.get("email")).first()
+    school_id = str(claims.get("school_id") or "").strip()
+    if not teacher or not school_id or not teacher_has_school_access(db, teacher, school_id):
+        raise HTTPException(status_code=403, detail="Aucun espace scolaire actif n'est autorisé pour cet enseignant.")
+    blocked = teacher_school_block(db, teacher, school_id)
+    if blocked:
+        raise HTTPException(status_code=403, detail=blocked)
+    entries = payload.get("schedule")
+    if not isinstance(entries, list) or len(entries) > 100:
+        raise HTTPException(status_code=422, detail="L'horaire doit être une liste de 0 à 100 créneaux.")
+    allowed_days = {"Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"}
+    clean_entries = []
+    seen_ids = set()
+    for index, entry in enumerate(entries):
+        if not isinstance(entry, dict):
+            raise HTTPException(status_code=422, detail="Un créneau de l'horaire est invalide.")
+        entry_id = clean_text(entry.get("id"), 80) or f"slot-{index + 1}"
+        day = clean_text(entry.get("day"), 20)
+        start = clean_text(entry.get("start"), 5)
+        end = clean_text(entry.get("end"), 5)
+        course = clean_text(entry.get("course"), 120)
+        room = clean_text(entry.get("room"), 80)
+        if entry_id in seen_ids:
+            raise HTTPException(status_code=422, detail="Chaque créneau doit avoir un identifiant unique.")
+        seen_ids.add(entry_id)
+        if day not in allowed_days or not re.fullmatch(r"([01]\\d|2[0-3]):[0-5]\\d", start) or not re.fullmatch(r"([01]\\d|2[0-3]):[0-5]\\d", end) or end <= start or not course:
+            raise HTTPException(status_code=422, detail="Chaque créneau doit avoir un jour, un cours et des heures valides.")
+        clean_entries.append({"id": entry_id, "day": day, "start": start, "end": end, "course": course, "room": room, "order": index})
+    space = db.query(TeacherSchoolSpace).filter(
+        TeacherSchoolSpace.teacher_email == teacher.email,
+        TeacherSchoolSpace.school_id == school_id,
+    ).first()
+    if not space:
+        # Compatibilité des enseignants historiques : matérialise leur ancien rattachement vérifié.
+        if str(teacher.school_id or "") != school_id or not teacher.school_access_verified:
+            raise HTTPException(status_code=403, detail="Cet espace n'est pas confirmé.")
+        space = TeacherSchoolSpace(teacher_email=teacher.email, school_id=school_id, is_verified=True)
+        db.add(space)
+    if not space.is_verified:
+        raise HTTPException(status_code=403, detail="L'école n'a pas encore confirmé cet espace.")
+    space.schedule_data = clean_entries
+    db.commit()
+    return {"status": True, "data": {"schoolId": school_id, "schedule": clean_entries}}
 
 
 @app.get("/api/teacher/classes")
