@@ -2969,7 +2969,7 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
     declared_class = str(user_data.get("titulaireOf") or "").strip()
     conduct_payload = payload.get("conduct") if isinstance(payload.get("conduct"), dict) else {}
     if declared_class and isinstance(conduct_payload.get(declared_class), dict):
-        conduct_report = store_conduct(db, teacher, declared_class, students_dict.get(declared_class, []), conduct_payload[declared_class])
+        conduct_report = store_conduct(db, teacher, declared_class, students_dict.get(declared_class, []), conduct_payload[declared_class], verified_school_id)
 
     # --- 1. Catalogue scolaire officiel et périmètre du professeur ---
     official_classes_by_name = {}
@@ -4311,13 +4311,14 @@ def resolve_student(db, school_id, classe, teacher_email, classink_student_id, c
     return None
 
 
-def store_conduct(db, teacher, class_name, students, conduct_by_student):
-    """Enregistre la conduite d'une classe, SEULEMENT si l'enseignant est le titulaire enregistré de cette classe."""
+def store_conduct(db, teacher, class_name, students, conduct_by_student, school_id: Optional[str] = None):
+    """Enregistre la conduite dans l'espace actif, uniquement pour le titulaire officiel."""
     report = {"accepted": 0, "rejected": []}
-    if not teacher_has_verified_school_access(teacher):
-        report["rejected"].append({"reason": "Compte enseignant non autorisé par l'école. Communiquez votre identifiant ClassInk à l'administration."})
+    selected_school_id = str(school_id or getattr(teacher, "school_id", "") or "").strip()
+    if not teacher_has_school_access(db, teacher, selected_school_id):
+        report["rejected"].append({"reason": "Compte enseignant non autorisé dans cet espace scolaire."})
         return report
-    classe = find_class_by_name(db, teacher.school_id, class_name)
+    classe = find_class_by_name(db, selected_school_id, class_name)
     if not classe:
         report["rejected"].append({"reason": "Classe introuvable dans PrimeInk : « " + clean_text(class_name, 80) + " »."})
         return report
@@ -4328,7 +4329,7 @@ def store_conduct(db, teacher, class_name, students, conduct_by_student):
     for classink_id, kinds in (conduct_by_student or {}).items():
         if not isinstance(kinds, dict):
             continue
-        student_id = resolve_student(db, teacher.school_id, classe, teacher.email, str(classink_id), names.get(str(classink_id), ""))
+        student_id = resolve_student(db, selected_school_id, classe, teacher.email, str(classink_id), names.get(str(classink_id), ""))
         if not student_id:
             report["rejected"].append({"studentId": str(classink_id), "reason": "Élève introuvable dans PrimeInk."})
             continue
@@ -4339,13 +4340,13 @@ def store_conduct(db, teacher, class_name, students, conduct_by_student):
                     continue
                 clean_value = value.strip().upper()[:CONDUCT_MAX_LEN]
                 row = db.query(StudentConduct).filter(
-                    StudentConduct.school_id == teacher.school_id, StudentConduct.student_id == student_id,
+                    StudentConduct.school_id == selected_school_id, StudentConduct.student_id == student_id,
                     StudentConduct.kind == kind, StudentConduct.period == period).first()
                 if row:
                     row.value = clean_value
                     row.updated_by = teacher.email
                 else:
-                    db.add(StudentConduct(school_id=teacher.school_id, student_id=student_id, kind=kind, period=period,
+                    db.add(StudentConduct(school_id=selected_school_id, student_id=student_id, kind=kind, period=period,
                                           value=clean_value, updated_by=teacher.email))
                 report["accepted"] += 1
     db.commit()
@@ -4451,7 +4452,7 @@ def submit_conduct(payload: dict, db: Session = Depends(get_db), claims: dict = 
             if str(e.get(field) or "").strip():
                 kinds[kind][period] = e.get(field)
         conduct[str(e["studentId"])] = kinds
-    report = store_conduct(db, teacher, str(payload.get("className") or ""), students, conduct)
+    report = store_conduct(db, teacher, str(payload.get("className") or ""), students, conduct, claims.get("school_id"))
     return {"status": report["accepted"] > 0 or not report["rejected"], "accepted": report["accepted"],
             "rejected": report["rejected"], "message": "" if report["accepted"] else "Aucune conduite acceptée."}
 
