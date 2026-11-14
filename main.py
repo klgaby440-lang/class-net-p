@@ -2943,6 +2943,11 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
     teacher = db.query(Teacher).filter(Teacher.email == email).first()
     if not teacher:
         return {"status": False, "message": "Enseignant non trouvé."}
+    verified_school_id = str(claims.get("school_id") or "").strip() or None
+    if verified_school_id and not teacher_has_school_access(db, teacher, verified_school_id):
+        raise HTTPException(status_code=403, detail="Cet espace enseignant n'est pas autorisé pour cette école.")
+    if not verified_school_id and teacher_has_verified_school_access(teacher):
+        verified_school_id = str(teacher.school_id)
     if verified_school_id:
         blocked = teacher_school_block(db, teacher, verified_school_id)
         if blocked:
@@ -2967,11 +2972,6 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
         conduct_report = store_conduct(db, teacher, declared_class, students_dict.get(declared_class, []), conduct_payload[declared_class])
 
     # --- 1. Catalogue scolaire officiel et périmètre du professeur ---
-    verified_school_id = str(claims.get("school_id") or "").strip() or None
-    if verified_school_id and not teacher_has_school_access(db, teacher, verified_school_id):
-        raise HTTPException(status_code=403, detail="Cet espace enseignant n'est pas autorisé pour cette école.")
-    if not verified_school_id and teacher_has_verified_school_access(teacher):
-        verified_school_id = str(teacher.school_id)
     official_classes_by_name = {}
     assigned_courses_by_class = {}
     official_course_max = {}
