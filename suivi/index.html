@@ -272,12 +272,20 @@ const store = {
     set(key, value) { memoryStore.set(key, String(value)); return true; },
     del(key) { memoryStore.delete(key); }
 };
-const defaults = () => ({ theme: 'auto', pin: null, kids: [], active: '', history: [], read: [] });
+const defaults = () => ({ theme: 'dark', pin: null, kids: [], active: '', history: [], read: [] });
+function loadSavedSuiviTheme() {
+    try {
+        const saved = localStorage.getItem('classink_suivi_theme');
+        if (saved === 'dark' || saved === 'light') return saved;
+    } catch (_) { /* la préférence est facultative */ }
+    return 'dark';
+}
 function loadState() {
     try { const raw = store.get(STORE_KEY); if (raw) return Object.assign(defaults(), JSON.parse(raw)); } catch (e) { /* données illisibles : on repart de zéro */ }
     return defaults();
 }
 let S = loadState();
+S.theme = loadSavedSuiviTheme();
 const saveState = () => store.set(STORE_KEY, JSON.stringify(S));
 
 let DEMO = false; // Mode démonstration conservé uniquement en mémoire.
@@ -686,7 +694,7 @@ function viewMessages() {
 }
 
 function viewSettings() {
-    const themes = [['auto', 'Auto'], ['dark', 'Sombre'], ['light', 'Clair']];
+    const themes = [['dark', 'Sombre'], ['light', 'Clair']];
     let out = demoBanner();
     out += '<div class="card"><h3 style="margin-bottom:10px">Apparence</h3><div class="seg">' + themes.map(t => '<button class="' + (S.theme === t[0] ? 'on' : '') + '" data-act="theme" data-t="' + t[0] + '">' + t[1] + '</button>').join('') + '</div></div>';
     out += '<div class="card"><h3>Code PIN</h3><p class="sub" style="margin:4px 0 12px">' + (S.pin ? 'Le PIN protège l’affichage du suivi sur cet appareil. Il se verrouille aussi après 5 minutes sans activité.' : 'Ajoutez un PIN pour masquer le suivi si quelqu’un d’autre utilise votre téléphone.') + '</p><div class="row wrap"><button class="btn sm" data-act="pin-set">' + (S.pin ? 'Changer le PIN' : 'Créer un PIN') + '</button>' + (S.pin ? '<button class="btn sm ghost" data-act="lock-now">Verrouiller maintenant</button><button class="btn sm ghost" data-act="pin-off">Retirer</button>' : '') + '</div><p class="sub" style="margin-top:10px;font-size:.78rem">Le PIN est un simple verrou d’écran : il ne remplace pas la sécurité de votre téléphone.</p></div>';
@@ -900,7 +908,10 @@ document.addEventListener('click', async e => {
         case 'period': V.period = b.dataset.p; render(); break;
         case 'course': courseSheet(+b.dataset.i); break;
         case 'msgtab': V.msgTab = b.dataset.t; render(); break;
-        case 'theme': S.theme = b.dataset.t; saveState(); applyTheme(); render(); break;
+        case 'theme':
+            S.theme = b.dataset.t === 'light' ? 'light' : 'dark';
+            try { localStorage.setItem('classink_suivi_theme', S.theme); } catch (_) {}
+            saveState(); applyTheme(); render(); break;
         case 'pin-set': setPin(); break;
         case 'pin-off': removePin(); break;
         case 'lock-now': showLock(); break;
