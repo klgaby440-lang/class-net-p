@@ -388,6 +388,10 @@ class _SpaceQuery:
             field = getattr(left, "key", None)
             value = getattr(right, "value", right)
             operator_name = getattr(getattr(condition, "operator", None), "__name__", "")
+            if operator_name == "is_" and type(right).__name__ == "True_":
+                value = True
+            elif operator_name == "is_" and type(right).__name__ == "False_":
+                value = False
             if not field:
                 continue
             if operator_name == "in_op":
