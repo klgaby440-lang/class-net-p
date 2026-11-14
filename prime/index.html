@@ -3633,6 +3633,18 @@ window.bpSuiviCopyCode = async function() {
     }
 };
 
+window.bpSuiviToggleStudentAccess = async function(studentId) {
+    bpSuiviCurrentStudentId = String(studentId || '');
+    const student = bpSuiviCurrentStudent();
+    if (!student) throw new Error("Élève introuvable dans la classe active.");
+    await bpSuiviLoadRoster(student.classId);
+    const row = bpSuiviGetRosterRow(student);
+    if (!row || !row.code) throw new Error("Identifiant parent indisponible. Chargez les données de l'école puis réessayez.");
+    bpSuiviRenderAccessPanel(student);
+    await window.bpSuiviToggleAccess();
+    return bpSuiviGetRosterRow(student);
+};
+
 window.bpSuiviToggleAccess = async function() {
     const student = bpSuiviCurrentStudent();
     const row = bpSuiviGetRosterRow(student);
@@ -4446,15 +4458,7 @@ async function bpPushClassBulletin(cls) {
                             accessButton.disabled = true;
                             accessButton.textContent = 'Vérification…';
                             try {
-                                if (typeof bpSuiviCurrentStudentId !== 'undefined') bpSuiviCurrentStudentId = String(st.id);
-                                if (typeof bpSuiviGetRosterRow === 'function' && !bpSuiviGetRosterRow(st)) {
-                                    await bpSuiviLoadRoster(st.classId);
-                                }
-                                const access = typeof bpSuiviGetRosterRow === 'function' ? bpSuiviGetRosterRow(st) : null;
-                                if (!access || !access.code) {
-                                    throw new Error("Identifiant parent indisponible. Vérifiez la connexion au serveur et réessayez.");
-                                }
-                                await window.bpSuiviToggleAccess();
+                                await window.bpSuiviToggleStudentAccess(st.id);
                                 renderFicheNotes(course);
                             } catch (error) {
                                 accessButton.disabled = false;
