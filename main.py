@@ -3883,6 +3883,7 @@ def request_teacher_school_space(payload: dict, db: Session = Depends(get_db), c
             "message": "Cet espace est déjà associé." if existing.is_verified else "Demande déjà enregistrée. L'école doit confirmer dans PrimeInk.",
         }
     db.add(TeacherSchoolSpace(teacher_email=teacher.email, school_id=school_id, is_verified=False))
+    teacher.preferred_school_id = school_id
     db.commit()
     return {"status": True, "verified": False, "message": "Demande enregistrée. L'école doit maintenant vous ajouter dans PrimeInk."}
 
@@ -3893,40 +3894,6 @@ def get_teacher_spaces(db: Session = Depends(get_db), claims: dict = Depends(req
     if not teacher:
         raise HTTPException(status_code=404, detail="Compte enseignant introuvable.")
     return {"status": True, "data": teacher_school_spaces(db, teacher)}
-
-
-@app.get("/api/teacher/spaces")
-def get_teacher_spaces(db: Session = Depends(get_db), claims: dict = Depends(require_teacher)):
-    teacher = db.query(Teacher).filter(Teacher.email == claims.get("email")).first()
-    if not teacher:
-        raise HTTPException(status_code=404, detail="Compte enseignant introuvable.")
-    return {"status": True, "data": teacher_school_spaces(db, teacher)}
-
-
-@app.post("/api/teacher/spaces/request")
-def request_teacher_school_space(payload: dict, db: Session = Depends(get_db), claims: dict = Depends(require_teacher)):
-    teacher = db.query(Teacher).filter(Teacher.email == claims.get("email")).first()
-    if not teacher:
-        raise HTTPException(status_code=404, detail="Compte enseignant introuvable.")
-    school_id = clean_text(payload.get("school_id"), 100)
-    if not school_id:
-        raise HTTPException(status_code=422, detail="Identifiant de l'école manquant.")
-    school = db.query(SchoolInformation).filter(SchoolInformation.school_id == school_id).first()
-    if not school:
-        raise HTTPException(status_code=404, detail="Aucun établissement ne correspond à cet identifiant.")
-    state = licence_state(school)
-    if state["locked"]:
-        raise HTTPException(status_code=403, detail=LICENCE_MESSAGES[state["reason"]])
-    existing = db.query(TeacherSchoolSpace).filter(
-        TeacherSchoolSpace.teacher_email == teacher.email,
-        TeacherSchoolSpace.school_id == school_id,
-    ).first()
-    if existing:
-        return {"status": True, "message": "Demande déjà enregistrée. L'école doit confirmer votre identifiant dans PrimeInk.", "verified": bool(existing.is_verified)}
-    db.add(TeacherSchoolSpace(teacher_email=teacher.email, school_id=school_id, is_verified=False))
-    teacher.preferred_school_id = school_id
-    db.commit()
-    return {"status": True, "message": "Demande d'espace envoyée. L'école doit maintenant vous ajouter dans PrimeInk.", "verified": False}
 
 
 @app.get("/api/teacher/classes")
