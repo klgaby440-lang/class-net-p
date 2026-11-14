@@ -3910,6 +3910,8 @@ def request_teacher_school_space(payload: dict, db: Session = Depends(get_db), c
         TeacherSchoolSpace.school_id == school_id,
     ).first()
     if existing:
+        teacher.preferred_school_id = school_id
+        db.commit()
         return {
             "status": True,
             "verified": bool(existing.is_verified),
