@@ -1512,6 +1512,8 @@ def login_teacher(data: LoginSchema, db: Session = Depends(get_db)):
         if not teacher_has_school_access(db, teacher, requested_school_id):
             return {"status": False, "message": "Cet espace n'est pas encore confirmé par l'école. Vérifiez l'identifiant puis demandez à l'administration de vous ajouter dans PrimeInk."}
         active_school_id = requested_school_id
+    elif teacher_has_school_access(db, teacher, str(getattr(teacher, "preferred_school_id", "") or "")):
+        active_school_id = str(teacher.preferred_school_id)
     elif teacher_has_school_access(db, teacher, str(teacher.school_id or "")):
         active_school_id = str(teacher.school_id)
     elif len(spaces) == 1:
