@@ -3650,6 +3650,41 @@ def store_school_class_catalog(db: Session, school: SchoolInformation, catalog: 
     }
 
 
+@app.get("/api/primenet/teachers/{teacher_code}")
+def lookup_teacher_for_school(
+    teacher_code: str,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(require_active_school),
+):
+    """Recherche un enseignant depuis PrimeInk ; ne renvoie ses données que s'il a demandé cet espace."""
+    school_id = str(claims.get("school_id") or "")
+    teacher = db.query(Teacher).filter(Teacher.teacher_code == clean_text(teacher_code, 100)).first()
+    if not teacher:
+        raise HTTPException(status_code=404, detail="Aucun compte enseignant ne correspond à cet identifiant.")
+    request_row = db.query(TeacherSchoolSpace).filter(
+        TeacherSchoolSpace.teacher_email == teacher.email,
+        TeacherSchoolSpace.school_id == school_id,
+    ).first()
+    legacy_match = (
+        str(getattr(teacher, "school_id", "") or "") == school_id
+        and bool(getattr(teacher, "school_access_verified", False))
+    )
+    if not request_row and not legacy_match:
+        raise HTTPException(status_code=409, detail="Cet enseignant n'a pas encore configuré l'identifiant de cet établissement dans ClassInk. Il doit d'abord demander cet espace depuis son compte.")
+    return {
+        "status": True,
+        "data": {
+            "uniqueId": teacher.teacher_code,
+            "name": teacher.full_name,
+            "subject": teacher.subject or "",
+            "status": teacher.status or "Actif",
+            "email": teacher.email,
+            "configuredForSchool": True,
+            "alreadyLinked": bool(request_row.is_verified) if request_row else True,
+        },
+    }
+
+
 def teacher_matches_catalog_name(teacher, value: str) -> bool:
     """Compare un titulaire de cours au compte enseignant (nom, code unique ou e-mail)."""
     raw = str(value or "").strip()
@@ -3822,6 +3857,44 @@ def prepare_classroom_information(
 
 
 
+@app.post("/api/teacher/spaces/request")
+def request_teacher_school_space(payload: dict, db: Session = Depends(get_db), claims: dict = Depends(require_teacher)):
+    """Un enseignant demande à rejoindre un espace école ; l'école doit confirmer dans PrimeInk."""
+    teacher = db.query(Teacher).filter(Teacher.email == claims.get("email")).first()
+    if not teacher:
+        raise HTTPException(status_code=404, detail="Compte enseignant introuvable.")
+    school_id = clean_text(payload.get("school_id"), 100)
+    if not school_id:
+        raise HTTPException(status_code=422, detail="Identifiant de l'école manquant.")
+    school = db.query(SchoolInformation).filter(SchoolInformation.school_id == school_id).first()
+    if not school:
+        raise HTTPException(status_code=404, detail="Aucun établissement ne correspond à cet identifiant.")
+    state = licence_state(school)
+    if state["locked"]:
+        raise HTTPException(status_code=403, detail=LICENCE_MESSAGES[state["reason"]])
+    existing = db.query(TeacherSchoolSpace).filter(
+        TeacherSchoolSpace.teacher_email == teacher.email,
+        TeacherSchoolSpace.school_id == school_id,
+    ).first()
+    if existing:
+        return {
+            "status": True,
+            "verified": bool(existing.is_verified),
+            "message": "Cet espace est déjà associé." if existing.is_verified else "Demande déjà enregistrée. L'école doit confirmer dans PrimeInk.",
+        }
+    db.add(TeacherSchoolSpace(teacher_email=teacher.email, school_id=school_id, is_verified=False))
+    db.commit()
+    return {"status": True, "verified": False, "message": "Demande enregistrée. L'école doit maintenant vous ajouter dans PrimeInk."}
+
+
+@app.get("/api/teacher/spaces")
+def get_teacher_spaces(db: Session = Depends(get_db), claims: dict = Depends(require_teacher)):
+    teacher = db.query(Teacher).filter(Teacher.email == claims.get("email")).first()
+    if not teacher:
+        raise HTTPException(status_code=404, detail="Compte enseignant introuvable.")
+    return {"status": True, "data": teacher_school_spaces(db, teacher)}
+
+
 @app.get("/api/teacher/spaces")
 def get_teacher_spaces(db: Session = Depends(get_db), claims: dict = Depends(require_teacher)):
     teacher = db.query(Teacher).filter(Teacher.email == claims.get("email")).first()
@@ -3913,11 +3986,19 @@ def build_suivi_results_payload(db: Session, school: SchoolInformation, student:
         StudentLink.student_id == student.id,
     ).all()
     linked_ids.extend(link.classink_student_id for link in links if link.classink_student_id)
-    teacher_emails = [
-        email for (email,) in db.query(Teacher.email).filter(
-            Teacher.school_id == school.school_id
+    linked_teacher_emails = [
+        email for (email,) in db.query(TeacherSchoolSpace.teacher_email).filter(
+            TeacherSchoolSpace.school_id == school.school_id,
+            TeacherSchoolSpace.is_verified.is_(True),
         ).all()
     ]
+    legacy_teacher_emails = [
+        email for (email,) in db.query(Teacher.email).filter(
+            Teacher.school_id == school.school_id,
+            Teacher.school_access_verified.is_(True),
+        ).all()
+    ]
+    teacher_emails = list(set(linked_teacher_emails + legacy_teacher_emails))
     detailed_rows = []
     if linked_ids and teacher_emails:
         detailed_rows = db.query(StudentGrade).filter(
@@ -4562,7 +4643,7 @@ def get_teacher_info(identifier: str, db: Session = Depends(get_db), claims: dic
         return {"status": False, "message": "Enseignant introuvable."}
 
     is_self = claims.get("role") == "teacher" and claims.get("email") == teacher.email
-    is_same_school = claims.get("role") == "school" and bool(teacher.school_id) and claims.get("school_id") == teacher.school_id
+    is_same_school = claims.get("role") == "school" and teacher_has_school_access(db, teacher, claims.get("school_id"))
     if not (is_self or is_same_school):
         raise HTTPException(status_code=403, detail="Accès refusé à ce profil.")
 
