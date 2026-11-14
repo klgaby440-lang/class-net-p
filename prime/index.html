@@ -1220,6 +1220,7 @@ body {
                 </select>
             </div>
             <div id="schoolPalmaresSummary" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.7rem;margin-bottom:1rem;"></div>
+            <div id="schoolPalmaresPeriodBreakdown" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:.6rem;margin-bottom:1rem;"></div>
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1rem;margin-bottom:1rem;">
                 <article class="card" style="padding:1rem;"><h4>Réussite par période</h4><div id="schoolPalmaresPercentChart"></div></article>
                 <article class="card" style="padding:1rem;"><h4>Classement général</h4><div id="schoolPalmaresRankChart"></div></article>
@@ -1432,6 +1433,7 @@ body {
                         </select>
                     </div>
                     <div id="classPalmaresSummary" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.7rem;margin-bottom:1rem;"></div>
+                    <div id="classPalmaresPeriodBreakdown" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:.6rem;margin-bottom:1rem;"></div>
                     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1rem;margin-bottom:1rem;">
                         <article class="card" style="padding:1rem;"><h4>Évolution du pourcentage</h4><div id="classPalmaresPercentChart"></div></article>
                         <article class="card" style="padding:1rem;"><h4>Évolution des places</h4><div id="classPalmaresRankChart"></div></article>
@@ -4733,6 +4735,14 @@ async function bpPushClassBulletin(cls) {
                     ['Échecs', summary.failed],
                     ['Incomplets', summary.incomplete]
                 ].map(item => '<article class="card" style="padding:.8rem"><small>' + item[0] + '</small><strong style="display:block;font-size:1.35rem;margin-top:4px">' + item[1] + '</strong></article>').join('');
+                const periodBreakdown = document.getElementById(prefix + 'PeriodBreakdown');
+                if (periodBreakdown) {
+                    periodBreakdown.innerHTML = PALMARES_PERIOD_ORDER.map(periodKey => {
+                        const periodSummary = buildPalmaresRecords(classIds, periodKey);
+                        const ratio = periodSummary.passPercent === null ? '—' : periodSummary.passPercent.toFixed(1) + '%';
+                        return '<article class="card" style="padding:.7rem"><small>' + PALMARES_PERIOD_LABELS[periodKey] + '</small><strong style="display:block;font-size:1.05rem;margin-top:3px">' + periodSummary.passed + ' / ' + periodSummary.evaluated + '</strong><span style="font-size:.78rem;color:var(--text-secondary)">' + ratio + ' de réussite</span></article>';
+                    }).join('');
+                }
                 const ranking = document.getElementById(prefix + 'Ranking');
                 if (ranking) {
                     const rows = summary.ranked.map(record => {
