@@ -6,6 +6,7 @@
 <meta name="theme-color" content="#0e0f14">
 <meta name="color-scheme" content="dark light">
 <title>Class-Ink Suivi</title>
+<link rel="icon" type="image/svg+xml" href="../assets/classink-logo.svg">
 <style>
 :root {
     --bg: #0e0f14; --surface: #171923; --surface-2: #1f2230; --border: rgba(255,255,255,.09);
@@ -161,30 +162,18 @@ table.t td:first-child, table.t th:first-child { text-align: left; }
 </head>
 <body>
 
-<!-- Logo partagé -->
-<svg width="0" height="0" style="position:absolute" aria-hidden="true">
-    <defs>
-        <linearGradient id="lgrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7c5cff"/><stop offset="1" stop-color="#2f80ff"/></linearGradient>
-        <linearGradient id="fgrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff5fa2"/><stop offset=".5" stop-color="#ffb84d"/><stop offset="1" stop-color="#38d9a9"/></linearGradient>
-    </defs>
-    <symbol id="logo" viewBox="0 0 96 96">
-        <rect width="96" height="96" rx="27" fill="url(#lgrad)"/>
-        <path d="M48 17C48 17 28 38 28 54a20 20 0 0 0 40 0C68 38 48 17 48 17z" fill="#fff"/>
-        <path d="M39 56a9 9 0 0 0 9 9" stroke="#5a6cff" stroke-width="4.5" fill="none" stroke-linecap="round"/>
-        <rect x="27" y="77" width="42" height="4.5" rx="2.25" fill="#fff" opacity=".85"/>
-    </symbol>
-</svg>
+
 
 <!-- Écran de démarrage -->
 <div id="splash" role="status" aria-label="Chargement de Class-Ink Suivi">
-    <svg class="logo"><use href="#logo"/></svg>
+    <img class="logo" src="../assets/classink-logo.svg" alt="Logo ClassInk">
     <h1>Class-Ink Suivi</h1>
     <p>Suivez la réussite de votre enfant</p>
     <div class="bar"><i></i></div>
 </div>
 
 <header class="top">
-    <svg class="logo"><use href="#logo"/></svg>
+    <img class="logo" src="../assets/classink-logo.svg" alt="Logo ClassInk">
     <div class="brand">Class-Ink Suivi<small id="subtitle">Espace parents</small></div>
     <div class="sp"></div>
     <span class="dot" id="netdot" title="Connexion"></span>
@@ -566,7 +555,7 @@ function schoolResults() {
 function viewHome() {
     const k = activeKid(), d = curData();
     if (!k || !d) {
-        return demoBanner() + '<div class="card" style="text-align:center"><svg class="logo" style="width:64px;height:64px"><use href="#logo"/></svg><h2 style="margin-top:10px">Bienvenue</h2><p class="sub">Suivez les résultats, les frais et les messages de l’école de votre enfant, où que vous soyez.</p></div>' + (kids().length ? kidBar() : '') + viewLink() +
+        return demoBanner() + '<div class="card" style="text-align:center"><img class="logo" src="../assets/classink-logo.svg" alt="Logo ClassInk" style="width:64px;height:64px;object-fit:contain"><h2 style="margin-top:10px">Bienvenue</h2><p class="sub">Suivez les résultats, les frais et les messages de l’école de votre enfant, où que vous soyez.</p></div>' + (kids().length ? kidBar() : '') + viewLink() +
             (DEMO ? '' : '<div style="text-align:center"><button class="btn sm ghost" data-act="demo-on">Essayer avec des données de démonstration</button></div>');
     }
     const r = d.results, fees = d.fees || {};
@@ -867,7 +856,7 @@ function showLock() {
     if (!S.pin) return;
     toggleDock(false);
     const box = $('#lock');
-    box.innerHTML = '<svg class="logo"><use href="#logo"/></svg><h2>Session verrouillée</h2><p class="sub">Saisissez votre PIN pour afficher le suivi.</p><form id="lockForm" autocomplete="off"><input class="input" id="lockPin" type="password" inputmode="numeric" maxlength="6" placeholder="••••" aria-label="Code PIN"><button class="btn" type="submit">Déverrouiller</button><div class="err" id="lockErr" role="alert"></div></form>';
+    box.innerHTML = '<img class="logo" src="../assets/classink-logo.svg" alt="Logo ClassInk"><h2>Session verrouillée</h2><p class="sub">Saisissez votre PIN pour afficher le suivi.</p><form id="lockForm" autocomplete="off"><input class="input" id="lockPin" type="password" inputmode="numeric" maxlength="6" placeholder="••••" aria-label="Code PIN"><button class="btn" type="submit">Déverrouiller</button><div class="err" id="lockErr" role="alert"></div></form>';
     box.classList.remove('hidden');
     $('#lockForm').addEventListener('submit', async e => {
         e.preventDefault();
