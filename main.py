@@ -520,7 +520,8 @@ class SyncHistory(Base):
 class QuizBank(Base):
     __tablename__ = "quizzes"
     id = Column(String, primary_key=True, index=True)
-    teacher_email = Column(String, ForeignKey("teachers.email"))
+    teacher_email = Column(String, ForeignKey("teachers.email"), index=True)
+    school_id = Column(String, ForeignKey("school_information.school_id"), nullable=True, index=True)
     title = Column(String)
     content = Column(Text)
     teacher = relationship("Teacher", back_populates="quizzes")
@@ -1148,7 +1149,6 @@ with engine.connect() as conn:
     conn.execute(text("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS teacher_code VARCHAR(50);"))
     conn.execute(text("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS school_access_verified BOOLEAN NOT NULL DEFAULT FALSE;"))
     conn.execute(text("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS preferred_school_id VARCHAR(100);"))
-    conn.execute(text("UPDATE student_grades sg SET school_id = t.school_id FROM teachers t WHERE sg.teacher_email = t.email AND sg.school_id IS NULL AND t.school_id IS NOT NULL;") )
     conn.execute(text("ALTER TABLE school_information ADD COLUMN IF NOT EXISTS email TEXT;"))
     conn.execute(text("ALTER TABLE school_information ADD COLUMN IF NOT EXISTS province VARCHAR(255);"))
     conn.execute(text("ALTER TABLE school_information ADD COLUMN IF NOT EXISTS province VARCHAR(255);"))
@@ -1161,6 +1161,10 @@ with engine.connect() as conn:
     conn.execute(text("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS signature TEXT;"))
     conn.execute(text("ALTER TABLE student_grades ADD COLUMN IF NOT EXISTS school_id VARCHAR;"))
     conn.execute(text("ALTER TABLE student_grades ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP;"))
+    conn.execute(text("ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS school_id VARCHAR;"))
+    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_quizzes_school_id ON quizzes (school_id);"))
+    conn.execute(text("UPDATE quizzes q SET school_id = t.school_id FROM teachers t WHERE q.teacher_email = t.email AND q.school_id IS NULL AND t.school_id IS NOT NULL;"))
+    conn.execute(text("UPDATE student_grades sg SET school_id = t.school_id FROM teachers t WHERE sg.teacher_email = t.email AND sg.school_id IS NULL AND t.school_id IS NOT NULL;"))
     conn.execute(text("ALTER TABLE primenet_payloads DROP CONSTRAINT IF EXISTS primenet_payloads_teacher_email_key;"))
     conn.execute(text("DROP INDEX IF EXISTS ix_primenet_payloads_teacher_email;"))
     conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_primenet_payload_school_teacher ON primenet_payloads (school_id, teacher_email);"))
@@ -1536,7 +1540,11 @@ def login_teacher(data: LoginSchema, db: Session = Depends(get_db)):
         StudentGrade.school_id == active_school_id if active_school_id else StudentGrade.school_id.is_(None)
     )
     db_grades = grades_query.all()
-    db_quizzes = db.query(QuizBank).filter(QuizBank.teacher_email == teacher.email).all()
+    quiz_query = db.query(QuizBank).filter(QuizBank.teacher_email == teacher.email)
+    quiz_query = quiz_query.filter(
+        QuizBank.school_id == active_school_id if active_school_id else QuizBank.school_id.is_(None)
+    )
+    db_quizzes = quiz_query.all()
     # Si vous avez un modèle Attendance pour les présences :
     db_presences = db.query(Attendance).filter(Attendance.teacher_email == teacher.email).all() if 'Attendance' in globals() else []
 
