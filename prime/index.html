@@ -4656,26 +4656,43 @@ async function bpPushClassBulletin(cls) {
             const teacherUniqueIdInput = document.getElementById('teacherUniqueIdInput');
 
             if (addTeacherBtn && teacherUniqueIdInput) {
-                addTeacherBtn.addEventListener('click', () => {
+                addTeacherBtn.addEventListener('click', async () => {
                     const uniqueId = teacherUniqueIdInput.value.trim();
                     if (!uniqueId) return alert("Veuillez saisir un identifiant unique valide.");
-
-                    const exists = appState.teachers.some(t => t.uniqueId.toLowerCase() === uniqueId.toLowerCase());
-                    if (exists) return alert("Cet enseignant est déjà rattaché à l'école !");
-
-                    // Déduction automatique du nom/matière selon le format de l'ID ou ajout standard
-                    const newTeacher = {
-                        uniqueId: uniqueId,
-                        name: `Enseignant (${uniqueId.substring(0, 8)}...)`,
-                        subject: "Matière à attribuer",
-                        status: "Actif (Synchronisé)"
-                    };
-
-                    appState.teachers.push(newTeacher);
-                    saveState();
-                    renderTeachersTable();
-                    teacherUniqueIdInput.value = '';
-                    alert(`✅ L'enseignant avec l'ID [${uniqueId}] a été ajouté avec succès à l'établissement !`);
+                    if (appState.teachers.some(t => String(t.uniqueId || '').toLowerCase() === uniqueId.toLowerCase())) {
+                        return alert("Cet enseignant est déjà rattaché à l'école.");
+                    }
+                    if (addTeacherBtn.disabled) return;
+                    addTeacherBtn.disabled = true;
+                    addTeacherBtn.textContent = "Vérification…";
+                    try {
+                        const lookup = await bpServerCall('GET', '/api/primenet/teachers/' + encodeURIComponent(uniqueId), null);
+                        if (!lookup.ok || !lookup.data) {
+                            throw new Error(lookup.message || "Compte introuvable ou identifiant d'école non configuré par l'enseignant.");
+                        }
+                        const profile = lookup.data;
+                        const newTeacher = {
+                            uniqueId: profile.uniqueId || uniqueId,
+                            name: profile.name || "Enseignant",
+                            subject: profile.subject || "Matière à attribuer",
+                            status: profile.status || "Actif",
+                            email: profile.email || "",
+                            configuredForSchool: true,
+                            alreadyLinked: !!profile.alreadyLinked
+                        };
+                        appState.teachers.push(newTeacher);
+                        saveState();
+                        renderTeachersTable();
+                        teacherUniqueIdInput.value = '';
+                        alert(newTeacher.alreadyLinked
+                            ? "✅ Les informations du compte enseignant ont été récupérées du serveur. Il est déjà associé à cette école."
+                            : "✅ Les informations de l'enseignant ont été récupérées. Son espace sera associé après « Préparer les informations des classes ».");
+                    } catch (error) {
+                        alert("❌ " + (error.message || "Impossible de vérifier cet enseignant."));
+                    } finally {
+                        addTeacherBtn.disabled = false;
+                        addTeacherBtn.textContent = "+ Ajouter l'Enseignant";
+                    }
                 });
             }
 
