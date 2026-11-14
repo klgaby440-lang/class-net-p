@@ -285,8 +285,12 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn("safe.results = null", source)
         self.assertIn("Hors connexion : les résultats restent masqués", source)
         self.assertIn("f.configured === false", source)
-        for storage_api in ("localStorage", "sessionStorage", "indexedDB", "document.cookie"):
+        # Le seul stockage persistant autorisé est la préférence de thème.
+        self.assertIn("localStorage.setItem('classink_suivi_theme'", source)
+        for storage_api in ("sessionStorage", "indexedDB", "document.cookie"):
             self.assertNotIn(storage_api, source)
+        self.assertNotIn("localStorage.setItem(STORE_KEY", source)
+        self.assertNotIn("localStorage.setItem(CACHE_PREFIX", source)
         self.assertIn("const memoryStore = new Map()", source)
         self.assertIn("cache: 'no-store'", source)
         self.assertIn("pagehide", source)
@@ -484,10 +488,6 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn('"suiviIndividualAccessAllowed": bool(s.suivi_results_allowed)', server)
         self.assertIn("/api/manager/schedule", prime)
         self.assertIn("suiviResultsAllowed", server)
-
-
-if __name__ == "__main__":
-    unittest.main()
 
 
 class TestNewFeatureStatic(unittest.TestCase):
