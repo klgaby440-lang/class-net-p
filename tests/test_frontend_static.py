@@ -491,7 +491,7 @@ class FrontendStaticTests(unittest.TestCase):
 
 
 class TestNewFeatureStatic(unittest.TestCase):
-    def test_primeink_palmares_uses_all_periods_school_scope_and_complete_grade_calculations():
+    def test_primeink_palmares_uses_all_periods_school_scope_and_complete_grade_calculations(self):
         source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
         for marker in (
             "PALMARES_PERIOD_FIELDS",
@@ -510,7 +510,7 @@ class TestNewFeatureStatic(unittest.TestCase):
         self.assertIn("openSchoolPalmaresBtn", source)
     
     
-    def test_primeink_grade_visibility_button_is_connected_to_suivi_server_api():
+    def test_primeink_grade_visibility_button_is_connected_to_suivi_server_api(self):
         source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
         self.assertIn("student-note-access-button", source)
         self.assertIn("window.bpSuiviToggleStudentAccess(st.id)", source)
@@ -520,7 +520,7 @@ class TestNewFeatureStatic(unittest.TestCase):
         self.assertNotIn('title="Commande prévue dans une prochaine version"', source)
     
     
-    def test_classink_teacher_spaces_are_masked_and_selected_on_login():
+    def test_classink_teacher_spaces_are_masked_and_selected_on_login(self):
         source = (ROOT / "app/index.html").read_text(encoding="utf-8")
         self.assertIn('id="login-school-id"', source)
         self.assertIn('type="password" id="login-school-id"', source)
@@ -532,7 +532,7 @@ class TestNewFeatureStatic(unittest.TestCase):
         self.assertIn("localSpace !== serverSpace", source)
     
     
-    def test_classink_teacher_schedule_is_editable_and_drives_bell_timing():
+    def test_classink_teacher_schedule_is_editable_and_drives_bell_timing(self):
         source = (ROOT / "app/index.html").read_text(encoding="utf-8")
         self.assertIn('type="time" data-field="start"', source)
         self.assertIn('type="time" data-field="end"', source)
@@ -542,7 +542,7 @@ class TestNewFeatureStatic(unittest.TestCase):
         self.assertNotIn("hours === '08' && minutes === '30'", source)
     
     
-    def test_themes_are_persisted_with_dark_default_across_classink_surfaces():
+    def test_themes_are_persisted_with_dark_default_across_classink_surfaces(self):
         app = (ROOT / "app/index.html").read_text(encoding="utf-8")
         prime = (ROOT / "prime/index.html").read_text(encoding="utf-8")
         manager = (ROOT / "manager/index.html").read_text(encoding="utf-8")
@@ -556,7 +556,7 @@ class TestNewFeatureStatic(unittest.TestCase):
     
     
     
-    def test_classnet_backend_scopes_teacher_spaces_and_notes_by_active_school():
+    def test_classnet_backend_scopes_teacher_spaces_and_notes_by_active_school(self):
         source = (ROOT / "main.py").read_text(encoding="utf-8")
         for marker in (
             "class TeacherSchoolSpace(Base)",
