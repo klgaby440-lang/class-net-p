@@ -4745,11 +4745,11 @@ async function bpPushClassBulletin(cls) {
                     }).join('');
                     const incompleteRows = summary.records.filter(record => !record.complete).map(record => {
                         const name = [record.student.name,record.student.postname,record.student.prename].filter(Boolean).join(' ');
-                        return '<tr><td>—</td><td>' + safeHTML(name) + '</td>' + (isSchool ? '<td>' + safeHTML(classNameForPalmares(record.student.classId)) + '</td>' : '') + '<td>—</td><td>—</td><td>' + record.atRisk.length + ' cours</td><td>Notes incomplètes</td></tr>';
+                        return '<tr data-palmares-student="' + safeHTML(record.student.id) + '" data-palmares-class="' + safeHTML(record.student.classId) + '" style="cursor:pointer"><td>—</td><td>' + safeHTML(name) + '</td>' + (isSchool ? '<td>' + safeHTML(classNameForPalmares(record.student.classId)) + '</td>' : '') + '<td>—</td><td>' + record.score.toFixed(1) + ' / ' + record.max.toFixed(1) + '</td><td>' + record.atRisk.length + ' cours</td><td>Notes incomplètes</td></tr>';
                     }).join('');
                     ranking.innerHTML = rows + incompleteRows || '<tr><td colspan="7">Aucun élève dans le périmètre.</td></tr>';
                     ranking.querySelectorAll('[data-palmares-student]').forEach(row => row.addEventListener('click', () => {
-                        const record = summary.ranked.find(item => String(item.student.id) === row.dataset.palmaresStudent && String(item.student.classId) === row.dataset.palmaresClass);
+                        const record = summary.records.find(item => String(item.student.id) === row.dataset.palmaresStudent && String(item.student.classId) === row.dataset.palmaresClass);
                         if (!record) return;
                         if (isSchool) selectedSchoolPalmaresStudent = row.dataset.palmaresClass + '::' + row.dataset.palmaresStudent;
                         else selectedClassPalmaresStudent = row.dataset.palmaresStudent;
@@ -4757,8 +4757,8 @@ async function bpPushClassBulletin(cls) {
                     }));
                 }
                 const selectedKey = isSchool ? selectedSchoolPalmaresStudent : selectedClassPalmaresStudent;
-                let selected = summary.ranked.find(record => (String(record.student.classId) + '::' + String(record.student.id)) === selectedKey || (!isSchool && String(record.student.id) === selectedKey));
-                if (!selected) selected = summary.ranked[0];
+                let selected = summary.records.find(record => (String(record.student.classId) + '::' + String(record.student.id)) === selectedKey || (!isSchool && String(record.student.id) === selectedKey));
+                if (!selected) selected = summary.ranked[0] || summary.records[0];
                 if (selected) {
                     if (isSchool) selectedSchoolPalmaresStudent = String(selected.student.classId) + '::' + String(selected.student.id);
                     else selectedClassPalmaresStudent = String(selected.student.id);
