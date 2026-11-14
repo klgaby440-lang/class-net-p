@@ -532,6 +532,29 @@ class TestNewFeatureStatic(unittest.TestCase):
         self.assertIn("localSpace !== serverSpace", source)
     
     
+    def test_teacher_schedule_is_saved_per_verified_school_space(self):
+        source = (ROOT / "main.py").read_text(encoding="utf-8")
+        self.assertIn('schedule_data = Column(JSON, nullable=False, default=list)', source)
+        self.assertIn('@app.get("/api/teacher/schedule")', source)
+        self.assertIn('@app.put("/api/teacher/schedule")', source)
+        self.assertIn('space.schedule_data = clean_entries', source)
+        self.assertIn('ALTER TABLE teacher_school_spaces ADD COLUMN IF NOT EXISTS schedule_data JSON', source)
+        app = (ROOT / "app/index.html").read_text(encoding="utf-8")
+        self.assertIn("/api/teacher/schedule", app)
+        self.assertIn("loadTeacherScheduleFromServer", app)
+        self.assertIn("method: 'PUT'", app)
+
+    def test_quiz_data_and_schema_migrations_are_scoped_safely_by_school(self):
+        source = (ROOT / "main.py").read_text(encoding="utf-8")
+        self.assertIn('school_id = Column(String, ForeignKey("school_information.school_id"), nullable=True, index=True)', source)
+        self.assertIn('QuizBank.school_id == active_school_id if active_school_id else QuizBank.school_id.is_(None)', source)
+        add_grade_column = source.index('ALTER TABLE student_grades ADD COLUMN IF NOT EXISTS school_id VARCHAR;')
+        migrate_grades = source.index('UPDATE student_grades sg SET school_id = t.school_id')
+        add_quiz_column = source.index('ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS school_id VARCHAR;')
+        migrate_quizzes = source.index('UPDATE quizzes q SET school_id = t.school_id')
+        self.assertLess(add_grade_column, migrate_grades)
+        self.assertLess(add_quiz_column, migrate_quizzes)
+
     def test_classink_teacher_schedule_is_editable_and_drives_bell_timing(self):
         source = (ROOT / "app/index.html").read_text(encoding="utf-8")
         self.assertIn('type="time" data-field="start"', source)
