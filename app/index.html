@@ -992,6 +992,7 @@
                 <div id="teacher-schedule-editor" style="display:grid;gap:8px;overflow-x:auto;"></div>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 15px;">
                     <button type="button" class="btn-action" onclick="addTeacherScheduleRow()">＋ Ajouter une heure</button>
+                    <button type="button" class="btn-secondary" onclick="testSchoolBell()">Tester la sonnerie</button>
                     <button type="button" class="btn-primary" onclick="saveTeacherSchedule()">Enregistrer l'horaire</button>
                 </div>
             </div>
@@ -1581,6 +1582,7 @@ async function handleLogin() {
             db = mergeServerDataIntoLocal(db, result.data);
             db.teacherSpaces = Array.isArray(result.data.teacherSpaces) ? result.data.teacherSpaces : [];
             db.user.schoolId = String(result.data.schoolId || result.data.user?.schoolId || '').trim();
+            await loadTeacherScheduleFromServer(true);
             if (result.token) {
                 try { localStorage.setItem('classink_cloud_token', result.token); } catch (e) { /* stockage indisponible */ }
             }
@@ -4045,24 +4047,88 @@ function removeTeacherScheduleRow(id) {
     renderTeacherScheduleEditor();
 }
 
+async function loadTeacherScheduleFromServer(silent = false) {
+    const schoolId = String(db.user && db.user.schoolId || db.schoolId || '').trim();
+    let token = '';
+    try { token = localStorage.getItem('classink_cloud_token') || ''; } catch (_) {}
+    if (!schoolId || !token) return false;
+    try {
+        const response = await fetch(CLOUD_AUTH_URL + '/api/teacher/schedule', {
+            method: 'GET',
+            headers: cloudAuthHeaders(),
+            cache: 'no-store',
+            credentials: 'omit'
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.status) throw new Error(result.detail || result.message || 'Horaire serveur indisponible.');
+        const returnedSchoolId = String(result.data && result.data.schoolId || '');
+        if (returnedSchoolId !== schoolId) throw new Error("L'horaire reçu ne correspond pas à l'espace scolaire actif.");
+        db.teacherSchedule = Array.isArray(result.data.schedule) ? result.data.schedule : [];
+        saveDB();
+        renderTeacherScheduleEditor();
+        return true;
+    } catch (error) {
+        if (!silent) await showCustomAlert(error.message || "Impossible de récupérer l'horaire du serveur.");
+        return false;
+    }
+}
+
 async function saveTeacherSchedule() {
     const entries = teacherScheduleReadEditor();
     if (entries.some(entry => !entry.start || !entry.end || !entry.course || entry.end <= entry.start)) {
         await showCustomAlert('Chaque ligne doit contenir un cours, un début et une fin postérieure au début.');
         return;
     }
-    db.teacherSchedule = entries.sort((a,b) => TEACHER_SCHEDULE_DAYS.indexOf(a.day) - TEACHER_SCHEDULE_DAYS.indexOf(b.day) || a.start.localeCompare(b.start));
+    const sorted = entries.sort((a,b) => TEACHER_SCHEDULE_DAYS.indexOf(a.day) - TEACHER_SCHEDULE_DAYS.indexOf(b.day) || a.start.localeCompare(b.start));
+    const schoolId = String(db.user && db.user.schoolId || db.schoolId || '').trim();
+    let token = '';
+    try { token = localStorage.getItem('classink_cloud_token') || ''; } catch (_) {}
+    if (schoolId && token) {
+        try {
+            const response = await fetch(CLOUD_AUTH_URL + '/api/teacher/schedule', {
+                method: 'PUT',
+                headers: cloudAuthHeaders(),
+                body: JSON.stringify({ schedule: sorted }),
+                cache: 'no-store',
+                credentials: 'omit'
+            });
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok || !result.status || String(result.data && result.data.schoolId || '') !== schoolId) {
+                throw new Error(result.detail || result.message || "L'horaire n'a pas été enregistré dans cet espace.");
+            }
+            db.teacherSchedule = Array.isArray(result.data.schedule) ? result.data.schedule : sorted;
+            saveDB();
+            renderTeacherScheduleEditor();
+            await showCustomAlert("Emploi du temps enregistré sur le serveur pour cet établissement.");
+            return;
+        } catch (error) {
+            await showCustomAlert((error.message || "Échec de la sauvegarde serveur.") + " Les données locales n'ont pas été remplacées.");
+            return;
+        }
+    }
+    db.teacherSchedule = sorted;
     saveDB();
     renderTeacherScheduleEditor();
-    await showCustomAlert('Emploi du temps enregistré sur cet appareil.');
+    await showCustomAlert("Horaire enregistré localement. Connectez un espace scolaire pour le sauvegarder sur le serveur.");
 }
+
+let teacherBellAudioContext = null;
+function unlockTeacherBellAudio() {
+    try {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) return;
+        if (!teacherBellAudioContext) teacherBellAudioContext = new AudioContextClass();
+        if (teacherBellAudioContext.state === 'suspended') teacherBellAudioContext.resume().catch(() => {});
+    } catch (_) { /* Le navigateur peut ne pas prendre en charge Web Audio. */ }
+}
+document.addEventListener('pointerdown', unlockTeacherBellAudio, { once: true, passive: true });
+document.addEventListener('keydown', unlockTeacherBellAudio, { once: true });
 
 function testSchoolBell() {
     try {
-        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-        if (!AudioContextClass) throw new Error('Web Audio indisponible');
-        const audioCtx = new AudioContextClass();
-        if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+        unlockTeacherBellAudio();
+        if (!teacherBellAudioContext) throw new Error('Web Audio indisponible');
+        const audioCtx = teacherBellAudioContext;
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
         osc.type = 'sine';
@@ -4071,7 +4137,6 @@ function testSchoolBell() {
         gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 1.5);
         osc.connect(gain); gain.connect(audioCtx.destination);
         osc.start(); osc.stop(audioCtx.currentTime + 1.5);
-        osc.onended = () => audioCtx.close().catch(() => {});
     } catch(error) { console.warn('[ClassInk] Sonnerie indisponible:', error); }
 }
 
