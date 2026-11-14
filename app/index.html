@@ -416,6 +416,11 @@
                     <label>MOT DE PASSE</label>
                     <input type="password" id="login-password" placeholder="••••••••">
                 </div>
+                <div class="form-group">
+                    <label>ID DE L'ÉCOLE (OPTIONNEL, MASQUÉ)</label>
+                    <input type="password" id="login-school-id" autocomplete="off" spellcheck="false" placeholder="Saisir l'identifiant communiqué par l'école">
+                    <small>Pour ouvrir un espace précis lorsque vous travaillez avec plusieurs établissements.</small>
+                </div>
                 <div style="display: flex; gap: 10px; margin-top: 20px;">
                     <button class="btn-action" style="flex:1;" onclick="closeLoginModal()">Annuler</button>
                     <button class="btn-primary" style="flex:1;" onclick="handleLogin()">Valider</button>
@@ -738,6 +743,19 @@
                 <label>ÉTABLISSEMENT / ÉCOLE</label>
                 <input type="text" id="setting-school-id" value="Enfant du Monde - Bukavu">
             </div>
+            <div class="form-group">
+                <label>IDENTIFIANT D'ÉCOLE À ASSOCIER (MASQUÉ)</label>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                    <input type="password" id="setting-school-space-id" autocomplete="off" spellcheck="false" placeholder="Identifiant fourni par l'école" style="flex:1;min-width:180px;">
+                    <button type="button" class="btn-secondary" onclick="requestTeacherSchoolSpace()">Demander l'espace</button>
+                </div>
+                <small style="display:block;margin-top:6px;color:var(--text-muted);">L'école devra confirmer cette demande dans PrimeInk. L'identifiant n'est jamais affiché en clair.</small>
+                <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+                    <select id="setting-teacher-space-select" aria-label="Espace scolaire" style="flex:1;min-width:180px;"></select>
+                    <button type="button" class="btn-secondary" onclick="prepareTeacherSpaceLogin()">Changer d'espace</button>
+                </div>
+                <small id="teacher-space-status" style="display:block;margin-top:6px;color:var(--text-muted);"></small>
+            </div>
 
             <div class="form-group">
                 <label>IDENTIFIANT UNIQUE CLASSINK À COMMUNIQUER À L'ÉCOLE</label>
@@ -932,8 +950,8 @@
             </div>
 
             <div class="form-group">
-                <label>ID DE L'ÉCOLE (Optionnel)</label>
-                <input type="text" id="edit-profile-school-code">
+                <label>ID DE L'ÉCOLE (MASQUÉ)</label>
+                <input type="password" id="edit-profile-school-code" autocomplete="off" spellcheck="false">
             </div>
 
             <div style="display: flex; gap: 10px; margin-top: 15px;">
@@ -1214,6 +1232,7 @@ const defaultDB = {
         email: "enseignant@classnet.cd",
         password: "admin",
         school: "Enfant du Monde - Bukavu",
+        schoolId: "",
         isLoggedIn: false
     },
     classes: [], 
@@ -1227,7 +1246,9 @@ const defaultDB = {
     presences: [], 
     quizzes: [],
     llinkPrefs: "Donne des explications précises adaptées au programme de RDC.",
-    pendingCommits: 0
+    pendingCommits: 0,
+    teacherSpaces: [],
+    teacherSchedule: []
 };
 
 /* ==========================================================================
@@ -1543,13 +1564,19 @@ async function handleLogin() {
         const response = await fetch(`${CLOUD_AUTH_URL}/api/auth/teacher/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ identifier: email, password: pass })
+            body: JSON.stringify({
+                identifier: email,
+                password: pass,
+                school_id: (document.getElementById('login-school-id')?.value || db.user.schoolId || '').trim()
+            })
         });
 
         const result = await response.json();
 
         if (result.status && result.data) {
             db = mergeServerDataIntoLocal(db, result.data);
+            db.teacherSpaces = Array.isArray(result.data.teacherSpaces) ? result.data.teacherSpaces : [];
+            db.user.schoolId = String(result.data.schoolId || result.data.user?.schoolId || '').trim();
             if (result.token) {
                 try { localStorage.setItem('classink_cloud_token', result.token); } catch (e) { /* stockage indisponible */ }
             }
@@ -1557,6 +1584,7 @@ async function handleLogin() {
             saveDB();
             
             updateLoginHeaderButton();
+            renderTeacherSpacesSettings();
             renderTeacherAccessCode();
             renderClassSelectors();
             renderGradesTables();
@@ -1688,6 +1716,74 @@ document.getElementById('btn-login-header').addEventListener('click', async () =
         openLoginModal();
     }
 });
+
+function renderTeacherSpacesSettings() {
+    const select = document.getElementById('setting-teacher-space-select');
+    if (!select) return;
+    const spaces = Array.isArray(db.teacherSpaces) ? db.teacherSpaces : [];
+    const active = String(db.user.schoolId || '');
+    select.innerHTML = '<option value="">Espace local / aucun espace sélectionné</option>' + spaces.map(space =>
+        '<option value="' + safeHTML(space.schoolId) + '">' + safeHTML(space.schoolName || 'Établissement') + (space.city ? ' · ' + safeHTML(space.city) : '') + '</option>'
+    ).join('');
+    if (active && spaces.some(space => String(space.schoolId) === active)) select.value = active;
+    const status = document.getElementById('teacher-space-status');
+    if (status) status.textContent = spaces.length
+        ? spaces.length + ' espace(s) confirmé(s). Les noms sont affichés, jamais les identifiants.'
+        : 'Aucun espace confirmé pour le moment.';
+}
+
+async function requestTeacherSchoolSpace(value, showMessage = true) {
+    const input = document.getElementById('setting-school-space-id');
+    const schoolId = String(value ?? (input ? input.value : '')).trim();
+    if (!schoolId) {
+        if (showMessage) await showCustomAlert("Saisissez l'identifiant de l'école. Le champ reste masqué.");
+        return { ok: false, message: "Identifiant de l'école manquant." };
+    }
+    const token = (() => { try { return localStorage.getItem('classink_cloud_token') || ''; } catch (_) { return ''; } })();
+    if (!token) {
+        if (showMessage) await showCustomAlert("Connectez-vous d'abord à votre compte enseignant avant de demander un espace.");
+        return { ok: false, message: "Connexion enseignant requise." };
+    }
+    try {
+        const response = await fetch(CLOUD_AUTH_URL + '/api/teacher/spaces/request', {
+            method: 'POST',
+            headers: cloudAuthHeaders(),
+            body: JSON.stringify({ school_id: schoolId }),
+            cache: 'no-store'
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload.status) throw new Error(payload.detail || payload.message || 'Demande refusée.');
+        db.user.schoolId = schoolId;
+        saveDB();
+        if (input) input.value = '';
+        const status = document.getElementById('teacher-space-status');
+        if (status) status.textContent = payload.message || "Demande envoyée à l'école.";
+        if (showMessage) await showCustomAlert(payload.message || "Demande d'espace envoyée.");
+        return { ok: true, message: payload.message || '', verified: !!payload.verified };
+    } catch (error) {
+        if (showMessage) await showCustomAlert(error.message || "Impossible de joindre le serveur.");
+        return { ok: false, message: error.message || "Erreur réseau." };
+    }
+}
+
+function prepareTeacherSpaceLogin() {
+    const select = document.getElementById('setting-teacher-space-select');
+    const schoolId = String(select?.value || '').trim();
+    if (!schoolId) {
+        openLoginModal();
+        const field = document.getElementById('login-school-id');
+        if (field) field.value = '';
+        return;
+    }
+    db.user.schoolId = schoolId;
+    saveDB();
+    openLoginModal();
+    switchAuthSubView('login');
+    const field = document.getElementById('login-school-id');
+    if (field) field.value = schoolId;
+    const email = document.getElementById('login-email');
+    if (email && db.user.email) email.value = db.user.email;
+}
 
 function updateProfileInfo() {
     db.user.name = document.getElementById('setting-user-name').value;
@@ -3735,7 +3831,12 @@ async function verifyAndSaveProfile() {
     db.user.school = document.getElementById('edit-profile-school-id').value.trim();
     db.user.phone = document.getElementById('edit-profile-user-phone').value.trim();
     db.user.age = document.getElementById('edit-profile-user-age').value.trim();
-    db.user.schoolCode = document.getElementById('edit-profile-school-code').value.trim();
+    const profileSchoolId = document.getElementById('edit-profile-school-code').value.trim();
+    if (profileSchoolId) {
+        db.user.schoolId = profileSchoolId;
+        const request = await requestTeacherSchoolSpace(profileSchoolId, false);
+        if (!request.ok) await showCustomAlert(request.message || "La demande d'espace n'a pas pu être envoyée.");
+    }
 
     const newPass = document.getElementById('edit-profile-user-pass').value.trim();
     if (newPass) {
