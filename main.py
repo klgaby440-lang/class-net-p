@@ -3973,7 +3973,7 @@ def save_teacher_schedule(payload: dict, db: Session = Depends(get_db), claims: 
         if entry_id in seen_ids:
             raise HTTPException(status_code=422, detail="Chaque créneau doit avoir un identifiant unique.")
         seen_ids.add(entry_id)
-        if day not in allowed_days or not re.fullmatch(r"([01]\\d|2[0-3]):[0-5]\\d", start) or not re.fullmatch(r"([01]\\d|2[0-3]):[0-5]\\d", end) or end <= start or not course:
+        if day not in allowed_days or not re.fullmatch(r"([01][0-9]|2[0-3]):[0-5][0-9]", start) or not re.fullmatch(r"([01][0-9]|2[0-3]):[0-5][0-9]", end) or end <= start or not course:
             raise HTTPException(status_code=422, detail="Chaque créneau doit avoir un jour, un cours et des heures valides.")
         clean_entries.append({"id": entry_id, "day": day, "start": start, "end": end, "course": course, "room": room, "order": index})
     space = db.query(TeacherSchoolSpace).filter(
