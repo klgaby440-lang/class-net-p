@@ -4533,6 +4533,7 @@ async function bpPushClassBulletin(cls) {
                 });
 
                 if (courses.length > 0) renderCourseStats(classId, courses[0].id);
+                renderClassPalmares(classId);
             }
 
             function renderCourseStats(classId, courseId) {
@@ -4579,6 +4580,203 @@ async function bpPushClassBulletin(cls) {
                 document.getElementById('statsDanger').textContent = `Échec : ${failurePct}${failurePct === '—' ? '' : '%'}`;
                 document.getElementById('statsMoyenne').textContent = `Moyenne Classe : ${avgPoints} / ${ficheFmt(maxTG)}`;
             }
+
+            const PALMARES_PERIOD_FIELDS = {
+                P1: ['p1'], P2: ['p2'], EX1: ['ex1'],
+                S1: ['p1','p2','ex1'], P3: ['p3'], P4: ['p4'], EX2: ['ex2'],
+                S2: ['p3','p4','ex2'], TG: ['p1','p2','ex1','p3','p4','ex2']
+            };
+            const PALMARES_PERIOD_ORDER = ['P1','P2','EX1','S1','P3','P4','EX2','S2','TG'];
+            const PALMARES_PERIOD_LABELS = {P1:'Période 1',P2:'Période 2',EX1:'Examen 1',S1:'1er semestre',P3:'Période 3',P4:'Période 4',EX2:'Examen 2',S2:'2e semestre',TG:'Année entière'};
+            let selectedClassPalmaresStudent = '';
+            let selectedSchoolPalmaresStudent = '';
+
+            function calculatePalmaresCourse(student, course, period) {
+                const fields = PALMARES_PERIOD_FIELDS[period] || PALMARES_PERIOD_FIELDS.TG;
+                const grades = (appState.grades || {})[String(student.id) + '_' + String(course.id)] || {};
+                const maxPer = Number(course.maxPer) || 0;
+                const max = fields.reduce((sum, field) => sum + maxPer * ((field === 'ex1' || field === 'ex2') ? 2 : 1), 0);
+                const values = fields.map(field => ficheNum(grades[field]));
+                const complete = max > 0 && values.every(value => value !== null);
+                const score = values.reduce((sum, value) => sum + (value === null ? 0 : value), 0);
+                return { complete, score, max, percent: complete ? score / max * 100 : null };
+            }
+
+            function buildPalmaresRecords(classIds, period) {
+                const ids = new Set((classIds || []).map(String));
+                const students = (appState.students || []).filter(student => ids.has(String(student.classId)));
+                const records = students.map(student => {
+                    const courses = (appState.courses || []).filter(course => String(course.classId) === String(student.classId));
+                    const courseResults = courses.map(course => ({ course, result: calculatePalmaresCourse(student, course, period) }));
+                    const complete = courses.length > 0 && courseResults.every(item => item.result.complete);
+                    const score = courseResults.reduce((sum, item) => sum + item.result.score, 0);
+                    const max = courseResults.reduce((sum, item) => sum + item.result.max, 0);
+                    const percent = complete && max > 0 ? score / max * 100 : null;
+                    const atRisk = courseResults.filter(item => !item.result.complete || item.result.percent < 50);
+                    return { student, courses, courseResults, complete, score, max, percent, atRisk, rank: null };
+                });
+                const ranked = records.filter(record => record.complete).sort((a,b) => b.percent - a.percent || String(a.student.name || '').localeCompare(String(b.student.name || ''),'fr'));
+                ranked.forEach((record,index) => { record.rank = index + 1; });
+                const evaluated = ranked.length;
+                const passed = ranked.filter(record => record.percent >= 50).length;
+                return { records, ranked, total: records.length, evaluated, passed, failed: evaluated - passed, incomplete: records.length - evaluated, passPercent: evaluated ? passed / evaluated * 100 : null };
+            }
+
+            function palmaresLineChart(values, mode) {
+                const valid = values.map((value,index) => ({value,index})).filter(item => Number.isFinite(item.value));
+                if (!valid.length) return '<div class="empty-state">Aucune donnée complète à tracer pour le moment.</div>';
+                const width = 640, height = 205, left = 35, right = 18, top = 20, bottom = 36;
+                const maxRank = Math.max(1, ...valid.map(item => item.value));
+                const points = valid.map(item => {
+                    const x = left + item.index * (width-left-right) / Math.max(1, values.length-1);
+                    const y = mode === 'rank' ? top + ((item.value-1) / Math.max(1,maxRank-1)) * (height-top-bottom) : height-bottom - (item.value/100) * (height-top-bottom);
+                    return x + ',' + y;
+                }).join(' ');
+                const dots = valid.map(item => {
+                    const x = left + item.index * (width-left-right) / Math.max(1, values.length-1);
+                    const y = mode === 'rank' ? top + ((item.value-1) / Math.max(1,maxRank-1)) * (height-top-bottom) : height-bottom - (item.value/100) * (height-top-bottom);
+                    return '<circle cx="' + x + '" cy="' + y + '" r="4" fill="var(--primary-color)"><title>' + PALMARES_PERIOD_LABELS[PALMARES_PERIOD_ORDER[item.index]] + ' : ' + (mode === 'rank' ? 'place ' : '') + item.value.toFixed(1) + '</title></circle>';
+                }).join('');
+                const labels = PALMARES_PERIOD_ORDER.map((period,index) => {
+                    const x = left + index * (width-left-right) / Math.max(1,values.length-1);
+                    return '<text x="' + x + '" y="' + (height-10) + '" text-anchor="middle" font-size="10" fill="var(--text-secondary)">' + period + '</text>';
+                }).join('');
+                const guide = mode === 'rank' ? '<text x="3" y="15" font-size="10" fill="var(--text-secondary)">1er</text>' : '<text x="3" y="15" font-size="10" fill="var(--text-secondary)">100%</text><text x="3" y="' + (height-bottom+4) + '" font-size="10" fill="var(--text-secondary)">0%</text>';
+                return '<svg viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="Évolution des résultats" style="width:100%;height:auto;overflow:visible">' + guide + '<polyline points="' + points + '" fill="none" stroke="var(--primary-color)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>' + dots + labels + '</svg>';
+            }
+
+            function getPalmaresTrend(record, classIds, mode) {
+                return PALMARES_PERIOD_ORDER.map(period => {
+                    const summary = buildPalmaresRecords(classIds, period);
+                    const key = String(record.student.classId) + '::' + String(record.student.id);
+                    const match = summary.ranked.find(item => String(item.student.classId) + '::' + String(item.student.id) === key);
+                    return match ? (mode === 'rank' ? match.rank : match.percent) : null;
+                });
+            }
+
+            function renderPalmaresCourseChart(record, courseId, targetId) {
+                const target = document.getElementById(targetId);
+                if (!target) return;
+                const course = record.courses.find(item => String(item.id) === String(courseId));
+                if (!course) { target.innerHTML = '<div class="empty-state">Aucun cours sélectionné.</div>'; return; }
+                const values = PALMARES_PERIOD_ORDER.map(period => {
+                    const result = calculatePalmaresCourse(record.student, course, period);
+                    return result.complete ? result.percent : null;
+                });
+                target.innerHTML = palmaresLineChart(values, 'percent');
+            }
+
+            function renderPalmaresStudentDetail(record, classIds, prefix, period) {
+                const target = document.getElementById(prefix + 'StudentDetail');
+                if (!target || !record) return;
+                const name = [record.student.name,record.student.postname,record.student.prename].filter(Boolean).join(' ');
+                const risk = record.atRisk.length ? record.atRisk.map(item => '<li>' + safeHTML(item.course.name) + ' : ' + (item.result.complete ? item.result.percent.toFixed(1) + '%' : 'notes incomplètes') + '</li>').join('') : '<li>Aucun cours à surveiller dans cette période.</li>';
+                const options = record.courses.map(course => '<option value="' + safeHTML(course.id) + '">' + safeHTML(course.name) + '</option>').join('');
+                const pctTrend = getPalmaresTrend(record, classIds, 'percent');
+                const rankTrend = getPalmaresTrend(record, classIds, 'rank');
+                const placeNow = record.rank ? record.rank + 'e / ' + buildPalmaresRecords(classIds,period).evaluated : 'Non classé';
+                target.innerHTML = '<div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center"><div><strong>' + safeHTML(name) + '</strong><div style="color:var(--text-secondary);font-size:.82rem">' + PALMARES_PERIOD_LABELS[period] + ' · ' + placeNow + ' · ' + (record.complete ? record.percent.toFixed(1) + '%' : 'Non évalué') + '</div></div><div><label style="font-size:.75rem">Évolution par cours</label><select id="' + prefix + 'CourseSelect" class="form-control">' + options + '</select></div></div>' +
+                    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin-top:12px"><div><h4>Pourcentage par période</h4>' + palmaresLineChart(pctTrend,'percent') + '</div><div><h4>Place par période</h4>' + palmaresLineChart(rankTrend,'rank') + '</div></div>' +
+                    '<div style="margin-top:10px"><h4>Cours à surveiller (' + record.atRisk.length + ')</h4><ul>' + risk + '</ul></div><h4>Évolution des notes du cours</h4><div id="' + prefix + 'CourseChart"></div>' +
+                    '<div style="overflow-x:auto;margin-top:10px"><table class="data-table"><thead><tr><th>COURS</th><th>NOTE</th><th>MAX</th><th>POURCENTAGE</th><th>STATUT</th></tr></thead><tbody>' + record.courseResults.map(item => '<tr><td>' + safeHTML(item.course.name) + '</td><td>' + (item.result.complete ? item.result.score.toFixed(1) : '—') + '</td><td>' + item.result.max.toFixed(1) + '</td><td>' + (item.result.complete ? item.result.percent.toFixed(1) + '%' : '—') + '</td><td>' + (!item.result.complete ? 'À compléter' : item.result.percent < 50 ? 'À surveiller' : 'OK') + '</td></tr>').join('') + '</tbody></table></div>';
+                const courseSelect = document.getElementById(prefix + 'CourseSelect');
+                if (courseSelect && record.courses.length) {
+                    courseSelect.addEventListener('change', () => renderPalmaresCourseChart(record, courseSelect.value, prefix + 'CourseChart'));
+                    renderPalmaresCourseChart(record, courseSelect.value, prefix + 'CourseChart');
+                }
+            }
+
+            function renderPalmaresView(scope) {
+                const isSchool = scope === 'school';
+                const prefix = isSchool ? 'schoolPalmares' : 'classPalmares';
+                const classIds = isSchool ? (appState.classes || []).map(item => item.id) : [activeClassId];
+                const periodSelect = document.getElementById(prefix + 'Period');
+                const period = periodSelect ? periodSelect.value : 'TG';
+                const summary = buildPalmaresRecords(classIds, period);
+                const summaryNode = document.getElementById(prefix + 'Summary');
+                if (summaryNode) summaryNode.innerHTML = [
+                    ['Effectif', summary.total],
+                    ['Réussites', summary.passed + ' / ' + summary.evaluated],
+                    ['Taux de réussite', summary.passPercent === null ? '—' : summary.passPercent.toFixed(1) + '%'],
+                    ['Échecs', summary.failed],
+                    ['Incomplets', summary.incomplete]
+                ].map(item => '<article class="card" style="padding:.8rem"><small>' + item[0] + '</small><strong style="display:block;font-size:1.35rem;margin-top:4px">' + item[1] + '</strong></article>').join('');
+                const ranking = document.getElementById(prefix + 'Ranking');
+                if (ranking) {
+                    const rows = summary.ranked.map(record => {
+                        const id = String(record.student.id), cid = String(record.student.classId);
+                        const name = [record.student.name,record.student.postname,record.student.prename].filter(Boolean).join(' ');
+                        const risk = record.atRisk.length ? record.atRisk.length + ' cours' : 'Aucun';
+                        return '<tr data-palmares-student="' + safeHTML(id) + '" data-palmares-class="' + safeHTML(cid) + '" style="cursor:pointer"><td>' + record.rank + '</td><td>' + safeHTML(name) + '</td>' + (isSchool ? '<td>' + safeHTML(classNameForPalmares(cid)) + '</td>' : '') + '<td><strong>' + record.percent.toFixed(1) + '%</strong></td><td>' + record.score.toFixed(1) + ' / ' + record.max.toFixed(1) + '</td><td>' + risk + '</td><td>' + (record.percent >= 50 ? 'Réussite' : 'Échec') + '</td></tr>';
+                    }).join('');
+                    const incompleteRows = summary.records.filter(record => !record.complete).map(record => {
+                        const name = [record.student.name,record.student.postname,record.student.prename].filter(Boolean).join(' ');
+                        return '<tr><td>—</td><td>' + safeHTML(name) + '</td>' + (isSchool ? '<td>' + safeHTML(classNameForPalmares(record.student.classId)) + '</td>' : '') + '<td>—</td><td>—</td><td>' + record.atRisk.length + ' cours</td><td>Notes incomplètes</td></tr>';
+                    }).join('');
+                    ranking.innerHTML = rows + incompleteRows || '<tr><td colspan="7">Aucun élève dans le périmètre.</td></tr>';
+                    ranking.querySelectorAll('[data-palmares-student]').forEach(row => row.addEventListener('click', () => {
+                        const record = summary.ranked.find(item => String(item.student.id) === row.dataset.palmaresStudent && String(item.student.classId) === row.dataset.palmaresClass);
+                        if (!record) return;
+                        if (isSchool) selectedSchoolPalmaresStudent = row.dataset.palmaresClass + '::' + row.dataset.palmaresStudent;
+                        else selectedClassPalmaresStudent = row.dataset.palmaresStudent;
+                        renderPalmaresStudentDetail(record, classIds, prefix, period);
+                    }));
+                }
+                const selectedKey = isSchool ? selectedSchoolPalmaresStudent : selectedClassPalmaresStudent;
+                let selected = summary.ranked.find(record => (String(record.student.classId) + '::' + String(record.student.id)) === selectedKey || (!isSchool && String(record.student.id) === selectedKey));
+                if (!selected) selected = summary.ranked[0];
+                if (selected) {
+                    if (isSchool) selectedSchoolPalmaresStudent = String(selected.student.classId) + '::' + String(selected.student.id);
+                    else selectedClassPalmaresStudent = String(selected.student.id);
+                    renderPalmaresStudentDetail(selected, classIds, prefix, period);
+                    const percentNode = document.getElementById(prefix + 'PercentChart');
+                    const rankNode = document.getElementById(prefix + 'RankChart');
+                    const trend = getPalmaresTrend(selected,classIds,'percent');
+                    const ranks = getPalmaresTrend(selected,classIds,'rank');
+                    if (percentNode) percentNode.innerHTML = palmaresLineChart(trend,'percent');
+                    if (rankNode) rankNode.innerHTML = palmaresLineChart(ranks,'rank');
+                } else {
+                    const detail = document.getElementById(prefix + 'StudentDetail');
+                    if (detail) detail.innerHTML = '<div class="empty-state">Aucun élève n'a encore toutes les notes nécessaires pour être classé. Les dossiers incomplets restent affichés dans le tableau.</div>';
+                    const percentNode = document.getElementById(prefix + 'PercentChart'); if (percentNode) percentNode.innerHTML = '<div class="empty-state">Pas encore de données.</div>';
+                    const rankNode = document.getElementById(prefix + 'RankChart'); if (rankNode) rankNode.innerHTML = '<div class="empty-state">Pas encore de classement.</div>';
+                }
+            }
+
+            function classNameForPalmares(classId) {
+                const item = (appState.classes || []).find(entry => String(entry.id) === String(classId));
+                return item ? item.name : 'Classe inconnue';
+            }
+
+            function renderClassPalmares(classId) {
+                if (classId) activeClassId = classId;
+                renderPalmaresView('class');
+            }
+            function renderSchoolPalmares() { renderPalmaresView('school'); }
+
+            function openSchoolPalmares() {
+                const overlay = document.getElementById('schoolPalmaresOverlay');
+                if (!overlay) return;
+                overlay.style.display = 'block';
+                document.body.style.overflow = 'hidden';
+                renderSchoolPalmares();
+            }
+            function closeSchoolPalmares() {
+                const overlay = document.getElementById('schoolPalmaresOverlay');
+                if (overlay) overlay.style.display = 'none';
+                document.body.style.overflow = '';
+            }
+
+            const classPeriodSelector = document.getElementById('classPalmaresPeriod');
+            if (classPeriodSelector) classPeriodSelector.addEventListener('change', () => renderClassPalmares(activeClassId));
+            const schoolPeriodSelector = document.getElementById('schoolPalmaresPeriod');
+            if (schoolPeriodSelector) schoolPeriodSelector.addEventListener('change', renderSchoolPalmares);
+            const openSchoolPalmaresButton = document.getElementById('openSchoolPalmaresBtn');
+            if (openSchoolPalmaresButton) openSchoolPalmaresButton.addEventListener('click', openSchoolPalmares);
+            const closeSchoolPalmaresButton = document.getElementById('closeSchoolPalmaresBtn');
+            if (closeSchoolPalmaresButton) closeSchoolPalmaresButton.addEventListener('click', closeSchoolPalmares);
+            const schoolPalmaresOverlay = document.getElementById('schoolPalmaresOverlay');
+            if (schoolPalmaresOverlay) schoolPalmaresOverlay.addEventListener('click', event => { if (event.target === schoolPalmaresOverlay) closeSchoolPalmares(); });
 
             /* 5. GESTION DES FORMULAIRES DE CRÉATION */
             document.getElementById('addCategoryFieldBtn').addEventListener('click', () => {
