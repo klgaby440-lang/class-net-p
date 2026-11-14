@@ -564,3 +564,21 @@ def test_classnet_backend_supports_teacher_school_spaces_and_school_scoped_sync(
     ):
         self.assertIn(marker, source)
     self.assertIn("if localSpace !== serverSpace && (localSpace || serverSpace)", (ROOT / "app/index.html").read_text(encoding="utf-8"))
+
+
+
+def test_classnet_backend_scopes_teacher_spaces_and_notes_by_active_school():
+    source = (ROOT / "main.py").read_text(encoding="utf-8")
+    for marker in (
+        "class TeacherSchoolSpace(Base)",
+        "class ClassInkTeacherSpaceSnapshot(Base)",
+        "teacher_has_school_access(db, teacher, selected_school_id)",
+        '@app.post("/api/teacher/spaces/request")',
+        '@app.get("/api/teacher/spaces")',
+        '@app.get("/api/primenet/teachers/{teacher_code}")',
+        "school_id=verified_school_id",
+        'test_registration_mode = os.getenv("APP_ENV", "production")',
+    ):
+        self.assertIn(marker, source)
+    app = (ROOT / "app/index.html").read_text(encoding="utf-8")
+    self.assertIn("if (localSpace !== serverSpace && (localSpace || serverSpace))", app)
