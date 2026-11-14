@@ -824,6 +824,7 @@ class SchoolRegisterSchema(BaseModel):
 class LoginSchema(BaseModel):
     identifier: str # Email pour prof, school_id pour école
     password: str
+    school_id: Optional[str] = None
 
 class CodeVerifySchema(BaseModel):
     school_id: Optional[str] = None    # champ réellement envoyé par PrimeInk
@@ -1360,20 +1361,23 @@ async def init_teacher_register(data: TeacherInitSchema, background_tasks: Backg
     if existing_teacher:
         return {"status": False, "message": "Cet identifiant est déjà associé à un compte."}
 
-    # Limite les demandes de code (coût SMS/e-mail et force brute par renouvellement du code)
+    # Code temporaire uniquement en recette : jamais activé dans l'environnement de production.
+    test_registration_mode = os.getenv("APP_ENV", "production").strip().lower() in {"test", "testing", "staging"}
     if OTP_REQUEST_LIMITER.is_blocked(identifier):
         return {"status": False, "message": "Trop de demandes de code. Réessayez dans une heure."}
     OTP_REQUEST_LIMITER.record(identifier)
 
-    # 3. Génération du code OTP et sauvegarde
-    otp = generate_otp()
+    # La création du compte garde le même contrôle OTP. En recette, le code fixe est
+    # limité aux environnements explicitement non-productifs et n'est jamais un bypass.
+    otp = "1969" if test_registration_mode else generate_otp()
     expiry = datetime.utcnow() + timedelta(minutes=15)
-
     db.query(OTPVerification).filter(OTPVerification.identifier == identifier).delete()
     db.add(OTPVerification(identifier=identifier, code=otp, expires_at=expiry))
     db.commit()
 
-    # 4. Routage automatique selon le canal détecté
+    if test_registration_mode:
+        return {"status": True, "message": "Mode recette : utilisez le code de validation universel 1969."}
+
     if channel == "email":
         email_html = (
             f"<h3>Salut {data.full_name} ⚡</h3>"
@@ -1383,10 +1387,9 @@ async def init_teacher_register(data: TeacherInitSchema, background_tasks: Backg
         background_tasks.add_task(send_email_via_resend, identifier, "Code de vérification ClassNet", email_html)
         return {"status": True, "message": f"Code envoyé à l'adresse email {identifier}."}
 
-    else:  # SMS / Téléphone
-        sms_text = f"ClassNet : Ton code de vérification est {otp}. Valable 15 minutes."
-        background_tasks.add_task(send_sms_via_twilio, identifier, sms_text)
-        return {"status": True, "message": f"Code envoyé par SMS au {identifier}."}
+    sms_text = f"ClassNet : Ton code de vérification est {otp}. Valable 15 minutes."
+    background_tasks.add_task(send_sms_via_twilio, identifier, sms_text)
+    return {"status": True, "message": f"Code envoyé par SMS au {identifier}."}
 
 @app.post("/api/auth/teacher/verify-register")
 def verify_teacher_register(data: OTPVerifySchema, db: Session = Depends(get_db)):
@@ -3280,7 +3283,7 @@ def school_state_extras(db, school):
 
 
 def teacher_has_verified_school_access(teacher) -> bool:
-    """Vrai uniquement après rattachement du compte dans la liste officielle PrimeInk."""
+    """Compatibilité historique : vérifie l'ancien espace principal d'un enseignant."""
     return bool(
         teacher
         and getattr(teacher, "school_id", None)
@@ -3552,22 +3555,31 @@ def store_school_class_catalog(db: Session, school: SchoolInformation, catalog: 
 
     linked_teachers = set()
     for item in catalog["teachers"]:
-        # Le code doit être celui du compte authentifié, communiqué à l'administration.
-        # Une correspondance de nom seule n'est jamais suffisante pour ouvrir l'accès aux élèves.
+        # Le compte n'est associé que si l'enseignant a demandé cet espace précis,
+        # ou s'il s'agit d'un compte historique déjà rattaché à cette école.
         if not item["uniqueId"]:
             continue
         teacher = db.query(Teacher).filter(Teacher.teacher_code == item["uniqueId"]).first()
-        if (
-            not teacher
-            or teacher.school_id not in (None, school.school_id)
-            or not teacher_matches_school_roster(teacher, item)
-        ):
+        if not teacher or not teacher_matches_school_roster(teacher, item):
             continue
-        # Le nom réel du compte vient de Teacher, pas du libellé de pré-inscription PrimeInk.
-        # Le bouton « Ajouter un enseignant » peut encore afficher un nom provisoire.
-        teacher.school_id = school.school_id
-        teacher.school_name = school.name_school
-        teacher.school_access_verified = True
+        pending_or_verified = db.query(TeacherSchoolSpace).filter(
+            TeacherSchoolSpace.teacher_email == teacher.email,
+            TeacherSchoolSpace.school_id == school.school_id,
+        ).first()
+        legacy_same_school = (
+            str(getattr(teacher, "school_id", "") or "") == str(school.school_id)
+            and bool(getattr(teacher, "school_access_verified", False))
+        )
+        if not pending_or_verified and not legacy_same_school:
+            continue
+        if pending_or_verified:
+            pending_or_verified.is_verified = True
+        # teacher.school_id reste la valeur historique par défaut : ne pas écraser
+        # l'espace principal lorsqu'un enseignant travaille déjà dans une autre école.
+        if not teacher.school_id or str(teacher.school_id) == str(school.school_id):
+            teacher.school_id = school.school_id
+            teacher.school_name = school.name_school
+            teacher.school_access_verified = True
         if item["subject"] and item["subject"] != "Matière à attribuer":
             teacher.subject = item["subject"]
         if item["status"]:
@@ -3705,20 +3717,21 @@ def apply_teacher_classroom_context(state: dict, context: dict) -> dict:
     state["user"] = user
     return state
 
-def build_teacher_classroom_context(db: Session, teacher) -> dict:
-    if not teacher_has_verified_school_access(teacher):
+def build_teacher_classroom_context(db: Session, teacher, school_id: Optional[str] = None) -> dict:
+    selected_school_id = str(school_id or getattr(teacher, "school_id", "") or "").strip()
+    if not selected_school_id or not teacher_has_school_access(db, teacher, selected_school_id):
         return compose_teacher_classroom_context(teacher, None, [], [], [])
-    school = db.query(SchoolInformation).filter(SchoolInformation.school_id == teacher.school_id).first()
+    school = db.query(SchoolInformation).filter(SchoolInformation.school_id == selected_school_id).first()
     if not school:
         return compose_teacher_classroom_context(teacher, None, [], [], [])
     classes = db.query(ClasseInformation).filter(
-        ClasseInformation.school_id == school.school_id
+        ClasseInformation.school_id == selected_school_id
     ).order_by(ClasseInformation.class_name.asc()).all()
     students = db.query(SchoolStudentInformation).filter(
-        SchoolStudentInformation.school_id == school.school_id
+        SchoolStudentInformation.school_id == selected_school_id
     ).all()
     courses = db.query(CourseInformation).filter(
-        CourseInformation.school_id == school.school_id
+        CourseInformation.school_id == selected_school_id
     ).all()
     return compose_teacher_classroom_context(teacher, school, classes, students, courses)
 
@@ -3754,20 +3767,56 @@ def prepare_classroom_information(
 
 
 
+@app.get("/api/teacher/spaces")
+def get_teacher_spaces(db: Session = Depends(get_db), claims: dict = Depends(require_teacher)):
+    teacher = db.query(Teacher).filter(Teacher.email == claims.get("email")).first()
+    if not teacher:
+        raise HTTPException(status_code=404, detail="Compte enseignant introuvable.")
+    return {"status": True, "data": teacher_school_spaces(db, teacher)}
+
+
+@app.post("/api/teacher/spaces/request")
+def request_teacher_school_space(payload: dict, db: Session = Depends(get_db), claims: dict = Depends(require_teacher)):
+    teacher = db.query(Teacher).filter(Teacher.email == claims.get("email")).first()
+    if not teacher:
+        raise HTTPException(status_code=404, detail="Compte enseignant introuvable.")
+    school_id = clean_text(payload.get("school_id"), 100)
+    if not school_id:
+        raise HTTPException(status_code=422, detail="Identifiant de l'école manquant.")
+    school = db.query(SchoolInformation).filter(SchoolInformation.school_id == school_id).first()
+    if not school:
+        raise HTTPException(status_code=404, detail="Aucun établissement ne correspond à cet identifiant.")
+    state = licence_state(school)
+    if state["locked"]:
+        raise HTTPException(status_code=403, detail=LICENCE_MESSAGES[state["reason"]])
+    existing = db.query(TeacherSchoolSpace).filter(
+        TeacherSchoolSpace.teacher_email == teacher.email,
+        TeacherSchoolSpace.school_id == school_id,
+    ).first()
+    if existing:
+        return {"status": True, "message": "Demande déjà enregistrée. L'école doit confirmer votre identifiant dans PrimeInk.", "verified": bool(existing.is_verified)}
+    db.add(TeacherSchoolSpace(teacher_email=teacher.email, school_id=school_id, is_verified=False))
+    teacher.preferred_school_id = school_id
+    db.commit()
+    return {"status": True, "message": "Demande d'espace envoyée. L'école doit maintenant vous ajouter dans PrimeInk.", "verified": False}
+
+
 @app.get("/api/teacher/classes")
 def get_teacher_classroom_information(
+    school_id: str = "",
     db: Session = Depends(get_db),
     claims: dict = Depends(require_teacher),
 ):
     teacher = db.query(Teacher).filter(Teacher.email == claims.get("email")).first()
     if not teacher:
         raise HTTPException(status_code=404, detail="Compte enseignant introuvable.")
-    if not teacher_has_verified_school_access(teacher):
-        raise HTTPException(status_code=403, detail="Votre compte n'est pas encore autorisé par l'école. Communiquez votre identifiant ClassInk à l'administration pour qu'elle l'ajoute dans PrimeInk.")
-    blocked = teacher_school_block(db, teacher)
+    selected = str(school_id or claims.get("school_id") or teacher.school_id or "").strip()
+    if not teacher_has_school_access(db, teacher, selected):
+        raise HTTPException(status_code=403, detail="Cet espace n'est pas encore confirmé par l'école. Vérifiez son identifiant puis demandez à l'administration de vous ajouter dans PrimeInk.")
+    blocked = teacher_school_block(db, teacher, selected)
     if blocked:
         raise HTTPException(status_code=403, detail=blocked)
-    context = build_teacher_classroom_context(db, teacher)
+    context = build_teacher_classroom_context(db, teacher, selected)
     return {"status": True, "data": context}
 
 def is_suivi_results_allowed(db: Session, school_id: str, student: SchoolStudentInformation) -> bool:
