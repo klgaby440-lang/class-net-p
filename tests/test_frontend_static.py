@@ -360,6 +360,20 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn("$('#appRoot').hidden=false", source)
         self.assertIn("@media(max-width:480px){.auth-screen{padding:14px;overflow-y:auto}", source)
 
+    def test_official_classink_and_crypt_logos_replace_manager_and_suivi_placeholders(self):
+        manager = (ROOT / "manager/index.html").read_text(encoding="utf-8")
+        suivi = (ROOT / "suivi/index.html").read_text(encoding="utf-8")
+        app = (ROOT / "app/index.html").read_text(encoding="utf-8")
+
+        self.assertGreaterEqual(manager.count('../assets/classink-logo.svg'), 2)
+        self.assertGreaterEqual(manager.count('../assets/crypt-logo.svg'), 2)
+        self.assertNotIn('M4 19V5l8 7 8-7v14', manager)
+        self.assertIn('../assets/classink-logo.svg', suivi)
+        self.assertNotIn('M48 17C48 17 28 38 28 54', suivi)
+        self.assertNotIn('href="#logo"', suivi)
+        self.assertIn('<img class="splash-logo-icon" src="../assets/classink-logo.svg"', app)
+        self.assertNotIn('<!-- Logo Vectoriel Officiel ClassInk -->', app)
+
     def test_manager_html_is_authenticated_readonly_and_never_persists_school_data(self):
         source = (ROOT / "manager/index.html").read_text(encoding="utf-8")
         self.inspect_file("manager/index.html")
