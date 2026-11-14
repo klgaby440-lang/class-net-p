@@ -2828,6 +2828,20 @@ function withoutSecrets(data) {
 function mergeServerDataIntoLocal(local, server) {
     local = local || {};
     server = server || {};
+    const localSpace = String((local.schoolId || (local.user && local.user.schoolId) || '')).trim();
+    const serverSpace = String((server.schoolId || (server.user && server.user.schoolId) || '')).trim();
+    if (localSpace && serverSpace && localSpace !== serverSpace) {
+        // Les données d'école ne doivent jamais être fusionnées entre deux espaces différents.
+        const isolated = { ...server };
+        isolated.user = { ...(server.user || {}), password: (local.user && local.user.password) || '' };
+        isolated.theme = local.theme || server.theme || 'dark';
+        isolated.llinkPrefs = local.llinkPrefs || server.llinkPrefs;
+        isolated.teacherSpaces = Array.isArray(server.teacherSpaces) ? server.teacherSpaces : [];
+        isolated.teacherSchedule = Array.isArray(server.teacherSchedule) ? server.teacherSchedule : [];
+        isolated.schoolId = serverSpace;
+        isolated.pendingCommits = 0;
+        return isolated;
+    }
     const merged = { ...local, ...server };
 
     // Identité : le serveur fait foi, le local garde ses champs supplémentaires
