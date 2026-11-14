@@ -1198,10 +1198,37 @@ body {
                     <!-- Rempli dynamiquement -->
                 </tbody>
             </table>
-            <div class="action-toolbar">
+            <div class="action-toolbar" style="display:flex;gap:.7rem;flex-wrap:wrap;">
                 <button class="btn-primary" onclick="renderinterface('ajouter_classe')">AJOUTER UNE CLASSE</button>
+                <button type="button" class="btn-secondary" id="openSchoolPalmaresBtn">🏆 PALMARÈS DE L'ÉCOLE</button>
             </div>
         </div>
+    </div>
+
+    <div id="schoolPalmaresOverlay" style="display:none;position:fixed;inset:0;z-index:99990;background:rgba(0,0,0,.72);padding:2vh 2vw;overflow:auto;">
+        <section style="max-width:1200px;margin:0 auto;padding:1.2rem;background:var(--card-bg);color:var(--text-primary);border:1px solid var(--border-color);border-radius:16px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+                <div><h2 style="margin:0;">🏆 Palmarès général de l'école</h2><small style="color:var(--text-secondary);">Tous les élèves de toutes les classes. Seuls les dossiers complets sont classés.</small></div>
+                <button type="button" class="btn-secondary" id="closeSchoolPalmaresBtn">Fermer</button>
+            </div>
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:1rem 0;">
+                <label for="schoolPalmaresPeriod">Période</label>
+                <select id="schoolPalmaresPeriod" class="form-control" style="width:auto;min-width:170px;">
+                    <option value="P1">Période 1</option><option value="P2">Période 2</option><option value="EX1">Examen 1</option>
+                    <option value="S1">1er semestre</option><option value="P3">Période 3</option><option value="P4">Période 4</option>
+                    <option value="EX2">Examen 2</option><option value="S2">2e semestre</option><option value="TG" selected>Année entière</option>
+                </select>
+            </div>
+            <div id="schoolPalmaresSummary" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.7rem;margin-bottom:1rem;"></div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1rem;margin-bottom:1rem;">
+                <article class="card" style="padding:1rem;"><h4>Réussite par période</h4><div id="schoolPalmaresPercentChart"></div></article>
+                <article class="card" style="padding:1rem;"><h4>Classement général</h4><div id="schoolPalmaresRankChart"></div></article>
+            </div>
+            <div id="schoolPalmaresStudentDetail" class="card" style="padding:1rem;margin-bottom:1rem;"><strong>Sélectionnez un élève dans le classement pour consulter son évolution et ses cours à surveiller.</strong></div>
+            <div style="overflow-x:auto;">
+                <table class="data-table"><thead><tr><th>PLACE</th><th>ÉLÈVE</th><th>CLASSE</th><th>POURCENTAGE</th><th>POINTS</th><th>COURS À SURVEILLER</th><th>ÉTAT</th></tr></thead><tbody id="schoolPalmaresRanking"></tbody></table>
+            </div>
+        </section>
     </div>
 
     <!-- Interface Détails de la Classe -->
@@ -1394,6 +1421,31 @@ body {
                     </thead>
                     <tbody id="statsTableBody"></tbody>
                 </table>
+
+                <section id="classPalmaresPanel" style="margin-top:1.5rem;padding:1rem;border:1px solid var(--border-color);border-radius:14px;background:var(--card-bg);">
+                    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:1rem;">
+                        <div><h3 style="margin:0;">🏆 Palmarès de la classe</h3><small style="color:var(--text-secondary);">Calculé à partir des notes enregistrées pour tous les cours de la classe.</small></div>
+                        <select id="classPalmaresPeriod" class="form-control" style="width:auto;min-width:170px;">
+                            <option value="P1">Période 1</option><option value="P2">Période 2</option><option value="EX1">Examen 1</option>
+                            <option value="S1">1er semestre</option><option value="P3">Période 3</option><option value="P4">Période 4</option>
+                            <option value="EX2">Examen 2</option><option value="S2">2e semestre</option><option value="TG" selected>Année entière</option>
+                        </select>
+                    </div>
+                    <div id="classPalmaresSummary" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.7rem;margin-bottom:1rem;"></div>
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1rem;margin-bottom:1rem;">
+                        <article class="card" style="padding:1rem;"><h4>Évolution du pourcentage</h4><div id="classPalmaresPercentChart"></div></article>
+                        <article class="card" style="padding:1rem;"><h4>Évolution des places</h4><div id="classPalmaresRankChart"></div></article>
+                    </div>
+                    <div id="classPalmaresStudentDetail" class="card" style="padding:1rem;margin-bottom:1rem;">
+                        <strong>Sélectionnez un élève dans le classement pour voir ses cours à surveiller et l'évolution de ses notes.</strong>
+                    </div>
+                    <div style="overflow-x:auto;">
+                        <table class="data-table">
+                            <thead><tr><th>PLACE</th><th>ÉLÈVE</th><th>POURCENTAGE</th><th>POINTS</th><th>COURS À SURVEILLER</th><th>ÉTAT</th></tr></thead>
+                            <tbody id="classPalmaresRanking"></tbody>
+                        </table>
+                    </div>
+                </section>
             </div>
         </div>
         <div id="view-settings" class="sub-view-content">
