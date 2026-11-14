@@ -2068,7 +2068,14 @@ def _crypt_public_school(school, db: Session) -> dict:
         "licenceState": state["reason"] or "ok",
         "classes": db.query(ClasseInformation).filter(ClasseInformation.school_id == school.school_id).count(),
         "students": db.query(SchoolStudentInformation).filter(SchoolStudentInformation.school_id == school.school_id).count(),
-        "teachers": db.query(Teacher).filter(Teacher.school_id == school.school_id).count(),
+        "teachers": len({
+            t.email for t in db.query(Teacher).filter(Teacher.school_id == school.school_id).all()
+        } | {
+            email for (email,) in db.query(TeacherSchoolSpace.teacher_email).filter(
+                TeacherSchoolSpace.school_id == school.school_id,
+                TeacherSchoolSpace.is_verified.is_(True),
+            ).all()
+        }),
     }
 
 
@@ -4366,7 +4373,12 @@ def build_verified_behaviour(db, school_id):
 def build_signature_map(db, school_id):
     """Signatures des enseignants de l'école, par identifiant PrimeInk (teacher_code)."""
     out = {}
-    for t in db.query(Teacher).filter(Teacher.school_id == school_id).all():
+    rows = {t.email: t for t in db.query(Teacher).filter(Teacher.school_id == school_id).all()}
+    for t in db.query(Teacher).join(TeacherSchoolSpace, TeacherSchoolSpace.teacher_email == Teacher.email).filter(
+        TeacherSchoolSpace.school_id == school_id, TeacherSchoolSpace.is_verified.is_(True)
+    ).all():
+        rows[t.email] = t
+    for t in rows.values():
         img = clean_image(t.signature)
         if img:
             out[t.teacher_code or f"prof_{t.id}"] = img
