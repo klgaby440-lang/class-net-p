@@ -1582,10 +1582,10 @@ async function handleLogin() {
             db = mergeServerDataIntoLocal(db, result.data);
             db.teacherSpaces = Array.isArray(result.data.teacherSpaces) ? result.data.teacherSpaces : [];
             db.user.schoolId = String(result.data.schoolId || result.data.user?.schoolId || '').trim();
-            await loadTeacherScheduleFromServer(true);
             if (result.token) {
                 try { localStorage.setItem('classink_cloud_token', result.token); } catch (e) { /* stockage indisponible */ }
             }
+            await loadTeacherScheduleFromServer(true);
             db.user.isLoggedIn = true;
             saveDB();
             
