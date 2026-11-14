@@ -5223,7 +5223,7 @@ function setTheme(mode) {
 
 // 2. Charger le thème lors du démarrage de l'application
 function loadTheme() {
-    const savedTheme = db.theme || 'light';
+    const savedTheme = db.theme || 'dark';
     setTheme(savedTheme);
 
     // Cocher le bon bouton radio dans les paramètres
