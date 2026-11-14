@@ -4779,7 +4779,7 @@ async function bpPushClassBulletin(cls) {
                     if (rankNode) rankNode.innerHTML = palmaresLineChart(ranks,'rank');
                 } else {
                     const detail = document.getElementById(prefix + 'StudentDetail');
-                    if (detail) detail.innerHTML = '<div class="empty-state">Aucun élève n'a encore toutes les notes nécessaires pour être classé. Les dossiers incomplets restent affichés dans le tableau.</div>';
+                    if (detail) detail.innerHTML = "<div class='empty-state'>Aucun élève n'a encore toutes les notes nécessaires pour être classé. Les dossiers incomplets restent affichés dans le tableau.</div>";
                     const percentNode = document.getElementById(prefix + 'PercentChart'); if (percentNode) percentNode.innerHTML = '<div class="empty-state">Pas encore de données.</div>';
                     const rankNode = document.getElementById(prefix + 'RankChart'); if (rankNode) rankNode.innerHTML = '<div class="empty-state">Pas encore de classement.</div>';
                 }
