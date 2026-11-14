@@ -440,6 +440,12 @@ class FrontendStaticTests(unittest.TestCase):
             if relative == "manager/index.html":
                 self.assertIn("classink_manager_theme", source)
                 self.assertNotIn("sessionStorage", source)
+            elif relative == "suivi/index.html":
+                # Seule la préférence d'apparence peut persister ; les données parentales restent éphémères.
+                self.assertIn("classink_suivi_theme", source)
+                self.assertIn("localStorage.setItem('classink_suivi_theme'", source)
+                self.assertNotIn("localStorage.setItem(STORE_KEY", source)
+                self.assertNotIn("sessionStorage", source)
             else:
                 self.assertNotIn("localStorage", source)
                 self.assertNotIn("sessionStorage", source)
