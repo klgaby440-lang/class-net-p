@@ -4447,7 +4447,10 @@ def submit_conduct(payload: dict, db: Session = Depends(get_db), claims: dict = 
         return {"status": False, "message": "Enseignant non trouvé."}
     if str(payload.get("teacherEmail") or "").strip().lower() != claims.get("email"):
         raise HTTPException(status_code=403, detail="Ce jeton ne correspond pas à l'enseignant indiqué.")
-    blocked = teacher_school_block(db, teacher)
+    selected_school_id = str(claims.get("school_id") or "").strip()
+    if not teacher_has_school_access(db, teacher, selected_school_id):
+        raise HTTPException(status_code=403, detail="Cet espace enseignant n'est pas autorisé pour cette école.")
+    blocked = teacher_school_block(db, teacher, selected_school_id)
     if blocked:
         raise HTTPException(status_code=403, detail=blocked)
     period = payload.get("period")
