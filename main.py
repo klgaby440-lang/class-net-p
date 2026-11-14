@@ -1506,7 +1506,20 @@ def login_teacher(data: LoginSchema, db: Session = Depends(get_db)):
         return {"status": False, "message": "Identifiants incorrects."}
     LOGIN_LIMITER.reset(limiter_key)
 
-    blocked = teacher_school_block(db, teacher)
+    requested_school_id = str(data.school_id or "").strip()
+    spaces = teacher_school_spaces(db, teacher)
+    if requested_school_id:
+        if not teacher_has_school_access(db, teacher, requested_school_id):
+            return {"status": False, "message": "Cet espace n'est pas encore confirmé par l'école. Vérifiez l'identifiant puis demandez à l'administration de vous ajouter dans PrimeInk."}
+        active_school_id = requested_school_id
+    elif teacher_has_school_access(db, teacher, str(teacher.school_id or "")):
+        active_school_id = str(teacher.school_id)
+    elif len(spaces) == 1:
+        active_school_id = str(spaces[0]["schoolId"])
+    else:
+        active_school_id = ""
+
+    blocked = teacher_school_block(db, teacher, active_school_id) if active_school_id else None
     if blocked:
         return {"status": False, "locked": True, "message": blocked}
 
@@ -1514,8 +1527,13 @@ def login_teacher(data: LoginSchema, db: Session = Depends(get_db)):
         teacher.password = hash_password(data.password)  # migration silencieuse de l'ancien format en clair
         db.commit()
     
-    # Récupération des entités
-    db_grades = db.query(StudentGrade).filter(StudentGrade.teacher_email == teacher.email).all()
+    # Chaque espace ne reçoit que ses notes. Les anciennes notes sans school_id
+    # restent visibles uniquement pour les comptes indépendants non encore rattachés.
+    grades_query = db.query(StudentGrade).filter(StudentGrade.teacher_email == teacher.email)
+    grades_query = grades_query.filter(
+        StudentGrade.school_id == active_school_id if active_school_id else StudentGrade.school_id.is_(None)
+    )
+    db_grades = grades_query.all()
     db_quizzes = db.query(QuizBank).filter(QuizBank.teacher_email == teacher.email).all()
     # Si vous avez un modèle Attendance pour les présences :
     db_presences = db.query(Attendance).filter(Attendance.teacher_email == teacher.email).all() if 'Attendance' in globals() else []
@@ -1603,7 +1621,8 @@ def login_teacher(data: LoginSchema, db: Session = Depends(get_db)):
             "name": teacher.full_name,
             "email": teacher.email,
             "password": data.password,  # jamais l'empreinte : le client garde le mot de passe saisi (mode hors-ligne)
-            "school": teacher.school_name or "Indépendant",
+            "school": next((item["schoolName"] for item in spaces if item["schoolId"] == active_school_id), teacher.school_name or "Indépendant"),
+            "schoolId": active_school_id,
             "isLoggedIn": True
         },
         "classes": list(classes_set),
@@ -1616,28 +1635,44 @@ def login_teacher(data: LoginSchema, db: Session = Depends(get_db)):
         "grades": grades_dict,
         "presences": presences_list,
         "quizzes": quizzes_list,
-        "school_id": getattr(teacher, 'school_id', ''),
+        "school_id": active_school_id,
+        "schoolId": active_school_id,
+        "teacherSpaces": spaces,
         "theme": getattr(teacher, 'theme', 'dark'),
         "pendingCommits": 0
     }
     
     # Si une sauvegarde complète existe, elle est prioritaire : elle contient aussi
     # les classes, cours, élèves sans notes et les réglages que StudentGrade ne peut pas reconstruire.
-    snapshot_row = db.query(ClassInkTeacherSnapshot).filter_by(teacher_email=teacher.email).first()
+    if active_school_id:
+        snapshot_row = db.query(ClassInkTeacherSpaceSnapshot).filter(
+            ClassInkTeacherSpaceSnapshot.teacher_email == teacher.email,
+            ClassInkTeacherSpaceSnapshot.school_id == active_school_id,
+        ).first()
+        if not snapshot_row and str(teacher.school_id or "") == active_school_id:
+            legacy_snapshot = db.query(ClassInkTeacherSnapshot).filter_by(teacher_email=teacher.email).first()
+            snapshot_payload = legacy_snapshot.payload_data if legacy_snapshot else None
+        else:
+            snapshot_payload = snapshot_row.payload_data if snapshot_row else None
+    else:
+        legacy_snapshot = db.query(ClassInkTeacherSnapshot).filter_by(teacher_email=teacher.email).first()
+        snapshot_payload = legacy_snapshot.payload_data if legacy_snapshot else None
     classnet_app_db = restore_classink_teacher_state(
-        snapshot_row.payload_data if snapshot_row else None,
+        snapshot_payload,
         classnet_app_db,
         teacher,
         data.password,
     )
-    # Les classes officielles de l'école sont ajoutées à chaque connexion, même sans aucune note.
     classnet_app_db = apply_teacher_classroom_context(
         classnet_app_db,
-        build_teacher_classroom_context(db, teacher),
+        build_teacher_classroom_context(db, teacher, active_school_id or None),
     )
 
+    token_claims = {"role": "teacher", "email": teacher.email}
+    if active_school_id:
+        token_claims["school_id"] = active_school_id
     return {"status": True, "data": classnet_app_db,
-            "token": create_token({"role": "teacher", "email": teacher.email}, TEACHER_TOKEN_TTL)}
+            "token": create_token(token_claims, TEACHER_TOKEN_TTL)}
 
 @app.post("/api/auth/school/login")
 def login_school(data: LoginSchema, db: Session = Depends(get_db)):
@@ -2899,9 +2934,10 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
     teacher = db.query(Teacher).filter(Teacher.email == email).first()
     if not teacher:
         return {"status": False, "message": "Enseignant non trouvé."}
-    blocked = teacher_school_block(db, teacher)
-    if blocked:
-        raise HTTPException(status_code=403, detail=blocked)
+    if verified_school_id:
+        blocked = teacher_school_block(db, teacher, verified_school_id)
+        if blocked:
+            raise HTTPException(status_code=403, detail=blocked)
 
     snapshot = build_classink_teacher_snapshot(payload, teacher.email)
 
@@ -2922,7 +2958,11 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
         conduct_report = store_conduct(db, teacher, declared_class, students_dict.get(declared_class, []), conduct_payload[declared_class])
 
     # --- 1. Catalogue scolaire officiel et périmètre du professeur ---
-    verified_school_id = teacher.school_id if teacher_has_verified_school_access(teacher) else None
+    verified_school_id = str(claims.get("school_id") or "").strip() or None
+    if verified_school_id and not teacher_has_school_access(db, teacher, verified_school_id):
+        raise HTTPException(status_code=403, detail="Cet espace enseignant n'est pas autorisé pour cette école.")
+    if not verified_school_id and teacher_has_verified_school_access(teacher):
+        verified_school_id = str(teacher.school_id)
     official_classes_by_name = {}
     assigned_courses_by_class = {}
     official_course_max = {}
@@ -3053,6 +3093,7 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
         # Sauvegarde ou mise à jour dans la table StudentGrade
         record = db.query(StudentGrade).filter_by(
             teacher_email=teacher.email,
+            school_id=verified_school_id,
             student_id=student_id,
             eval_id=eval_id
         ).first()
@@ -3068,7 +3109,8 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
                 eval_name=eval_info["name"],
                 period=eval_info["period"],
                 score=float(score),
-                max_score=eval_info["max"]
+                max_score=eval_info["max"],
+                school_id=verified_school_id
             )
             db.add(record)
         else:
@@ -3077,7 +3119,7 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
         updates_count += 1
 
     # --- 4. Génération et Sauvegarde des données pour PrimeNet ---
-    school_id = teacher.school_id if teacher_has_verified_school_access(teacher) else None
+    school_id = verified_school_id
 
     # On ne génère le format PrimeNet que si l'enseignant a été autorisé par la liste officielle de l'école
     if school_id and str(school_id).lower() != "indépendant":
@@ -3149,7 +3191,9 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
         
         # Sauvegarde dans la base de données (Table à créer si pas encore fait)
         # On met à jour s'il existe déjà un enregistrement pour ce prof, sinon on crée.
-        existing_payload = db.query(PrimeNetPayload).filter_by(teacher_email=teacher.email).first()
+        existing_payload = db.query(PrimeNetPayload).filter_by(
+            teacher_email=teacher.email, school_id=school_id
+        ).first()
         if existing_payload:
             existing_payload.payload_data = primenet_data
         else:
@@ -3161,11 +3205,22 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
             db.add(new_payload)
 
     # État complet : conserve les cours/classes/élèves sans aucune note.
-    snapshot_row = db.query(ClassInkTeacherSnapshot).filter_by(teacher_email=teacher.email).first()
-    if snapshot_row:
-        snapshot_row.payload_data = snapshot
+    if verified_school_id:
+        snapshot_row = db.query(ClassInkTeacherSpaceSnapshot).filter_by(
+            teacher_email=teacher.email, school_id=verified_school_id
+        ).first()
+        if snapshot_row:
+            snapshot_row.payload_data = snapshot
+        else:
+            db.add(ClassInkTeacherSpaceSnapshot(
+                teacher_email=teacher.email, school_id=verified_school_id, payload_data=snapshot
+            ))
     else:
-        db.add(ClassInkTeacherSnapshot(teacher_email=teacher.email, payload_data=snapshot))
+        snapshot_row = db.query(ClassInkTeacherSnapshot).filter_by(teacher_email=teacher.email).first()
+        if snapshot_row:
+            snapshot_row.payload_data = snapshot
+        else:
+            db.add(ClassInkTeacherSnapshot(teacher_email=teacher.email, payload_data=snapshot))
 
     # Historique de synchronisation
     db.add(SyncHistory(
