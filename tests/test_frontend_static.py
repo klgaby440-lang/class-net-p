@@ -353,6 +353,13 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn("finalPreview.duplicates", source)
 
 
+    def test_manager_auth_overlay_is_hidden_after_successful_login(self):
+        source = (ROOT / "manager/index.html").read_text(encoding="utf-8")
+        self.assertIn(".auth-screen[hidden],.app[hidden]{display:none!important}", source)
+        self.assertIn("$('#authScreen').hidden=true", source)
+        self.assertIn("$('#appRoot').hidden=false", source)
+        self.assertIn("@media(max-width:480px){.auth-screen{padding:14px;overflow-y:auto}", source)
+
     def test_manager_html_is_authenticated_readonly_and_never_persists_school_data(self):
         source = (ROOT / "manager/index.html").read_text(encoding="utf-8")
         self.inspect_file("manager/index.html")
