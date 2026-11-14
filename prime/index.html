@@ -3472,7 +3472,11 @@ async function bpServerCall(method, path, body) {
     const headers = cloudAuthHeaders();
     if (!headers['Authorization']) return { ok: false, offline: true };
     try {
-        const response = await window.primeInkFetchWithTimeout(API_BASE_URL + path, { method, headers, body: JSON.stringify(body) }, 20000);
+        const request = { method, headers, cache: 'no-store' };
+        if (!['GET', 'HEAD'].includes(String(method).toUpperCase()) && body !== undefined && body !== null) {
+            request.body = JSON.stringify(body);
+        }
+        const response = await window.primeInkFetchWithTimeout(API_BASE_URL + path, request, 20000);
         let data = {};
         try { data = await response.json(); } catch (e) { /* réponse sans détail */ }
         return { ok: response.ok && data.status !== false, status: response.status, message: data.message || data.detail || '', data: data.data || null };
