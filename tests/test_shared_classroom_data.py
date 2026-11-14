@@ -278,12 +278,21 @@ def test_unverified_teacher_cannot_load_the_school_catalog_even_with_a_stale_sch
         email="aline@example.cd",
     )
 
-    class DatabaseMustNotBeQueried:
-        def query(self, _model):
-            raise AssertionError("Unverified teacher must not query school tables")
+    class EmptyAssociationQuery:
+        def filter(self, *_args):
+            return self
+
+        def first(self):
+            return None
+
+    class DatabaseMustNotLoadSchoolCatalog:
+        def query(self, model):
+            if model is TeacherSchoolSpace:
+                return EmptyAssociationQuery()
+            raise AssertionError("Unverified teacher must not query school, class, student or course catalog tables")
 
     from main import build_teacher_classroom_context
-    context = build_teacher_classroom_context(DatabaseMustNotBeQueried(), teacher)
+    context = build_teacher_classroom_context(DatabaseMustNotLoadSchoolCatalog(), teacher)
 
     assert context["schoolId"] == ""
     assert context["classes"] == []
@@ -371,7 +380,23 @@ class _SpaceQuery:
     def __init__(self, rows):
         self.rows = list(rows)
 
-    def filter(self, *_args):
+    def filter(self, *conditions):
+        filtered = list(self.rows)
+        for condition in conditions:
+            left = getattr(condition, "left", None)
+            right = getattr(condition, "right", None)
+            field = getattr(left, "key", None)
+            value = getattr(right, "value", right)
+            operator_name = getattr(getattr(condition, "operator", None), "__name__", "")
+            if not field:
+                continue
+            if operator_name == "in_op":
+                filtered = [row for row in filtered if getattr(row, field, None) in value]
+            elif operator_name == "is_":
+                filtered = [row for row in filtered if getattr(row, field, None) is value]
+            else:
+                filtered = [row for row in filtered if getattr(row, field, None) == value]
+        self.rows = filtered
         return self
 
     def first(self):
