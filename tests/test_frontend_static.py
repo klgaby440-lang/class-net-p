@@ -484,101 +484,88 @@ if __name__ == "__main__":
     unittest.main()
 
 
+class TestNewFeatureStatic(unittest.TestCase):
+    def test_primeink_palmares_uses_all_periods_school_scope_and_complete_grade_calculations():
+        source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
+        for marker in (
+            "PALMARES_PERIOD_FIELDS",
+            "buildPalmaresRecords",
+            "classPalmaresRanking",
+            "schoolPalmaresRanking",
+            "classPalmaresPercentChart",
+            "classPalmaresRankChart",
+            "schoolPalmaresPercentChart",
+            "renderPalmaresStudentDetail",
+            "Aucun élève n'a encore toutes les notes",
+        ):
+            self.assertIn(marker, source)
+        self.assertIn("record.percent >= 50", source)
+        self.assertIn("courseResults.every(item => item.result.complete)", source)
+        self.assertIn("openSchoolPalmaresBtn", source)
+    
+    
+    def test_primeink_grade_visibility_button_is_connected_to_suivi_server_api():
+        source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
+        self.assertIn("student-note-access-button", source)
+        self.assertIn("window.bpSuiviToggleStudentAccess(st.id)", source)
+        self.assertIn("window.bpSuiviToggleStudentAccess = async function(studentId)", source)
+        self.assertIn("await bpSuiviLoadRoster(student.classId)", source)
+        self.assertNotIn("student-note-access-placeholder", source)
+        self.assertNotIn('title="Commande prévue dans une prochaine version"', source)
+    
+    
+    def test_classink_teacher_spaces_are_masked_and_selected_on_login():
+        source = (ROOT / "app/index.html").read_text(encoding="utf-8")
+        self.assertIn('id="login-school-id"', source)
+        self.assertIn('type="password" id="login-school-id"', source)
+        self.assertIn('id="setting-school-space-id"', source)
+        self.assertIn('type="password" id="setting-school-space-id"', source)
+        self.assertIn("/api/teacher/spaces/request", source)
+        self.assertIn("/api/teacher/spaces", source)
+        self.assertIn("teacherSpaces", source)
+        self.assertIn("localSpace !== serverSpace", source)
+    
+    
+    def test_classink_teacher_schedule_is_editable_and_drives_bell_timing():
+        source = (ROOT / "app/index.html").read_text(encoding="utf-8")
+        self.assertIn('type="time" data-field="start"', source)
+        self.assertIn('type="time" data-field="end"', source)
+        self.assertIn("function saveTeacherSchedule()", source)
+        self.assertIn("function teacherScheduleTick()", source)
+        self.assertIn("entry.end", source)
+        self.assertNotIn("hours === '08' && minutes === '30'", source)
+    
+    
+    def test_themes_are_persisted_with_dark_default_across_classink_surfaces():
+        app = (ROOT / "app/index.html").read_text(encoding="utf-8")
+        prime = (ROOT / "prime/index.html").read_text(encoding="utf-8")
+        manager = (ROOT / "manager/index.html").read_text(encoding="utf-8")
+        suivi = (ROOT / "suivi/index.html").read_text(encoding="utf-8")
+        self.assertIn("db.theme || 'dark'", app)
+        self.assertIn("primeink_theme", prime)
+        self.assertIn('<body class="theme-dark">', prime)
+        self.assertIn("classink_manager_theme", manager)
+        self.assertIn("classink_suivi_theme", suivi)
+        self.assertIn("theme: 'dark'", suivi)
+    
+    
+    
+    def test_classnet_backend_scopes_teacher_spaces_and_notes_by_active_school():
+        source = (ROOT / "main.py").read_text(encoding="utf-8")
+        for marker in (
+            "class TeacherSchoolSpace(Base)",
+            "class ClassInkTeacherSpaceSnapshot(Base)",
+            "teacher_has_school_access(db, teacher, selected_school_id)",
+            '@app.post("/api/teacher/spaces/request")',
+            '@app.get("/api/teacher/spaces")',
+            '@app.get("/api/primenet/teachers/{teacher_code}")',
+            "school_id=verified_school_id",
+            'test_registration_mode = os.getenv("APP_ENV", "production")',
+        ):
+            self.assertIn(marker, source)
+        app = (ROOT / "app/index.html").read_text(encoding="utf-8")
+        self.assertIn("if (localSpace !== serverSpace && (localSpace || serverSpace))", app)
 
-def test_primeink_palmares_uses_all_periods_school_scope_and_complete_grade_calculations():
-    source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
-    for marker in (
-        "PALMARES_PERIOD_FIELDS",
-        "buildPalmaresRecords",
-        "classPalmaresRanking",
-        "schoolPalmaresRanking",
-        "classPalmaresPercentChart",
-        "classPalmaresRankChart",
-        "schoolPalmaresPercentChart",
-        "renderPalmaresStudentDetail",
-        "Aucun élève n'a encore toutes les notes",
-    ):
-        self.assertIn(marker, source)
-    self.assertIn("record.percent >= 50", source)
-    self.assertIn("courseResults.every(item => item.result.complete)", source)
-    self.assertIn("openSchoolPalmaresBtn", source)
 
-
-def test_primeink_grade_visibility_button_is_connected_to_suivi_server_api():
-    source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
-    self.assertIn("student-note-access-button", source)
-    self.assertIn("window.bpSuiviToggleStudentAccess(st.id)", source)
-    self.assertIn("window.bpSuiviToggleStudentAccess = async function(studentId)", source)
-    self.assertIn("await bpSuiviLoadRoster(student.classId)", source)
-    self.assertNotIn("student-note-access-placeholder", source)
-    self.assertNotIn('title="Commande prévue dans une prochaine version"', source)
-
-
-def test_classink_teacher_spaces_are_masked_and_selected_on_login():
-    source = (ROOT / "app/index.html").read_text(encoding="utf-8")
-    self.assertIn('id="login-school-id"', source)
-    self.assertIn('type="password" id="login-school-id"', source)
-    self.assertIn('id="setting-school-space-id"', source)
-    self.assertIn('type="password" id="setting-school-space-id"', source)
-    self.assertIn("/api/teacher/spaces/request", source)
-    self.assertIn("/api/teacher/spaces", source)
-    self.assertIn("teacherSpaces", source)
-    self.assertIn("localSpace !== serverSpace", source)
-
-
-def test_classink_teacher_schedule_is_editable_and_drives_bell_timing():
-    source = (ROOT / "app/index.html").read_text(encoding="utf-8")
-    self.assertIn('type="time" data-field="start"', source)
-    self.assertIn('type="time" data-field="end"', source)
-    self.assertIn("function saveTeacherSchedule()", source)
-    self.assertIn("function teacherScheduleTick()", source)
-    self.assertIn("entry.end", source)
-    self.assertNotIn("hours === '08' && minutes === '30'", source)
-
-
-def test_themes_are_persisted_with_dark_default_across_classink_surfaces():
-    app = (ROOT / "app/index.html").read_text(encoding="utf-8")
-    prime = (ROOT / "prime/index.html").read_text(encoding="utf-8")
-    manager = (ROOT / "manager/index.html").read_text(encoding="utf-8")
-    suivi = (ROOT / "suivi/index.html").read_text(encoding="utf-8")
-    self.assertIn("db.theme || 'dark'", app)
-    self.assertIn("primeink_theme", prime)
-    self.assertIn('<body class="theme-dark">', prime)
-    self.assertIn("classink_manager_theme", manager)
-    self.assertIn("classink_suivi_theme", suivi)
-    self.assertIn("theme: 'dark'", suivi)
-
-
-
-def test_classnet_backend_supports_teacher_school_spaces_and_school_scoped_sync():
-    source = (ROOT / "main.py").read_text(encoding="utf-8")
-    for marker in (
-        "class TeacherSchoolSpace(Base)",
-        "class ClassInkTeacherSpaceSnapshot(Base)",
-        "teacher_has_school_access(db, teacher, selected_school_id)",
-        '@app.post("/api/teacher/spaces/request")',
-        '@app.get("/api/teacher/spaces")',
-        '@app.get("/api/primenet/teachers/{teacher_code}")',
-        "school_id=verified_school_id",
-        'test_registration_mode = os.getenv("APP_ENV", "production")',
-    ):
-        self.assertIn(marker, source)
-    self.assertIn("if localSpace !== serverSpace && (localSpace || serverSpace)", (ROOT / "app/index.html").read_text(encoding="utf-8"))
-
-
-
-def test_classnet_backend_scopes_teacher_spaces_and_notes_by_active_school():
-    source = (ROOT / "main.py").read_text(encoding="utf-8")
-    for marker in (
-        "class TeacherSchoolSpace(Base)",
-        "class ClassInkTeacherSpaceSnapshot(Base)",
-        "teacher_has_school_access(db, teacher, selected_school_id)",
-        '@app.post("/api/teacher/spaces/request")',
-        '@app.get("/api/teacher/spaces")',
-        '@app.get("/api/primenet/teachers/{teacher_code}")',
-        "school_id=verified_school_id",
-        'test_registration_mode = os.getenv("APP_ENV", "production")',
-    ):
-        self.assertIn(marker, source)
-    app = (ROOT / "app/index.html").read_text(encoding="utf-8")
-    self.assertIn("if (localSpace !== serverSpace && (localSpace || serverSpace))", app)
+if __name__ == "__main__":
+    unittest.main()
