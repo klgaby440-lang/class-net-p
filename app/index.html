@@ -3127,7 +3127,7 @@ async function requestTeacherSchoolSpace(value, showMessage = true) {
         });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok || !payload.status) throw new Error(payload.detail || payload.message || 'Demande refusée.');
-        db.user.schoolId = schoolId;
+        db.user.preferredSchoolId = schoolId;
         saveDB();
         if (input) input.value = '';
         const status = document.getElementById('teacher-space-status');
@@ -3152,8 +3152,6 @@ function prepareTeacherSpaceLogin() {
         if (field) field.value = '';
         return;
     }
-    db.user.schoolId = schoolId;
-    saveDB();
     openLoginModal();
     switchAuthSubView('login');
     const field = document.getElementById('login-school-id');
