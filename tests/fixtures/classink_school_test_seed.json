@@ -1,0 +1,386 @@
+{
+  "fixture": "classink-school-integration-test",
+  "environment": "test-only",
+  "school": {
+    "id": "SCHOOL-CRYPT-DEMO-2026",
+    "name": "École Démo CRYPT",
+    "code": "TEST-2026",
+    "city": "Bukavu",
+    "commune": "Ibanda",
+    "schoolYear": "2026 - 2027",
+    "responsable": "Préfet Démo"
+  },
+  "classes": [
+    {
+      "id": "demo-class-sci",
+      "name": "1ère Scientifique",
+      "titulaire": "PROF-DEMO-01",
+      "studentIds": [
+        "demo-student-01",
+        "demo-student-02",
+        "demo-student-03",
+        "demo-student-04",
+        "demo-student-05"
+      ]
+    },
+    {
+      "id": "demo-class-lit",
+      "name": "2e Littéraire",
+      "titulaire": "PROF-DEMO-02",
+      "studentIds": [
+        "demo-student-06",
+        "demo-student-07",
+        "demo-student-08",
+        "demo-student-09",
+        "demo-student-10",
+        "demo-student-11"
+      ]
+    },
+    {
+      "id": "demo-class-com",
+      "name": "3e Commerciale",
+      "titulaire": "PROF-DEMO-03",
+      "studentIds": [
+        "demo-student-12",
+        "demo-student-13",
+        "demo-student-14",
+        "demo-student-15"
+      ]
+    }
+  ],
+  "students": [
+    {
+      "id": "demo-student-01",
+      "name": "ÉLÈVE01",
+      "postname": "DÉMONSTRATION",
+      "prename": "ALPHA",
+      "sexe": "F",
+      "classId": "demo-class-sci",
+      "permi": "TEST-PERMI-001"
+    },
+    {
+      "id": "demo-student-02",
+      "name": "ÉLÈVE02",
+      "postname": "DÉMONSTRATION",
+      "prename": "BETA",
+      "sexe": "M",
+      "classId": "demo-class-sci",
+      "permi": "TEST-PERMI-002"
+    },
+    {
+      "id": "demo-student-03",
+      "name": "ÉLÈVE03",
+      "postname": "DÉMONSTRATION",
+      "prename": "GAMMA",
+      "sexe": "F",
+      "classId": "demo-class-sci",
+      "permi": "TEST-PERMI-003"
+    },
+    {
+      "id": "demo-student-04",
+      "name": "ÉLÈVE04",
+      "postname": "DÉMONSTRATION",
+      "prename": "DELTA",
+      "sexe": "M",
+      "classId": "demo-class-sci",
+      "permi": "TEST-PERMI-004"
+    },
+    {
+      "id": "demo-student-05",
+      "name": "ÉLÈVE05",
+      "postname": "DÉMONSTRATION",
+      "prename": "EPSILON",
+      "sexe": "F",
+      "classId": "demo-class-sci",
+      "permi": "TEST-PERMI-005"
+    },
+    {
+      "id": "demo-student-06",
+      "name": "ÉLÈVE06",
+      "postname": "DÉMONSTRATION",
+      "prename": "ALPHA",
+      "sexe": "M",
+      "classId": "demo-class-lit",
+      "permi": "TEST-PERMI-006"
+    },
+    {
+      "id": "demo-student-07",
+      "name": "ÉLÈVE07",
+      "postname": "DÉMONSTRATION",
+      "prename": "BETA",
+      "sexe": "F",
+      "classId": "demo-class-lit",
+      "permi": "TEST-PERMI-007"
+    },
+    {
+      "id": "demo-student-08",
+      "name": "ÉLÈVE08",
+      "postname": "DÉMONSTRATION",
+      "prename": "GAMMA",
+      "sexe": "M",
+      "classId": "demo-class-lit",
+      "permi": "TEST-PERMI-008"
+    },
+    {
+      "id": "demo-student-09",
+      "name": "ÉLÈVE09",
+      "postname": "DÉMONSTRATION",
+      "prename": "DELTA",
+      "sexe": "F",
+      "classId": "demo-class-lit",
+      "permi": "TEST-PERMI-009"
+    },
+    {
+      "id": "demo-student-10",
+      "name": "ÉLÈVE10",
+      "postname": "DÉMONSTRATION",
+      "prename": "EPSILON",
+      "sexe": "M",
+      "classId": "demo-class-lit",
+      "permi": "TEST-PERMI-010"
+    },
+    {
+      "id": "demo-student-11",
+      "name": "ÉLÈVE11",
+      "postname": "DÉMONSTRATION",
+      "prename": "ALPHA",
+      "sexe": "F",
+      "classId": "demo-class-lit",
+      "permi": "TEST-PERMI-011"
+    },
+    {
+      "id": "demo-student-12",
+      "name": "ÉLÈVE12",
+      "postname": "DÉMONSTRATION",
+      "prename": "BETA",
+      "sexe": "M",
+      "classId": "demo-class-com",
+      "permi": "TEST-PERMI-012"
+    },
+    {
+      "id": "demo-student-13",
+      "name": "ÉLÈVE13",
+      "postname": "DÉMONSTRATION",
+      "prename": "GAMMA",
+      "sexe": "F",
+      "classId": "demo-class-com",
+      "permi": "TEST-PERMI-013"
+    },
+    {
+      "id": "demo-student-14",
+      "name": "ÉLÈVE14",
+      "postname": "DÉMONSTRATION",
+      "prename": "DELTA",
+      "sexe": "M",
+      "classId": "demo-class-com",
+      "permi": "TEST-PERMI-014"
+    },
+    {
+      "id": "demo-student-15",
+      "name": "ÉLÈVE15",
+      "postname": "DÉMONSTRATION",
+      "prename": "EPSILON",
+      "sexe": "F",
+      "classId": "demo-class-com",
+      "permi": "TEST-PERMI-015"
+    }
+  ],
+  "teachers": [
+    {
+      "uniqueId": "PROF-DEMO-01",
+      "name": "ENSEIGNANT ALPHA",
+      "subject": "Mathématiques",
+      "status": "Actif"
+    },
+    {
+      "uniqueId": "PROF-DEMO-02",
+      "name": "ENSEIGNANT BETA",
+      "subject": "Français",
+      "status": "Actif"
+    },
+    {
+      "uniqueId": "PROF-DEMO-03",
+      "name": "ENSEIGNANT GAMMA",
+      "subject": "Sciences",
+      "status": "Actif"
+    },
+    {
+      "uniqueId": "PROF-DEMO-04",
+      "name": "ENSEIGNANT DELTA",
+      "subject": "Histoire",
+      "status": "Actif"
+    },
+    {
+      "uniqueId": "PROF-DEMO-05",
+      "name": "ENSEIGNANT EPSILON",
+      "subject": "Anglais",
+      "status": "Actif"
+    },
+    {
+      "uniqueId": "PROF-DEMO-06",
+      "name": "ENSEIGNANT ZETA",
+      "subject": "Éducation physique",
+      "status": "Actif"
+    }
+  ],
+  "courses": [
+    {
+      "id": "demo-course-math-sci",
+      "classId": "demo-class-sci",
+      "name": "Mathématiques",
+      "maxPer": 20,
+      "category": "Sciences",
+      "titulaire": "ENSEIGNANT ALPHA",
+      "subCategory": "Algèbre"
+    },
+    {
+      "id": "demo-course-phys-sci",
+      "classId": "demo-class-sci",
+      "name": "Physique",
+      "maxPer": 20,
+      "category": "Sciences",
+      "titulaire": "ENSEIGNANT GAMMA",
+      "subCategory": "Mécanique"
+    },
+    {
+      "id": "demo-course-fr-lit",
+      "classId": "demo-class-lit",
+      "name": "Français",
+      "maxPer": 20,
+      "category": "Littéraire",
+      "titulaire": "ENSEIGNANT BETA",
+      "subCategory": "Expression"
+    },
+    {
+      "id": "demo-course-hist-lit",
+      "classId": "demo-class-lit",
+      "name": "Histoire",
+      "maxPer": 20,
+      "category": "Littéraire",
+      "titulaire": "ENSEIGNANT DELTA",
+      "subCategory": "Histoire générale"
+    },
+    {
+      "id": "demo-course-math-com",
+      "classId": "demo-class-com",
+      "name": "Mathématiques commerciales",
+      "maxPer": 20,
+      "category": "Commercial",
+      "titulaire": "ENSEIGNANT ALPHA",
+      "subCategory": "Calcul commercial"
+    },
+    {
+      "id": "demo-course-english-com",
+      "classId": "demo-class-com",
+      "name": "Anglais",
+      "maxPer": 20,
+      "category": "Langues",
+      "titulaire": "ENSEIGNANT EPSILON",
+      "subCategory": "Communication"
+    }
+  ],
+  "parents": [
+    {
+      "id": "demo-parent-01",
+      "email": "parent01@example.invalid",
+      "studentId": "demo-student-01",
+      "individualAccessAllowed": true,
+      "expectedResultsState": "allowed"
+    },
+    {
+      "id": "demo-parent-02",
+      "email": "parent02@example.invalid",
+      "studentId": "demo-student-02",
+      "individualAccessAllowed": true,
+      "expectedResultsState": "allowed"
+    },
+    {
+      "id": "demo-parent-03",
+      "email": "parent03@example.invalid",
+      "studentId": "demo-student-03",
+      "individualAccessAllowed": true,
+      "expectedResultsState": "allowed"
+    },
+    {
+      "id": "demo-parent-04",
+      "email": "parent04@example.invalid",
+      "studentId": "demo-student-04",
+      "individualAccessAllowed": true,
+      "expectedResultsState": "allowed"
+    },
+    {
+      "id": "demo-parent-05",
+      "email": "parent05@example.invalid",
+      "studentId": "demo-student-05",
+      "individualAccessAllowed": true,
+      "expectedResultsState": "allowed"
+    },
+    {
+      "id": "demo-parent-06",
+      "email": "parent06@example.invalid",
+      "studentId": "demo-student-06",
+      "individualAccessAllowed": false,
+      "expectedResultsState": "blocked"
+    },
+    {
+      "id": "demo-parent-07",
+      "email": "parent07@example.invalid",
+      "studentId": "demo-student-07",
+      "individualAccessAllowed": false,
+      "expectedResultsState": "blocked"
+    },
+    {
+      "id": "demo-parent-08",
+      "email": "parent08@example.invalid",
+      "studentId": "demo-student-08",
+      "individualAccessAllowed": false,
+      "expectedResultsState": "blocked"
+    },
+    {
+      "id": "demo-parent-09",
+      "email": "parent09@example.invalid",
+      "studentId": "demo-student-09",
+      "individualAccessAllowed": false,
+      "expectedResultsState": "blocked"
+    },
+    {
+      "id": "demo-parent-10",
+      "email": "parent10@example.invalid",
+      "studentId": "demo-student-10",
+      "individualAccessAllowed": false,
+      "expectedResultsState": "blocked"
+    }
+  ],
+  "prefect": {
+    "role": "prefect",
+    "email": "prefet.demo@example.invalid",
+    "name": "PRÉFET DE DÉMONSTRATION",
+    "schoolId": "SCHOOL-CRYPT-DEMO-2026",
+    "auth": "Use a test-only account created in the test database; no password is stored in this fixture."
+  },
+  "cryptConsole": {
+    "role": "crypt_admin",
+    "expectedChecks": [
+      "school-counts",
+      "teacher-spaces",
+      "parent-access",
+      "telemetry",
+      "sync-events"
+    ],
+    "auth": "Use the dedicated CRYPT test secret from CI environment; never place it in the fixture."
+  },
+  "expected": {
+    "teachers": 6,
+    "classes": 3,
+    "students": 15,
+    "classSizes": [
+      5,
+      6,
+      4
+    ],
+    "courses": 6,
+    "parents": 10,
+    "parentsAllowed": 5,
+    "parentsBlocked": 5
+  }
+}
