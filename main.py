@@ -432,6 +432,18 @@ class Teacher(Base):
     school = relationship("SchoolInformation", back_populates="teachers")
     quizzes = relationship("QuizBank", back_populates="teacher")
 
+class TeacherSchoolSpace(Base):
+    """Association validée entre un compte enseignant et une école ; un compte peut avoir plusieurs espaces."""
+    __tablename__ = "teacher_school_spaces"
+    __table_args__ = (UniqueConstraint("teacher_email", "school_id", name="uq_teacher_school_space"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    teacher_email = Column(String, ForeignKey("teachers.email"), index=True, nullable=False)
+    school_id = Column(String, ForeignKey("school_information.school_id"), index=True, nullable=False)
+    is_verified = Column(Boolean, nullable=False, default=True, server_default="true")
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+
 class ClasseInformation(Base):
     __tablename__ = "classe_informations"
     id = Column(String, primary_key=True, index=True)
@@ -591,14 +603,17 @@ class StudentGrade(Base):
     period = Column(String, nullable=False)
     score = Column(Float, nullable=False)
     max_score = Column(Float, nullable=False)
+    school_id = Column(String, index=True, nullable=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 class PrimeNetPayload(Base):
     __tablename__ = "primenet_payloads"
 
     id = Column(Integer, primary_key=True, index=True)
+    __table_args__ = (UniqueConstraint("school_id", "teacher_email", name="uq_primenet_payload_school_teacher"),)
+
     school_id = Column(String, index=True, nullable=False)
-    teacher_email = Column(String, unique=True, index=True, nullable=False)
+    teacher_email = Column(String, index=True, nullable=False)
     
     # Déclaration de la colonne JSON
     payload_data = Column(JSON, nullable=False, default=dict)
@@ -611,10 +626,22 @@ class PrimeNetPayload(Base):
     )
 
 class ClassInkTeacherSnapshot(Base):
-    """État complet ClassInk d'un enseignant, y compris les classes et élèves sans note."""
+    """Ancienne sauvegarde globale conservée pour compatibilité des comptes historiques."""
     __tablename__ = "classink_teacher_snapshots"
 
     teacher_email = Column(String, primary_key=True, index=True)
+    payload_data = Column(JSON, nullable=False, default=dict)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class ClassInkTeacherSpaceSnapshot(Base):
+    """État indépendant d'un compte enseignant dans une école donnée."""
+    __tablename__ = "classink_teacher_space_snapshots"
+    __table_args__ = (UniqueConstraint("teacher_email", "school_id", name="uq_classink_teacher_space_snapshot"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    teacher_email = Column(String, index=True, nullable=False)
+    school_id = Column(String, index=True, nullable=False)
     payload_data = Column(JSON, nullable=False, default=dict)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -1087,6 +1114,12 @@ with engine.connect() as conn:
     conn.execute(text("ALTER TABLE school_information ADD COLUMN IF NOT EXISTS armoiries TEXT;"))
     conn.execute(text("ALTER TABLE school_information ADD COLUMN IF NOT EXISTS pn_extra TEXT;"))
     conn.execute(text("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS signature TEXT;"))
+    conn.execute(text("ALTER TABLE student_grades ADD COLUMN IF NOT EXISTS school_id VARCHAR;"))
+    conn.execute(text("ALTER TABLE student_grades ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP;"))
+    conn.execute(text("ALTER TABLE primenet_payloads DROP CONSTRAINT IF EXISTS primenet_payloads_teacher_email_key;"))
+    conn.execute(text("DROP INDEX IF EXISTS ix_primenet_payloads_teacher_email;"))
+    conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_primenet_payload_school_teacher ON primenet_payloads (school_id, teacher_email);"))
+
     conn.execute(text("ALTER TABLE school_student_informations ADD COLUMN IF NOT EXISTS suivi_code VARCHAR(40);"))
     conn.execute(text("ALTER TABLE school_student_informations ADD COLUMN IF NOT EXISTS suivi_results_allowed BOOLEAN NOT NULL DEFAULT FALSE;"))
     conn.execute(text("ALTER TABLE school_student_informations ADD COLUMN IF NOT EXISTS suivi_results_updated_at TIMESTAMP;"))
