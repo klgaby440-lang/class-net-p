@@ -1132,7 +1132,7 @@ body {
     <link rel="apple-touch-icon" href="../assets/classink-logo.svg">
 </head>
 
-<body class="theme-light">
+<body class="theme-dark">
 
     <!-- Barre de navigation principale (Haut) -->
     <nav class="main-navbar">
@@ -1490,8 +1490,8 @@ body {
                 <div class="form-group">
                     <label>THÈME</label>
                     <select class="form-control" id="themeSelect">
+                        <option value="dark" selected>SOMBRE</option>
                         <option value="light">CLAIR</option>
-                        <option value="dark">SOMBRE</option>
                     </select>
                 </div>
             </section>
@@ -4788,9 +4788,23 @@ async function bpPushClassBulletin(cls) {
             // (Le déverrouillage avec vérification du mot de passe est enregistré dans le second bloc DOMContentLoaded,
             // « 7. Déverrouillage Écran » : l'enregistrer aussi ici déverrouillait avec n'importe quel mot de passe.)
 
-            document.getElementById('themeSelect').addEventListener('change', (e) => {
-                document.body.className = e.target.value === 'dark' ? 'theme-dark' : 'theme-light';
-            });
+            function setPrimeInkTheme(mode, persist = true) {
+                const theme = mode === 'light' ? 'light' : 'dark';
+                document.body.classList.remove('theme-light', 'theme-dark');
+                document.body.classList.add('theme-' + theme);
+                const selector = document.getElementById('themeSelect');
+                if (selector) selector.value = theme;
+                if (persist) {
+                    try { window.localStorage.setItem('primeink_theme', theme); } catch (_) { /* préférence facultative */ }
+                }
+            }
+            function loadPrimeInkTheme() {
+                let saved = 'dark';
+                try { saved = window.localStorage.getItem('primeink_theme') || 'dark'; } catch (_) {}
+                setPrimeInkTheme(saved, false);
+            }
+            loadPrimeInkTheme();
+            document.getElementById('themeSelect').addEventListener('change', e => setPrimeInkTheme(e.target.value, true));
 
             document.getElementById('tutorialBtn').addEventListener('click', () => {
                 document.getElementById('tutorialContent').classList.toggle('hidden');
