@@ -1750,7 +1750,16 @@ def login_school(data: LoginSchema, db: Session = Depends(get_db)):
 
     # 4. Chargement des enseignants
     teachers_data = []
-    for t in school.teachers:
+    school_teachers = {t.email: t for t in school.teachers}
+    space_teacher_rows = db.query(Teacher).join(
+        TeacherSchoolSpace, TeacherSchoolSpace.teacher_email == Teacher.email
+    ).filter(
+        TeacherSchoolSpace.school_id == school.school_id,
+        TeacherSchoolSpace.is_verified.is_(True),
+    ).all()
+    for teacher_row in space_teacher_rows:
+        school_teachers[teacher_row.email] = teacher_row
+    for t in school_teachers.values():
         teachers_data.append({
             "uniqueId": t.teacher_code or f"prof_{t.id}",
             "name": t.full_name,
@@ -3969,6 +3978,7 @@ def build_suivi_results_payload(db: Session, school: SchoolInformation, student:
     detailed_rows = []
     if linked_ids and teacher_emails:
         detailed_rows = db.query(StudentGrade).filter(
+            StudentGrade.school_id == school.school_id,
             StudentGrade.student_id.in_(list(set(linked_ids))),
             StudentGrade.teacher_email.in_(teacher_emails),
         ).order_by(StudentGrade.updated_at.asc()).all()
