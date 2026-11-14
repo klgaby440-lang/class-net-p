@@ -377,8 +377,10 @@ class FrontendStaticTests(unittest.TestCase):
     def test_manager_html_is_authenticated_readonly_and_never_persists_school_data(self):
         source = (ROOT / "manager/index.html").read_text(encoding="utf-8")
         self.inspect_file("manager/index.html")
-        for storage_api in ("localStorage", "sessionStorage", "indexedDB", "serviceWorker"):
+        for storage_api in ("sessionStorage", "indexedDB", "serviceWorker"):
             self.assertNotIn(storage_api, source)
+        self.assertIn("classink_manager_theme", source)
+        self.assertIn("classink_manager_theme", source)
         self.assertIn("/api/manager/login", source)
         self.assertIn("cache:'no-store'", source)
         self.assertIn("pagehide", source)
@@ -435,15 +437,20 @@ class FrontendStaticTests(unittest.TestCase):
             self.assertIn('id="llink-assist-widget"', source)
             self.assertIn("/api/llink/assist", source)
             self.assertIn("history.slice(-8)", source)
-            self.assertNotIn("localStorage", source)
-            self.assertNotIn("sessionStorage", source)
+            if relative == "manager/index.html":
+                self.assertIn("classink_manager_theme", source)
+                self.assertNotIn("sessionStorage", source)
+            else:
+                self.assertNotIn("localStorage", source)
+                self.assertNotIn("sessionStorage", source)
 
     def test_manager_has_crypt_telemetry_and_no_persistent_storage(self):
         source = (ROOT / "manager/index.html").read_text(encoding="utf-8")
         self.assertIn("const APP = 'manager'", source)
         self.assertIn("/api/telemetry/complaints", source)
         self.assertIn("window.addEventListener('pagehide'", source)
-        for storage_api in ("localStorage", "sessionStorage", "indexedDB"):
+        self.assertIn("classink_manager_theme", source)
+        for storage_api in ("sessionStorage", "indexedDB"):
             self.assertNotIn(storage_api, source)
 
     def test_primeink_has_legacy_schedule_publication_and_preserves_old_schedules_at_login(self):
@@ -475,3 +482,67 @@ class FrontendStaticTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+
+def test_primeink_palmares_uses_all_periods_school_scope_and_complete_grade_calculations():
+    source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
+    for marker in (
+        "PALMARES_PERIOD_FIELDS",
+        "buildPalmaresRecords",
+        "classPalmaresRanking",
+        "schoolPalmaresRanking",
+        "classPalmaresPercentChart",
+        "classPalmaresRankChart",
+        "schoolPalmaresPercentChart",
+        "renderPalmaresStudentDetail",
+        "Aucun élève n'a encore toutes les notes",
+    ):
+        self.assertIn(marker, source)
+    self.assertIn("record.percent >= 50", source)
+    self.assertIn("courseResults.every(item => item.result.complete)", source)
+    self.assertIn("openSchoolPalmaresBtn", source)
+
+
+def test_primeink_grade_visibility_button_is_connected_to_suivi_server_api():
+    source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
+    self.assertIn("student-note-access-button", source)
+    self.assertIn("window.bpSuiviToggleAccess()", source)
+    self.assertIn("await bpSuiviLoadRoster(st.classId)", source)
+    self.assertNotIn("student-note-access-placeholder", source)
+    self.assertNotIn('title="Commande prévue dans une prochaine version"', source)
+
+
+def test_classink_teacher_spaces_are_masked_and_selected_on_login():
+    source = (ROOT / "app/index.html").read_text(encoding="utf-8")
+    self.assertIn('id="login-school-id"', source)
+    self.assertIn('type="password" id="login-school-id"', source)
+    self.assertIn('id="setting-school-space-id"', source)
+    self.assertIn('type="password" id="setting-school-space-id"', source)
+    self.assertIn("/api/teacher/spaces/request", source)
+    self.assertIn("/api/teacher/spaces", source)
+    self.assertIn("teacherSpaces", source)
+    self.assertIn("localSpace !== serverSpace", source)
+
+
+def test_classink_teacher_schedule_is_editable_and_drives_bell_timing():
+    source = (ROOT / "app/index.html").read_text(encoding="utf-8")
+    self.assertIn('type="time" data-field="start"', source)
+    self.assertIn('type="time" data-field="end"', source)
+    self.assertIn("function saveTeacherSchedule()", source)
+    self.assertIn("function teacherScheduleTick()", source)
+    self.assertIn("entry.end", source)
+    self.assertNotIn("hours === '08' && minutes === '30'", source)
+
+
+def test_themes_are_persisted_with_dark_default_across_classink_surfaces():
+    app = (ROOT / "app/index.html").read_text(encoding="utf-8")
+    prime = (ROOT / "prime/index.html").read_text(encoding="utf-8")
+    manager = (ROOT / "manager/index.html").read_text(encoding="utf-8")
+    suivi = (ROOT / "suivi/index.html").read_text(encoding="utf-8")
+    self.assertIn("db.theme || 'dark'", app)
+    self.assertIn("primeink_theme", prime)
+    self.assertIn('<body class="theme-dark">', prime)
+    self.assertIn("classink_manager_theme", manager)
+    self.assertIn("classink_suivi_theme", suivi)
+    self.assertIn("theme: 'dark'", suivi)
