@@ -507,8 +507,9 @@ def test_primeink_palmares_uses_all_periods_school_scope_and_complete_grade_calc
 def test_primeink_grade_visibility_button_is_connected_to_suivi_server_api():
     source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
     self.assertIn("student-note-access-button", source)
-    self.assertIn("window.bpSuiviToggleAccess()", source)
-    self.assertIn("await bpSuiviLoadRoster(st.classId)", source)
+    self.assertIn("window.bpSuiviToggleStudentAccess(st.id)", source)
+    self.assertIn("window.bpSuiviToggleStudentAccess = async function(studentId)", source)
+    self.assertIn("await bpSuiviLoadRoster(student.classId)", source)
     self.assertNotIn("student-note-access-placeholder", source)
     self.assertNotIn('title="Commande prévue dans une prochaine version"', source)
 
@@ -546,3 +547,20 @@ def test_themes_are_persisted_with_dark_default_across_classink_surfaces():
     self.assertIn("classink_manager_theme", manager)
     self.assertIn("classink_suivi_theme", suivi)
     self.assertIn("theme: 'dark'", suivi)
+
+
+
+def test_classnet_backend_supports_teacher_school_spaces_and_school_scoped_sync():
+    source = (ROOT / "main.py").read_text(encoding="utf-8")
+    for marker in (
+        "class TeacherSchoolSpace(Base)",
+        "class ClassInkTeacherSpaceSnapshot(Base)",
+        "teacher_has_school_access(db, teacher, selected_school_id)",
+        '@app.post("/api/teacher/spaces/request")',
+        '@app.get("/api/teacher/spaces")',
+        '@app.get("/api/primenet/teachers/{teacher_code}")',
+        "school_id=verified_school_id",
+        'test_registration_mode = os.getenv("APP_ENV", "production")',
+    ):
+        self.assertIn(marker, source)
+    self.assertIn("if localSpace !== serverSpace && (localSpace || serverSpace)", (ROOT / "app/index.html").read_text(encoding="utf-8"))
