@@ -416,6 +416,11 @@
                     <label>MOT DE PASSE</label>
                     <input type="password" id="login-password" placeholder="••••••••">
                 </div>
+                <div class="form-group">
+                    <label>ID DE L'ÉCOLE (OPTIONNEL, MASQUÉ)</label>
+                    <input type="password" id="login-school-id" autocomplete="off" spellcheck="false" placeholder="Saisir l'identifiant communiqué par l'école">
+                    <small>Pour ouvrir un espace précis lorsque vous travaillez avec plusieurs établissements.</small>
+                </div>
                 <div style="display: flex; gap: 10px; margin-top: 20px;">
                     <button class="btn-action" style="flex:1;" onclick="closeLoginModal()">Annuler</button>
                     <button class="btn-primary" style="flex:1;" onclick="handleLogin()">Valider</button>
@@ -738,6 +743,19 @@
                 <label>ÉTABLISSEMENT / ÉCOLE</label>
                 <input type="text" id="setting-school-id" value="Enfant du Monde - Bukavu">
             </div>
+            <div class="form-group">
+                <label>IDENTIFIANT D'ÉCOLE À ASSOCIER (MASQUÉ)</label>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                    <input type="password" id="setting-school-space-id" autocomplete="off" spellcheck="false" placeholder="Identifiant fourni par l'école" style="flex:1;min-width:180px;">
+                    <button type="button" class="btn-secondary" onclick="requestTeacherSchoolSpace()">Demander l'espace</button>
+                </div>
+                <small style="display:block;margin-top:6px;color:var(--text-muted);">L'école devra confirmer cette demande dans PrimeInk. L'identifiant n'est jamais affiché en clair.</small>
+                <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+                    <select id="setting-teacher-space-select" aria-label="Espace scolaire" style="flex:1;min-width:180px;"></select>
+                    <button type="button" class="btn-secondary" onclick="prepareTeacherSpaceLogin()">Changer d'espace</button>
+                </div>
+                <small id="teacher-space-status" style="display:block;margin-top:6px;color:var(--text-muted);"></small>
+            </div>
 
             <div class="form-group">
                 <label>IDENTIFIANT UNIQUE CLASSINK À COMMUNIQUER À L'ÉCOLE</label>
@@ -932,8 +950,8 @@
             </div>
 
             <div class="form-group">
-                <label>ID DE L'ÉCOLE (Optionnel)</label>
-                <input type="text" id="edit-profile-school-code">
+                <label>ID DE L'ÉCOLE (MASQUÉ)</label>
+                <input type="password" id="edit-profile-school-code" autocomplete="off" spellcheck="false">
             </div>
 
             <div style="display: flex; gap: 10px; margin-top: 15px;">
@@ -969,24 +987,12 @@
                     </div>
                 </div>
 
-                <h4 style="margin: 10px 0; font-size: 0.95rem;">🗓️ Emploi du Temps Général</h4>
-                <div style="overflow-x: auto; margin-bottom: 15px;">
-                    <table style="font-size: 0.8rem;">
-                        <thead>
-                            <tr>
-                                <th>Heure</th>
-                                <th>Lundi</th>
-                                <th>Mardi</th>
-                                <th>Mercredi</th>
-                                <th>Jeudi</th>
-                                <th>Vendredi</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr><td><strong>07:30 - 08:30</strong></td><td>Algèbre</td><td>Analyse</td><td>Physique</td><td>Chimie</td><td>Biologie</td></tr>
-                            <tr><td><strong>08:30 - 09:30</strong></td><td>Français</td><td>Anglais</td><td>Histoire</td><td>Géographie</td><td>Informatique</td></tr>
-                        </tbody>
-                    </table>
+                <h4 style="margin: 10px 0; font-size: 0.95rem;">🗓️ Mon emploi du temps</h4>
+                <p style="font-size:.75rem;color:var(--text-muted);margin-bottom:10px;">Ajoutez les heures de début et de fin de chaque cours. La sonnerie se déclenche à la fin de l'heure indiquée, selon le jour.</p>
+                <div id="teacher-schedule-editor" style="display:grid;gap:8px;overflow-x:auto;"></div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 15px;">
+                    <button type="button" class="btn-action" onclick="addTeacherScheduleRow()">＋ Ajouter une heure</button>
+                    <button type="button" class="btn-primary" onclick="saveTeacherSchedule()">Enregistrer l'horaire</button>
                 </div>
             </div>
 
@@ -1214,6 +1220,7 @@ const defaultDB = {
         email: "enseignant@classnet.cd",
         password: "admin",
         school: "Enfant du Monde - Bukavu",
+        schoolId: "",
         isLoggedIn: false
     },
     classes: [], 
@@ -1227,7 +1234,9 @@ const defaultDB = {
     presences: [], 
     quizzes: [],
     llinkPrefs: "Donne des explications précises adaptées au programme de RDC.",
-    pendingCommits: 0
+    pendingCommits: 0,
+    teacherSpaces: [],
+    teacherSchedule: []
 };
 
 /* ==========================================================================
@@ -1362,8 +1371,1380 @@ function initApp() {
     updateLoginHeaderButton();
     renderClassSelectors();
     renderGradesTables();
-    renderAttendanceList();
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Class-Ink App | Suite Pédagogique</title>
+    <!-- LIBRAIRIES JSPDF ET AUTO-TABLE POUR EXPORT PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="icon" type="image/svg+xml" href="../assets/classink-logo.svg">
+    <link rel="preload" href="../assets/crypt-logo.svg" as="image" type="image/svg+xml">
+    <meta name="application-name" content="ClassInk — CRYPT">
+    <style>
+        /* --- VARIABLES & RESET --- */
+        :root {
+            --primary-gradient: linear-gradient(135deg, #412b66 0%, #3731a8 50%, #2563EB 100%);
+            --primary: #6D28D9;
+            --primary-dark: #5B21B6;
+            --bg-color: #F3F4F6;
+            --card-bg: #FFFFFF;
+            --text-main: #1F2937;
+            --text-muted: #6B7280;
+            --border-color: #E5E7EB;
+            --nav-bg: #FFFFFF;
+            --success: #10B981;
+            --danger: #EF4444;
+            --warning: #F59E0B;
+        }
+
+        [data-theme="dark"] {
+            --bg-color: #111827;
+            --card-bg: #1F2937;
+            --text-main: #F9FAFB;
+            --text-muted: #9CA3AF;
+            --border-color: #374151;
+            --nav-bg: #1F2937;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+        body { background-color: var(--bg-color); color: var(--text-main); padding-bottom: 70px; transition: background 0.3s, color 0.3s; }
+        
+        /* --- HEADER --- */
+        header {
+            background: var(--primary-gradient); 
+            color: white; 
+            flex: 1;
+            padding: 12px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: bold;
+            font-size: 1.1rem;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header-actions { display: flex; gap: 10px; align-items: center; }
+        .btn-auth-header {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            color: white;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn-auth-header:hover { background: rgba(255, 255, 255, 0.3); }
+        header button.icon-btn { background: none; border: none; color: white; font-size: 1.2rem; cursor: pointer; }
+
+        /* --- BOTTOM NAVIGATION --- */
+        .bottom-nav {
+            position: fixed;
+            bottom: 0; left: 0; right: 0;
+            background-color: var(--nav-bg);
+            display: flex;
+            justify-content: space-around;
+            padding: 8px 0;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
+            z-index: 100;
+            border-top: 1px solid var(--border-color);
+        }
+        .bottom-nav button {
+            background: none; border: none;
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            display: flex; flex-direction: column; align-items: center;
+            cursor: pointer; transition: color 0.2s;
+            padding: 4px 8px;
+        }
+        .bottom-nav button.active { color: var(--primary); font-weight: bold; }
+        .bottom-nav button::before { content: '📊'; font-size: 1.1rem; margin-bottom: 2px; }
+        .bottom-nav button[data-target="view-presence"]::before { content: '📅'; }
+        .bottom-nav button[data-target="view-llink"]::before { content: '🤖'; }
+        .bottom-nav button[data-target="view-interrogations"]::before { content: '📝'; }
+        .bottom-nav button[data-target="view-settings"]::before { content: '⚙️'; }
+        .bottom-nav button[data-target="view-conduite"]::before { content: '🧭'; }
+
+        /* --- VIEWS --- */
+        .view-section { display: none; padding: 15px; animation: fadeIn 0.3s ease-in-out; }
+        .view-section.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* --- CARDS & TABLES --- */
+        .card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            border: 1px solid var(--border-color);
+        }
+        .card-header-toggle {
+            display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;
+        }
+        .class-selector { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 10px; align-items: center; }
+        .btn-badge {
+            background-color: var(--bg-color); color: var(--text-main);
+            border: 1px solid var(--border-color); padding: 6px 14px;
+            border-radius: 20px; white-space: nowrap; cursor: pointer; font-size: 0.85rem;
+        }
+        .btn-badge.active { background: var(--primary-gradient); color: white; border-color: transparent; font-weight: bold; }
+        .btn-add-class {
+            background-color: var(--primary); color: white; border: none;
+            width: 32px; height: 32px; border-radius: 50%; font-weight: bold;
+            cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+        }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+        td, th { padding: 8px; text-align: left; border-bottom: 1px solid var(--border-color); font-size: 0.85rem; }
+        tr:nth-child(even) { background-color: rgba(0,0,0,0.02); }
+        
+        .push-actions { display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap; }
+        .btn-primary, .btn-secondary, .btn-action {
+            padding: 10px 14px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 0.85rem;
+        }
+        .btn-primary { background-color: var(--primary); color: white; flex: 1; }
+        .btn-secondary { background-color: var(--success); color: white; flex: 1; }
+        .btn-action { background-color: var(--bg-color); color: var(--text-main); border: 1px solid var(--border-color); }
+.student-note-access-placeholder { padding: 5px 7px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-color); color: var(--text-muted); font-size: 0.72rem; white-space: nowrap; cursor: not-allowed; opacity: 0.65; }
+
+        /* --- FORMS --- */
+        .form-group { margin-bottom: 12px; }
+        .form-group label { display: block; font-size: 0.8rem; font-weight: bold; margin-bottom: 4px; color: var(--text-muted); }
+        .form-group input, .form-group select {
+            width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color);
+            background-color: var(--bg-color); color: var(--text-main); outline: none; font-size: 0.9rem;
+        }
+        .form-inline { display: flex; gap: 10px; align-items: flex-end; margin-bottom: 15px; flex-wrap: wrap; }
+        .form-inline .form-group { flex: 1; min-width: 130px; margin-bottom: 0; }
+
+        /* --- MODAL AUTHENTIFICATION --- */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.5); display: none; justify-content: center; align-items: center; z-index: 200;
+        }
+        .modal-overlay.active { display: flex; }
+        .modal-content {
+            background: var(--card-bg); width: 90%; max-width: 380px; padding: 20px; border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2); border: 1px solid var(--border-color);
+        }
+
+        /* --- LLINK UI --- */
+        .llink-container { display: flex; flex-direction: column; height: calc(100vh - 140px); }
+        .llink-header { text-align: center; margin-bottom: 15px; }
+        .llink-header h1 { color: var(--primary); font-size: 1.8rem; }
+        .llink-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; flex-grow: 1; }
+        .llink-card {
+            background: var(--card-bg); border: 1px solid var(--border-color);
+            border-radius: 12px; padding: 12px; text-align: center; font-size: 0.8rem;
+        }
+        .llink-input-area {
+            background: var(--card-bg); border: 1px solid var(--border-color);
+            border-radius: 24px; padding: 8px 12px; display: flex; align-items: center; margin-top: auto;
+        }
+        .llink-input-area input { flex-grow: 1; border: none; background: transparent; color: var(--text-main); outline: none; padding: 5px; }
+        .llink-input-area button { background: var(--text-main); color: var(--card-bg); border: none; border-radius: 50%; width: 32px; height: 32px; cursor: pointer; }
+
+        .app-info { text-align: center; margin-top: 25px; font-size: 0.8rem; color: var(--text-muted); }
+        .empty-state { text-align: center; color: var(--text-muted); padding: 20px 10px; font-size: 0.85rem; }
+        .badge-info { background: var(--bg-color); padding: 4px 8px; border-radius: 6px; font-size: 0.75rem; color: var(--primary); border: 1px solid var(--border-color); }
+
+        /* --- SPLASH SCREEN MISE EN PRODUCTION --- */
+        #splash-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: linear-gradient(135deg, #0F172A 0%, #1E293B 50%, #1D4ED8 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 99999;
+            color: #FFFFFF;
+            transition: opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.6s;
+        }
+
+        #splash-screen.fade-out {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+
+        .splash-container {
+            text-align: center;
+            animation: splashContainerAppear 0.8s ease-out forwards;
+        }
+
+        .splash-logo-wrapper {
+            position: relative;
+            width: 90px;
+            height: 90px;
+            margin: 0 auto 20px auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .splash-logo-ring {
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            border: 3px solid rgba(255, 255, 255, 0.15);
+            border-top-color: #60A5FA;
+            animation: splashSpin 1.4s linear infinite;
+        }
+
+        .splash-logo-icon {
+            width: 52px;
+            height: 52px;
+            object-fit: contain;
+            border-radius: 10px;
+            animation: splashPulse 2s ease-in-out infinite;
+        }
+
+        .splash-title {
+            font-size: 1.8rem;
+            font-weight: 800;
+            letter-spacing: 2px;
+            margin-bottom: 6px;
+            background: linear-gradient(90deg, #FFFFFF 0%, #93C5FD 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .splash-subtitle {
+            font-size: 0.8rem;
+            color: #94A3B8;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+
+        @keyframes splashSpin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @keyframes splashPulse {
+            0%, 100% { transform: scale(1); opacity: 0.95; }
+            50% { transform: scale(1.08); opacity: 1; filter: drop-shadow(0 0 14px rgba(96, 165, 250, 0.7)); }
+        }
+
+        @keyframes splashContainerAppear {
+            from { opacity: 0; transform: translateY(12px) scale(0.95); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        
+        .drawer-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5); z-index: 300; display: none; justify-content: flex-end;
+            backdrop-filter: blur(3px);
+        }
+        .drawer-overlay.active { display: flex; }
+        .drawer-content {
+            width: 100%; max-width: 460px; height: 100%; background: var(--card-bg);
+            padding: 20px; display: flex; flex-direction: column; box-shadow: -5px 0 25px rgba(0,0,0,0.3);
+            animation: slideInRight 0.3s ease-out forwards; overflow-y: auto;
+        }
+        @keyframes slideInRight { from { transform: translateX(100%); } to { transform: translateX(0); } }
+
+/* --- Bouton Flottant & Cercles Tourbillonnants --- */
+.floating-nav-btn {
+    position: fixed;
+    bottom: 25px;
+    right: 25px;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background-color: #6D28D9;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 15px rgba(109, 40, 217, 0.4);
+    z-index: 1001;
+    transition: transform 0.3s ease;
 }
+
+/* Cercles tourbillonnants en arrière-plan */
+.floating-nav-btn .spinner-ring {
+    position: absolute;
+    top: -6px;
+    left: -6px;
+    right: -6px;
+    bottom: -6px;
+    border: 2px dashed rgba(109, 40, 217, 0.7);
+    border-radius: 50%;
+    animation: spin-circles 4s linear infinite;
+}
+
+.floating-nav-btn:hover {
+    transform: scale(1.08);
+}
+
+.floating-nav-btn:hover .spinner-ring {
+    animation-duration: 1.5s; /* S'accélère au survol */
+}
+
+@keyframes spin-circles {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.floating-nav-btn .btn-icon {
+    font-size: 1.25rem;
+    z-index: 2;
+}
+
+/* --- Barre de navigation (Masquée / Glissante) --- */
+.bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background-color: #FFFFFF;
+    display: flex;
+    justify-content: space-around;
+    padding: 10px 0;
+    z-index: 1000;
+    border-top: 1px solid #E5E7EB;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.08);
+    
+    /* Cachée par défaut en bas de l'écran */
+    transform: translateY(100%);
+    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Classe ajoutée en JS pour afficher la barre */
+.bottom-nav.show {
+    transform: translateY(0);
+}
+
+.bottom-nav button.nav-btn {
+    background: none;
+    border: none;
+    color: #6B7280;
+    font-size: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    cursor: pointer;
+    padding: 4px 8px;
+    transition: color 0.2s;
+}
+
+.bottom-nav button.nav-btn.active {
+    color: #6D28D9;
+    font-weight: bold;
+}
+    </style>
+</head>
+
+<!-- SPLASH SCREEN ANIMÉ -->
+<div id="splash-screen">
+    <div class="splash-container">
+        <div class="splash-logo-wrapper">
+            <div class="splash-logo-ring"></div>
+            <img class="splash-logo-icon" src="../assets/classink-logo.svg" alt="Logo ClassInk">
+
+        </div>
+        <div class="splash-title">CLASSINK</div>
+        <div class="splash-subtitle" style="display:flex;align-items:center;justify-content:center;gap:8px;"><img src="../assets/crypt-logo.svg" alt="Logo CRYPT" style="width:44px;height:38px;object-fit:contain;border-radius:5px;"> <span>Propulsé par CRYPT Neural Engine</span></div>
+    </div>
+</div>
+
+<body>
+
+    <!-- HEADER -->
+    <header>
+        <div>CLASS-INK SUITE ⚡</div>
+        <div class="header-actions">
+            <!-- NOUVEAU BOUTON DE MENU STYLE THINK / PAY.HTML -->
+            <button id="btn-header-schedule" class="icon-btn" title="Horaire & Admin Chat" onclick="toggleScheduleDrawer()">📅💬</button>
+            <button id="btn-login-header" class="btn-auth-header">Se connecter</button>
+        </div>
+    </header>
+
+    <!-- MODAL MULTI-VUES AUTHENTIFICATION (CONNEXION & INSCRIPTION OTP) -->
+    <div id="login-modal" class="modal-overlay">
+        <div class="modal-content">
+            
+            <!-- VUE 1 : CONNEXION ENSEIGNANT -->
+            <div id="auth-view-login">
+                <h3 style="margin-bottom: 15px; color: var(--primary);">Connexion Enseignant</h3>
+                <div class="form-group">
+                    <label>ADRESSE E-MAIL DE CONNEXION</label>
+                    <input type="email" id="login-email" placeholder="enseignant@classnet.cd">
+                </div>
+                <div class="form-group">
+                    <label>MOT DE PASSE</label>
+                    <input type="password" id="login-password" placeholder="••••••••">
+                </div>
+                <div class="form-group">
+                    <label>ID DE L'ÉCOLE (OPTIONNEL, MASQUÉ)</label>
+                    <input type="password" id="login-school-id" autocomplete="off" spellcheck="false" placeholder="Saisir l'identifiant communiqué par l'école">
+                    <small>Pour ouvrir un espace précis lorsque vous travaillez avec plusieurs établissements.</small>
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button class="btn-action" style="flex:1;" onclick="closeLoginModal()">Annuler</button>
+                    <button class="btn-primary" style="flex:1;" onclick="handleLogin()">Valider</button>
+                </div>
+                <div style="text-align: center; margin-top: 15px;">
+                    <a href="#" onclick="switchAuthSubView('register')" style="color: var(--primary); font-size: 0.85rem; text-decoration: underline;">Pas encore de compte ? S'inscrire</a>
+                </div>
+            </div>
+
+            <!-- VUE 2 : INSCRIPTION ENSEIGNANT (ÉTAPE 1 - INITIALISATION) -->
+            <div id="auth-view-register" style="display: none;">
+                <h3 style="margin-bottom: 15px; color: var(--primary);">Créer un Compte Enseignant</h3>
+                <div class="form-group">
+                    <label>NOM COMPLET</label>
+                    <input type="text" id="reg-fullname" placeholder="Ex: Gabriel Kahorha">
+                </div>
+                <div class="form-group">
+                    <label>ADRESSE E-MAIL</label>
+                    <input type="email" id="reg-email" placeholder="nom@exemple.com">
+                </div>
+                <div class="form-group">
+                    <label>NUMÉRO DE TÉLÉPHONE</label>
+                    <input type="tel" id="reg-phone" placeholder="0895281304">
+                </div>
+                <div class="form-group">
+                    <label>ÂGE</label>
+                    <input type="number" id="reg-age" placeholder="25" min="18">
+                </div>
+                <div class="form-group">
+                    <label>ÉCOLE / ÉTABLISSEMENT (OPTIONNEL)</label>
+                    <input type="text" id="reg-school" placeholder="Enfant du Monde">
+                </div>
+                <div class="form-group">
+                    <label>MOT DE PASSE</label>
+                    <input type="password" id="reg-password" placeholder="••••••••">
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button class="btn-action" style="flex:1;" onclick="switchAuthSubView('login')">Retour</button>
+                    <button class="btn-primary" style="flex:1;" id="btn-send-otp" onclick="handleRegisterInit()">Recevoir le code OTP ⚡</button>
+                </div>
+            </div>
+
+            <!-- VUE 3 : VÉRIFICATION CODE OTP (ÉTAPE 2 - VALIDATION) -->
+            <div id="auth-view-otp" style="display: none;">
+                <h3 style="margin-bottom: 10px; color: var(--primary);">Vérification de l'E-mail</h3>
+                <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 15px;">
+                    Un code OTP à 6 chiffres a été envoyé à l'adresse <strong id="otp-target-email"></strong>.
+                </p>
+                <div class="form-group">
+                    <label>CODE OTP DE VÉRIFICATION</label>
+                    <input type="text" id="reg-otp-code" placeholder="123456" maxlength="6" style="text-align: center; letter-spacing: 4px; font-weight: bold; font-size: 1.2rem;">
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <span>En cliquant sur <strong>Valider mon compte</strong>, vous reconnaissez avoir lu et accepté la <a href="https://class-net-p.vercel.app/confidentialite" target="_blank" rel="noopener noreferrer">politique de confidentialité</a> de CRYPT Entreprise pour ClassInk.</span>
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button class="btn-action" style="flex:1;" onclick="switchAuthSubView('register')">Modifier infos</button>
+                    <button class="btn-primary" style="flex:1;" id="btn-verify-otp" onclick="handleRegisterVerify()">Valider mon compte</button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- MAIN VIEWS -->
+    
+    <!-- SECTION 1 : NOTES & ÉLÈVES -->
+    <main id="view-notes" class="view-section active">
+        
+        <!-- MODULE D'AJOUT D'ÉLÈVE ET GESTION DES COURS DE LA CLASSE -->
+        <div class="card">
+            <h4 style="margin-bottom: 10px; color: var(--primary);">Gestion de la Classe & des Élèves</h4>
+            <div class="form-inline">
+                <div class="form-group">
+                    <label>NOM DE L'ÉLÈVE</label>
+                    <input type="text" id="input-student-name" placeholder="Ex: Amisi Baraka">
+                </div>
+                <div class="form-group">
+                    <label>CLASSE CONCERNÉE</label>
+                    <select id="select-student-class" onchange="syncSelectedClass(this.value)"></select>
+                </div>
+                <button class="btn-primary" onclick="addStudentFromForm()">+ Élève</button>
+            </div>
+            <hr style="border: 0; border-top: 1px dashed var(--border-color); margin: 10px 0;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                <div>
+                    <span style="font-size: 0.8rem; font-weight: bold; color: var(--text-muted);">COURS DE LA CLASSE :</span>
+                    <span id="current-class-courses-list" class="badge-info">Aucun cours</span>
+                </div>
+                <button class="btn-action" onclick="promptAddCourseToActiveClass()">+ Ajouter un Cours à cette Classe</button>
+            </div>
+        </div>
+
+        <!-- SÉLECTEUR DE CLASSES -->
+        <div class="class-selector">
+            <div id="class-buttons" style="display: flex; gap: 8px;"></div>
+            <button class="btn-add-class" title="Ajouter une classe" onclick="promptAddClass()">+</button>
+        </div>
+        
+        <h3 id="current-class-title" style="margin: 10px 0; color: var(--primary);">Aucune classe</h3>
+
+        <!-- CHAMP DE RECHERCHE DYNAMIQUE POUR LES NOTES -->
+        <div class="card" style="margin-bottom: 12px;">
+            <div class="form-group" style="margin-bottom: 0;">
+                <label>🔍 RECHERCHE DYNAMIQUE D'ÉLÈVE</label>
+                <input type="text" id="grades-filter-search" placeholder="Tapez le nom d'un élève pour filtrer..." oninput="renderGradesTables()">
+            </div>
+        </div>
+
+        <!-- FILTRE DE COURS EN SÉPARÉ POUR LES NOTES -->
+        <div class="card" style="margin-bottom: 12px;">
+            <div class="form-group" style="margin-bottom: 0;">
+                <label>📖 SÉLECTIONNER LE COURS ÀA FICHER / Saisir</label>
+                <select id="grades-filter-course" onchange="changeGradeCourseFilter(this.value)"></select>
+            </div>
+        </div>
+
+        <!-- PÉRIODES DE NOTES -->
+        <div id="periods-container"></div>
+
+        <div class="push-actions">
+            <button class="btn-primary" onclick="saveOfflineCommit()">Push Off (WiFi)</button>
+            <button class="btn-secondary" onclick="syncWithCloud()">Push On (API)</button>
+        </div>
+    </main>
+
+    <!-- SECTION 2 : JOURNAL DE PRÉSENCE -->
+    <main id="view-presence" class="view-section">
+        <div class="card">
+            <h3 style="color: var(--primary); margin-bottom: 12px;">📅 Journal de Présence Quotidien</h3>
+            
+            <div class="form-inline">
+                <div class="form-group">
+                    <label>CLASSE</label>
+                    <select id="presence-select-class" onchange="onPresenceClassChange()"></select>
+                </div>
+                <div class="form-group">
+                    <label>COURS / MATIÈRE</label>
+                    <select id="presence-select-course" onchange="renderAttendanceList()"></select>
+                </div>
+                <div class="form-group">
+                    <label>DATE DU JOURNAL</label>
+                    <input type="date" id="presence-date" onchange="renderAttendanceList()">
+                </div>
+            </div>
+
+            <!-- 🔍 MODULE DE FILTRAGE DYNAMIQUE -->
+            <div class="form-inline" style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border-color);">
+                <div class="form-group">
+                    <label>🔍 RECHERCHER UN ÉLÈVE</label>
+                    <input type="text" id="presence-filter-search" placeholder="Nom de l'élève..." oninput="renderAttendanceList()">
+                </div>
+                <div class="form-group">
+                    <label>🎯 FILTRER PAR STATUT</label>
+                    <select id="presence-filter-status" onchange="renderAttendanceList()">
+                        <option value="ALL">Tous les statuts</option>
+                        <option value="P">✅ Présents uniquement</option>
+                        <option value="A">❌ Absents uniquement</option>
+                        <option value="R">🕒 En retard uniquement</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div id="attendance-list-container"></div>
+            
+            <div style="display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap;">
+                <button class="btn-primary" style="flex: 2;" onclick="saveAttendanceSession()">
+                    💾 Enregistrer la Présence
+                </button>
+                <button class="btn-secondary" style="flex: 1; background-color: #DC2626;" onclick="exportPresenceToPDF()">
+                    📄 Exporter en PDF
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <!-- SECTION : CONDUITE ET APPLICATION (réservée au titulaire de la classe) -->
+    <main id="view-conduite" class="view-section">
+        <div class="card">
+            <h3 style="color: var(--primary); margin-bottom: 8px;">🧭 Conduite et Application — <span id="conduite-class-label"></span></h3>
+            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">Seul le titulaire de la classe saisit l'Application et la Conduite de ses élèves. PrimeInk vérifie que ces données viennent bien du titulaire avant de les mettre sur les bulletins.</p>
+            <div class="form-inline">
+                <div class="form-group">
+                    <label>PÉRIODE</label>
+                    <select id="conduite-period" onchange="renderConduiteList()">
+                        <option value="P1">1ère période (P1)</option>
+                        <option value="P2">2ème période (P2)</option>
+                        <option value="EX1">Examens du 1er semestre (EX1)</option>
+                        <option value="P3">3ème période (P3)</option>
+                        <option value="P4">4ème période (P4)</option>
+                        <option value="EX2">Examens du 2ème semestre (EX2)</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        <div class="card">
+            <div id="conduite-list-container"></div>
+            <datalist id="conduite-suggestions"><option value="E"></option><option value="TB"></option><option value="B"></option></datalist>
+            <div style="display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap;">
+                <button class="btn-primary" style="flex: 2;" onclick="saveConduite()">💾 Enregistrer la conduite</button>
+            </div>
+            <p id="conduite-status" style="font-size: 12px; color: var(--text-muted); margin-top: 10px;"></p>
+        </div>
+    </main>
+
+    <!-- SECTION 3 : LLINK AI -->
+    <main id="view-llink" class="view-section">
+        <div class="llink-container" style="display: flex; flex-direction: column; height: calc(100vh - 140px); gap: 10px;">
+            
+            <!-- HEADER LLINK (Sans Auth Google & Sans switch Online/Offline) -->
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: var(--card-bg); border-radius: 12px; border: 1px solid var(--border-color);">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 1.5rem;">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="1em" height="1em">
+                            <circle cx="50" cy="20" r="18" fill="none" stroke="#FF5733" stroke-width="3"/>
+                            <circle cx="76" cy="35" r="18" fill="none" stroke="#33FF57" stroke-width="3"/>
+                            <circle cx="76" cy="65" r="18" fill="none" stroke="#3357FF" stroke-width="3"/>
+                            <circle cx="50" cy="80" r="18" fill="none" stroke="#F333FF" stroke-width="3"/>
+                            <circle cx="24" cy="65" r="18" fill="none" stroke="#FFBD33" stroke-width="3"/>
+                            <circle cx="24" cy="35" r="18" fill="none" stroke="#33FFF3" stroke-width="3"/>
+                        </svg>
+                    </span>
+                    <div>
+                        <strong style="color: var(--primary); font-size: 1rem;">Llink AI</strong>
+                        <div style="font-size: 0.7rem; color: var(--text-muted);">CRYPT Neural Engine</div>
+                    </div>
+                </div>
+                <!-- Sélecteur de modèle basé sur la structure ChatPayload -->
+                <select id="llink-model-select" style="padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-color); color: var(--text-main); font-size: 0.8rem; font-weight: bold; outline: none;">
+                    <option value="gemini-1.5-flash">✨ Standard</option>
+                    <option value="deepseek-v3">🧠 Reflexion</option>
+                </select>
+            </div>
+
+            <!-- FENÊTRE DE CHAT STREAMING -->
+            <div id="llink-chat-window" style="flex-grow: 1; overflow-y: auto; padding: 12px; background: var(--card-bg); border-radius: 12px; border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 12px;">
+                <div class="empty-state" id="llink-empty-state">
+                    <h3 style="color: var(--primary); margin-bottom: 6px;">Bienvenue sur Llink 🤖</h3>
+                    <p style="margin-bottom: 12px;">Assistant pédagogique autonome. Choisissez une suggestion ou posez votre question :</p>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; text-align: left;">
+                        <button class="btn-action" onclick="setLlinkPrompt('Peux-tu m\'aider à préparer un cours sur : ')">🎓 Aide au cours</button>
+                        <button class="btn-action" onclick="setLlinkPrompt('Génère un sujet d\'examen sur : ')">✍️ Énoncé d'examen</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ZONE DE SAISIE -->
+            <div class="llink-input-area" style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 24px; padding: 6px 14px; display: flex; align-items: center; gap: 8px;">
+                <input type="text" id="llink-input" placeholder="Posez votre question à Llink..." style="flex-grow: 1; border: none; background: transparent; color: var(--text-main); outline: none; padding: 6px; font-size: 0.9rem;" onkeydown="if(event.key==='Enter') sendLlinkMessage()">
+                <button onclick="sendLlinkMessage()" style="background: var(--primary); color: white; border: none; border-radius: 50%; width: 34px; height: 34px; cursor: pointer; font-weight: bold; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">➤</button>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- SECTION 4 : INTERROGATIONS -->
+    <main id="view-interrogations" class="view-section">
+        <!-- FORMULAIRE DE CRÉATION DE QUIZ -->
+        <div class="card">
+            <h3 style="color: var(--primary); margin-bottom: 12px;">✍️ Créer / Générer une Interrogation</h3>
+            
+            <div class="form-group">
+                <label>TITRE DE L'ÉVALUATION / SUJET</label>
+                <input type="text" id="quiz-title-input" placeholder="Ex: Quiz 1 - La Photosynthèse et la Cellule Végétale">
+            </div>
+
+            <div class="form-inline">
+                <div class="form-group">
+                    <label>CLASSE CONCERNÉE</label>
+                    <select id="quiz-select-class"></select>
+                </div>
+                <div class="form-group">
+                    <label>COURS / MATIÈRE</label>
+                    <select id="quiz-select-course"></select>
+                </div>
+                <div class="form-group">
+                    <label>NOTE MAX (PTS)</label>
+                    <input type="number" id="quiz-max-score" value="10" min="1">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>ÉNONCÉ ET QUESTIONNAIRE (TEXTE BRUT OU GÉNÉRÉ PAR LLINK)</label>
+                <textarea id="quiz-text-content" rows="8" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-color); color: var(--text-main); font-family: monospace; font-size: 0.85rem;" placeholder="Tape ton sujet ici ou clique sur 'Générer avec Llink AI' pour que Llink rédige automatiquement les questions selon la classe et le cours..."></textarea>
+            </div>
+
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <button class="btn-secondary" onclick="generateQuizWithLlink()">✨ Générer avec Llink AI</button>
+                <button class="btn-primary" onclick="saveQuizToDB()">💾 Enregistrer l'Interrogation</button>
+            </div>
+        </div>
+
+        <!-- BANQUE DES QUIZ ENREGISTRÉS -->
+        <div class="card">
+            <h3 style="color: var(--primary); margin-bottom: 12px;">📚 Banque des Interrogations Sauvegardées</h3>
+            <div id="quizzes-container"></div>
+        </div>
+    </main>
+
+    <!-- SECTION 5 : PARAMÈTRES ET PROFIL -->
+    <main id="view-settings" class="view-section">
+        <div class="card">
+            <h3 style="color: var(--primary); margin-bottom: 15px;">Profil & Identité Enseignant</h3>
+            
+            <div class="form-group">
+                <label>NOM COMPLET DE L'ENSEIGNANT</label>
+                <input type="text" id="setting-user-name" value="Kahorha Gabriel">
+            </div>
+
+            <div class="form-group">
+                <label>ADRESSE E-MAIL DE L'ENSEIGNANT</label>
+                <div style="display: flex; gap: 8px;">
+                    <input type="email" id="setting-user-email" readonly style="font-weight: bold; background: rgba(0,0,0,0.05);">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>ÉTABLISSEMENT / ÉCOLE</label>
+                <input type="text" id="setting-school-id" value="Enfant du Monde - Bukavu">
+            </div>
+            <div class="form-group">
+                <label>IDENTIFIANT D'ÉCOLE À ASSOCIER (MASQUÉ)</label>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                    <input type="password" id="setting-school-space-id" autocomplete="off" spellcheck="false" placeholder="Identifiant fourni par l'école" style="flex:1;min-width:180px;">
+                    <button type="button" class="btn-secondary" onclick="requestTeacherSchoolSpace()">Demander l'espace</button>
+                </div>
+                <small style="display:block;margin-top:6px;color:var(--text-muted);">L'école devra confirmer cette demande dans PrimeInk. L'identifiant n'est jamais affiché en clair.</small>
+                <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+                    <select id="setting-teacher-space-select" aria-label="Espace scolaire" style="flex:1;min-width:180px;"></select>
+                    <button type="button" class="btn-secondary" onclick="prepareTeacherSpaceLogin()">Changer d'espace</button>
+                </div>
+                <small id="teacher-space-status" style="display:block;margin-top:6px;color:var(--text-muted);"></small>
+            </div>
+
+            <div class="form-group">
+                <label>IDENTIFIANT UNIQUE CLASSINK À COMMUNIQUER À L'ÉCOLE</label>
+                <div style="display:flex;gap:8px;">
+                    <input type="text" id="setting-teacher-access-code" readonly style="font-weight:700;background:rgba(0,0,0,0.05);">
+                    <button type="button" class="btn-secondary" onclick="copyTeacherAccessCode()">Copier</button>
+                </div>
+                <small style="display:block;margin-top:6px;color:var(--text-muted);">L'administration doit ajouter cet identifiant dans PrimeInk › Gestion des enseignants, puis préparer les informations des classes pour vous donner accès aux données de l'école.</small>
+            </div>
+
+            <div class="form-group">
+                <label>MOT DE PASSE DU COMPTE LOCAL</label>
+                <input type="password" id="setting-user-pass" value="123456">
+            </div>
+
+            <!-- AJOUTS CRYPT : Téléphone et Âge -->
+            <div class="form-group">
+                <label>NUMÉRO DE TÉLÉPHONE</label>
+                <input type="tel" id="setting-user-phone" placeholder="Ex: 089...">
+            </div>
+
+            <div class="form-group">
+                <label>ÂGE</label>
+                <input type="number" id="setting-user-age" placeholder="Ex: 25">
+            </div>
+
+            <!-- NOUVEAU : ID de l'école -->
+            <div class="form-group">
+                <label>ID DE L'ÉCOLE (Peut être vide si enseignant indépendant)</label>
+                <input type="text" id="setting-school-code" placeholder="Ex: ECOLE-123">
+            </div>
+
+            <button class="btn-primary" onclick="openEditProfileModal()">✏️ Modifier le profil</button>
+
+        </div>
+
+        <div class="card" id="titulaire-card">
+            <h3 style="color: var(--primary); margin-bottom: 8px;">Mon rôle de titulaire</h3>
+            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">PrimeInk transmet les classes et leurs titulaires au serveur de l'école. Après connexion, ClassInk affiche automatiquement les classes dont vous êtes officiellement titulaire, avec leurs élèves. Seul le titulaire enregistré peut saisir leur conduite.</p>
+            <div class="form-group">
+                <label>CLASSE(S) DONT JE SUIS TITULAIRE</label>
+                <select id="titulaire-class-select"></select>
+                <small id="titulaire-access-status" style="display:block;margin-top:8px;color:var(--text-muted);" aria-live="polite"></small>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <button class="btn-primary" id="save-titulaire-button" onclick="saveTitulaire()">Choisir ma classe</button>
+                <button class="btn-secondary" onclick="refreshTeacherClassroomData()">Actualiser les classes de l'école</button>
+            </div>
+        </div>
+
+        <div class="card" id="signature-card">
+            <h3 style="color: var(--primary); margin-bottom: 8px;">Ma signature pour les bulletins</h3>
+            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">Photographiez votre signature sur une feuille blanche bien éclairée. Le fond est retiré automatiquement. Elle sera envoyée avec vos notes et servira à compléter les bulletins des cours dont vous êtes titulaire.</p>
+            <div style="height: 90px; display: flex; align-items: center; justify-content: center; background: #fff; border: 1px dashed #94a3b8; border-radius: 8px; margin-bottom: 12px;">
+                <span id="signature-empty" style="color: #64748b; font-size: 13px;">Aucune signature enregistrée</span>
+                <img id="signature-preview" alt="Ma signature" style="display: none; max-height: 80px; max-width: 100%;">
+            </div>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <button class="btn-primary" onclick="captureSignature(true)">📷 Prendre une photo</button>
+                <button class="btn-action" onclick="captureSignature(false)">🖼️ Choisir une image</button>
+                <button class="btn-action" id="signature-delete-btn" style="display: none; color: var(--danger); border-color: var(--danger);" onclick="deleteSignature()">Supprimer</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3 style="color: var(--primary); margin-bottom: 15px;">Personnalisation Llink AI</h3>
+            
+            <div class="form-group">
+                <label>INSTRUCTIONS SPÉCIALES POUR LLINK (PRÉFÉRENCES)</label>
+                <textarea id="setting-llink-prefs" rows="3" style="width:100%; padding:8px; border-radius:8px; border:1px solid var(--border-color); background:var(--bg-color); color:var(--text-main); font-size:0.85rem;" placeholder="Ex: Réponds toujours avec un ton pédagogique, donne des exemples adaptés au programme RDC..." onchange="saveLlinkPrefs()"></textarea>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3 style="color: var(--primary); margin-bottom: 15px;">Préférences de l'Application</h3>
+            
+            <div class="form-group">
+                <label>THÈME D'AFFICHAGE</label>
+                <div style="display: flex; gap: 15px; margin-top: 5px;">
+                    <label><input type="radio" name="theme" value="light" checked onchange="setTheme('light')"> ☀️ Clair</label>
+                    <label><input type="radio" name="theme" value="dark" onchange="setTheme('dark')"> 🌙 Sombre</label>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>LANGUE DE L'INTERFACE</label>
+                <select id="setting-language" onchange="saveLanguagePref()">
+                    <option value="fr-RDC">Français (RDC)</option>
+                    <option value="en-US">English</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3 style="color: var(--primary); margin-bottom: 15px;">Sauvegarde & Maintenance</h3>
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+                <button class="btn-action" onclick="exportDatabaseJSON()">📥 Exporter la Base de Données (JSON)</button>
+                <button class="btn-action" style="color: var(--danger); border-color: var(--danger);" onclick="resetAppDatabase()">⚠️ Réinitialiser toutes les données locales</button>
+            </div>
+        </div>
+
+        <div class="app-info">
+            <p><strong>ClassInk</strong> - Version 2.1.30245 (Build Cryptographique)</p>
+            <p>Site officiel : <a href="https://klgaby440-lang.github.io/class-net/" target="_blank" style="color: var(--primary);">klgaby440-lang.github.io/classnet</a></p>
+            <p style="margin-top: 8px; color: var(--primary); font-weight: bold;">Developped by CRYPT Entreprise ⚡</p>
+        </div>
+    </main>
+
+    <button id="nav-toggle-btn" class="floating-nav-btn" aria-label="Menu des options">
+        <span class="spinner-ring"></span>
+        <span class="btn-icon">⚙️</span>
+    </button>
+
+    <!-- NAVIGATION INFERIEURE -->
+    <nav id="bottom-nav" class="bottom-nav">
+        <button class="nav-btn active" data-target="view-notes">Notes</button>
+        <button class="nav-btn" data-target="view-presence">Présences</button>
+        <button class="nav-btn" data-target="view-llink">Llink</button>
+        <button class="nav-btn" data-target="view-interrogations">Quiz</button>
+        <button class="nav-btn" id="nav-conduite" data-target="view-conduite" style="display: none;">Conduite</button>
+        <button class="nav-btn" data-target="view-settings">Réglages</button>
+    </nav>
+
+    <!-- MODAL DE REMPLACEMENT DE PROMPT() -->
+    <div id="custom-prompt-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3 id="custom-prompt-title" style="margin-bottom: 10px; color: var(--primary);">Saisie requise</h3>
+            <div class="form-group">
+                <label id="custom-prompt-label"></label>
+                <input type="text" id="custom-prompt-input" style="width:100%; padding:8px; border-radius:6px; border:1px solid var(--border-color);">
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 15px;">
+                <button class="btn-action" id="custom-prompt-cancel" style="flex:1;">Annuler</button>
+                <button class="btn-primary" id="custom-prompt-confirm" style="flex:1;">Valider</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE REMPLACEMENT DE CONSOLE.LOG() ET ALERT() -->
+    <div id="custom-alert-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3 id="custom-alert-title" style="margin-bottom: 10px; color: var(--primary);">Notification ClassInk</h3>
+            <p id="custom-alert-label" style="font-size: 0.9rem; color: var(--text-main); margin-bottom: 15px;"></p>
+            <button class="btn-primary" id="custom-alert-ok" style="width: 100%;">Ok</button>
+        </div>
+    </div>
+
+    <div id="custom-confirm-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3 id="custom-confirm-title" style="margin-bottom: 10px; color: var(--primary);">Confirmation</h3>
+            <p id="custom-confirm-label" style="font-size: 0.9rem; color: var(--text-main); margin-bottom: 15px; white-space: pre-wrap;"></p>
+            <div style="display: flex; gap: 10px;">
+                <button class="btn-secondary" id="custom-confirm-cancel" style="flex: 1;">Annuler</button>
+                <button class="btn-primary" id="custom-confirm-ok" style="flex: 1;">Confirmer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL SÉCURISÉE DE MODIFICATION DU PROFIL ENSEIGNANT -->
+    <div id="edit-profile-modal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 420px; width: 92%;">
+            <h3 style="color: var(--primary); margin-bottom: 15px;">Profil & Identité Enseignant</h3>
+            
+            <div class="form-group">
+                <label>NOM COMPLET DE L'ENSEIGNANT</label>
+                <input type="text" id="edit-profile-user-name">
+            </div>
+
+            <div class="form-group">
+                <label>ADRESSE E-MAIL DE L'ENSEIGNANT (IDENTIFIANT UNIQUE)</label>
+                <input type="email" id="edit-profile-user-email">
+            </div>
+
+            <div class="form-group">
+                <label>ÉTABLISSEMENT / ÉCOLE</label>
+                <input type="text" id="edit-profile-school-id">
+            </div>
+
+            <div class="form-group">
+                <label>NOUVEAU MOT DE PASSE (Optionnel)</label>
+                <input type="password" id="edit-profile-user-pass" placeholder="••••••••">
+            </div>
+
+            <div class="form-group">
+                <label>NUMÉRO DE TÉLÉPHONE</label>
+                <input type="tel" id="edit-profile-user-phone">
+            </div>
+
+            <div class="form-group">
+                <label>ÂGE</label>
+                <input type="number" id="edit-profile-user-age">
+            </div>
+
+            <div class="form-group">
+                <label>ID DE L'ÉCOLE (MASQUÉ)</label>
+                <input type="password" id="edit-profile-school-code" autocomplete="off" spellcheck="false">
+            </div>
+
+            <div style="display: flex; gap: 10px; margin-top: 15px;">
+                <button class="btn-action" onclick="closeEditProfileModal()" style="flex:1;">Annuler</button>
+                <button class="btn-primary" onclick="verifyAndSaveProfile()" style="flex:1;">💾 Valider les modifications</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- DRAWER COULISSANT : HORAIRE, MINUTEUR & WHATSAPP ADMIN CHAT -->
+    <div id="schedule-chat-drawer" class="drawer-overlay">
+        <div class="drawer-content">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">
+                <h3 style="color: var(--primary);">🏫 Centre de Contrôle & Admin</h3>
+                <button onclick="toggleScheduleDrawer()" style="background:none; border:none; font-size:1.4rem; cursor:pointer; color:var(--text-main);">✕</button>
+            </div>
+
+            <!-- SÉLECTEUR D'ONGLETS -->
+            <div style="display: flex; gap: 8px; margin-bottom: 15px;">
+                <button class="btn-primary" style="flex:1; font-size:0.75rem;" onclick="switchDrawerTab('schedule')">📅 Horaire & Sonnerie</button>
+                <button class="btn-action" style="flex:1; font-size:0.75rem;" onclick="switchDrawerTab('chat')">💬 Groupe Direction</button>
+            </div>
+
+            <!-- SECTION 1 : HORAIRE & MINUTEUR SONNERIE -->
+            <div id="drawer-tab-schedule">
+                <div class="card" style="background: rgba(109, 40, 217, 0.05); border: 1px dashed var(--primary);">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <strong style="font-size: 0.85rem; color: var(--primary);">🔔 Minuteur de Cours</strong>
+                            <div id="live-timer-display" style="font-size: 1.1rem; font-weight: bold; margin-top: 2px;">00:00:00 (Hors période)</div>
+                        </div>
+                        <button class="btn-primary" style="padding: 6px 10px; font-size: 0.75rem;" onclick="testSchoolBell()">Test Sonnerie 🔊</button>
+                    </div>
+                </div>
+
+                <h4 style="margin: 10px 0; font-size: 0.95rem;">🗓️ Mon emploi du temps</h4>
+                <p style="font-size:.75rem;color:var(--text-muted);margin-bottom:10px;">Ajoutez les heures de début et de fin de chaque cours. La sonnerie se déclenche à la fin de l'heure indiquée, selon le jour.</p>
+                <div id="teacher-schedule-editor" style="display:grid;gap:8px;overflow-x:auto;"></div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 15px;">
+                    <button type="button" class="btn-action" onclick="addTeacherScheduleRow()">＋ Ajouter une heure</button>
+                    <button type="button" class="btn-primary" onclick="saveTeacherSchedule()">Enregistrer l'horaire</button>
+                </div>
+            </div>
+
+            <!-- SECTION 2 : WHATSAPP STYLE ADMIN CHAT -->
+            <div id="drawer-tab-chat" style="display: none; flex-direction: column; height: calc(100% - 120px);">
+                <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid var(--success); padding: 8px 12px; border-radius: 8px; margin-bottom: 10px; font-size: 0.75rem; color: var(--success); font-weight: bold;">
+                    📢 Canal Officiel de la Direction (Sécurisé)
+                </div>
+                
+                <div id="admin-chat-messages" style="flex-grow: 1; overflow-y: auto; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px;">
+                    <div style="background: var(--card-bg); padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border-color); font-size: 0.8rem;">
+                        <strong style="color: var(--primary);">Direction :</strong> Réunion pédagogique ce samedi à 10h précise.
+                        <div style="font-size: 0.65rem; color: var(--text-muted); text-align: right; margin-top: 2px;">08:15</div>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 6px;">
+                    <input type="text" id="admin-chat-input" placeholder="Écrire à la direction..." style="flex-grow: 1; padding: 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-color); color: var(--text-main); font-size: 0.85rem;" onkeydown="if(event.key==='Enter') sendAdminMessage()">
+                    <button class="btn-primary" style="padding: 8px 14px;" onclick="sendAdminMessage()">➤</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+// ---------------------------------------------------------------------------
+// PROTECTION XSS : tout texte saisi par un utilisateur est échappé avant d'être inséré dans du HTML.
+//  - safeHTML(valeur)  : pour le texte et les attributs HTML (échappe & < > " ')
+//  - jsArg(valeur)     : pour un argument JavaScript dans onclick="..." (littéral JSON, puis échappement HTML)
+// ---------------------------------------------------------------------------
+function safeHTML(value) {
+    return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function jsArg(value) {
+    return safeHTML(JSON.stringify(String(value == null ? '' : value)));
+}
+
+
+
+// Déclenchement et fermeture automatique du Splash Screen au chargement de l'application
+window.addEventListener('load', () => {
+    setTimeout(() => {
+        const splash = document.getElementById('splash-screen');
+        if (splash) {
+            splash.classList.add('fade-out');
+            setTimeout(() => splash.remove(), 600); // Retire l'élément du DOM après l'animation
+        }
+    }, 2800); // Masquage après 1.8 seconde
+});
+
+/* ==========================================================================
+   1. MOTEUR DE BASE DE DONNÉES LOCALES (LOCALSTORAGE SÉCURISÉ)
+   ========================================================================== */
+
+const version = "2.1.30245"
+
+async function search_version(url, version_actuelle) {
+    try {
+        const res = await fetch(`${url}/app/version`, { method: 'POST' });
+        const data = await res.json();
+        
+        if (data && data.status === true) {
+            if (version_actuelle !== data.latest_version) {
+                await showCustomAlert("📢 Une nouvelle version est disponible. Rendez-vous sur CRYPT Store pour la télécharger.");
+            }
+        }
+    } catch (err) {
+        /* Crash silencieux ou log système */
+        if (typeof systemLog === 'function') {
+            systemLog("Échec de la vérification de version", "warn", "Version");
+        }
+    }
+}
+
+search_version('https://class-net-p.onrender.com', version)
+   /**
+ * Imprime un contenu HTML via une iframe cachée compatible WebView / Tauri
+ */
+function imprimerDocument(htmlContent) {
+  let printIframe = document.getElementById('classnet-print-iframe');
+
+  // Création de l'iframe si elle n'existe pas encore
+  if (!printIframe) {
+    printIframe = document.createElement('iframe');
+    printIframe.id = 'classnet-print-iframe';
+    printIframe.style.position = 'fixed';
+    printIframe.style.right = '0';
+    printIframe.style.bottom = '0';
+    printIframe.style.width = '0px';
+    printIframe.style.height = '0px';
+    printIframe.style.border = 'none';
+    printIframe.style.visibility = 'hidden';
+    document.body.appendChild(printIframe);
+  }
+
+  const iframeDoc = printIframe.contentWindow.document;
+
+  // Réinitialisation du contenu de l'iframe
+  iframeDoc.open();
+  iframeDoc.write(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Impression ClassInk</title>
+        <style>
+          @page {
+            margin: 10mm;
+            size: auto;
+          }
+          body {
+            font-family: Arial, sans-serif;
+            padding: 15px;
+            color: #000;
+            background: #fff;
+            margin: 0;
+          }
+          h1, h2 { text-align: center; }
+          table { width: 100%; border-collapse: collapse; }
+          th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+          @media print {
+            body { margin: 0; padding: 0; }
+          }
+        </style>
+      </head>
+      <body>
+        ${htmlContent}
+      </body>
+    </html>
+  `);
+  iframeDoc.close();
+
+  // Fonction de déclenchement de l'impression
+  const triggerPrint = () => {
+    setTimeout(() => {
+      try {
+        printIframe.contentWindow.focus();
+        printIframe.contentWindow.print();
+      } catch (err) {
+        showCustomAlert("Impossible de lancer l'impression. Réessayez ou utilisez l'export PDF.");
+      }
+    }, 250);
+  };
+
+  // S'assurer que le contenu et les éléments de l'iframe sont entièrement prêts
+  if (iframeDoc.readyState === 'complete') {
+    triggerPrint();
+  } else {
+    printIframe.onload = triggerPrint;
+  }
+}
+
+/**
+ * Exporte un document jsPDF compatible Tauri et Navigateur Web
+ */
+async function exporterPDF(doc, filename = "interrogation.pdf") {
+  // Détection de l'environnement Tauri
+  const isTauri = typeof window !== 'undefined' && (window.__TAURI__ || window.__TAURI_INTERNALS__);
+
+  if (isTauri) {
+    try {
+      // 1. Récupération des API natives de Tauri (support v1 et v2)
+      const dialog = window.__TAURI__?.dialog || await import('@tauri-apps/plugin-dialog');
+      const fs = window.__TAURI__?.fs || await import('@tauri-apps/plugin-fs');
+
+      // 2. Extraire les données binaires du PDF généré par jsPDF
+      const arrayBuffer = doc.output('arraybuffer');
+      const uint8Array = new Uint8Array(arrayBuffer);
+
+      // 3. Ouvrir la boîte de dialogue système pour choisir l'emplacement de sauvegarde
+      const filePath = await dialog.save({
+        defaultPath: filename,
+        filters: [{ name: 'Document PDF', extensions: ['pdf'] }]
+      });
+
+      // 4. Écrire le fichier directement sur le disque si l'utilisateur valide
+      if (filePath) {
+        if (fs.writeBinaryFile) {
+          await fs.writeBinaryFile(filePath, uint8Array); // Tauri v1
+        } else if (fs.writeFile) {
+          await fs.writeFile(filePath, uint8Array); // Tauri v2
+        }
+        
+        if (typeof showCustomAlert === 'function') {
+          await showCustomAlert("✅ Le fichier PDF a été enregistré avec succès !");
+        }
+      }
+      return;
+    } catch (err) {
+      // l'export natif a échoué : on tente l'export par Blob ci-dessous
+    }
+  }
+
+  // Fallback pour Navigateur Web standard / WebView générique
+  try {
+    doc.save(filename);
+  } catch (e) {
+    const blob = doc.output('blob');
+    const blobUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+  }
+}
+
+function generateUniqueId(prefix = "CN") {
+    const year = new Date().getFullYear();
+    const randomHash1 = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const randomHash2 = Math.random().toString(36).substring(2, 6).toUpperCase();
+    return `${prefix}-${year}-${randomHash1}-${randomHash2}`;
+}
+
+const DB_KEY = 'classnet_app_database_v2';
+
+const defaultDB = {
+    user: {
+        id: generateUniqueId("SYS-CRYPT"),
+        name: "Gabriel Kahorha",
+        email: "enseignant@classnet.cd",
+        password: "admin",
+        school: "Enfant du Monde - Bukavu",
+        schoolId: "",
+        isLoggedIn: false
+    },
+    classes: [], 
+    courses: {},  
+    courseMax: {}, // { "3ème Scientifique_SVT": 20 }
+    periodVisibility: { "P1": true, "P2": false, "EX1": false, "P3": false, "P4": false, "EX2": false },
+    activeCourseFilter: {},
+    students: {}, 
+    evaluations: {}, 
+    grades: {}, 
+    presences: [], 
+    quizzes: [],
+    llinkPrefs: "Donne des explications précises adaptées au programme de RDC.",
+    pendingCommits: 0,
+    teacherSpaces: [],
+    teacherSchedule: []
+};
+
+/* ==========================================================================
+   SUPPRESSION D'UNE CLASSE
+   ========================================================================== */
+async function deleteClass(classNameToDelete) {
+    const targetClass = classNameToDelete || activeClass;
+
+    if (!targetClass) {
+        alert("⚠️ Aucune classe sélectionnée à supprimer.");
+        return;
+    }
+
+    const confirmDelete = await showCustomConfirm(`⚠️ Es-tu sûr de vouloir supprimer la classe "${targetClass}" ?\n\nToutes les données associées (élèves, cours, évaluations et présences) seront définitivement effacées.`);
+    if (!confirmDelete) return;
+
+    // 1. Retrait de la liste des classes
+    db.classes = db.classes.filter(c => c !== targetClass);
+
+    // 2. Nettoyage des objets liés
+    delete db.courses[targetClass];
+    delete db.students[targetClass];
+    delete db.evaluations[targetClass];
+    if (db.conduct) delete db.conduct[targetClass];
+    if (db.user.titulaireOf === targetClass) db.user.titulaireOf = '';
+
+    // 3. Nettoyage de l'historique des présences
+    if (db.presences && Array.isArray(db.presences)) {
+        db.presences = db.presences.filter(p => p.class !== targetClass);
+    }
+
+    // 4. Redéfinition de la classe active
+    activeClass = db.classes.length > 0 ? db.classes[0] : "";
+
+    saveDB();
+    renderClassSelectors();
+    renderGradesTables();
+    renderAttendanceList();
+
+    alert(`✅ La classe "${targetClass}" a été supprimée avec succès.`);
+}
+
+let classInkStorageAvailable = true;
+const classInkIsOperaMini = /Opera Mini/i.test((navigator && navigator.userAgent) || "")
+    || (typeof window !== "undefined" && typeof window.operamini !== "undefined");
+
+function showClassInkCompatibilityNotice(message) {
+    const display = () => {
+        let notice = document.getElementById("classink-browser-compatibility");
+        if (!notice) {
+            notice = document.createElement("div");
+            notice.id = "classink-browser-compatibility";
+            notice.setAttribute("role", "alert");
+            notice.style.cssText = "position:sticky;top:0;z-index:99999;padding:12px 16px;background:#fff4d6;color:#713f12;border-bottom:2px solid #d97706;font:600 14px/1.45 Arial,sans-serif;";
+            document.body.insertBefore(notice, document.body.firstChild);
+        }
+        notice.textContent = message;
+    };
+    if (document.body) display();
+    else document.addEventListener("DOMContentLoaded", display, { once: true });
+}
+
+function safeClassInkStorageGet(key, fallback = null) {
+    try {
+        const value = window.localStorage.getItem(key);
+        return value === null ? fallback : value;
+    } catch (error) {
+        classInkStorageAvailable = false;
+        return fallback;
+    }
+}
+
+function safeClassInkStorageSet(key, value) {
+    try {
+        window.localStorage.setItem(key, value);
+        return true;
+    } catch (error) {
+        classInkStorageAvailable = false;
+        showClassInkCompatibilityNotice("ATTENTION : ce navigateur ne permet pas de sauvegarder les données locales de ClassInk. N'effectuez aucune saisie importante ici. Ouvrez ClassInk avec Chrome, Edge, Firefox ou Opera (version normale, pas Opera Mini).");
+        return false;
+    }
+}
+
+function loadClassInkDatabase() {
+    try {
+        const saved = window.localStorage.getItem(DB_KEY);
+        if (!saved) return JSON.parse(JSON.stringify(defaultDB));
+        const parsed = JSON.parse(saved);
+        return parsed && typeof parsed === "object" ? parsed : JSON.parse(JSON.stringify(defaultDB));
+    } catch (error) {
+        classInkStorageAvailable = false;
+        return JSON.parse(JSON.stringify(defaultDB));
+    }
+}
+
+let db = loadClassInkDatabase();
+
+function saveDB() {
+    try {
+        if (typeof updateConduiteNav === 'function') updateConduiteNav();
+    } catch (error) {
+        console.warn("[ClassInk] Mise à jour du menu conduite impossible :", error);
+    }
+    const saved = safeClassInkStorageSet(DB_KEY, JSON.stringify(db));
+    if (!saved || classInkIsOperaMini) {
+        showClassInkCompatibilityNotice("ATTENTION : Opera Mini n'est pas compatible avec le stockage local requis par ClassInk. Les modifications risquent de ne pas être conservées. Utilisez Chrome, Edge, Firefox ou Opera normal pour travailler.");
+    }
+    return saved;
+}
+
+let activeClass = db.classes.length > 0 ? db.classes[0] : "";
+
+/* ==========================================================================
+   2. INITIALISATION ET AUTHENTIFICATION
+   ========================================================================== */
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('presence-date').value = new Date().toISOString().substring(0, 10);
+    initApp();
+});
+
+function initApp() {
+    if (classInkIsOperaMini || !classInkStorageAvailable) {
+        showClassInkCompatibilityNotice("ATTENTION : Opera Mini ne prend pas en charge le stockage local utilisé par ClassInk. Les données saisies peuvent être perdues. Pour le test du professeur, ouvrez ClassInk avec Chrome, Edge, Firefox ou Opera normal.");
+    }
+    loadTheme();
+    if (!db.user.id) db.user.id = generateUniqueId("SYS-CRYPT");
+    document.getElementById('setting-user-name').value = db.user.name;
+    document.getElementById('setting-school-id').value = db.user.school;
+    document.getElementById('setting-user-email').value = db.user.email || 'Non renseigné';
+    renderTeacherAccessCode();
+
+    updateLoginHeaderButton();
+    renderClassSelectors();
+    renderGradesTables();
+
 
 function renderTeacherAccessCode() {
     const input = document.getElementById('setting-teacher-access-code');
@@ -1447,6 +2828,20 @@ function withoutSecrets(data) {
 function mergeServerDataIntoLocal(local, server) {
     local = local || {};
     server = server || {};
+    const localSpace = String((local.schoolId || (local.user && local.user.schoolId) || '')).trim();
+    const serverSpace = String((server.schoolId || (server.user && server.user.schoolId) || '')).trim();
+    if (localSpace !== serverSpace && (localSpace || serverSpace)) {
+        // Les données d'école ne doivent jamais être fusionnées entre deux espaces différents.
+        const isolated = { ...server };
+        isolated.user = { ...(server.user || {}), password: (local.user && local.user.password) || '' };
+        isolated.theme = local.theme || server.theme || 'dark';
+        isolated.llinkPrefs = local.llinkPrefs || server.llinkPrefs;
+        isolated.teacherSpaces = Array.isArray(server.teacherSpaces) ? server.teacherSpaces : [];
+        isolated.teacherSchedule = Array.isArray(server.teacherSchedule) ? server.teacherSchedule : [];
+        isolated.schoolId = serverSpace;
+        isolated.pendingCommits = 0;
+        return isolated;
+    }
     const merged = { ...local, ...server };
 
     // Identité : le serveur fait foi, le local garde ses champs supplémentaires
@@ -1543,13 +2938,19 @@ async function handleLogin() {
         const response = await fetch(`${CLOUD_AUTH_URL}/api/auth/teacher/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ identifier: email, password: pass })
+            body: JSON.stringify({
+                identifier: email,
+                password: pass,
+                school_id: (document.getElementById('login-school-id')?.value || db.user.schoolId || '').trim()
+            })
         });
 
         const result = await response.json();
 
         if (result.status && result.data) {
             db = mergeServerDataIntoLocal(db, result.data);
+            db.teacherSpaces = Array.isArray(result.data.teacherSpaces) ? result.data.teacherSpaces : [];
+            db.user.schoolId = String(result.data.schoolId || result.data.user?.schoolId || '').trim();
             if (result.token) {
                 try { localStorage.setItem('classink_cloud_token', result.token); } catch (e) { /* stockage indisponible */ }
             }
@@ -1557,6 +2958,7 @@ async function handleLogin() {
             saveDB();
             
             updateLoginHeaderButton();
+            renderTeacherSpacesSettings();
             renderTeacherAccessCode();
             renderClassSelectors();
             renderGradesTables();
@@ -1688,6 +3090,72 @@ document.getElementById('btn-login-header').addEventListener('click', async () =
         openLoginModal();
     }
 });
+
+function renderTeacherSpacesSettings() {
+    const select = document.getElementById('setting-teacher-space-select');
+    if (!select) return;
+    const spaces = Array.isArray(db.teacherSpaces) ? db.teacherSpaces : [];
+    const active = String(db.user.schoolId || '');
+    select.innerHTML = '<option value="">Espace local / aucun espace sélectionné</option>' + spaces.map(space =>
+        '<option value="' + safeHTML(space.schoolId) + '">' + safeHTML(space.schoolName || 'Établissement') + (space.city ? ' · ' + safeHTML(space.city) : '') + '</option>'
+    ).join('');
+    if (active && spaces.some(space => String(space.schoolId) === active)) select.value = active;
+    const status = document.getElementById('teacher-space-status');
+    if (status) status.textContent = spaces.length
+        ? spaces.length + ' espace(s) confirmé(s). Les noms sont affichés, jamais les identifiants.'
+        : 'Aucun espace confirmé pour le moment.';
+}
+
+async function requestTeacherSchoolSpace(value, showMessage = true) {
+    const input = document.getElementById('setting-school-space-id');
+    const schoolId = String(value ?? (input ? input.value : '')).trim();
+    if (!schoolId) {
+        if (showMessage) await showCustomAlert("Saisissez l'identifiant de l'école. Le champ reste masqué.");
+        return { ok: false, message: "Identifiant de l'école manquant." };
+    }
+    const token = (() => { try { return localStorage.getItem('classink_cloud_token') || ''; } catch (_) { return ''; } })();
+    if (!token) {
+        if (showMessage) await showCustomAlert("Connectez-vous d'abord à votre compte enseignant avant de demander un espace.");
+        return { ok: false, message: "Connexion enseignant requise." };
+    }
+    try {
+        const response = await fetch(CLOUD_AUTH_URL + '/api/teacher/spaces/request', {
+            method: 'POST',
+            headers: cloudAuthHeaders(),
+            body: JSON.stringify({ school_id: schoolId }),
+            cache: 'no-store'
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload.status) throw new Error(payload.detail || payload.message || 'Demande refusée.');
+        db.user.preferredSchoolId = schoolId;
+        saveDB();
+        if (input) input.value = '';
+        const status = document.getElementById('teacher-space-status');
+        if (status) status.textContent = payload.message || "Demande envoyée à l'école.";
+        if (showMessage) await showCustomAlert(payload.message || "Demande d'espace envoyée.");
+        return { ok: true, message: payload.message || '', verified: !!payload.verified };
+    } catch (error) {
+        if (showMessage) await showCustomAlert(error.message || "Impossible de joindre le serveur.");
+        return { ok: false, message: error.message || "Erreur réseau." };
+    }
+}
+
+function prepareTeacherSpaceLogin() {
+    const select = document.getElementById('setting-teacher-space-select');
+    const schoolId = String(select?.value || '').trim();
+    if (!schoolId) {
+        if (typeof showCustomAlert === 'function') {
+            showCustomAlert("Sélectionnez un espace confirmé. Pour demander un nouvel espace, saisissez son identifiant masqué dans les paramètres.");
+        }
+        return;
+    }
+    openLoginModal();
+    switchAuthSubView('login');
+    const field = document.getElementById('login-school-id');
+    if (field) field.value = schoolId;
+    const email = document.getElementById('login-email');
+    if (email && db.user.email) email.value = db.user.email;
+}
 
 function updateProfileInfo() {
     db.user.name = document.getElementById('setting-user-name').value;
@@ -3735,7 +5203,11 @@ async function verifyAndSaveProfile() {
     db.user.school = document.getElementById('edit-profile-school-id').value.trim();
     db.user.phone = document.getElementById('edit-profile-user-phone').value.trim();
     db.user.age = document.getElementById('edit-profile-user-age').value.trim();
-    db.user.schoolCode = document.getElementById('edit-profile-school-code').value.trim();
+    const profileSchoolId = document.getElementById('edit-profile-school-code').value.trim();
+    if (profileSchoolId) {
+        const request = await requestTeacherSchoolSpace(profileSchoolId, false);
+        if (!request.ok) await showCustomAlert(request.message || "La demande d'espace n'a pas pu être envoyée.");
+    }
 
     const newPass = document.getElementById('edit-profile-user-pass').value.trim();
     if (newPass) {
@@ -3762,7 +5234,7 @@ function setTheme(mode) {
 
 // 2. Charger le thème lors du démarrage de l'application
 function loadTheme() {
-    const savedTheme = db.theme || 'light';
+    const savedTheme = db.theme || 'dark';
     setTheme(savedTheme);
 
     // Cocher le bon bouton radio dans les paramètres
@@ -3893,44 +5365,105 @@ function switchDrawerTab(tab) {
     document.getElementById('drawer-tab-chat').style.display = tab === 'chat' ? 'flex' : 'none';
 }
 
-// Sonnerie audio native (Web Audio API)
+const TEACHER_SCHEDULE_DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+const teacherScheduleBellFired = new Set();
+let teacherScheduleLastTick = Date.now();
+
+function teacherScheduleReadEditor() {
+    const editor = document.getElementById('teacher-schedule-editor');
+    if (!editor) return [];
+    return Array.from(editor.querySelectorAll('[data-schedule-row]')).map((row, index) => ({
+        id: row.dataset.scheduleId || generateUniqueId('SCH'),
+        day: row.querySelector('[data-field="day"]').value,
+        start: row.querySelector('[data-field="start"]').value,
+        end: row.querySelector('[data-field="end"]').value,
+        course: row.querySelector('[data-field="course"]').value.trim(),
+        room: row.querySelector('[data-field="room"]').value.trim(),
+        order: index
+    }));
+}
+
+function renderTeacherScheduleEditor() {
+    const editor = document.getElementById('teacher-schedule-editor');
+    if (!editor) return;
+    const entries = Array.isArray(db.teacherSchedule) ? db.teacherSchedule : [];
+    editor.innerHTML = entries.map(entry => {
+        const id = String(entry.id || generateUniqueId('SCH'));
+        const dayOptions = TEACHER_SCHEDULE_DAYS.map(day => '<option value="' + day + '"' + (day === entry.day ? ' selected' : '') + '>' + day + '</option>').join('');
+        return '<div data-schedule-row data-schedule-id="' + safeHTML(id) + '" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:7px;padding:9px;border:1px solid var(--border-color);border-radius:10px;">' +
+            '<label>Jour<select data-field="day">' + dayOptions + '</select></label>' +
+            '<label>Début<input type="time" data-field="start" value="' + safeHTML(entry.start || '') + '"></label>' +
+            '<label>Fin<input type="time" data-field="end" value="' + safeHTML(entry.end || '') + '"></label>' +
+            '<label>Cours<input type="text" data-field="course" value="' + safeHTML(entry.course || '') + '" placeholder="Nom du cours"></label>' +
+            '<label>Salle<input type="text" data-field="room" value="' + safeHTML(entry.room || '') + '" placeholder="Facultatif"></label>' +
+            '<button type="button" class="btn-action" onclick="removeTeacherScheduleRow(' + JSON.stringify(id) + ')">Supprimer</button></div>';
+    }).join('') || '<div class="empty-state">Aucune heure configurée. Ajoutez les créneaux de votre horaire.</div>';
+}
+
+function addTeacherScheduleRow() {
+    const entries = teacherScheduleReadEditor();
+    entries.push({ id: generateUniqueId('SCH'), day: 'Lundi', start: '07:30', end: '08:30', course: '', room: '' });
+    db.teacherSchedule = entries;
+    renderTeacherScheduleEditor();
+}
+
+function removeTeacherScheduleRow(id) {
+    db.teacherSchedule = teacherScheduleReadEditor().filter(entry => String(entry.id) !== String(id));
+    saveDB();
+    renderTeacherScheduleEditor();
+}
+
+async function saveTeacherSchedule() {
+    const entries = teacherScheduleReadEditor();
+    if (entries.some(entry => !entry.start || !entry.end || !entry.course || entry.end <= entry.start)) {
+        await showCustomAlert('Chaque ligne doit contenir un cours, un début et une fin postérieure au début.');
+        return;
+    }
+    db.teacherSchedule = entries.sort((a,b) => TEACHER_SCHEDULE_DAYS.indexOf(a.day) - TEACHER_SCHEDULE_DAYS.indexOf(b.day) || a.start.localeCompare(b.start));
+    saveDB();
+    renderTeacherScheduleEditor();
+    await showCustomAlert('Emploi du temps enregistré sur cet appareil.');
+}
+
 function testSchoolBell() {
     try {
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) throw new Error('Web Audio indisponible');
+        const audioCtx = new AudioContextClass();
+        if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(880, audioCtx.currentTime); // La4
+        osc.frequency.setValueAtTime(880, audioCtx.currentTime);
         gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 1.5);
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.start();
-        osc.stop(audioCtx.currentTime + 1.5);
-    } catch(e) {
-        // pas de son disponible : sans conséquence
-    }
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.start(); osc.stop(audioCtx.currentTime + 1.5);
+        osc.onended = () => audioCtx.close().catch(() => {});
+    } catch(error) { console.warn('[ClassInk] Sonnerie indisponible:', error); }
 }
 
-// Minuteur dynamique en temps réel
-setInterval(() => {
+function teacherScheduleTick() {
     const now = new Date();
-    const hours = String(now.getHours()).padStart(2, '0');
-    const minutes = String(now.getMinutes()).padStart(2, '0');
-    const seconds = String(now.getSeconds()).padStart(2, '0');
-    const timeStr = `${hours}:${minutes}:${seconds}`;
-    
+    const day = TEACHER_SCHEDULE_DAYS[(now.getDay() + 6) % 7];
+    const nowTime = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
     const display = document.getElementById('live-timer-display');
-    if (display) {
-        if (hours === '08' && minutes === '30' && seconds === '00') {
-            testSchoolBell();
-            display.textContent = `🚨 Fin de l'heure de cours !`;
-        } else {
-            display.textContent = `${timeStr} (En cours)`;
+    const entries = Array.isArray(db.teacherSchedule) ? db.teacherSchedule : [];
+    const current = entries.find(entry => entry.day === day && entry.start <= nowTime && nowTime < entry.end);
+    if (display) display.textContent = current ? '📚 ' + current.course + (current.room ? ' · ' + current.room : '') + ' · fin à ' + current.end : '🕒 ' + nowTime + ' · Aucun cours en cours';
+    const nowStamp = now.getTime();
+    entries.filter(entry => entry.day === day && entry.end).forEach(entry => {
+        const parts = entry.end.split(':').map(Number);
+        const end = new Date(now); end.setHours(parts[0] || 0, parts[1] || 0, 0, 0);
+        const key = now.toISOString().slice(0,10) + '|' + entry.id;
+        if (end.getTime() > teacherScheduleLastTick && end.getTime() <= nowStamp && !teacherScheduleBellFired.has(key)) {
+            teacherScheduleBellFired.add(key); testSchoolBell();
+            if (display) display.textContent = '🔔 Fin du cours : ' + entry.course;
         }
-    }
-}, 1000);
-
+    });
+    teacherScheduleLastTick = nowStamp;
+}
+setInterval(teacherScheduleTick, 1000);
 // Envoi de message style WhatsApp dans le chat admin
 function sendAdminMessage() {
     const input = document.getElementById('admin-chat-input');
