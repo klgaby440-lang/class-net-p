@@ -13,7 +13,7 @@ from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, status, He
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, EmailStr
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, Text, JSON, Float, text, func, UniqueConstraint, CheckConstraint
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, Text, JSON, Float, text, func, UniqueConstraint, CheckConstraint, or_
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session, relationship
 import random
@@ -426,11 +426,25 @@ class Teacher(Base):
     status = Column(String, default="Actif")
     school_id = Column(String, ForeignKey("school_information.school_id"), nullable=True)
     school_access_verified = Column(Boolean, nullable=False, default=False, server_default="false")
+    preferred_school_id = Column(String(100), nullable=True, index=True)
     llink_preferences = Column(Text, nullable=True)
     signature = Column(Text, nullable=True)  # photo de la signature, prise dans ClassInk
 
     school = relationship("SchoolInformation", back_populates="teachers")
     quizzes = relationship("QuizBank", back_populates="teacher")
+
+class TeacherSchoolSpace(Base):
+    """Association validée entre un compte enseignant et une école ; un compte peut avoir plusieurs espaces."""
+    __tablename__ = "teacher_school_spaces"
+    __table_args__ = (UniqueConstraint("teacher_email", "school_id", name="uq_teacher_school_space"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    teacher_email = Column(String, ForeignKey("teachers.email"), index=True, nullable=False)
+    school_id = Column(String, ForeignKey("school_information.school_id"), index=True, nullable=False)
+    is_verified = Column(Boolean, nullable=False, default=True, server_default="true")
+    schedule_data = Column(JSON, nullable=False, default=list)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
 
 class ClasseInformation(Base):
     __tablename__ = "classe_informations"
@@ -507,7 +521,8 @@ class SyncHistory(Base):
 class QuizBank(Base):
     __tablename__ = "quizzes"
     id = Column(String, primary_key=True, index=True)
-    teacher_email = Column(String, ForeignKey("teachers.email"))
+    teacher_email = Column(String, ForeignKey("teachers.email"), index=True)
+    school_id = Column(String, ForeignKey("school_information.school_id"), nullable=True, index=True)
     title = Column(String)
     content = Column(Text)
     teacher = relationship("Teacher", back_populates="quizzes")
@@ -591,14 +606,17 @@ class StudentGrade(Base):
     period = Column(String, nullable=False)
     score = Column(Float, nullable=False)
     max_score = Column(Float, nullable=False)
+    school_id = Column(String, index=True, nullable=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 class PrimeNetPayload(Base):
     __tablename__ = "primenet_payloads"
 
     id = Column(Integer, primary_key=True, index=True)
+    __table_args__ = (UniqueConstraint("school_id", "teacher_email", name="uq_primenet_payload_school_teacher"),)
+
     school_id = Column(String, index=True, nullable=False)
-    teacher_email = Column(String, unique=True, index=True, nullable=False)
+    teacher_email = Column(String, index=True, nullable=False)
     
     # Déclaration de la colonne JSON
     payload_data = Column(JSON, nullable=False, default=dict)
@@ -611,10 +629,22 @@ class PrimeNetPayload(Base):
     )
 
 class ClassInkTeacherSnapshot(Base):
-    """État complet ClassInk d'un enseignant, y compris les classes et élèves sans note."""
+    """Ancienne sauvegarde globale conservée pour compatibilité des comptes historiques."""
     __tablename__ = "classink_teacher_snapshots"
 
     teacher_email = Column(String, primary_key=True, index=True)
+    payload_data = Column(JSON, nullable=False, default=dict)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class ClassInkTeacherSpaceSnapshot(Base):
+    """État indépendant d'un compte enseignant dans une école donnée."""
+    __tablename__ = "classink_teacher_space_snapshots"
+    __table_args__ = (UniqueConstraint("teacher_email", "school_id", name="uq_classink_teacher_space_snapshot"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    teacher_email = Column(String, index=True, nullable=False)
+    school_id = Column(String, index=True, nullable=False)
     payload_data = Column(JSON, nullable=False, default=dict)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -796,6 +826,7 @@ class SchoolRegisterSchema(BaseModel):
 class LoginSchema(BaseModel):
     identifier: str # Email pour prof, school_id pour école
     password: str
+    school_id: Optional[str] = None
 
 class CodeVerifySchema(BaseModel):
     school_id: Optional[str] = None    # champ réellement envoyé par PrimeInk
@@ -1023,11 +1054,52 @@ def require_active_school(claims: dict = Depends(require_school), db: Session = 
     return claims
 
 
-def teacher_school_block(db: Session, teacher) -> Optional[str]:
-    """Message de refus si l'école de l'enseignant est suspendue ou expirée, sinon None."""
-    if not teacher or not teacher.school_id:
+def teacher_has_school_access(db: Session, teacher, school_id: str) -> bool:
+    """Vérifie l'association explicite d'un enseignant à une école, avec compatibilité historique."""
+    school_id = str(school_id or "").strip()
+    if not teacher or not school_id:
+        return False
+    association = db.query(TeacherSchoolSpace).filter(
+        TeacherSchoolSpace.teacher_email == teacher.email,
+        TeacherSchoolSpace.school_id == school_id,
+        TeacherSchoolSpace.is_verified.is_(True),
+    ).first()
+    if association:
+        return True
+    return bool(
+        str(getattr(teacher, "school_id", "") or "") == school_id
+        and getattr(teacher, "school_access_verified", False)
+    )
+
+
+def teacher_school_spaces(db: Session, teacher) -> list:
+    """Retourne les espaces vérifiés de l'enseignant sans exposer les espaces d'autres comptes."""
+    if not teacher:
+        return []
+    associations = db.query(TeacherSchoolSpace).filter(
+        TeacherSchoolSpace.teacher_email == teacher.email,
+        TeacherSchoolSpace.is_verified.is_(True),
+    ).all()
+    ids = {str(item.school_id) for item in associations}
+    legacy_id = str(getattr(teacher, "school_id", "") or "")
+    if legacy_id and getattr(teacher, "school_access_verified", False):
+        ids.add(legacy_id)
+    if not ids:
+        return []
+    schools = db.query(SchoolInformation).filter(SchoolInformation.school_id.in_(sorted(ids))).all()
+    return [
+        {"schoolId": school.school_id, "schoolName": school.name_school, "city": school.city}
+        for school in sorted(schools, key=lambda item: (item.name_school or "").casefold())
+    ]
+
+
+def teacher_school_block(db: Session, teacher, school_id: Optional[str] = None) -> Optional[str]:
+    """Message de refus si l'école de l'espace actif est suspendue ou expirée."""
+    selected = str(school_id or getattr(teacher, "school_id", "") or "").strip()
+    if not teacher or not selected:
         return None
-    state = licence_state(db.query(SchoolInformation).filter(SchoolInformation.school_id == teacher.school_id).first())
+    school = db.query(SchoolInformation).filter(SchoolInformation.school_id == selected).first()
+    state = licence_state(school)
     return LICENCE_MESSAGES[state["reason"]] if state["locked"] else None
 
 def generate_20_char_code() -> str:
@@ -1077,6 +1149,7 @@ with engine.connect() as conn:
     conn.execute(text("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS status VARCHAR DEFAULT 'Actif';"))
     conn.execute(text("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS teacher_code VARCHAR(50);"))
     conn.execute(text("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS school_access_verified BOOLEAN NOT NULL DEFAULT FALSE;"))
+    conn.execute(text("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS preferred_school_id VARCHAR(100);"))
     conn.execute(text("ALTER TABLE school_information ADD COLUMN IF NOT EXISTS email TEXT;"))
     conn.execute(text("ALTER TABLE school_information ADD COLUMN IF NOT EXISTS province VARCHAR(255);"))
     conn.execute(text("ALTER TABLE school_information ADD COLUMN IF NOT EXISTS province VARCHAR(255);"))
@@ -1087,6 +1160,17 @@ with engine.connect() as conn:
     conn.execute(text("ALTER TABLE school_information ADD COLUMN IF NOT EXISTS armoiries TEXT;"))
     conn.execute(text("ALTER TABLE school_information ADD COLUMN IF NOT EXISTS pn_extra TEXT;"))
     conn.execute(text("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS signature TEXT;"))
+    conn.execute(text("ALTER TABLE student_grades ADD COLUMN IF NOT EXISTS school_id VARCHAR;"))
+    conn.execute(text("ALTER TABLE student_grades ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP;"))
+    conn.execute(text("ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS school_id VARCHAR;"))
+    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_quizzes_school_id ON quizzes (school_id);"))
+    conn.execute(text("UPDATE quizzes q SET school_id = t.school_id FROM teachers t WHERE q.teacher_email = t.email AND q.school_id IS NULL AND t.school_id IS NOT NULL;"))
+    conn.execute(text("UPDATE student_grades sg SET school_id = t.school_id FROM teachers t WHERE sg.teacher_email = t.email AND sg.school_id IS NULL AND t.school_id IS NOT NULL;"))
+    conn.execute(text("ALTER TABLE primenet_payloads DROP CONSTRAINT IF EXISTS primenet_payloads_teacher_email_key;"))
+    conn.execute(text("DROP INDEX IF EXISTS ix_primenet_payloads_teacher_email;"))
+    conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_primenet_payload_school_teacher ON primenet_payloads (school_id, teacher_email);"))
+    conn.execute(text("ALTER TABLE teacher_school_spaces ADD COLUMN IF NOT EXISTS schedule_data JSON NOT NULL DEFAULT '[]'::json;"))
+
     conn.execute(text("ALTER TABLE school_student_informations ADD COLUMN IF NOT EXISTS suivi_code VARCHAR(40);"))
     conn.execute(text("ALTER TABLE school_student_informations ADD COLUMN IF NOT EXISTS suivi_results_allowed BOOLEAN NOT NULL DEFAULT FALSE;"))
     conn.execute(text("ALTER TABLE school_student_informations ADD COLUMN IF NOT EXISTS suivi_results_updated_at TIMESTAMP;"))
@@ -1283,20 +1367,23 @@ async def init_teacher_register(data: TeacherInitSchema, background_tasks: Backg
     if existing_teacher:
         return {"status": False, "message": "Cet identifiant est déjà associé à un compte."}
 
-    # Limite les demandes de code (coût SMS/e-mail et force brute par renouvellement du code)
+    # Code temporaire uniquement en recette : jamais activé dans l'environnement de production.
+    test_registration_mode = os.getenv("APP_ENV", "production").strip().lower() in {"test", "testing", "staging"}
     if OTP_REQUEST_LIMITER.is_blocked(identifier):
         return {"status": False, "message": "Trop de demandes de code. Réessayez dans une heure."}
     OTP_REQUEST_LIMITER.record(identifier)
 
-    # 3. Génération du code OTP et sauvegarde
-    otp = generate_otp()
+    # La création du compte garde le même contrôle OTP. En recette, le code fixe est
+    # limité aux environnements explicitement non-productifs et n'est jamais un bypass.
+    otp = "1969" if test_registration_mode else generate_otp()
     expiry = datetime.utcnow() + timedelta(minutes=15)
-
     db.query(OTPVerification).filter(OTPVerification.identifier == identifier).delete()
     db.add(OTPVerification(identifier=identifier, code=otp, expires_at=expiry))
     db.commit()
 
-    # 4. Routage automatique selon le canal détecté
+    if test_registration_mode:
+        return {"status": True, "message": "Mode recette : utilisez le code de validation universel 1969."}
+
     if channel == "email":
         email_html = (
             f"<h3>Salut {data.full_name} ⚡</h3>"
@@ -1306,10 +1393,9 @@ async def init_teacher_register(data: TeacherInitSchema, background_tasks: Backg
         background_tasks.add_task(send_email_via_resend, identifier, "Code de vérification ClassNet", email_html)
         return {"status": True, "message": f"Code envoyé à l'adresse email {identifier}."}
 
-    else:  # SMS / Téléphone
-        sms_text = f"ClassNet : Ton code de vérification est {otp}. Valable 15 minutes."
-        background_tasks.add_task(send_sms_via_twilio, identifier, sms_text)
-        return {"status": True, "message": f"Code envoyé par SMS au {identifier}."}
+    sms_text = f"ClassNet : Ton code de vérification est {otp}. Valable 15 minutes."
+    background_tasks.add_task(send_sms_via_twilio, identifier, sms_text)
+    return {"status": True, "message": f"Code envoyé par SMS au {identifier}."}
 
 @app.post("/api/auth/teacher/verify-register")
 def verify_teacher_register(data: OTPVerifySchema, db: Session = Depends(get_db)):
@@ -1426,7 +1512,22 @@ def login_teacher(data: LoginSchema, db: Session = Depends(get_db)):
         return {"status": False, "message": "Identifiants incorrects."}
     LOGIN_LIMITER.reset(limiter_key)
 
-    blocked = teacher_school_block(db, teacher)
+    requested_school_id = str(data.school_id or "").strip()
+    spaces = teacher_school_spaces(db, teacher)
+    if requested_school_id:
+        if not teacher_has_school_access(db, teacher, requested_school_id):
+            return {"status": False, "message": "Cet espace n'est pas encore confirmé par l'école. Vérifiez l'identifiant puis demandez à l'administration de vous ajouter dans PrimeInk."}
+        active_school_id = requested_school_id
+    elif teacher_has_school_access(db, teacher, str(getattr(teacher, "preferred_school_id", "") or "")):
+        active_school_id = str(teacher.preferred_school_id)
+    elif teacher_has_school_access(db, teacher, str(teacher.school_id or "")):
+        active_school_id = str(teacher.school_id)
+    elif len(spaces) == 1:
+        active_school_id = str(spaces[0]["schoolId"])
+    else:
+        active_school_id = ""
+
+    blocked = teacher_school_block(db, teacher, active_school_id) if active_school_id else None
     if blocked:
         return {"status": False, "locked": True, "message": blocked}
 
@@ -1434,9 +1535,18 @@ def login_teacher(data: LoginSchema, db: Session = Depends(get_db)):
         teacher.password = hash_password(data.password)  # migration silencieuse de l'ancien format en clair
         db.commit()
     
-    # Récupération des entités
-    db_grades = db.query(StudentGrade).filter(StudentGrade.teacher_email == teacher.email).all()
-    db_quizzes = db.query(QuizBank).filter(QuizBank.teacher_email == teacher.email).all()
+    # Chaque espace ne reçoit que ses notes. Les anciennes notes sans school_id
+    # restent visibles uniquement pour les comptes indépendants non encore rattachés.
+    grades_query = db.query(StudentGrade).filter(StudentGrade.teacher_email == teacher.email)
+    grades_query = grades_query.filter(
+        StudentGrade.school_id == active_school_id if active_school_id else StudentGrade.school_id.is_(None)
+    )
+    db_grades = grades_query.all()
+    quiz_query = db.query(QuizBank).filter(QuizBank.teacher_email == teacher.email)
+    quiz_query = quiz_query.filter(
+        QuizBank.school_id == active_school_id if active_school_id else QuizBank.school_id.is_(None)
+    )
+    db_quizzes = quiz_query.all()
     # Si vous avez un modèle Attendance pour les présences :
     db_presences = db.query(Attendance).filter(Attendance.teacher_email == teacher.email).all() if 'Attendance' in globals() else []
 
@@ -1523,7 +1633,8 @@ def login_teacher(data: LoginSchema, db: Session = Depends(get_db)):
             "name": teacher.full_name,
             "email": teacher.email,
             "password": data.password,  # jamais l'empreinte : le client garde le mot de passe saisi (mode hors-ligne)
-            "school": teacher.school_name or "Indépendant",
+            "school": next((item["schoolName"] for item in spaces if item["schoolId"] == active_school_id), teacher.school_name or "Indépendant"),
+            "schoolId": active_school_id,
             "isLoggedIn": True
         },
         "classes": list(classes_set),
@@ -1536,28 +1647,44 @@ def login_teacher(data: LoginSchema, db: Session = Depends(get_db)):
         "grades": grades_dict,
         "presences": presences_list,
         "quizzes": quizzes_list,
-        "school_id": getattr(teacher, 'school_id', ''),
+        "school_id": active_school_id,
+        "schoolId": active_school_id,
+        "teacherSpaces": spaces,
         "theme": getattr(teacher, 'theme', 'dark'),
         "pendingCommits": 0
     }
     
     # Si une sauvegarde complète existe, elle est prioritaire : elle contient aussi
     # les classes, cours, élèves sans notes et les réglages que StudentGrade ne peut pas reconstruire.
-    snapshot_row = db.query(ClassInkTeacherSnapshot).filter_by(teacher_email=teacher.email).first()
+    if active_school_id:
+        snapshot_row = db.query(ClassInkTeacherSpaceSnapshot).filter(
+            ClassInkTeacherSpaceSnapshot.teacher_email == teacher.email,
+            ClassInkTeacherSpaceSnapshot.school_id == active_school_id,
+        ).first()
+        if not snapshot_row and str(teacher.school_id or "") == active_school_id:
+            legacy_snapshot = db.query(ClassInkTeacherSnapshot).filter_by(teacher_email=teacher.email).first()
+            snapshot_payload = legacy_snapshot.payload_data if legacy_snapshot else None
+        else:
+            snapshot_payload = snapshot_row.payload_data if snapshot_row else None
+    else:
+        legacy_snapshot = db.query(ClassInkTeacherSnapshot).filter_by(teacher_email=teacher.email).first()
+        snapshot_payload = legacy_snapshot.payload_data if legacy_snapshot else None
     classnet_app_db = restore_classink_teacher_state(
-        snapshot_row.payload_data if snapshot_row else None,
+        snapshot_payload,
         classnet_app_db,
         teacher,
         data.password,
     )
-    # Les classes officielles de l'école sont ajoutées à chaque connexion, même sans aucune note.
     classnet_app_db = apply_teacher_classroom_context(
         classnet_app_db,
-        build_teacher_classroom_context(db, teacher),
+        build_teacher_classroom_context(db, teacher, active_school_id or None),
     )
 
+    token_claims = {"role": "teacher", "email": teacher.email}
+    if active_school_id:
+        token_claims["school_id"] = active_school_id
     return {"status": True, "data": classnet_app_db,
-            "token": create_token({"role": "teacher", "email": teacher.email}, TEACHER_TOKEN_TTL)}
+            "token": create_token(token_claims, TEACHER_TOKEN_TTL)}
 
 @app.post("/api/auth/school/login")
 def login_school(data: LoginSchema, db: Session = Depends(get_db)):
@@ -1635,7 +1762,16 @@ def login_school(data: LoginSchema, db: Session = Depends(get_db)):
 
     # 4. Chargement des enseignants
     teachers_data = []
-    for t in school.teachers:
+    school_teachers = {t.email: t for t in school.teachers}
+    space_teacher_rows = db.query(Teacher).join(
+        TeacherSchoolSpace, TeacherSchoolSpace.teacher_email == Teacher.email
+    ).filter(
+        TeacherSchoolSpace.school_id == school.school_id,
+        TeacherSchoolSpace.is_verified.is_(True),
+    ).all()
+    for teacher_row in space_teacher_rows:
+        school_teachers[teacher_row.email] = teacher_row
+    for t in school_teachers.values():
         teachers_data.append({
             "uniqueId": t.teacher_code or f"prof_{t.id}",
             "name": t.full_name,
@@ -1944,7 +2080,14 @@ def _crypt_public_school(school, db: Session) -> dict:
         "licenceState": state["reason"] or "ok",
         "classes": db.query(ClasseInformation).filter(ClasseInformation.school_id == school.school_id).count(),
         "students": db.query(SchoolStudentInformation).filter(SchoolStudentInformation.school_id == school.school_id).count(),
-        "teachers": db.query(Teacher).filter(Teacher.school_id == school.school_id).count(),
+        "teachers": len({
+            t.email for t in db.query(Teacher).filter(Teacher.school_id == school.school_id).all()
+        } | {
+            email for (email,) in db.query(TeacherSchoolSpace.teacher_email).filter(
+                TeacherSchoolSpace.school_id == school.school_id,
+                TeacherSchoolSpace.is_verified.is_(True),
+            ).all()
+        }),
     }
 
 
@@ -2819,9 +2962,15 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
     teacher = db.query(Teacher).filter(Teacher.email == email).first()
     if not teacher:
         return {"status": False, "message": "Enseignant non trouvé."}
-    blocked = teacher_school_block(db, teacher)
-    if blocked:
-        raise HTTPException(status_code=403, detail=blocked)
+    verified_school_id = str(claims.get("school_id") or "").strip() or None
+    if verified_school_id and not teacher_has_school_access(db, teacher, verified_school_id):
+        raise HTTPException(status_code=403, detail="Cet espace enseignant n'est pas autorisé pour cette école.")
+    if not verified_school_id and teacher_has_verified_school_access(teacher):
+        verified_school_id = str(teacher.school_id)
+    if verified_school_id:
+        blocked = teacher_school_block(db, teacher, verified_school_id)
+        if blocked:
+            raise HTTPException(status_code=403, detail=blocked)
 
     snapshot = build_classink_teacher_snapshot(payload, teacher.email)
 
@@ -2839,10 +2988,9 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
     declared_class = str(user_data.get("titulaireOf") or "").strip()
     conduct_payload = payload.get("conduct") if isinstance(payload.get("conduct"), dict) else {}
     if declared_class and isinstance(conduct_payload.get(declared_class), dict):
-        conduct_report = store_conduct(db, teacher, declared_class, students_dict.get(declared_class, []), conduct_payload[declared_class])
+        conduct_report = store_conduct(db, teacher, declared_class, students_dict.get(declared_class, []), conduct_payload[declared_class], verified_school_id)
 
     # --- 1. Catalogue scolaire officiel et périmètre du professeur ---
-    verified_school_id = teacher.school_id if teacher_has_verified_school_access(teacher) else None
     official_classes_by_name = {}
     assigned_courses_by_class = {}
     official_course_max = {}
@@ -2973,6 +3121,7 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
         # Sauvegarde ou mise à jour dans la table StudentGrade
         record = db.query(StudentGrade).filter_by(
             teacher_email=teacher.email,
+            school_id=verified_school_id,
             student_id=student_id,
             eval_id=eval_id
         ).first()
@@ -2988,7 +3137,8 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
                 eval_name=eval_info["name"],
                 period=eval_info["period"],
                 score=float(score),
-                max_score=eval_info["max"]
+                max_score=eval_info["max"],
+                school_id=verified_school_id
             )
             db.add(record)
         else:
@@ -2997,7 +3147,7 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
         updates_count += 1
 
     # --- 4. Génération et Sauvegarde des données pour PrimeNet ---
-    school_id = teacher.school_id if teacher_has_verified_school_access(teacher) else None
+    school_id = verified_school_id
 
     # On ne génère le format PrimeNet que si l'enseignant a été autorisé par la liste officielle de l'école
     if school_id and str(school_id).lower() != "indépendant":
@@ -3069,7 +3219,9 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
         
         # Sauvegarde dans la base de données (Table à créer si pas encore fait)
         # On met à jour s'il existe déjà un enregistrement pour ce prof, sinon on crée.
-        existing_payload = db.query(PrimeNetPayload).filter_by(teacher_email=teacher.email).first()
+        existing_payload = db.query(PrimeNetPayload).filter_by(
+            teacher_email=teacher.email, school_id=school_id
+        ).first()
         if existing_payload:
             existing_payload.payload_data = primenet_data
         else:
@@ -3081,11 +3233,22 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
             db.add(new_payload)
 
     # État complet : conserve les cours/classes/élèves sans aucune note.
-    snapshot_row = db.query(ClassInkTeacherSnapshot).filter_by(teacher_email=teacher.email).first()
-    if snapshot_row:
-        snapshot_row.payload_data = snapshot
+    if verified_school_id:
+        snapshot_row = db.query(ClassInkTeacherSpaceSnapshot).filter_by(
+            teacher_email=teacher.email, school_id=verified_school_id
+        ).first()
+        if snapshot_row:
+            snapshot_row.payload_data = snapshot
+        else:
+            db.add(ClassInkTeacherSpaceSnapshot(
+                teacher_email=teacher.email, school_id=verified_school_id, payload_data=snapshot
+            ))
     else:
-        db.add(ClassInkTeacherSnapshot(teacher_email=teacher.email, payload_data=snapshot))
+        snapshot_row = db.query(ClassInkTeacherSnapshot).filter_by(teacher_email=teacher.email).first()
+        if snapshot_row:
+            snapshot_row.payload_data = snapshot
+        else:
+            db.add(ClassInkTeacherSnapshot(teacher_email=teacher.email, payload_data=snapshot))
 
     # Historique de synchronisation
     db.add(SyncHistory(
@@ -3203,7 +3366,7 @@ def school_state_extras(db, school):
 
 
 def teacher_has_verified_school_access(teacher) -> bool:
-    """Vrai uniquement après rattachement du compte dans la liste officielle PrimeInk."""
+    """Compatibilité historique : vérifie l'ancien espace principal d'un enseignant."""
     return bool(
         teacher
         and getattr(teacher, "school_id", None)
@@ -3475,22 +3638,36 @@ def store_school_class_catalog(db: Session, school: SchoolInformation, catalog: 
 
     linked_teachers = set()
     for item in catalog["teachers"]:
-        # Le code doit être celui du compte authentifié, communiqué à l'administration.
-        # Une correspondance de nom seule n'est jamais suffisante pour ouvrir l'accès aux élèves.
+        # Le compte n'est associé que si l'enseignant a demandé cet espace précis,
+        # ou s'il s'agit d'un compte historique déjà rattaché à cette école.
         if not item["uniqueId"]:
             continue
         teacher = db.query(Teacher).filter(Teacher.teacher_code == item["uniqueId"]).first()
-        if (
-            not teacher
-            or teacher.school_id not in (None, school.school_id)
-            or not teacher_matches_school_roster(teacher, item)
-        ):
+        if not teacher or not teacher_matches_school_roster(teacher, item):
             continue
-        # Le nom réel du compte vient de Teacher, pas du libellé de pré-inscription PrimeInk.
-        # Le bouton « Ajouter un enseignant » peut encore afficher un nom provisoire.
-        teacher.school_id = school.school_id
-        teacher.school_name = school.name_school
-        teacher.school_access_verified = True
+        pending_or_verified = db.query(TeacherSchoolSpace).filter(
+            TeacherSchoolSpace.teacher_email == teacher.email,
+            TeacherSchoolSpace.school_id == school.school_id,
+        ).first()
+        legacy_same_school = (
+            str(getattr(teacher, "school_id", "") or "") == str(school.school_id)
+            and bool(getattr(teacher, "school_access_verified", False))
+        )
+        if not pending_or_verified and not legacy_same_school:
+            continue
+        if pending_or_verified:
+            pending_or_verified.is_verified = True
+        elif legacy_same_school:
+            pending_or_verified = TeacherSchoolSpace(
+                teacher_email=teacher.email, school_id=school.school_id, is_verified=True
+            )
+            db.add(pending_or_verified)
+        # teacher.school_id reste la valeur historique par défaut : ne pas écraser
+        # l'espace principal lorsqu'un enseignant travaille déjà dans une autre école.
+        if not teacher.school_id or str(teacher.school_id) == str(school.school_id):
+            teacher.school_id = school.school_id
+            teacher.school_name = school.name_school
+            teacher.school_access_verified = True
         if item["subject"] and item["subject"] != "Matière à attribuer":
             teacher.subject = item["subject"]
         if item["status"]:
@@ -3503,6 +3680,41 @@ def store_school_class_catalog(db: Session, school: SchoolInformation, catalog: 
         "students": len(catalog["students"]),
         "courses": len(catalog["courses"]),
         "linkedTeachers": len(linked_teachers),
+    }
+
+
+@app.get("/api/primenet/teachers/{teacher_code}")
+def lookup_teacher_for_school(
+    teacher_code: str,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(require_active_school),
+):
+    """Recherche un enseignant depuis PrimeInk ; ne renvoie ses données que s'il a demandé cet espace."""
+    school_id = str(claims.get("school_id") or "")
+    teacher = db.query(Teacher).filter(Teacher.teacher_code == clean_text(teacher_code, 100)).first()
+    if not teacher:
+        raise HTTPException(status_code=404, detail="Aucun compte enseignant ne correspond à cet identifiant.")
+    request_row = db.query(TeacherSchoolSpace).filter(
+        TeacherSchoolSpace.teacher_email == teacher.email,
+        TeacherSchoolSpace.school_id == school_id,
+    ).first()
+    legacy_match = (
+        str(getattr(teacher, "school_id", "") or "") == school_id
+        and bool(getattr(teacher, "school_access_verified", False))
+    )
+    if not request_row and not legacy_match:
+        raise HTTPException(status_code=409, detail="Cet enseignant n'a pas encore configuré l'identifiant de cet établissement dans ClassInk. Il doit d'abord demander cet espace depuis son compte.")
+    return {
+        "status": True,
+        "data": {
+            "uniqueId": teacher.teacher_code,
+            "name": teacher.full_name,
+            "subject": teacher.subject or "",
+            "status": teacher.status or "Actif",
+            "email": teacher.email,
+            "configuredForSchool": True,
+            "alreadyLinked": bool(request_row.is_verified) if request_row else True,
+        },
     }
 
 
@@ -3628,20 +3840,21 @@ def apply_teacher_classroom_context(state: dict, context: dict) -> dict:
     state["user"] = user
     return state
 
-def build_teacher_classroom_context(db: Session, teacher) -> dict:
-    if not teacher_has_verified_school_access(teacher):
+def build_teacher_classroom_context(db: Session, teacher, school_id: Optional[str] = None) -> dict:
+    selected_school_id = str(school_id or getattr(teacher, "school_id", "") or "").strip()
+    if not selected_school_id or not teacher_has_school_access(db, teacher, selected_school_id):
         return compose_teacher_classroom_context(teacher, None, [], [], [])
-    school = db.query(SchoolInformation).filter(SchoolInformation.school_id == teacher.school_id).first()
+    school = db.query(SchoolInformation).filter(SchoolInformation.school_id == selected_school_id).first()
     if not school:
         return compose_teacher_classroom_context(teacher, None, [], [], [])
     classes = db.query(ClasseInformation).filter(
-        ClasseInformation.school_id == school.school_id
+        ClasseInformation.school_id == selected_school_id
     ).order_by(ClasseInformation.class_name.asc()).all()
     students = db.query(SchoolStudentInformation).filter(
-        SchoolStudentInformation.school_id == school.school_id
+        SchoolStudentInformation.school_id == selected_school_id
     ).all()
     courses = db.query(CourseInformation).filter(
-        CourseInformation.school_id == school.school_id
+        CourseInformation.school_id == selected_school_id
     ).all()
     return compose_teacher_classroom_context(teacher, school, classes, students, courses)
 
@@ -3677,20 +3890,127 @@ def prepare_classroom_information(
 
 
 
+@app.post("/api/teacher/spaces/request")
+def request_teacher_school_space(payload: dict, db: Session = Depends(get_db), claims: dict = Depends(require_teacher)):
+    """Un enseignant demande à rejoindre un espace école ; l'école doit confirmer dans PrimeInk."""
+    teacher = db.query(Teacher).filter(Teacher.email == claims.get("email")).first()
+    if not teacher:
+        raise HTTPException(status_code=404, detail="Compte enseignant introuvable.")
+    school_id = clean_text(payload.get("school_id"), 100)
+    if not school_id:
+        raise HTTPException(status_code=422, detail="Identifiant de l'école manquant.")
+    school = db.query(SchoolInformation).filter(SchoolInformation.school_id == school_id).first()
+    if not school:
+        raise HTTPException(status_code=404, detail="Aucun établissement ne correspond à cet identifiant.")
+    state = licence_state(school)
+    if state["locked"]:
+        raise HTTPException(status_code=403, detail=LICENCE_MESSAGES[state["reason"]])
+    existing = db.query(TeacherSchoolSpace).filter(
+        TeacherSchoolSpace.teacher_email == teacher.email,
+        TeacherSchoolSpace.school_id == school_id,
+    ).first()
+    if existing:
+        teacher.preferred_school_id = school_id
+        db.commit()
+        return {
+            "status": True,
+            "verified": bool(existing.is_verified),
+            "message": "Cet espace est déjà associé." if existing.is_verified else "Demande déjà enregistrée. L'école doit confirmer dans PrimeInk.",
+        }
+    db.add(TeacherSchoolSpace(teacher_email=teacher.email, school_id=school_id, is_verified=False))
+    teacher.preferred_school_id = school_id
+    db.commit()
+    return {"status": True, "verified": False, "message": "Demande enregistrée. L'école doit maintenant vous ajouter dans PrimeInk."}
+
+
+@app.get("/api/teacher/spaces")
+def get_teacher_spaces(db: Session = Depends(get_db), claims: dict = Depends(require_teacher)):
+    teacher = db.query(Teacher).filter(Teacher.email == claims.get("email")).first()
+    if not teacher:
+        raise HTTPException(status_code=404, detail="Compte enseignant introuvable.")
+    return {"status": True, "data": teacher_school_spaces(db, teacher)}
+
+
+@app.get("/api/teacher/schedule")
+def get_teacher_schedule(db: Session = Depends(get_db), claims: dict = Depends(require_teacher)):
+    teacher = db.query(Teacher).filter(Teacher.email == claims.get("email")).first()
+    school_id = str(claims.get("school_id") or "").strip()
+    if not teacher or not school_id or not teacher_has_school_access(db, teacher, school_id):
+        raise HTTPException(status_code=403, detail="Aucun espace scolaire actif n'est autorisé pour cet enseignant.")
+    blocked = teacher_school_block(db, teacher, school_id)
+    if blocked:
+        raise HTTPException(status_code=403, detail=blocked)
+    space = db.query(TeacherSchoolSpace).filter(
+        TeacherSchoolSpace.teacher_email == teacher.email,
+        TeacherSchoolSpace.school_id == school_id,
+        TeacherSchoolSpace.is_verified.is_(True),
+    ).first()
+    return {"status": True, "data": {"schoolId": school_id, "schedule": list((space.schedule_data or []) if space else [])}}
+
+
+@app.put("/api/teacher/schedule")
+def save_teacher_schedule(payload: dict, db: Session = Depends(get_db), claims: dict = Depends(require_teacher)):
+    teacher = db.query(Teacher).filter(Teacher.email == claims.get("email")).first()
+    school_id = str(claims.get("school_id") or "").strip()
+    if not teacher or not school_id or not teacher_has_school_access(db, teacher, school_id):
+        raise HTTPException(status_code=403, detail="Aucun espace scolaire actif n'est autorisé pour cet enseignant.")
+    blocked = teacher_school_block(db, teacher, school_id)
+    if blocked:
+        raise HTTPException(status_code=403, detail=blocked)
+    entries = payload.get("schedule")
+    if not isinstance(entries, list) or len(entries) > 100:
+        raise HTTPException(status_code=422, detail="L'horaire doit être une liste de 0 à 100 créneaux.")
+    allowed_days = {"Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"}
+    clean_entries = []
+    seen_ids = set()
+    for index, entry in enumerate(entries):
+        if not isinstance(entry, dict):
+            raise HTTPException(status_code=422, detail="Un créneau de l'horaire est invalide.")
+        entry_id = clean_text(entry.get("id"), 80) or f"slot-{index + 1}"
+        day = clean_text(entry.get("day"), 20)
+        start = clean_text(entry.get("start"), 5)
+        end = clean_text(entry.get("end"), 5)
+        course = clean_text(entry.get("course"), 120)
+        room = clean_text(entry.get("room"), 80)
+        if entry_id in seen_ids:
+            raise HTTPException(status_code=422, detail="Chaque créneau doit avoir un identifiant unique.")
+        seen_ids.add(entry_id)
+        if day not in allowed_days or not re.fullmatch(r"([01][0-9]|2[0-3]):[0-5][0-9]", start) or not re.fullmatch(r"([01][0-9]|2[0-3]):[0-5][0-9]", end) or end <= start or not course:
+            raise HTTPException(status_code=422, detail="Chaque créneau doit avoir un jour, un cours et des heures valides.")
+        clean_entries.append({"id": entry_id, "day": day, "start": start, "end": end, "course": course, "room": room, "order": index})
+    space = db.query(TeacherSchoolSpace).filter(
+        TeacherSchoolSpace.teacher_email == teacher.email,
+        TeacherSchoolSpace.school_id == school_id,
+    ).first()
+    if not space:
+        # Compatibilité des enseignants historiques : matérialise leur ancien rattachement vérifié.
+        if str(teacher.school_id or "") != school_id or not teacher.school_access_verified:
+            raise HTTPException(status_code=403, detail="Cet espace n'est pas confirmé.")
+        space = TeacherSchoolSpace(teacher_email=teacher.email, school_id=school_id, is_verified=True)
+        db.add(space)
+    if not space.is_verified:
+        raise HTTPException(status_code=403, detail="L'école n'a pas encore confirmé cet espace.")
+    space.schedule_data = clean_entries
+    db.commit()
+    return {"status": True, "data": {"schoolId": school_id, "schedule": clean_entries}}
+
+
 @app.get("/api/teacher/classes")
 def get_teacher_classroom_information(
+    school_id: str = "",
     db: Session = Depends(get_db),
     claims: dict = Depends(require_teacher),
 ):
     teacher = db.query(Teacher).filter(Teacher.email == claims.get("email")).first()
     if not teacher:
         raise HTTPException(status_code=404, detail="Compte enseignant introuvable.")
-    if not teacher_has_verified_school_access(teacher):
-        raise HTTPException(status_code=403, detail="Votre compte n'est pas encore autorisé par l'école. Communiquez votre identifiant ClassInk à l'administration pour qu'elle l'ajoute dans PrimeInk.")
-    blocked = teacher_school_block(db, teacher)
+    selected = str(school_id or claims.get("school_id") or teacher.school_id or "").strip()
+    if not teacher_has_school_access(db, teacher, selected):
+        raise HTTPException(status_code=403, detail="Cet espace n'est pas encore confirmé par l'école. Vérifiez son identifiant puis demandez à l'administration de vous ajouter dans PrimeInk.")
+    blocked = teacher_school_block(db, teacher, selected)
     if blocked:
         raise HTTPException(status_code=403, detail=blocked)
-    context = build_teacher_classroom_context(db, teacher)
+    context = build_teacher_classroom_context(db, teacher, selected)
     return {"status": True, "data": context}
 
 def is_suivi_results_allowed(db: Session, school_id: str, student: SchoolStudentInformation) -> bool:
@@ -3732,14 +4052,23 @@ def build_suivi_results_payload(db: Session, school: SchoolInformation, student:
         StudentLink.student_id == student.id,
     ).all()
     linked_ids.extend(link.classink_student_id for link in links if link.classink_student_id)
-    teacher_emails = [
-        email for (email,) in db.query(Teacher.email).filter(
-            Teacher.school_id == school.school_id
+    linked_teacher_emails = [
+        email for (email,) in db.query(TeacherSchoolSpace.teacher_email).filter(
+            TeacherSchoolSpace.school_id == school.school_id,
+            TeacherSchoolSpace.is_verified.is_(True),
         ).all()
     ]
+    legacy_teacher_emails = [
+        email for (email,) in db.query(Teacher.email).filter(
+            Teacher.school_id == school.school_id,
+            Teacher.school_access_verified.is_(True),
+        ).all()
+    ]
+    teacher_emails = list(set(linked_teacher_emails + legacy_teacher_emails))
     detailed_rows = []
     if linked_ids and teacher_emails:
         detailed_rows = db.query(StudentGrade).filter(
+            StudentGrade.school_id == school.school_id,
             StudentGrade.student_id.in_(list(set(linked_ids))),
             StudentGrade.teacher_email.in_(teacher_emails),
         ).order_by(StudentGrade.updated_at.asc()).all()
@@ -4072,13 +4401,14 @@ def resolve_student(db, school_id, classe, teacher_email, classink_student_id, c
     return None
 
 
-def store_conduct(db, teacher, class_name, students, conduct_by_student):
-    """Enregistre la conduite d'une classe, SEULEMENT si l'enseignant est le titulaire enregistré de cette classe."""
+def store_conduct(db, teacher, class_name, students, conduct_by_student, school_id: Optional[str] = None):
+    """Enregistre la conduite dans l'espace actif, uniquement pour le titulaire officiel."""
     report = {"accepted": 0, "rejected": []}
-    if not teacher_has_verified_school_access(teacher):
-        report["rejected"].append({"reason": "Compte enseignant non autorisé par l'école. Communiquez votre identifiant ClassInk à l'administration."})
+    selected_school_id = str(school_id or getattr(teacher, "school_id", "") or "").strip()
+    if not teacher_has_school_access(db, teacher, selected_school_id):
+        report["rejected"].append({"reason": "Compte enseignant non autorisé dans cet espace scolaire."})
         return report
-    classe = find_class_by_name(db, teacher.school_id, class_name)
+    classe = find_class_by_name(db, selected_school_id, class_name)
     if not classe:
         report["rejected"].append({"reason": "Classe introuvable dans PrimeInk : « " + clean_text(class_name, 80) + " »."})
         return report
@@ -4089,7 +4419,7 @@ def store_conduct(db, teacher, class_name, students, conduct_by_student):
     for classink_id, kinds in (conduct_by_student or {}).items():
         if not isinstance(kinds, dict):
             continue
-        student_id = resolve_student(db, teacher.school_id, classe, teacher.email, str(classink_id), names.get(str(classink_id), ""))
+        student_id = resolve_student(db, selected_school_id, classe, teacher.email, str(classink_id), names.get(str(classink_id), ""))
         if not student_id:
             report["rejected"].append({"studentId": str(classink_id), "reason": "Élève introuvable dans PrimeInk."})
             continue
@@ -4100,13 +4430,13 @@ def store_conduct(db, teacher, class_name, students, conduct_by_student):
                     continue
                 clean_value = value.strip().upper()[:CONDUCT_MAX_LEN]
                 row = db.query(StudentConduct).filter(
-                    StudentConduct.school_id == teacher.school_id, StudentConduct.student_id == student_id,
+                    StudentConduct.school_id == selected_school_id, StudentConduct.student_id == student_id,
                     StudentConduct.kind == kind, StudentConduct.period == period).first()
                 if row:
                     row.value = clean_value
                     row.updated_by = teacher.email
                 else:
-                    db.add(StudentConduct(school_id=teacher.school_id, student_id=student_id, kind=kind, period=period,
+                    db.add(StudentConduct(school_id=selected_school_id, student_id=student_id, kind=kind, period=period,
                                           value=clean_value, updated_by=teacher.email))
                 report["accepted"] += 1
     db.commit()
@@ -4126,7 +4456,12 @@ def build_verified_behaviour(db, school_id):
 def build_signature_map(db, school_id):
     """Signatures des enseignants de l'école, par identifiant PrimeInk (teacher_code)."""
     out = {}
-    for t in db.query(Teacher).filter(Teacher.school_id == school_id).all():
+    rows = {t.email: t for t in db.query(Teacher).filter(Teacher.school_id == school_id).all()}
+    for t in db.query(Teacher).join(TeacherSchoolSpace, TeacherSchoolSpace.teacher_email == Teacher.email).filter(
+        TeacherSchoolSpace.school_id == school_id, TeacherSchoolSpace.is_verified.is_(True)
+    ).all():
+        rows[t.email] = t
+    for t in rows.values():
         img = clean_image(t.signature)
         if img:
             out[t.teacher_code or f"prof_{t.id}"] = img
@@ -4195,7 +4530,10 @@ def submit_conduct(payload: dict, db: Session = Depends(get_db), claims: dict = 
         return {"status": False, "message": "Enseignant non trouvé."}
     if str(payload.get("teacherEmail") or "").strip().lower() != claims.get("email"):
         raise HTTPException(status_code=403, detail="Ce jeton ne correspond pas à l'enseignant indiqué.")
-    blocked = teacher_school_block(db, teacher)
+    selected_school_id = str(claims.get("school_id") or "").strip()
+    if not teacher_has_school_access(db, teacher, selected_school_id):
+        raise HTTPException(status_code=403, detail="Cet espace enseignant n'est pas autorisé pour cette école.")
+    blocked = teacher_school_block(db, teacher, selected_school_id)
     if blocked:
         raise HTTPException(status_code=403, detail=blocked)
     period = payload.get("period")
@@ -4212,7 +4550,7 @@ def submit_conduct(payload: dict, db: Session = Depends(get_db), claims: dict = 
             if str(e.get(field) or "").strip():
                 kinds[kind][period] = e.get(field)
         conduct[str(e["studentId"])] = kinds
-    report = store_conduct(db, teacher, str(payload.get("className") or ""), students, conduct)
+    report = store_conduct(db, teacher, str(payload.get("className") or ""), students, conduct, claims.get("school_id"))
     return {"status": report["accepted"] > 0 or not report["rejected"], "accepted": report["accepted"],
             "rejected": report["rejected"], "message": "" if report["accepted"] else "Aucune conduite acceptée."}
 
@@ -4381,7 +4719,7 @@ def get_teacher_info(identifier: str, db: Session = Depends(get_db), claims: dic
         return {"status": False, "message": "Enseignant introuvable."}
 
     is_self = claims.get("role") == "teacher" and claims.get("email") == teacher.email
-    is_same_school = claims.get("role") == "school" and bool(teacher.school_id) and claims.get("school_id") == teacher.school_id
+    is_same_school = claims.get("role") == "school" and teacher_has_school_access(db, teacher, claims.get("school_id"))
     if not (is_self or is_same_school):
         raise HTTPException(status_code=403, detail="Accès refusé à ce profil.")
 

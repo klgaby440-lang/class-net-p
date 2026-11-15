@@ -416,6 +416,11 @@
                     <label>MOT DE PASSE</label>
                     <input type="password" id="login-password" placeholder="••••••••">
                 </div>
+                <div class="form-group">
+                    <label>ID DE L'ÉCOLE (OPTIONNEL, MASQUÉ)</label>
+                    <input type="password" id="login-school-id" autocomplete="off" spellcheck="false" placeholder="Saisir l'identifiant communiqué par l'école">
+                    <small>Pour ouvrir un espace précis lorsque vous travaillez avec plusieurs établissements.</small>
+                </div>
                 <div style="display: flex; gap: 10px; margin-top: 20px;">
                     <button class="btn-action" style="flex:1;" onclick="closeLoginModal()">Annuler</button>
                     <button class="btn-primary" style="flex:1;" onclick="handleLogin()">Valider</button>
@@ -738,6 +743,19 @@
                 <label>ÉTABLISSEMENT / ÉCOLE</label>
                 <input type="text" id="setting-school-id" value="Enfant du Monde - Bukavu">
             </div>
+            <div class="form-group">
+                <label>IDENTIFIANT D'ÉCOLE À ASSOCIER (MASQUÉ)</label>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                    <input type="password" id="setting-school-space-id" autocomplete="off" spellcheck="false" placeholder="Identifiant fourni par l'école" style="flex:1;min-width:180px;">
+                    <button type="button" class="btn-secondary" onclick="requestTeacherSchoolSpace()">Demander l'espace</button>
+                </div>
+                <small style="display:block;margin-top:6px;color:var(--text-muted);">L'école devra confirmer cette demande dans PrimeInk. L'identifiant n'est jamais affiché en clair.</small>
+                <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+                    <select id="setting-teacher-space-select" aria-label="Espace scolaire" style="flex:1;min-width:180px;"></select>
+                    <button type="button" class="btn-secondary" onclick="prepareTeacherSpaceLogin()">Changer d'espace</button>
+                </div>
+                <small id="teacher-space-status" style="display:block;margin-top:6px;color:var(--text-muted);"></small>
+            </div>
 
             <div class="form-group">
                 <label>IDENTIFIANT UNIQUE CLASSINK À COMMUNIQUER À L'ÉCOLE</label>
@@ -932,8 +950,8 @@
             </div>
 
             <div class="form-group">
-                <label>ID DE L'ÉCOLE (Optionnel)</label>
-                <input type="text" id="edit-profile-school-code">
+                <label>ID DE L'ÉCOLE (MASQUÉ)</label>
+                <input type="password" id="edit-profile-school-code" autocomplete="off" spellcheck="false">
             </div>
 
             <div style="display: flex; gap: 10px; margin-top: 15px;">
@@ -969,24 +987,13 @@
                     </div>
                 </div>
 
-                <h4 style="margin: 10px 0; font-size: 0.95rem;">🗓️ Emploi du Temps Général</h4>
-                <div style="overflow-x: auto; margin-bottom: 15px;">
-                    <table style="font-size: 0.8rem;">
-                        <thead>
-                            <tr>
-                                <th>Heure</th>
-                                <th>Lundi</th>
-                                <th>Mardi</th>
-                                <th>Mercredi</th>
-                                <th>Jeudi</th>
-                                <th>Vendredi</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr><td><strong>07:30 - 08:30</strong></td><td>Algèbre</td><td>Analyse</td><td>Physique</td><td>Chimie</td><td>Biologie</td></tr>
-                            <tr><td><strong>08:30 - 09:30</strong></td><td>Français</td><td>Anglais</td><td>Histoire</td><td>Géographie</td><td>Informatique</td></tr>
-                        </tbody>
-                    </table>
+                <h4 style="margin: 10px 0; font-size: 0.95rem;">🗓️ Mon emploi du temps</h4>
+                <p style="font-size:.75rem;color:var(--text-muted);margin-bottom:10px;">Ajoutez les heures de début et de fin de chaque cours. La sonnerie se déclenche à la fin de l'heure indiquée, selon le jour.</p>
+                <div id="teacher-schedule-editor" style="display:grid;gap:8px;overflow-x:auto;"></div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 15px;">
+                    <button type="button" class="btn-action" onclick="addTeacherScheduleRow()">＋ Ajouter une heure</button>
+                    <button type="button" class="btn-secondary" onclick="testSchoolBell()">Tester la sonnerie</button>
+                    <button type="button" class="btn-primary" onclick="saveTeacherSchedule()">Enregistrer l'horaire</button>
                 </div>
             </div>
 
@@ -1214,6 +1221,7 @@ const defaultDB = {
         email: "enseignant@classnet.cd",
         password: "admin",
         school: "Enfant du Monde - Bukavu",
+        schoolId: "",
         isLoggedIn: false
     },
     classes: [], 
@@ -1227,7 +1235,9 @@ const defaultDB = {
     presences: [], 
     quizzes: [],
     llinkPrefs: "Donne des explications précises adaptées au programme de RDC.",
-    pendingCommits: 0
+    pendingCommits: 0,
+    teacherSpaces: [],
+    teacherSchedule: []
 };
 
 /* ==========================================================================
@@ -1363,6 +1373,8 @@ function initApp() {
     renderClassSelectors();
     renderGradesTables();
     renderAttendanceList();
+    renderTeacherSpacesSettings();
+    renderTeacherScheduleEditor();
 }
 
 function renderTeacherAccessCode() {
@@ -1447,6 +1459,20 @@ function withoutSecrets(data) {
 function mergeServerDataIntoLocal(local, server) {
     local = local || {};
     server = server || {};
+    const localSpace = String((local.schoolId || (local.user && local.user.schoolId) || '')).trim();
+    const serverSpace = String((server.schoolId || (server.user && server.user.schoolId) || '')).trim();
+    if (localSpace !== serverSpace && (localSpace || serverSpace)) {
+        // Les données d'école ne doivent jamais être fusionnées entre deux espaces différents.
+        const isolated = { ...server };
+        isolated.user = { ...(server.user || {}), password: (local.user && local.user.password) || '' };
+        isolated.theme = local.theme || server.theme || 'dark';
+        isolated.llinkPrefs = local.llinkPrefs || server.llinkPrefs;
+        isolated.teacherSpaces = Array.isArray(server.teacherSpaces) ? server.teacherSpaces : [];
+        isolated.teacherSchedule = Array.isArray(server.teacherSchedule) ? server.teacherSchedule : [];
+        isolated.schoolId = serverSpace;
+        isolated.pendingCommits = 0;
+        return isolated;
+    }
     const merged = { ...local, ...server };
 
     // Identité : le serveur fait foi, le local garde ses champs supplémentaires
@@ -1543,20 +1569,28 @@ async function handleLogin() {
         const response = await fetch(`${CLOUD_AUTH_URL}/api/auth/teacher/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ identifier: email, password: pass })
+            body: JSON.stringify({
+                identifier: email,
+                password: pass,
+                school_id: (document.getElementById('login-school-id')?.value || db.user.schoolId || '').trim()
+            })
         });
 
         const result = await response.json();
 
         if (result.status && result.data) {
             db = mergeServerDataIntoLocal(db, result.data);
+            db.teacherSpaces = Array.isArray(result.data.teacherSpaces) ? result.data.teacherSpaces : [];
+            db.user.schoolId = String(result.data.schoolId || result.data.user?.schoolId || '').trim();
             if (result.token) {
                 try { localStorage.setItem('classink_cloud_token', result.token); } catch (e) { /* stockage indisponible */ }
             }
+            await loadTeacherScheduleFromServer(true);
             db.user.isLoggedIn = true;
             saveDB();
             
             updateLoginHeaderButton();
+            renderTeacherSpacesSettings();
             renderTeacherAccessCode();
             renderClassSelectors();
             renderGradesTables();
@@ -1689,6 +1723,72 @@ document.getElementById('btn-login-header').addEventListener('click', async () =
     }
 });
 
+function renderTeacherSpacesSettings() {
+    const select = document.getElementById('setting-teacher-space-select');
+    if (!select) return;
+    const spaces = Array.isArray(db.teacherSpaces) ? db.teacherSpaces : [];
+    const active = String(db.user.schoolId || '');
+    select.innerHTML = '<option value="">Espace local / aucun espace sélectionné</option>' + spaces.map(space =>
+        '<option value="' + safeHTML(space.schoolId) + '">' + safeHTML(space.schoolName || 'Établissement') + (space.city ? ' · ' + safeHTML(space.city) : '') + '</option>'
+    ).join('');
+    if (active && spaces.some(space => String(space.schoolId) === active)) select.value = active;
+    const status = document.getElementById('teacher-space-status');
+    if (status) status.textContent = spaces.length
+        ? spaces.length + ' espace(s) confirmé(s). Les noms sont affichés, jamais les identifiants.'
+        : 'Aucun espace confirmé pour le moment.';
+}
+
+async function requestTeacherSchoolSpace(value, showMessage = true) {
+    const input = document.getElementById('setting-school-space-id');
+    const schoolId = String(value ?? (input ? input.value : '')).trim();
+    if (!schoolId) {
+        if (showMessage) await showCustomAlert("Saisissez l'identifiant de l'école. Le champ reste masqué.");
+        return { ok: false, message: "Identifiant de l'école manquant." };
+    }
+    const token = (() => { try { return localStorage.getItem('classink_cloud_token') || ''; } catch (_) { return ''; } })();
+    if (!token) {
+        if (showMessage) await showCustomAlert("Connectez-vous d'abord à votre compte enseignant avant de demander un espace.");
+        return { ok: false, message: "Connexion enseignant requise." };
+    }
+    try {
+        const response = await fetch(CLOUD_AUTH_URL + '/api/teacher/spaces/request', {
+            method: 'POST',
+            headers: cloudAuthHeaders(),
+            body: JSON.stringify({ school_id: schoolId }),
+            cache: 'no-store'
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload.status) throw new Error(payload.detail || payload.message || 'Demande refusée.');
+        db.user.preferredSchoolId = schoolId;
+        saveDB();
+        if (input) input.value = '';
+        const status = document.getElementById('teacher-space-status');
+        if (status) status.textContent = payload.message || "Demande envoyée à l'école.";
+        if (showMessage) await showCustomAlert(payload.message || "Demande d'espace envoyée.");
+        return { ok: true, message: payload.message || '', verified: !!payload.verified };
+    } catch (error) {
+        if (showMessage) await showCustomAlert(error.message || "Impossible de joindre le serveur.");
+        return { ok: false, message: error.message || "Erreur réseau." };
+    }
+}
+
+function prepareTeacherSpaceLogin() {
+    const select = document.getElementById('setting-teacher-space-select');
+    const schoolId = String(select?.value || '').trim();
+    if (!schoolId) {
+        if (typeof showCustomAlert === 'function') {
+            showCustomAlert("Sélectionnez un espace confirmé. Pour demander un nouvel espace, saisissez son identifiant masqué dans les paramètres.");
+        }
+        return;
+    }
+    openLoginModal();
+    switchAuthSubView('login');
+    const field = document.getElementById('login-school-id');
+    if (field) field.value = schoolId;
+    const email = document.getElementById('login-email');
+    if (email && db.user.email) email.value = db.user.email;
+}
+
 function updateProfileInfo() {
     db.user.name = document.getElementById('setting-user-name').value;
     db.user.email = document.getElementById('setting-user-email').value; // Ajout
@@ -1769,6 +1869,8 @@ function syncSelectedClass(cls) {
     renderClassSelectors();
     renderGradesTables();
     renderAttendanceList();
+    renderTeacherSpacesSettings();
+    renderTeacherScheduleEditor();
 }
 
 function renderClassSelectors() {
@@ -3735,7 +3837,11 @@ async function verifyAndSaveProfile() {
     db.user.school = document.getElementById('edit-profile-school-id').value.trim();
     db.user.phone = document.getElementById('edit-profile-user-phone').value.trim();
     db.user.age = document.getElementById('edit-profile-user-age').value.trim();
-    db.user.schoolCode = document.getElementById('edit-profile-school-code').value.trim();
+    const profileSchoolId = document.getElementById('edit-profile-school-code').value.trim();
+    if (profileSchoolId) {
+        const request = await requestTeacherSchoolSpace(profileSchoolId, false);
+        if (!request.ok) await showCustomAlert(request.message || "La demande d'espace n'a pas pu être envoyée.");
+    }
 
     const newPass = document.getElementById('edit-profile-user-pass').value.trim();
     if (newPass) {
@@ -3762,7 +3868,7 @@ function setTheme(mode) {
 
 // 2. Charger le thème lors du démarrage de l'application
 function loadTheme() {
-    const savedTheme = db.theme || 'light';
+    const savedTheme = db.theme || 'dark';
     setTheme(savedTheme);
 
     // Cocher le bon bouton radio dans les paramètres
@@ -3893,44 +3999,168 @@ function switchDrawerTab(tab) {
     document.getElementById('drawer-tab-chat').style.display = tab === 'chat' ? 'flex' : 'none';
 }
 
-// Sonnerie audio native (Web Audio API)
-function testSchoolBell() {
+const TEACHER_SCHEDULE_DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+const teacherScheduleBellFired = new Set();
+let teacherScheduleLastTick = Date.now();
+
+function teacherScheduleReadEditor() {
+    const editor = document.getElementById('teacher-schedule-editor');
+    if (!editor) return [];
+    return Array.from(editor.querySelectorAll('[data-schedule-row]')).map((row, index) => ({
+        id: row.dataset.scheduleId || generateUniqueId('SCH'),
+        day: row.querySelector('[data-field="day"]').value,
+        start: row.querySelector('[data-field="start"]').value,
+        end: row.querySelector('[data-field="end"]').value,
+        course: row.querySelector('[data-field="course"]').value.trim(),
+        room: row.querySelector('[data-field="room"]').value.trim(),
+        order: index
+    }));
+}
+
+function renderTeacherScheduleEditor() {
+    const editor = document.getElementById('teacher-schedule-editor');
+    if (!editor) return;
+    const entries = Array.isArray(db.teacherSchedule) ? db.teacherSchedule : [];
+    editor.innerHTML = entries.map(entry => {
+        const id = String(entry.id || generateUniqueId('SCH'));
+        const dayOptions = TEACHER_SCHEDULE_DAYS.map(day => '<option value="' + day + '"' + (day === entry.day ? ' selected' : '') + '>' + day + '</option>').join('');
+        return '<div data-schedule-row data-schedule-id="' + safeHTML(id) + '" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:7px;padding:9px;border:1px solid var(--border-color);border-radius:10px;">' +
+            '<label>Jour<select data-field="day">' + dayOptions + '</select></label>' +
+            '<label>Début<input type="time" data-field="start" value="' + safeHTML(entry.start || '') + '"></label>' +
+            '<label>Fin<input type="time" data-field="end" value="' + safeHTML(entry.end || '') + '"></label>' +
+            '<label>Cours<input type="text" data-field="course" value="' + safeHTML(entry.course || '') + '" placeholder="Nom du cours"></label>' +
+            '<label>Salle<input type="text" data-field="room" value="' + safeHTML(entry.room || '') + '" placeholder="Facultatif"></label>' +
+            '<button type="button" class="btn-action" onclick="removeTeacherScheduleRow(' + JSON.stringify(id) + ')">Supprimer</button></div>';
+    }).join('') || '<div class="empty-state">Aucune heure configurée. Ajoutez les créneaux de votre horaire.</div>';
+}
+
+function addTeacherScheduleRow() {
+    const entries = teacherScheduleReadEditor();
+    entries.push({ id: generateUniqueId('SCH'), day: 'Lundi', start: '07:30', end: '08:30', course: '', room: '' });
+    db.teacherSchedule = entries;
+    renderTeacherScheduleEditor();
+}
+
+function removeTeacherScheduleRow(id) {
+    db.teacherSchedule = teacherScheduleReadEditor().filter(entry => String(entry.id) !== String(id));
+    saveDB();
+    renderTeacherScheduleEditor();
+}
+
+async function loadTeacherScheduleFromServer(silent = false) {
+    const schoolId = String(db.user && db.user.schoolId || db.schoolId || '').trim();
+    let token = '';
+    try { token = localStorage.getItem('classink_cloud_token') || ''; } catch (_) {}
+    if (!schoolId || !token) return false;
     try {
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(880, audioCtx.currentTime); // La4
-        gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 1.5);
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.start();
-        osc.stop(audioCtx.currentTime + 1.5);
-    } catch(e) {
-        // pas de son disponible : sans conséquence
+        const response = await fetch(CLOUD_AUTH_URL + '/api/teacher/schedule', {
+            method: 'GET',
+            headers: cloudAuthHeaders(),
+            cache: 'no-store',
+            credentials: 'omit'
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.status) throw new Error(result.detail || result.message || 'Horaire serveur indisponible.');
+        const returnedSchoolId = String(result.data && result.data.schoolId || '');
+        if (returnedSchoolId !== schoolId) throw new Error("L'horaire reçu ne correspond pas à l'espace scolaire actif.");
+        db.teacherSchedule = Array.isArray(result.data.schedule) ? result.data.schedule : [];
+        saveDB();
+        renderTeacherScheduleEditor();
+        return true;
+    } catch (error) {
+        if (!silent) await showCustomAlert(error.message || "Impossible de récupérer l'horaire du serveur.");
+        return false;
     }
 }
 
-// Minuteur dynamique en temps réel
-setInterval(() => {
-    const now = new Date();
-    const hours = String(now.getHours()).padStart(2, '0');
-    const minutes = String(now.getMinutes()).padStart(2, '0');
-    const seconds = String(now.getSeconds()).padStart(2, '0');
-    const timeStr = `${hours}:${minutes}:${seconds}`;
-    
-    const display = document.getElementById('live-timer-display');
-    if (display) {
-        if (hours === '08' && minutes === '30' && seconds === '00') {
-            testSchoolBell();
-            display.textContent = `🚨 Fin de l'heure de cours !`;
-        } else {
-            display.textContent = `${timeStr} (En cours)`;
+async function saveTeacherSchedule() {
+    const entries = teacherScheduleReadEditor();
+    if (entries.some(entry => !entry.start || !entry.end || !entry.course || entry.end <= entry.start)) {
+        await showCustomAlert('Chaque ligne doit contenir un cours, un début et une fin postérieure au début.');
+        return;
+    }
+    const sorted = entries.sort((a,b) => TEACHER_SCHEDULE_DAYS.indexOf(a.day) - TEACHER_SCHEDULE_DAYS.indexOf(b.day) || a.start.localeCompare(b.start));
+    const schoolId = String(db.user && db.user.schoolId || db.schoolId || '').trim();
+    let token = '';
+    try { token = localStorage.getItem('classink_cloud_token') || ''; } catch (_) {}
+    if (schoolId && token) {
+        try {
+            const response = await fetch(CLOUD_AUTH_URL + '/api/teacher/schedule', {
+                method: 'PUT',
+                headers: cloudAuthHeaders(),
+                body: JSON.stringify({ schedule: sorted }),
+                cache: 'no-store',
+                credentials: 'omit'
+            });
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok || !result.status || String(result.data && result.data.schoolId || '') !== schoolId) {
+                throw new Error(result.detail || result.message || "L'horaire n'a pas été enregistré dans cet espace.");
+            }
+            db.teacherSchedule = Array.isArray(result.data.schedule) ? result.data.schedule : sorted;
+            saveDB();
+            renderTeacherScheduleEditor();
+            await showCustomAlert("Emploi du temps enregistré sur le serveur pour cet établissement.");
+            return;
+        } catch (error) {
+            await showCustomAlert((error.message || "Échec de la sauvegarde serveur.") + " Les données locales n'ont pas été remplacées.");
+            return;
         }
     }
-}, 1000);
+    db.teacherSchedule = sorted;
+    saveDB();
+    renderTeacherScheduleEditor();
+    await showCustomAlert("Horaire enregistré localement. Connectez un espace scolaire pour le sauvegarder sur le serveur.");
+}
 
+let teacherBellAudioContext = null;
+function unlockTeacherBellAudio() {
+    try {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) return;
+        if (!teacherBellAudioContext) teacherBellAudioContext = new AudioContextClass();
+        if (teacherBellAudioContext.state === 'suspended') teacherBellAudioContext.resume().catch(() => {});
+    } catch (_) { /* Le navigateur peut ne pas prendre en charge Web Audio. */ }
+}
+document.addEventListener('pointerdown', unlockTeacherBellAudio, { once: true, passive: true });
+document.addEventListener('keydown', unlockTeacherBellAudio, { once: true });
+
+function testSchoolBell() {
+    try {
+        unlockTeacherBellAudio();
+        if (!teacherBellAudioContext) throw new Error('Web Audio indisponible');
+        const audioCtx = teacherBellAudioContext;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 1.5);
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.start(); osc.stop(audioCtx.currentTime + 1.5);
+    } catch(error) { console.warn('[ClassInk] Sonnerie indisponible:', error); }
+}
+
+function teacherScheduleTick() {
+    const now = new Date();
+    const day = TEACHER_SCHEDULE_DAYS[(now.getDay() + 6) % 7];
+    const nowTime = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+    const display = document.getElementById('live-timer-display');
+    const entries = Array.isArray(db.teacherSchedule) ? db.teacherSchedule : [];
+    const current = entries.find(entry => entry.day === day && entry.start <= nowTime && nowTime < entry.end);
+    if (display) display.textContent = current ? '📚 ' + current.course + (current.room ? ' · ' + current.room : '') + ' · fin à ' + current.end : '🕒 ' + nowTime + ' · Aucun cours en cours';
+    const nowStamp = now.getTime();
+    entries.filter(entry => entry.day === day && entry.end).forEach(entry => {
+        const parts = entry.end.split(':').map(Number);
+        const end = new Date(now); end.setHours(parts[0] || 0, parts[1] || 0, 0, 0);
+        const key = now.toISOString().slice(0,10) + '|' + entry.id;
+        if (end.getTime() > teacherScheduleLastTick && end.getTime() <= nowStamp && !teacherScheduleBellFired.has(key)) {
+            teacherScheduleBellFired.add(key); testSchoolBell();
+            if (display) display.textContent = '🔔 Fin du cours : ' + entry.course;
+        }
+    });
+    teacherScheduleLastTick = nowStamp;
+}
+setInterval(teacherScheduleTick, 1000);
 // Envoi de message style WhatsApp dans le chat admin
 function sendAdminMessage() {
     const input = document.getElementById('admin-chat-input');
