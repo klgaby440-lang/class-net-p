@@ -11,6 +11,7 @@ from main import (
     Teacher,
     TeacherSchoolSpace,
     get_teacher_classroom_information,
+    is_suivi_results_allowed,
     lookup_teacher_for_school,
     prepare_classroom_information,
 )
@@ -134,6 +135,23 @@ def test_primeink_catalog_write_and_classink_teacher_read_roundtrip_for_all_six_
             "courses": 6,
             "linkedTeachers": 6,
         }
+
+        # Applique les 10 états parent du jeu de recette et vérifie la règle d'accès réelle.
+        for parent in seed["parents"]:
+            student = db.query(SchoolStudentInformation).filter_by(
+                id=parent["studentId"] + "-" + suffix,
+                school_id=school_id,
+            ).first()
+            assert student is not None
+            assert student.suivi_code
+            student.suivi_results_allowed = bool(parent["individualAccessAllowed"])
+        db.commit()
+        for parent in seed["parents"]:
+            student = db.query(SchoolStudentInformation).filter_by(
+                id=parent["studentId"] + "-" + suffix,
+                school_id=school_id,
+            ).first()
+            assert is_suivi_results_allowed(db, school_id, student) is bool(parent["individualAccessAllowed"])
 
         # Contrôle de la persistance en base, après la publication.
         assert db.query(ClasseInformation).filter_by(school_id=school_id).count() == 3
