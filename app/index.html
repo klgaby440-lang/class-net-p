@@ -2099,7 +2099,11 @@ function renderClassSelectors() {
     });
 
     const activeCourses = Array.isArray(db.courses[activeClass]) ? db.courses[activeClass] : [];
-    const selectedCourse = (db.activeCourseFilter || {})[activeClass] || activeCourses[0] || '';
+    const requestedCourse = (db.activeCourseFilter || {})[activeClass] || '';
+    const selectedCourse = activeCourses.includes(requestedCourse) ? requestedCourse : (activeCourses[0] || '');
+    if (!db.activeCourseFilter) db.activeCourseFilter = {};
+    if (selectedCourse) db.activeCourseFilter[activeClass] = selectedCourse;
+    else delete db.activeCourseFilter[activeClass];
     coursesDisplay.innerHTML = '';
     coursesDisplay.className = 'course-chip-list';
     coursesDisplay.style.cssText = 'display:inline-flex;flex-wrap:wrap;align-items:center;gap:6px;vertical-align:middle;';
@@ -2216,6 +2220,7 @@ function renderGradesTables() {
     if (!db.activeCourseFilter) db.activeCourseFilter = {};
     if (selectedCourse) db.activeCourseFilter[activeClass] = selectedCourse;
     else delete db.activeCourseFilter[activeClass];
+    if (courseSelect) courseSelect.value = selectedCourse;
     const maxBulletin = (db.courseMax && db.courseMax[activeClass + '_' + selectedCourse]) || 100;
 
     // 2. Boutons d'action rapides (Édition des élèves & Fiche Récapitulative)
