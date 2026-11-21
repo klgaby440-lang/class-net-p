@@ -4947,27 +4947,38 @@ def sync_primenet(payload: dict, db: Session = Depends(get_db), claims: dict = D
     legacy_evaluations = db.query(TeacherEvaluation).filter(
         TeacherEvaluation.school_id == school_id
     ).all()
+
+    # Pré-calcul des destinations avant toute mutation afin de ne pas réparer
+    # deux anciennes lignes vers le même couple élève/cours.
+    legacy_candidates = {}
     for legacy_eval in legacy_evaluations:
-        # Une ligne dont les références sont déjà valides n'est pas une ligne cassée.
         if (legacy_eval.course_id in courses_by_id
                 and legacy_eval.student_n_permanent in valid_permanents):
             continue
-
         legacy_composite_key = (
             f"{legacy_eval.student_n_permanent}_{legacy_eval.course_id}"
         )
         resolved_pair = resolve_grade_key(legacy_composite_key)
         if not resolved_pair:
             continue
-
         legacy_student, legacy_course = resolved_pair
         corrected_permanent = (
             legacy_student.student_n_permanent or legacy_student.id
         )
+        target_key = (str(corrected_permanent), str(legacy_course.id))
+        legacy_candidates.setdefault(target_key, []).append(
+            (legacy_eval, corrected_permanent, legacy_course.id)
+        )
+
+    for target_key, candidates in legacy_candidates.items():
+        # Plusieurs anciennes lignes vers la même destination : ne pas deviner.
+        if len(candidates) != 1:
+            continue
+        legacy_eval, corrected_permanent, corrected_course_id = candidates[0]
         conflicting_eval = db.query(TeacherEvaluation).filter(
             TeacherEvaluation.school_id == school_id,
             TeacherEvaluation.student_n_permanent == corrected_permanent,
-            TeacherEvaluation.course_id == legacy_course.id,
+            TeacherEvaluation.course_id == corrected_course_id,
             TeacherEvaluation.id != legacy_eval.id
         ).first()
         if conflicting_eval:
@@ -4975,8 +4986,12 @@ def sync_primenet(payload: dict, db: Session = Depends(get_db), claims: dict = D
             continue
 
         legacy_eval.student_n_permanent = corrected_permanent
-        legacy_eval.course_id = legacy_course.id
+        legacy_eval.course_id = corrected_course_id
         repaired_legacy_grades += 1
+
+    # Rend les références réparées visibles aux requêtes de la synchronisation
+    # courante : sans ce flush, autoflush=False créerait des doublons.
+    db.flush()
 
     if repaired_legacy_grades:
         logger.info(
