@@ -3782,7 +3782,7 @@ def compose_teacher_classroom_context(teacher, school, classes, students, course
     assigned_courses_by_class = {}
     course_max = {}
     for course in courses:
-        if not teacher_matches_catalog_name(teacher, course.titulaire_name):
+        if not teacher_matches_catalog_name(teacher, getattr(course, "titulaire_name", "")):
             continue
         classe = classes_by_id.get(str(course.class_id))
         if not classe:
@@ -4133,8 +4133,15 @@ def activate_independent_teacher_workspace(
 @app.get("/api/teacher/schedule")
 def get_teacher_schedule(db: Session = Depends(get_db), claims: dict = Depends(require_teacher)):
     teacher = db.query(Teacher).filter(Teacher.email == claims.get("email")).first()
+    if not teacher:
+        raise HTTPException(status_code=404, detail="Compte enseignant introuvable.")
+    if str(claims.get("workspace_mode") or "").strip().lower() == "independent":
+        row = db.query(ClassInkTeacherIndependentSnapshot).filter_by(teacher_email=teacher.email).first()
+        state = dict(row.payload_data or {}) if row else {}
+        return {"status": True, "data": {"schoolId": "", "workspaceMode": "independent", "schedule": list(state.get("teacherSchedule") or [])}}
+
     school_id = str(claims.get("school_id") or "").strip()
-    if not teacher or not school_id or not teacher_has_school_access(db, teacher, school_id):
+    if not school_id or not teacher_has_school_access(db, teacher, school_id):
         raise HTTPException(status_code=403, detail="Aucun espace scolaire actif n'est autorisé pour cet enseignant.")
     blocked = teacher_school_block(db, teacher, school_id)
     if blocked:
@@ -4144,18 +4151,22 @@ def get_teacher_schedule(db: Session = Depends(get_db), claims: dict = Depends(r
         TeacherSchoolSpace.school_id == school_id,
         TeacherSchoolSpace.is_verified.is_(True),
     ).first()
-    return {"status": True, "data": {"schoolId": school_id, "schedule": list((space.schedule_data or []) if space else [])}}
+    return {"status": True, "data": {"schoolId": school_id, "workspaceMode": "school", "schedule": list((space.schedule_data or []) if space else [])}}
 
 
 @app.put("/api/teacher/schedule")
 def save_teacher_schedule(payload: dict, db: Session = Depends(get_db), claims: dict = Depends(require_teacher)):
     teacher = db.query(Teacher).filter(Teacher.email == claims.get("email")).first()
+    if not teacher:
+        raise HTTPException(status_code=404, detail="Compte enseignant introuvable.")
+    independent_workspace = str(claims.get("workspace_mode") or "").strip().lower() == "independent"
     school_id = str(claims.get("school_id") or "").strip()
-    if not teacher or not school_id or not teacher_has_school_access(db, teacher, school_id):
+    if not independent_workspace and (not school_id or not teacher_has_school_access(db, teacher, school_id)):
         raise HTTPException(status_code=403, detail="Aucun espace scolaire actif n'est autorisé pour cet enseignant.")
-    blocked = teacher_school_block(db, teacher, school_id)
-    if blocked:
-        raise HTTPException(status_code=403, detail=blocked)
+    if not independent_workspace:
+        blocked = teacher_school_block(db, teacher, school_id)
+        if blocked:
+            raise HTTPException(status_code=403, detail=blocked)
     entries = payload.get("schedule")
     if not isinstance(entries, list) or len(entries) > 100:
         raise HTTPException(status_code=422, detail="L'horaire doit être une liste de 0 à 100 créneaux.")
@@ -4177,6 +4188,27 @@ def save_teacher_schedule(payload: dict, db: Session = Depends(get_db), claims: 
         if day not in allowed_days or not re.fullmatch(r"([01][0-9]|2[0-3]):[0-5][0-9]", start) or not re.fullmatch(r"([01][0-9]|2[0-3]):[0-5][0-9]", end) or end <= start or not course:
             raise HTTPException(status_code=422, detail="Chaque créneau doit avoir un jour, un cours et des heures valides.")
         clean_entries.append({"id": entry_id, "day": day, "start": start, "end": end, "course": course, "room": room, "order": index})
+
+    if independent_workspace:
+        row = db.query(ClassInkTeacherIndependentSnapshot).filter_by(teacher_email=teacher.email).first()
+        if not row:
+            row = ClassInkTeacherIndependentSnapshot(
+                teacher_email=teacher.email,
+                payload_data={
+                    "user": {"id": teacher.teacher_code or f"prof_{teacher.id}", "name": teacher.full_name,
+                             "email": teacher.email, "school": "Espace indépendant", "schoolId": ""},
+                    "classes": [], "courses": {}, "courseMax": {}, "students": {},
+                    "evaluations": {}, "grades": {}, "presences": [], "quizzes": [],
+                    "titulaireClasses": [], "classrooms": [],
+                },
+            )
+            db.add(row)
+        state = dict(row.payload_data or {})
+        state["teacherSchedule"] = clean_entries
+        row.payload_data = state
+        db.commit()
+        return {"status": True, "data": {"schoolId": "", "workspaceMode": "independent", "schedule": clean_entries}}
+
     space = db.query(TeacherSchoolSpace).filter(
         TeacherSchoolSpace.teacher_email == teacher.email,
         TeacherSchoolSpace.school_id == school_id,
@@ -4191,7 +4223,7 @@ def save_teacher_schedule(payload: dict, db: Session = Depends(get_db), claims: 
         raise HTTPException(status_code=403, detail="L'école n'a pas encore confirmé cet espace.")
     space.schedule_data = clean_entries
     db.commit()
-    return {"status": True, "data": {"schoolId": school_id, "schedule": clean_entries}}
+    return {"status": True, "data": {"schoolId": school_id, "workspaceMode": "school", "schedule": clean_entries}}
 
 
 @app.get("/api/teacher/classes")
@@ -4203,6 +4235,8 @@ def get_teacher_classroom_information(
     teacher = db.query(Teacher).filter(Teacher.email == claims.get("email")).first()
     if not teacher:
         raise HTTPException(status_code=404, detail="Compte enseignant introuvable.")
+    if str(claims.get("workspace_mode") or "").strip().lower() == "independent":
+        return {"status": True, "data": compose_teacher_classroom_context(teacher, None, [], [], [])}
     selected = str(school_id or claims.get("school_id") or teacher.school_id or "").strip()
     if not teacher_has_school_access(db, teacher, selected):
         raise HTTPException(status_code=403, detail="Cet espace n'est pas encore confirmé par l'école. Vérifiez son identifiant puis demandez à l'administration de vous ajouter dans PrimeInk.")
