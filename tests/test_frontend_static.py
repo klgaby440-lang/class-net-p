@@ -596,5 +596,32 @@ class TestNewFeatureStatic(unittest.TestCase):
         self.assertIn("if (localSpace !== serverSpace && (localSpace || serverSpace))", app)
 
 
+    def test_primeink_school_id_update_command_is_isolated_and_authenticates_new_school(self):
+        source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
+        self.assertIn('id="primeInkSchoolIdUpdatePanel"', source)
+        self.assertIn('id="primeInkSchoolIdUpdateInput"', source)
+        self.assertIn('id="primeInkSchoolIdUpdatePassword"', source)
+        self.assertIn('function isPrimeInkSchoolIdUpdateCommand(value)', source)
+        self.assertIn('replace(/\\s+/g, " ")', source)
+        activation = source.split("async function verifyActivationCode()", 1)[1].split(
+            "// 5. Petite fonction", 1
+        )[0]
+        self.assertIn("if (isPrimeInkSchoolIdUpdateCommand(code))", activation)
+        self.assertLess(
+            activation.index("if (isPrimeInkSchoolIdUpdateCommand(code))"),
+            activation.index("fetch(`${API_BASE_URL}/api/admin/codes/verify`"),
+        )
+        self.assertIn("async function applyPrimeInkSchoolIdUpdate()", source)
+        self.assertIn("fetch(`${API_BASE_URL}/api/primenet/load`", source)
+        self.assertIn("school_id: newSchoolId, password: password", source)
+        self.assertIn("if (!response.ok || !result.status || !result.data)", source)
+        self.assertIn("if (loadedSchoolId !== newSchoolId)", source)
+        self.assertIn("window.localStorage.setItem('primeink_cloud_token', result.token)", source)
+        self.assertIn("La base actuelle n'a pas été modifiée.", source)
+        self.assertIn("openPrimeInkSchoolIdUpdate(true)", source)
+        self.assertIn("panel._primeInkSchoolIdUpdateModalState", source)
+        self.assertIn("panel.style.cssText += ';position:fixed;z-index:100001", source)
+
+
 if __name__ == "__main__":
     unittest.main()

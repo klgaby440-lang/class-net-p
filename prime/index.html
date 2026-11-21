@@ -1527,6 +1527,29 @@ body {
                         <input type="text" id="activationCodeInput" class="form-control" placeholder="Entrez le code CRYPT">
                         <button class="btn-primary" onclick="verifyActivationCode()">Activer</button>
                     </div>
+                    <div id="primeInkSchoolIdUpdatePanel" style="display:none; margin-top:0.85rem; padding:0.85rem; border:1px solid var(--border-color); border-radius:10px; background:var(--bg-main);">
+                        <strong style="display:block; margin-bottom:0.35rem;">Changer l'établissement connecté</strong>
+                        <p style="margin:0 0 0.7rem; color:var(--text-secondary); font-size:0.82rem;">
+                            Saisissez le nouvel identifiant et le mot de passe de l'école. PrimeInk vérifiera l'accès avant de remplacer les données actuellement ouvertes.
+                        </p>
+                        <div class="form-group">
+                            <label>IDENTIFIANT ACTUEL</label>
+                            <input type="text" id="primeInkCurrentSchoolId" class="form-control" readonly>
+                        </div>
+                        <div class="form-group">
+                            <label>NOUVEL IDENTIFIANT DE L'ÉCOLE</label>
+                            <input type="text" id="primeInkSchoolIdUpdateInput" class="form-control" maxlength="100" autocomplete="off" placeholder="Identifiant communiqué par l'école">
+                        </div>
+                        <div class="form-group">
+                            <label>MOT DE PASSE DE L'ÉCOLE</label>
+                            <input type="password" id="primeInkSchoolIdUpdatePassword" class="form-control" autocomplete="current-password" placeholder="Mot de passe de ce nouvel établissement">
+                        </div>
+                        <div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-top:0.65rem;">
+                            <button type="button" class="btn-secondary" onclick="cancelPrimeInkSchoolIdUpdate()">Annuler</button>
+                            <button type="button" class="btn-primary" id="primeInkSchoolIdUpdateSubmit" onclick="applyPrimeInkSchoolIdUpdate()">Vérifier et connecter</button>
+                        </div>
+                        <small id="primeInkSchoolIdUpdateStatus" role="status" aria-live="polite" style="display:block; margin-top:0.6rem; color:var(--text-secondary);"></small>
+                    </div>
                     <small id="expirationStatusLabel" style="display:block; margin-top:0.4rem; color: var(--text-secondary); font-weight:600;"></small>
                 </div>
                 <div class="form-group">
@@ -7170,10 +7193,161 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
             }
         }
 
+        // Commande locale spéciale : ouvre le changement d'école sans consommer de code de licence.
+        function isPrimeInkSchoolIdUpdateCommand(value) {
+            return String(value || "").trim().toLowerCase().replace(/\s+/g, " ") === "update school id";
+        }
+
+        function openPrimeInkSchoolIdUpdate(fromLockScreen = false) {
+            const panel = document.getElementById('primeInkSchoolIdUpdatePanel');
+            const currentInput = document.getElementById('primeInkCurrentSchoolId');
+            const newIdInput = document.getElementById('primeInkSchoolIdUpdateInput');
+            const passwordInput = document.getElementById('primeInkSchoolIdUpdatePassword');
+            const status = document.getElementById('primeInkSchoolIdUpdateStatus');
+            const activationInput = document.getElementById('activationCodeInput');
+            if (currentInput) currentInput.value = String(appState.school && appState.school.id || '');
+            if (newIdInput) newIdInput.value = '';
+            if (passwordInput) passwordInput.value = '';
+            if (status) status.textContent = '';
+
+            // Depuis l'écran verrouillé, déplace temporairement le même panneau au-dessus du verrou.
+            // Le verrou reste visible et aucune donnée n'est accessible avant l'authentification.
+            if (fromLockScreen && panel && panel.parentNode !== document.body) {
+                panel._primeInkSchoolIdUpdateModalState = {
+                    parent: panel.parentNode,
+                    nextSibling: panel.nextSibling,
+                    style: panel.getAttribute('style')
+                };
+                document.body.appendChild(panel);
+                panel.style.cssText += ';position:fixed;z-index:100001;left:50%;top:50%;transform:translate(-50%,-50%);width:min(560px,calc(100vw - 24px));max-height:85vh;overflow:auto;box-shadow:0 20px 60px #0008;';
+            }
+            if (panel) panel.style.display = 'block';
+            if (activationInput) activationInput.value = '';
+            if (newIdInput) newIdInput.focus();
+        }
+
+        function cancelPrimeInkSchoolIdUpdate() {
+            const panel = document.getElementById('primeInkSchoolIdUpdatePanel');
+            const newIdInput = document.getElementById('primeInkSchoolIdUpdateInput');
+            const passwordInput = document.getElementById('primeInkSchoolIdUpdatePassword');
+            const status = document.getElementById('primeInkSchoolIdUpdateStatus');
+            if (panel && panel._primeInkSchoolIdUpdateModalState) {
+                const saved = panel._primeInkSchoolIdUpdateModalState;
+                if (saved.parent && saved.parent.isConnected) {
+                    saved.parent.insertBefore(panel, saved.nextSibling && saved.nextSibling.parentNode === saved.parent ? saved.nextSibling : null);
+                }
+                if (saved.style === null) panel.removeAttribute('style');
+                else panel.setAttribute('style', saved.style);
+                delete panel._primeInkSchoolIdUpdateModalState;
+            }
+            if (panel) panel.style.display = 'none';
+            if (newIdInput) newIdInput.value = '';
+            if (passwordInput) passwordInput.value = '';
+            if (status) status.textContent = '';
+        }
+
+        async function applyPrimeInkSchoolIdUpdate() {
+            const newIdInput = document.getElementById('primeInkSchoolIdUpdateInput');
+            const passwordInput = document.getElementById('primeInkSchoolIdUpdatePassword');
+            const status = document.getElementById('primeInkSchoolIdUpdateStatus');
+            const submitButton = document.getElementById('primeInkSchoolIdUpdateSubmit');
+            const newSchoolId = String(newIdInput && newIdInput.value || '').trim();
+            const password = String(passwordInput && passwordInput.value || '');
+            const previousSchoolId = String(appState.school && appState.school.id || '').trim();
+
+            if (!newSchoolId) {
+                if (status) status.textContent = "Saisissez le nouvel identifiant de l'école.";
+                if (newIdInput) newIdInput.focus();
+                return;
+            }
+            if (newSchoolId.length > 100) {
+                if (status) status.textContent = "L'identifiant ne peut pas dépasser 100 caractères.";
+                return;
+            }
+            if (newSchoolId === previousSchoolId) {
+                if (status) status.textContent = "Cet identifiant est déjà utilisé par l'école actuellement ouverte.";
+                return;
+            }
+            if (!password) {
+                if (status) status.textContent = "Saisissez le mot de passe du nouvel établissement.";
+                if (passwordInput) passwordInput.focus();
+                return;
+            }
+            if (!window.confirm("PrimeInk va remplacer la base actuellement ouverte par les données de l'établissement correspondant au nouvel identifiant. Continuer ?")) {
+                return;
+            }
+
+            if (submitButton) submitButton.disabled = true;
+            if (status) status.textContent = "Vérification de l'identifiant et chargement des données…";
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/primenet/load`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    cache: 'no-store',
+                    body: JSON.stringify({ school_id: newSchoolId, password: password })
+                });
+                let result = {};
+                try { result = await response.json(); } catch (_) { /* réponse non JSON */ }
+                if (!response.ok || !result.status || !result.data) {
+                    if (status) status.textContent = result.detail || result.message || "Impossible de vérifier ce nouvel établissement. La base actuelle n'a pas été modifiée.";
+                    return;
+                }
+
+                const loadedSchoolId = String(result.data.school && result.data.school.id || '').trim();
+                if (loadedSchoolId !== newSchoolId) {
+                    if (status) status.textContent = "Le serveur a renvoyé un établissement différent. La base actuelle est conservée.";
+                    return;
+                }
+                if (!result.token) {
+                    if (status) status.textContent = "Le serveur n'a pas délivré de session. La base actuelle est conservée.";
+                    return;
+                }
+
+                const previousState = appState;
+                let previousToken = '';
+                try { previousToken = window.localStorage.getItem('primeink_cloud_token') || ''; } catch (_) { /* stockage indisponible */ }
+
+                // Remplacement seulement après authentification réussie. Aucun mélange de données entre écoles.
+                appState = result.data;
+                if (!saveState()) {
+                    appState = previousState;
+                    if (status) status.textContent = "La nouvelle école a été vérifiée, mais la base locale n'a pas pu être sauvegardée. L'ancienne base reste active.";
+                    return;
+                }
+
+                try {
+                    window.localStorage.setItem('primeink_cloud_token', result.token);
+                } catch (storageError) {
+                    appState = previousState;
+                    saveState();
+                    try {
+                        if (previousToken) window.localStorage.setItem('primeink_cloud_token', previousToken);
+                        else window.localStorage.removeItem('primeink_cloud_token');
+                    } catch (_) { /* stockage indisponible */ }
+                    if (status) status.textContent = "Impossible d'enregistrer la nouvelle session sur cet appareil. La base précédente a été restaurée.";
+                    return;
+                }
+
+                cancelPrimeInkSchoolIdUpdate();
+                alert("✅ PrimeInk est maintenant connecté à l'établissement " + newSchoolId + ". Ses données ont été chargées depuis le serveur.");
+                location.reload();
+            } catch (error) {
+                if (status) status.textContent = error && error.message
+                    ? "Erreur de connexion : " + error.message
+                    : "Impossible de joindre le serveur. La base actuelle est conservée.";
+            } finally {
+                if (submitButton) submitButton.disabled = false;
+            }
+        }
+
         // 4. Fonction pour vérifier et enregistrer le code d'activation CRYPT
         async function verifyActivationCode() {
             const code = document.getElementById('activationCodeInput').value.trim();
             if (!code) return alert("Veuillez saisir un code d'activation.");
+            if (isPrimeInkSchoolIdUpdateCommand(code)) {
+                openPrimeInkSchoolIdUpdate();
+                return;
+            }
             
             try {
                 const response = await fetch(`${API_BASE_URL}/api/admin/codes/verify`, {
@@ -7237,6 +7411,10 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
 
         async function verifyActivationFromLock() {
             const input = document.getElementById('lockActivationInput');
+            if (input && isPrimeInkSchoolIdUpdateCommand(input.value)) {
+                openPrimeInkSchoolIdUpdate(true);
+                return;
+            }
             if (input) {
                 document.getElementById('activationCodeInput').value = input.value;
                 await verifyActivationCode();
