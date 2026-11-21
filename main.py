@@ -648,6 +648,14 @@ class ClassInkTeacherSpaceSnapshot(Base):
     payload_data = Column(JSON, nullable=False, default=dict)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+class ClassInkTeacherIndependentSnapshot(Base):
+    """Espace personnel d'un enseignant, distinct de tous ses espaces scolaires."""
+    __tablename__ = "classink_teacher_independent_snapshots"
+
+    teacher_email = Column(String, primary_key=True, index=True)
+    payload_data = Column(JSON, nullable=False, default=dict)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 # ---------------------------------------------------------
 # MODÈLE COMMUN (étape 3) : types de bulletin, conduite, signatures, accès aux notes, liens d'élèves.
 # Les valeurs autorisées viennent de classnet_common.py : ne pas les recopier ici.
@@ -1667,8 +1675,12 @@ def login_teacher(data: LoginSchema, db: Session = Depends(get_db)):
         else:
             snapshot_payload = snapshot_row.payload_data if snapshot_row else None
     else:
-        legacy_snapshot = db.query(ClassInkTeacherSnapshot).filter_by(teacher_email=teacher.email).first()
-        snapshot_payload = legacy_snapshot.payload_data if legacy_snapshot else None
+        independent_snapshot = db.query(ClassInkTeacherIndependentSnapshot).filter_by(teacher_email=teacher.email).first()
+        legacy_snapshot = None if independent_snapshot else db.query(ClassInkTeacherSnapshot).filter_by(teacher_email=teacher.email).first()
+        snapshot_payload = (
+            independent_snapshot.payload_data if independent_snapshot
+            else (legacy_snapshot.payload_data if legacy_snapshot else None)
+        )
     classnet_app_db = restore_classink_teacher_state(
         snapshot_payload,
         classnet_app_db,
@@ -3252,11 +3264,11 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
                 teacher_email=teacher.email, school_id=verified_school_id, payload_data=snapshot
             ))
     else:
-        snapshot_row = db.query(ClassInkTeacherSnapshot).filter_by(teacher_email=teacher.email).first()
+        snapshot_row = db.query(ClassInkTeacherIndependentSnapshot).filter_by(teacher_email=teacher.email).first()
         if snapshot_row:
             snapshot_row.payload_data = snapshot
         else:
-            db.add(ClassInkTeacherSnapshot(teacher_email=teacher.email, payload_data=snapshot))
+            db.add(ClassInkTeacherIndependentSnapshot(teacher_email=teacher.email, payload_data=snapshot))
 
     # Historique de synchronisation
     db.add(SyncHistory(
@@ -3793,10 +3805,8 @@ def compose_teacher_classroom_context(teacher, school, classes, students, course
         name: sorted(assigned_courses_by_class.get(name, []), key=str.casefold)
         for name in (item.class_name for item in visible_classes)
     }
-    visible_course_max = {
-        key: value for key, value in course_max.items()
-        if key.split("_", 1)[0] in visible_class_names
-    }
+    # course_max a déjà été constitué exclusivement à partir des cours de cet enseignant.
+    visible_course_max = dict(course_max)
 
     classroom_rows = []
     for item in visible_classes:
@@ -4052,7 +4062,7 @@ def activate_independent_teacher_workspace(
     if not teacher:
         raise HTTPException(status_code=404, detail="Compte enseignant introuvable.")
 
-    row = db.query(ClassInkTeacherSnapshot).filter_by(teacher_email=teacher.email).first()
+    row = db.query(ClassInkTeacherIndependentSnapshot).filter_by(teacher_email=teacher.email).first()
     created = row is None
     if row is None:
         seed = payload.get("snapshot") if isinstance(payload, dict) else None
@@ -4087,7 +4097,7 @@ def activate_independent_teacher_workspace(
             "isLoggedIn": True,
         })
         snapshot["user"] = user
-        row = ClassInkTeacherSnapshot(teacher_email=teacher.email, payload_data=snapshot)
+        row = ClassInkTeacherIndependentSnapshot(teacher_email=teacher.email, payload_data=snapshot)
         db.add(row)
         db.commit()
 
