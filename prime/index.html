@@ -5187,6 +5187,7 @@ async function bpPushClassBulletin(cls) {
         // immédiatement après le prochain contrôle, sans rechargement de la page.
         let primeInkSchoolSuspensionDetected = false;
         let primeInkOriginalLockBoxHtml = null;
+        let primeInkOriginalLockOverlayWasHidden = true;
 
         async function checkSchoolStatus() {
             const schoolId = appState && appState.school && appState.school.id;
@@ -5209,7 +5210,10 @@ async function bpPushClassBulletin(cls) {
                     if (lockBox && primeInkOriginalLockBoxHtml !== null) lockBox.innerHTML = primeInkOriginalLockBoxHtml;
                     primeInkOriginalLockBoxHtml = null;
                     primeInkSchoolSuspensionDetected = false;
-                    if (lockOverlay) lockOverlay.classList.add('hidden');
+                    if (lockOverlay) {
+                        if (primeInkOriginalLockOverlayWasHidden) lockOverlay.classList.add('hidden');
+                        else lockOverlay.classList.remove('hidden');
+                    }
                     updateExpirationLabel();
                 }
             } catch (error) { /* hors ligne : on conserve l'écran actuel */ }
@@ -5220,7 +5224,10 @@ async function bpPushClassBulletin(cls) {
             if (!lockOverlay) return;
             const lockBox = lockOverlay.querySelector('.lock-box');
             if (lockBox) {
-                if (!primeInkSchoolSuspensionDetected) primeInkOriginalLockBoxHtml = lockBox.innerHTML;
+                if (!primeInkSchoolSuspensionDetected) {
+                    primeInkOriginalLockBoxHtml = lockBox.innerHTML;
+                    primeInkOriginalLockOverlayWasHidden = lockOverlay.classList.contains('hidden');
+                }
                 lockBox.innerHTML = `<div class="lock-icon">⛔</div><h3>Accès suspendu</h3><p style="color: var(--danger-color);">${safeHTML(message)}</p>`;
             }
             primeInkSchoolSuspensionDetected = true;
