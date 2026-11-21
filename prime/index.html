@@ -7195,7 +7195,7 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
 
         // Commande locale spéciale : ouvre le changement d'école sans consommer de code de licence.
         function isPrimeInkSchoolIdUpdateCommand(value) {
-            return String(value || "").trim().toLowerCase().replace(/\\s+/g, " ") === "update school id";
+            return String(value || "").trim().toLowerCase().replace(/\s+/g, " ") === "update school id";
         }
 
         function openPrimeInkSchoolIdUpdate() {
@@ -7390,6 +7390,10 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
 
         async function verifyActivationFromLock() {
             const input = document.getElementById('lockActivationInput');
+            if (input && isPrimeInkSchoolIdUpdateCommand(input.value)) {
+                alert("Pour changer l'identifiant, utilisez la commande UPDATE SCHOOL ID dans Paramètres > Licence et apparence.");
+                return;
+            }
             if (input) {
                 document.getElementById('activationCodeInput').value = input.value;
                 await verifyActivationCode();
