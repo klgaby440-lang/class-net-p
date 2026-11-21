@@ -3792,7 +3792,7 @@ def compose_teacher_classroom_context(teacher, school, classes, students, course
             continue
         assigned_courses_by_class.setdefault(str(classe.class_name), []).append(course)
 
-    courses_by_class = {}
+    assigned_course_labels_by_class = {}
     course_catalog_by_class = {}
     course_max = {}
     legacy_course_labels_by_class = {}
@@ -3849,7 +3849,7 @@ def compose_teacher_classroom_context(teacher, school, classes, students, course
             })
             course_max[f"{class_name}_{label}"] = max_per
 
-        courses_by_class[class_name] = labels
+        assigned_course_labels_by_class[class_name] = labels
         course_catalog_by_class[class_name] = catalog_rows
 
         # Les anciennes évaluations ClassInk ne contenaient que le nom du cours.
@@ -3876,7 +3876,7 @@ def compose_teacher_classroom_context(teacher, school, classes, students, course
         for name in (item.class_name for item in visible_classes)
     }
     courses_by_class = {
-        name: courses_by_class.get(str(name), [])
+        name: assigned_course_labels_by_class.get(str(name), [])
         for name in (item.class_name for item in visible_classes)
     }
     course_catalog = {
