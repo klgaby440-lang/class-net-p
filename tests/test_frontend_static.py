@@ -602,7 +602,7 @@ class TestNewFeatureStatic(unittest.TestCase):
         self.assertIn('id="primeInkSchoolIdUpdateInput"', source)
         self.assertIn('id="primeInkSchoolIdUpdatePassword"', source)
         self.assertIn('function isPrimeInkSchoolIdUpdateCommand(value)', source)
-        self.assertIn('replace(/\\\\s+/g, " ")', source)
+        self.assertIn('replace(/\\s+/g, " ")', source)
         activation = source.split("async function verifyActivationCode()", 1)[1].split(
             "// 5. Petite fonction", 1
         )[0]
