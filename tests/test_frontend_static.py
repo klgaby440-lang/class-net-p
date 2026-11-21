@@ -623,5 +623,59 @@ class TestNewFeatureStatic(unittest.TestCase):
         self.assertIn("panel.style.cssText += ';position:fixed;z-index:100001", source)
 
 
+    def test_teacher_workspaces_refresh_without_relogin_and_are_scoped_by_assignment(self):
+        backend = (ROOT / "main.py").read_text(encoding="utf-8")
+        classroom = backend.split("def compose_teacher_classroom_context(", 1)[1].split(
+            "def apply_teacher_classroom_context(", 1
+        )[0]
+        self.assertIn('if not teacher_matches_catalog_name(teacher, getattr(course, "titulaire_name", "")):', classroom)
+        self.assertIn("assigned_courses_by_class", classroom)
+        self.assertIn("visible_class_names", classroom)
+        apply_context = backend.split("def apply_teacher_classroom_context(", 1)[1].split(
+            "def build_teacher_classroom_context(", 1
+        )[0]
+        self.assertIn('state["courses"] = dict(context.get("courses") or {})', apply_context)
+        self.assertIn('state["students"] = dict(context.get("students") or {})', apply_context)
+        self.assertIn('state["teacherCatalogScope"] = "assigned"', apply_context)
+
+        self.assertIn('class ClassInkTeacherIndependentSnapshot(Base)', backend)
+        self.assertIn('@app.get("/api/teacher/session/status")', backend)
+        self.assertIn('@app.post("/api/teacher/workspace/independent")', backend)
+        self.assertIn('claims.get("workspace_mode") or "").strip().lower() == "independent"', backend)
+        self.assertIn("if not independent_workspace and not verified_school_id and teacher_has_verified_school_access(teacher):", backend)
+
+        app = (ROOT / "app/index.html").read_text(encoding="utf-8")
+        self.assertIn("async function refreshTeacherSessionStatus(options = {})", app)
+        self.assertIn("/api/teacher/session/status", app)
+        self.assertIn("/api/teacher/workspace/independent", app)
+        self.assertIn("function openIndependentTeacherWorkspace()", app)
+        self.assertIn("setInterval(() => refreshTeacherSessionStatus", app)
+        self.assertIn("server.teacherCatalogScope === 'assigned'", app)
+        self.assertIn("allowedCourses.has(String(item.course || ''))", app)
+        self.assertIn("async function refreshTeacherClassroomData(silent = false)", app)
+
+    def test_primeink_teacher_assignments_use_available_teacher_selects_and_suspend_auto_restore(self):
+        source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
+        self.assertIn('<select id="name-titulaire-added-class"', source)
+        self.assertIn('<select id="name-titulaire-added-cours"', source)
+        self.assertIn('data-field="titulaire">${primeInkTeacherSelectOptions(crs.titulaire || \'\')}', source)
+        self.assertIn("function primeInkTeacherSelectOptions(rawValue = '')", source)
+        self.assertIn("teacher.uniqueId", source)
+        self.assertIn("function refreshPrimeInkTeacherAssignmentSelects()", source)
+        self.assertIn("primeInkOriginalLockBoxHtml", source)
+        self.assertIn("if (primeInkSchoolSuspensionDetected)", source)
+        self.assertIn("if (lockOverlay) lockOverlay.classList.add('hidden');", source)
+        self.assertIn("setInterval(checkSchoolStatus, 15000)", source)
+
+        backend = (ROOT / "main.py").read_text(encoding="utf-8")
+        self.assertIn('if str(claims.get("workspace_mode") or "").strip().lower() == "independent":', backend)
+        self.assertIn('"workspaceMode": "independent", "schedule"', backend)
+        self.assertIn('state["teacherSchedule"] = clean_entries', backend)
+
+        app = (ROOT / "app/index.html").read_text(encoding="utf-8")
+        self.assertIn("const independent = String(db.workspaceMode || '').toLowerCase() === 'independent';", app)
+        self.assertIn("if ((!schoolId && !independent) || !token) return false;", app)
+
+
 if __name__ == "__main__":
     unittest.main()

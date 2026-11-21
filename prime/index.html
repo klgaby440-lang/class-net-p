@@ -1937,7 +1937,7 @@ body {
             <button class="modal-close-btn" onclick="renderinterface('ajouter_classe')">×</button>
             <h3 style="margin-bottom:1rem; color: var(--primary-color);">Ajouter une Classe</h3>
             <div class="form-group"><label>Nom de la classe</label><input type="text" id="name-added-class" class="form-control" placeholder="Ex: 3ème SCIENTIFIQUE"></div>
-            <div class="form-group"><label>Titulaire de la classe</label><input type="text" id="name-titulaire-added-class" class="form-control" placeholder="Nom complet exact du titulaire (ex. Aline Mukendi)"><small style="display:block;margin-top:5px;color:var(--text-secondary);">Le nom doit correspondre au compte ClassInk de l'enseignant. Le serveur confirme le rôle avant d'afficher Conduite.</small></div>
+            <div class="form-group"><label>Titulaire de la classe</label><select id="name-titulaire-added-class" class="form-control"><option value="">-- Aucun titulaire --</option></select><small style="display:block;margin-top:5px;color:var(--text-secondary);">Choisissez un enseignant déjà ajouté dans « Gestion des enseignants ». Le rôle sera confirmé par le serveur après publication.</small></div>
             <div class="form-group"><label>Modèle de bulletin</label>
                 <select id="class-bulletin-model" class="form-control">
                     <option value="classink">Modèle ClassInk (standard)</option>
@@ -1974,7 +1974,7 @@ body {
             <h3 style="margin-bottom:1rem; color: var(--primary-color);">Ajouter un Cours</h3>
             <div class="form-group"><label>Nom du cours</label><input type="text" id="name-added-cours" class="form-control" placeholder="Ex : Mathématiques"></div>
             <div class="form-group"><label>Max Période (Points)</label><input type="number" id="max-per-cours" class="form-control" value="40"></div>
-            <div class="form-group"><label>Titulaire du cours</label><input type="text" id="name-titulaire-added-cours" class="form-control" placeholder="Ex : Prof. Mwamba"></div>
+            <div class="form-group"><label>Enseignant responsable du cours</label><select id="name-titulaire-added-cours" class="form-control"><option value="">-- Aucun enseignant attribué --</option></select><small style="display:block;margin-top:5px;color:var(--text-secondary);">Seul cet enseignant recevra ce cours dans son espace ClassInk.</small></div>
             <div class="form-group"><label>Catégorie du cours</label><select class="form-control" id="choix-categorie"></select></div>
             <div class="form-group"><label>Sous-domaine (facultatif)</label><input type="text" id="sub-category-cours" class="form-control" placeholder="Ex : Sous-domaine des mathématiques"></div>
             <div class="form-group" style="border:1px dashed var(--border-color);border-radius:8px;padding:.75rem;">
@@ -3271,7 +3271,11 @@ window.alert = function(message) { showCustomAlert(message); };
 
                     editingClassId = cls.id;
                     document.getElementById('name-added-class').value = cls.name;
-                    document.getElementById('name-titulaire-added-class').value = cls.titulaire;
+                    const classTitularSelect = document.getElementById('name-titulaire-added-class');
+                    if (classTitularSelect) {
+                        classTitularSelect.innerHTML = primeInkTeacherSelectOptions(cls.titulaire);
+                        classTitularSelect.value = primeInkResolveTeacherOptionValue(cls.titulaire);
+                    }
                     document.getElementById('class-bulletin-model').value = bpClassModel(cls);
                     document.getElementById('class-bulletin-title').value = cls.bulletinTitle || '';
                     document.getElementById('class-signature-source').value = bpSignatureSource(cls);
@@ -3832,6 +3836,7 @@ async function bpPushClassBulletin(cls) {
                 `;
                 tbody.appendChild(tr);
             });
+            if (typeof refreshPrimeInkTeacherAssignmentSelects === 'function') refreshPrimeInkTeacherAssignmentSelects();
         }
 
         window.removeTeacher = function(uniqueId) {
@@ -4892,6 +4897,7 @@ async function bpPushClassBulletin(cls) {
                 document.getElementById('class-bulletin-title').value = '';
                 document.getElementById('class-signature-source').value = 'titulaire';
                 document.getElementById('class-autocourses').checked = false;
+                document.getElementById('name-titulaire-added-class').value = '';
                 document.querySelector('#interface-classe h3').textContent = 'Ajouter une Classe';
 
                 saveState();
@@ -4952,6 +4958,7 @@ async function bpPushClassBulletin(cls) {
                 };
 
                 appState.courses.push(newCourse);
+                document.getElementById('name-titulaire-added-cours').value = '';
                 document.getElementById('sub-category-cours').value = '';
                 saveState();
                 loadClassData(activeClassId);
@@ -5136,6 +5143,7 @@ async function bpPushClassBulletin(cls) {
 
             renderClassesTable();
             renderTeachersTable();
+            refreshPrimeInkTeacherAssignmentSelects();
             loadClassData(activeClassId);
         });
 
@@ -5177,7 +5185,12 @@ async function bpPushClassBulletin(cls) {
         // Vérifier l'Intranet toutes les 10 secondes
         setInterval(fetchIntranetAverages, 10000);
 
-        // 2. Contrôle de l'état de l'école auprès du serveur : suspension ou licence expirée
+        // Contrôle de l'état de licence. La restauration du statut actif retire le verrou
+        // immédiatement après le prochain contrôle, sans rechargement de la page.
+        let primeInkSchoolSuspensionDetected = false;
+        let primeInkOriginalLockBoxHtml = null;
+        let primeInkOriginalLockOverlayWasHidden = true;
+
         async function checkSchoolStatus() {
             const schoolId = appState && appState.school && appState.school.id;
             if (!schoolId) return;
@@ -5185,26 +5198,47 @@ async function bpPushClassBulletin(cls) {
                 const response = await window.primeInkFetchWithTimeout(`${API_BASE_URL}/api/cloud/${encodeURIComponent(schoolId)}/status`, {}, 6000);
                 if (!response.ok) return;
                 const data = await response.json();
-                if (data.locked !== true) return;
-                if (data.reason === 'expired') {
-                    blockSoftwareForActivation("La licence de l'école a expiré. Saisissez un code de renouvellement.");
-                } else {
-                    blockSoftwareSuspended("Ce compte est suspendu par l'administrateur de ClassInk. Contactez l'équipe de votre établissement pour le réactiver.");
+                if (data.locked === true) {
+                    if (data.reason === 'expired') {
+                        blockSoftwareForActivation("La licence de l'école a expiré. Saisissez un code de renouvellement.");
+                    } else {
+                        blockSoftwareSuspended("Ce compte est suspendu par l'administrateur de ClassNet. Dès que l'école est réactivée, cet écran se fermera automatiquement.");
+                    }
+                    return;
                 }
-            } catch (error) { /* hors ligne : aucune restriction connue */ }
+                if (primeInkSchoolSuspensionDetected) {
+                    const lockOverlay = document.getElementById('lock-screen-overlay');
+                    const lockBox = lockOverlay && lockOverlay.querySelector('.lock-box');
+                    if (lockBox && primeInkOriginalLockBoxHtml !== null) lockBox.innerHTML = primeInkOriginalLockBoxHtml;
+                    primeInkOriginalLockBoxHtml = null;
+                    primeInkSchoolSuspensionDetected = false;
+                    if (lockOverlay) {
+                        if (primeInkOriginalLockOverlayWasHidden) lockOverlay.classList.add('hidden');
+                        else lockOverlay.classList.remove('hidden');
+                    }
+                    updateExpirationLabel();
+                }
+            } catch (error) { /* hors ligne : on conserve l'écran actuel */ }
         }
 
         function blockSoftwareSuspended(message) {
             const lockOverlay = document.getElementById('lock-screen-overlay');
             if (!lockOverlay) return;
-            lockOverlay.classList.remove('hidden');
             const lockBox = lockOverlay.querySelector('.lock-box');
-            if (lockBox) lockBox.innerHTML = `<div class="lock-icon">⛔</div><h3>Accès suspendu</h3><p style="color: var(--danger-color);">${safeHTML(message)}</p>`;
+            if (lockBox) {
+                if (!primeInkSchoolSuspensionDetected) {
+                    primeInkOriginalLockBoxHtml = lockBox.innerHTML;
+                    primeInkOriginalLockOverlayWasHidden = lockOverlay.classList.contains('hidden');
+                }
+                lockBox.innerHTML = `<div class="lock-icon">⛔</div><h3>Accès suspendu</h3><p style="color: var(--danger-color);">${safeHTML(message)}</p>`;
+            }
+            primeInkSchoolSuspensionDetected = true;
+            lockOverlay.classList.remove('hidden');
         }
 
-        // Vérifier l'état de l'école après le démarrage, puis chaque minute
+        // Contrôle rapproché pour rétablir l'accès sans demander à l'utilisateur de recharger.
         setTimeout(checkSchoolStatus, 3000);
-        setInterval(checkSchoolStatus, 60000);
+        setInterval(checkSchoolStatus, 15000);
 
         // Navigation spécifique pour l'interface Tools
         const toolNavBtns = document.querySelectorAll('.main-navbar .nav-btn[data-target="section-about"]');
@@ -5997,6 +6031,53 @@ function updateScheduleResultTables(joursCount, heuresCount) {
     }
 }
 
+// Valeur de titulaire stockée = identifiant unique du compte enseignant.
+// Les anciennes attributions par nom/e-mail sont converties à la volée quand le compte est disponible.
+function primeInkResolveTeacherOptionValue(rawValue) {
+    const raw = String(rawValue || '').trim();
+    if (!raw || ['non assigné', 'non attribué', 'aucun', 'aucune'].includes(raw.toLocaleLowerCase())) return '';
+    const key = raw.toLocaleLowerCase();
+    const match = (appState.teachers || []).find(teacher =>
+        [teacher.uniqueId, teacher.name, teacher.email].some(value =>
+            String(value || '').trim().toLocaleLowerCase() === key
+        )
+    );
+    return match ? String(match.uniqueId || '') : raw;
+}
+
+function primeInkTeacherSelectOptions(rawValue = '') {
+    const raw = String(rawValue || '').trim();
+    const resolved = primeInkResolveTeacherOptionValue(raw);
+    const teachers = Array.isArray(appState.teachers) ? appState.teachers : [];
+    const hasMatch = teachers.some(teacher => String(teacher.uniqueId || '') === resolved);
+    const isUnassigned = ['non assigné', 'non attribué', 'aucun', 'aucune'].includes(raw.toLocaleLowerCase());
+    let html = '<option value="">-- Aucun enseignant attribué --</option>';
+    if (raw && !hasMatch && !isUnassigned) {
+        html += '<option value="' + safeHTML(raw) + '" selected>Attribution existante à vérifier : ' + safeHTML(raw) + '</option>';
+    }
+    html += teachers.filter(teacher => teacher && teacher.uniqueId).map(teacher => {
+        const label = [teacher.name || 'Enseignant', teacher.subject || '', teacher.email || '']
+            .filter(Boolean).join(' · ');
+        return '<option value="' + safeHTML(teacher.uniqueId) + '"' +
+            (String(teacher.uniqueId) === resolved ? ' selected' : '') + '>' +
+            safeHTML(label) + '</option>';
+    }).join('');
+    return html;
+}
+
+function refreshPrimeInkTeacherAssignmentSelects() {
+    [
+        ['name-titulaire-added-class', ''],
+        ['name-titulaire-added-cours', '']
+    ].forEach(([id, fallback]) => {
+        const select = document.getElementById(id);
+        if (!select) return;
+        const current = select.value || fallback || '';
+        select.innerHTML = primeInkTeacherSelectOptions(current);
+        select.value = primeInkResolveTeacherOptionValue(current);
+    });
+}
+
 // REGISTRE DES ENSEIGNANTS (PARAMÈTRES)
         function renderTeachersTable() {
             const tbody = document.getElementById('teachersTableBody');
@@ -6016,6 +6097,7 @@ function updateScheduleResultTables(joursCount, heuresCount) {
                 `;
                 tbody.appendChild(tr);
             });
+            if (typeof refreshPrimeInkTeacherAssignmentSelects === 'function') refreshPrimeInkTeacherAssignmentSelects();
         }
 
         window.removeTeacher = function(uniqueId) {
@@ -6293,7 +6375,7 @@ function updateScheduleResultTables(joursCount, heuresCount) {
                     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:0.6rem;">
                         <label>Nom du cours<input class="form-control" data-field="name" value="${safeHTML(crs.name || '')}"></label>
                         <label>Maximum par période<input class="form-control" type="number" min="1" step="0.5" data-field="maxPer" value="${safeHTML(crs.maxPer ?? 40)}"></label>
-                        <label>Titulaire<input class="form-control" data-field="titulaire" value="${safeHTML(crs.titulaire || '')}"></label>
+                        <label>Enseignant responsable<select class="form-control" data-field="titulaire">${primeInkTeacherSelectOptions(crs.titulaire || '')}</select></label>
                         <label>Catégorie<input class="form-control" data-field="category" value="${safeHTML(crs.category || '')}"></label>
                         <label>Sous-domaine<input class="form-control" data-field="subCategory" value="${safeHTML(crs.subCategory || '')}"></label>
                     </div>

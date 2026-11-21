@@ -156,6 +156,7 @@ def test_teacher_classroom_context_identifies_only_the_official_titular():
         course_name="Mathématiques",
         max_per=40,
         category="Sciences",
+        titulaire_name="aline@example.cd",
     )
 
     context = compose_teacher_classroom_context(
@@ -187,9 +188,11 @@ def test_teacher_classroom_context_does_not_grant_titular_role_by_school_members
 
     context = compose_teacher_classroom_context(teacher, school, [classe], [], [])
 
-    assert context["classes"] == ["1ère Scientifique"]
+    assert context["classes"] == []
+    assert context["students"] == {}
+    assert context["courses"] == {}
     assert context["titulaireClasses"] == []
-    assert context["classrooms"][0]["isTitulaire"] is False
+    assert context["classrooms"] == []
 
 def test_titular_matching_accepts_honorific_and_reordered_full_name():
     teacher = SimpleNamespace(
@@ -213,13 +216,30 @@ def test_titular_matching_does_not_grant_access_by_single_name_token():
     assert teacher_is_titulaire(teacher, classe) is False
 
 
-def test_apply_teacher_classroom_context_preserves_local_notes_and_merges_students():
+def test_apply_teacher_classroom_context_replaces_unassigned_catalog_and_keeps_only_assigned_notes():
     local_state = {
         "user": {"email": "aline@example.cd", "password": "local-password"},
-        "classes": ["Classe locale"],
-        "students": {"Classe locale": [{"id": "local-student", "name": "Local"}]},
-        "courses": {"Classe locale": ["Français"]},
-        "grades": {"student_course": {"p1": 18}},
+        "classes": ["Classe locale", "1ère Scientifique"],
+        "students": {
+            "Classe locale": [{"id": "local-student", "name": "Local"}],
+            "1ère Scientifique": [{"id": "student-1", "name": "MUKENDI Aline"}],
+        },
+        "courses": {
+            "Classe locale": ["Français"],
+            "1ère Scientifique": ["Mathématiques", "Français"],
+        },
+        "evaluations": {
+            "Classe locale": {"P1": [{"id": "EV-local", "course": "Français"}]},
+            "1ère Scientifique": {"P1": [
+                {"id": "EV-math", "course": "Mathématiques"},
+                {"id": "EV-french", "course": "Français"},
+            ]},
+        },
+        "grades": {
+            "local-student_EV-local": 18,
+            "student-1_EV-math": 17,
+            "student-1_EV-french": 16,
+        },
         "pendingCommits": 1,
     }
     context = {
@@ -237,14 +257,19 @@ def test_apply_teacher_classroom_context_preserves_local_notes_and_merges_studen
 
     updated = apply_teacher_classroom_context(local_state, context)
 
-    assert updated["classes"] == ["Classe locale", "1ère Scientifique"]
-    assert updated["students"]["Classe locale"][0]["id"] == "local-student"
+    assert updated["classes"] == ["1ère Scientifique"]
+    assert list(updated["students"]) == ["1ère Scientifique"]
     assert updated["students"]["1ère Scientifique"][0]["id"] == "student-1"
-    assert updated["courses"]["1ère Scientifique"] == ["Mathématiques"]
-    assert updated["grades"] == {"student_course": {"p1": 18}}
+    assert updated["courses"] == {"1ère Scientifique": ["Mathématiques"]}
+    assert updated["courseMax"] == {"1ère Scientifique_Mathématiques": 40}
+    assert updated["evaluations"]["1ère Scientifique"]["P1"] == [
+        {"id": "EV-math", "course": "Mathématiques"}
+    ]
+    assert updated["grades"] == {"student-1_EV-math": 17}
     assert updated["pendingCommits"] == 1
     assert updated["user"]["password"] == "local-password"
     assert updated["user"]["titulaireOf"] == "1ère Scientifique"
+
 
 
 def test_teacher_roster_link_requires_the_official_code_and_registered_name():

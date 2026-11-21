@@ -648,6 +648,14 @@ class ClassInkTeacherSpaceSnapshot(Base):
     payload_data = Column(JSON, nullable=False, default=dict)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+class ClassInkTeacherIndependentSnapshot(Base):
+    """Espace personnel d'un enseignant, distinct de tous ses espaces scolaires."""
+    __tablename__ = "classink_teacher_independent_snapshots"
+
+    teacher_email = Column(String, primary_key=True, index=True)
+    payload_data = Column(JSON, nullable=False, default=dict)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 # ---------------------------------------------------------
 # MODÈLE COMMUN (étape 3) : types de bulletin, conduite, signatures, accès aux notes, liens d'élèves.
 # Les valeurs autorisées viennent de classnet_common.py : ne pas les recopier ici.
@@ -1667,8 +1675,12 @@ def login_teacher(data: LoginSchema, db: Session = Depends(get_db)):
         else:
             snapshot_payload = snapshot_row.payload_data if snapshot_row else None
     else:
-        legacy_snapshot = db.query(ClassInkTeacherSnapshot).filter_by(teacher_email=teacher.email).first()
-        snapshot_payload = legacy_snapshot.payload_data if legacy_snapshot else None
+        independent_snapshot = db.query(ClassInkTeacherIndependentSnapshot).filter_by(teacher_email=teacher.email).first()
+        legacy_snapshot = None if independent_snapshot else db.query(ClassInkTeacherSnapshot).filter_by(teacher_email=teacher.email).first()
+        snapshot_payload = (
+            independent_snapshot.payload_data if independent_snapshot
+            else (legacy_snapshot.payload_data if legacy_snapshot else None)
+        )
     classnet_app_db = restore_classink_teacher_state(
         snapshot_payload,
         classnet_app_db,
@@ -1680,7 +1692,11 @@ def login_teacher(data: LoginSchema, db: Session = Depends(get_db)):
         build_teacher_classroom_context(db, teacher, active_school_id or None),
     )
 
-    token_claims = {"role": "teacher", "email": teacher.email}
+    token_claims = {
+        "role": "teacher",
+        "email": teacher.email,
+        "workspace_mode": "school" if active_school_id else "auto",
+    }
     if active_school_id:
         token_claims["school_id"] = active_school_id
     return {"status": True, "data": classnet_app_db,
@@ -2937,6 +2953,7 @@ def build_classink_teacher_snapshot(payload: dict, teacher_email: str) -> dict:
     user["email"] = teacher_email
     user["isLoggedIn"] = True
     snapshot["user"] = user
+    snapshot.pop("teacherCatalogScope", None)
     snapshot["pendingCommits"] = 0
 
     serialized = json.dumps(snapshot, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
@@ -2962,10 +2979,13 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
     teacher = db.query(Teacher).filter(Teacher.email == email).first()
     if not teacher:
         return {"status": False, "message": "Enseignant non trouvé."}
-    verified_school_id = str(claims.get("school_id") or "").strip() or None
+    # Un espace indépendant est explicitement séparé des espaces scolaires, même
+    # si le compte possède également un ancien rattachement principal à une école.
+    independent_workspace = str(claims.get("workspace_mode") or "").strip().lower() == "independent"
+    verified_school_id = None if independent_workspace else (str(claims.get("school_id") or "").strip() or None)
     if verified_school_id and not teacher_has_school_access(db, teacher, verified_school_id):
         raise HTTPException(status_code=403, detail="Cet espace enseignant n'est pas autorisé pour cette école.")
-    if not verified_school_id and teacher_has_verified_school_access(teacher):
+    if not independent_workspace and not verified_school_id and teacher_has_verified_school_access(teacher):
         verified_school_id = str(teacher.school_id)
     if verified_school_id:
         blocked = teacher_school_block(db, teacher, verified_school_id)
@@ -3244,11 +3264,11 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
                 teacher_email=teacher.email, school_id=verified_school_id, payload_data=snapshot
             ))
     else:
-        snapshot_row = db.query(ClassInkTeacherSnapshot).filter_by(teacher_email=teacher.email).first()
+        snapshot_row = db.query(ClassInkTeacherIndependentSnapshot).filter_by(teacher_email=teacher.email).first()
         if snapshot_row:
             snapshot_row.payload_data = snapshot
         else:
-            db.add(ClassInkTeacherSnapshot(teacher_email=teacher.email, payload_data=snapshot))
+            db.add(ClassInkTeacherIndependentSnapshot(teacher_email=teacher.email, payload_data=snapshot))
 
     # Historique de synchronisation
     db.add(SyncHistory(
@@ -3735,42 +3755,61 @@ def teacher_matches_catalog_name(teacher, value: str) -> bool:
 
 
 def compose_teacher_classroom_context(teacher, school, classes, students, courses) -> dict:
-    """Construit le catalogue de l'école ; le statut de titulaire reste propre à chaque classe."""
-    classes_by_id = {str(item.id): str(item.class_name) for item in classes}
-    students_by_class, courses_by_class, course_max = {}, {}, {}
+    """Construit uniquement le périmètre de classes et de cours officiellement attribué à l'enseignant."""
+    classes_by_id = {str(item.id): item for item in classes}
+    all_students_by_class = {}
     for item in classes:
-        students_by_class.setdefault(item.class_name, [])
-        courses_by_class.setdefault(item.class_name, [])
+        all_students_by_class.setdefault(item.class_name, [])
     for item in students:
-        class_name = classes_by_id.get(str(item.class_id))
-        if not class_name:
+        classe = classes_by_id.get(str(item.class_id))
+        if not classe:
             continue
         full_name = " ".join(part for part in (
             item.student_name or "", item.student_post_name or "", item.student_pre_name or ""
         ) if part).strip()
-        students_by_class.setdefault(class_name, []).append({
+        all_students_by_class.setdefault(classe.class_name, []).append({
             "id": item.id, "name": full_name,
             "postname": item.student_post_name or "", "prename": item.student_pre_name or "",
             "sexe": item.student_sexe or "", "classId": item.class_id,
         })
-    for item in courses:
-        class_name = classes_by_id.get(str(item.class_id))
-        if not class_name:
-            continue
-        values = courses_by_class.setdefault(class_name, [])
-        if item.course_name not in values:
-            values.append(item.course_name)
-        course_max[f"{class_name}_{item.course_name}"] = float(item.max_per or 40)
 
-    # L'enseignant autorisé reçoit le catalogue des classes de son école.
-    # En revanche, le droit de modifier la conduite n'est accordé que dans ses classes
-    # de titulariat officielles, vérifiées par teacher_is_titulaire et store_conduct.
+    # Le titulariat donne accès au registre des élèves de la classe et à la conduite,
+    # mais ne donne pas automatiquement accès à tous les cours de cette classe.
     titulaire_classes = [
         item.class_name for item in classes
         if teacher_is_titulaire(teacher, item)
     ]
+    assigned_courses_by_class = {}
+    course_max = {}
+    for course in courses:
+        if not teacher_matches_catalog_name(teacher, getattr(course, "titulaire_name", "")):
+            continue
+        classe = classes_by_id.get(str(course.class_id))
+        if not classe:
+            continue
+        class_name = str(classe.class_name)
+        values = assigned_courses_by_class.setdefault(class_name, [])
+        if course.course_name not in values:
+            values.append(course.course_name)
+        course_max[f"{class_name}_{course.course_name}"] = float(course.max_per or 40)
+
+    # Une classe est visible si l'enseignant y donne au moins un cours,
+    # ou s'il en est le titulaire officiel.
+    visible_class_names = set(titulaire_classes) | set(assigned_courses_by_class.keys())
+    visible_classes = [item for item in classes if item.class_name in visible_class_names]
+    students_by_class = {
+        name: all_students_by_class.get(name, [])
+        for name in (item.class_name for item in visible_classes)
+    }
+    courses_by_class = {
+        name: sorted(assigned_courses_by_class.get(name, []), key=str.casefold)
+        for name in (item.class_name for item in visible_classes)
+    }
+    # course_max a déjà été constitué exclusivement à partir des cours de cet enseignant.
+    visible_course_max = dict(course_max)
+
     classroom_rows = []
-    for item in classes:
+    for item in visible_classes:
         classroom_rows.append({
             "id": item.id,
             "name": item.class_name,
@@ -3781,20 +3820,20 @@ def compose_teacher_classroom_context(teacher, school, classes, students, course
         })
     return {
         "schoolId": school.school_id if school else "",
-        "schoolName": school.name_school if school else (teacher.school_name or ""),
-        "classes": [item.class_name for item in classes],
+        "schoolName": school.name_school if school else (teacher.school_name or "Indépendant"),
+        "classes": [item.class_name for item in visible_classes],
         "students": students_by_class,
         "courses": courses_by_class,
-        "courseMax": course_max,
+        "courseMax": visible_course_max,
         "titulaireClasses": titulaire_classes,
         "classrooms": classroom_rows,
+        "teacherCatalogScope": "assigned" if school else "independent",
     }
 
 
 def apply_teacher_classroom_context(state: dict, context: dict) -> dict:
-    """Fusionne le catalogue autorisé de l'école avec l'espace local sans effacer les notes."""
+    """Applique le catalogue officiel filtré sans fusionner les cours d'autres enseignants."""
     state = dict(state or {})
-    # Un enseignant indépendant/non autorisé garde son espace local, sans titulaire déclaré.
     if not context.get("schoolId"):
         user = dict(state.get("user") or {})
         user["schoolId"] = ""
@@ -3804,37 +3843,58 @@ def apply_teacher_classroom_context(state: dict, context: dict) -> dict:
         state["titulaireClasses"] = []
         state["classrooms"] = []
         state["schoolId"] = ""
+        state["teacherCatalogScope"] = "independent"
         return state
 
-    state["classes"] = list(dict.fromkeys(
-        [str(value) for value in (state.get("classes") or [])] +
-        [str(value) for value in (context.get("classes") or [])]
-    ))
-    for key in ("courses", "students"):
-        merged = dict(state.get(key) or {})
-        for class_name, rows in (context.get(key) or {}).items():
-            existing = list(merged.get(class_name) or [])
-            seen = {str((item or {}).get("id")) if isinstance(item, dict) else str(item) for item in existing}
-            for item in rows:
-                item_id = str(item.get("id")) if isinstance(item, dict) else str(item)
-                if item_id not in seen:
-                    existing.append(item)
-                    seen.add(item_id)
-            merged[class_name] = existing
-        state[key] = merged
-    state["courseMax"] = {**(context.get("courseMax") or {}), **(state.get("courseMax") or {})}
-    evaluations = dict(state.get("evaluations") or {})
-    for class_name in context.get("classes") or []:
-        evaluations.setdefault(class_name, {"P1": [], "P2": [], "EX1": [], "P3": [], "P4": [], "EX2": []})
-    state["evaluations"] = evaluations
+    # Pour un espace scolaire, le catalogue du serveur est autoritaire : il remplace
+    # les anciennes listes locales susceptibles de contenir les cours d'un autre enseignant.
+    state["classes"] = list(context.get("classes") or [])
+    state["courses"] = dict(context.get("courses") or {})
+    state["students"] = dict(context.get("students") or {})
+    state["courseMax"] = dict(context.get("courseMax") or {})
+
+    allowed_courses = {
+        (str(class_name), str(course_name))
+        for class_name, names in state["courses"].items()
+        for course_name in (names or [])
+    }
+    previous_evaluations = state.get("evaluations") if isinstance(state.get("evaluations"), dict) else {}
+    filtered_evaluations = {}
+    allowed_evaluation_ids = set()
+    for class_name, periods in previous_evaluations.items():
+        if class_name not in state["classes"]:
+            continue
+        filtered_evaluations[class_name] = {}
+        for period, entries in (periods or {}).items():
+            kept = []
+            for entry in (entries or []):
+                course_name = str((entry or {}).get("course") or "")
+                if (str(class_name), course_name) not in allowed_courses:
+                    continue
+                kept.append(entry)
+                if entry.get("id"):
+                    allowed_evaluation_ids.add(str(entry["id"]))
+            filtered_evaluations[class_name][period] = kept
+    for class_name in state["classes"]:
+        filtered_evaluations.setdefault(class_name, {"P1": [], "P2": [], "EX1": [], "P3": [], "P4": [], "EX2": []})
+    state["evaluations"] = filtered_evaluations
+
+    # Les clés de notes prennent la forme studentId_EV-xxxx ; seules les évaluations
+    # dont le cours est attribué restent dans le catalogue reçu par le professeur.
+    grades = state.get("grades") if isinstance(state.get("grades"), dict) else {}
+    state["grades"] = {
+        key: value for key, value in grades.items()
+        if "_EV-" in str(key) and ("EV-" + str(key).split("_EV-", 1)[1]) in allowed_evaluation_ids
+    }
+
     state["titulaireClasses"] = list(context.get("titulaireClasses") or [])
     state["classrooms"] = list(context.get("classrooms") or [])
     state["schoolId"] = context.get("schoolId") or ""
+    state["teacherCatalogScope"] = "assigned"
     user = dict(state.get("user") or {})
     if context.get("schoolName"):
         user["school"] = context["schoolName"]
     user["schoolId"] = context.get("schoolId") or ""
-    # Le rôle est fourni par le registre de l'école, jamais par une auto-déclaration locale.
     user["titulaireOf"] = (context.get("titulaireClasses") or [""])[0]
     user["titulaireClasses"] = list(context.get("titulaireClasses") or [])
     state["user"] = user
@@ -3931,11 +3991,157 @@ def get_teacher_spaces(db: Session = Depends(get_db), claims: dict = Depends(req
     return {"status": True, "data": teacher_school_spaces(db, teacher)}
 
 
+@app.get("/api/teacher/session/status")
+def get_teacher_session_status(db: Session = Depends(get_db), claims: dict = Depends(require_teacher)):
+    """Actualise les espaces, demandes en attente et l'état de licence sans reconnexion."""
+    teacher = db.query(Teacher).filter(Teacher.email == claims.get("email")).first()
+    if not teacher:
+        raise HTTPException(status_code=404, detail="Compte enseignant introuvable.")
+
+    associations = db.query(TeacherSchoolSpace).filter(
+        TeacherSchoolSpace.teacher_email == teacher.email
+    ).all()
+    school_ids = sorted({str(item.school_id) for item in associations if item.school_id})
+    schools = db.query(SchoolInformation).filter(SchoolInformation.school_id.in_(school_ids)).all() if school_ids else []
+    schools_by_id = {str(item.school_id): item for item in schools}
+    verified_spaces = teacher_school_spaces(db, teacher)
+    pending_spaces = [
+        {
+            "schoolId": str(item.school_id),
+            "schoolName": (schools_by_id.get(str(item.school_id)).name_school if schools_by_id.get(str(item.school_id)) else "Établissement"),
+            "city": (schools_by_id.get(str(item.school_id)).city if schools_by_id.get(str(item.school_id)) else ""),
+            "status": "pending",
+        }
+        for item in associations
+        if not item.is_verified and str(item.school_id) in schools_by_id
+    ]
+
+    mode = str(claims.get("workspace_mode") or "auto").strip().lower()
+    active_school_id = ""
+    if mode != "independent":
+        claimed_school_id = str(claims.get("school_id") or "").strip()
+        preferred_school_id = str(getattr(teacher, "preferred_school_id", "") or "").strip()
+        legacy_school_id = str(getattr(teacher, "school_id", "") or "").strip()
+        for candidate in (claimed_school_id, preferred_school_id, legacy_school_id):
+            if candidate and teacher_has_school_access(db, teacher, candidate):
+                active_school_id = candidate
+                break
+        if not active_school_id and len(verified_spaces) == 1:
+            active_school_id = str(verified_spaces[0]["schoolId"])
+
+    lock_message = teacher_school_block(db, teacher, active_school_id) if active_school_id else None
+    workspace_mode = "independent" if mode == "independent" else ("school" if active_school_id else "auto")
+    token_claims = {
+        "role": "teacher",
+        "email": teacher.email,
+        "workspace_mode": workspace_mode,
+    }
+    if active_school_id:
+        token_claims["school_id"] = active_school_id
+
+    return {
+        "status": True,
+        "workspaceMode": workspace_mode,
+        "activeSchoolId": active_school_id,
+        "schoolLocked": bool(lock_message),
+        "lockMessage": lock_message or "",
+        "teacherSpaces": verified_spaces,
+        "pendingSpaces": pending_spaces,
+        "token": create_token(token_claims, TEACHER_TOKEN_TTL),
+    }
+
+
+@app.post("/api/teacher/workspace/independent")
+def activate_independent_teacher_workspace(
+    payload: dict,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(require_teacher),
+):
+    """Crée ou ouvre le snapshot personnel séparé des données de chaque école."""
+    teacher = db.query(Teacher).filter(Teacher.email == claims.get("email")).first()
+    if not teacher:
+        raise HTTPException(status_code=404, detail="Compte enseignant introuvable.")
+
+    row = db.query(ClassInkTeacherIndependentSnapshot).filter_by(teacher_email=teacher.email).first()
+    created = row is None
+    if row is None:
+        seed = payload.get("snapshot") if isinstance(payload, dict) else None
+        # Les données locales ne sont proposées comme point de départ que si le jeton
+        # n'appartient pas à un espace scolaire actif. On ne copie jamais une école vers
+        # l'espace personnel.
+        if (
+            not claims.get("school_id")
+            and str(claims.get("workspace_mode") or "auto").lower() != "school"
+            and isinstance(seed, dict)
+        ):
+            snapshot = build_classink_teacher_snapshot(seed, teacher.email)
+        else:
+            snapshot = {
+                "user": {"id": teacher.teacher_code or f"prof_{teacher.id}", "name": teacher.full_name,
+                         "email": teacher.email, "school": "Espace indépendant", "isLoggedIn": True},
+                "classes": [], "courses": {}, "courseMax": {}, "students": {},
+                "evaluations": {}, "grades": {}, "presences": [], "quizzes": [],
+                "periodVisibility": {"P1": True, "P2": False, "EX1": False, "P3": False, "P4": False, "EX2": False},
+                "activeCourseFilter": {}, "titulaireClasses": [], "classrooms": [],
+            }
+        snapshot["schoolId"] = ""
+        snapshot.pop("school_id", None)
+        snapshot.pop("teacherCatalogScope", None)
+        user = dict(snapshot.get("user") or {})
+        user.update({
+            "id": teacher.teacher_code or f"prof_{teacher.id}",
+            "name": teacher.full_name,
+            "email": teacher.email,
+            "school": "Espace indépendant",
+            "schoolId": "",
+            "isLoggedIn": True,
+        })
+        snapshot["user"] = user
+        row = ClassInkTeacherIndependentSnapshot(teacher_email=teacher.email, payload_data=snapshot)
+        db.add(row)
+        db.commit()
+
+    state = dict(row.payload_data or {})
+    state.pop("teacherCatalogScope", None)
+    state["schoolId"] = ""
+    state.pop("school_id", None)
+    state["teacherSpaces"] = teacher_school_spaces(db, teacher)
+    state["pendingTeacherSpaces"] = []
+    user = dict(state.get("user") or {})
+    user.update({
+        "id": teacher.teacher_code or f"prof_{teacher.id}",
+        "name": teacher.full_name,
+        "email": teacher.email,
+        "school": "Espace indépendant",
+        "schoolId": "",
+        "titulaireOf": "",
+        "titulaireClasses": [],
+        "isLoggedIn": True,
+    })
+    state["user"] = user
+
+    token_claims = {"role": "teacher", "email": teacher.email, "workspace_mode": "independent"}
+    return {
+        "status": True,
+        "created": created,
+        "workspaceMode": "independent",
+        "data": state,
+        "token": create_token(token_claims, TEACHER_TOKEN_TTL),
+    }
+
+
 @app.get("/api/teacher/schedule")
 def get_teacher_schedule(db: Session = Depends(get_db), claims: dict = Depends(require_teacher)):
     teacher = db.query(Teacher).filter(Teacher.email == claims.get("email")).first()
+    if not teacher:
+        raise HTTPException(status_code=404, detail="Compte enseignant introuvable.")
+    if str(claims.get("workspace_mode") or "").strip().lower() == "independent":
+        row = db.query(ClassInkTeacherIndependentSnapshot).filter_by(teacher_email=teacher.email).first()
+        state = dict(row.payload_data or {}) if row else {}
+        return {"status": True, "data": {"schoolId": "", "workspaceMode": "independent", "schedule": list(state.get("teacherSchedule") or [])}}
+
     school_id = str(claims.get("school_id") or "").strip()
-    if not teacher or not school_id or not teacher_has_school_access(db, teacher, school_id):
+    if not school_id or not teacher_has_school_access(db, teacher, school_id):
         raise HTTPException(status_code=403, detail="Aucun espace scolaire actif n'est autorisé pour cet enseignant.")
     blocked = teacher_school_block(db, teacher, school_id)
     if blocked:
@@ -3945,18 +4151,22 @@ def get_teacher_schedule(db: Session = Depends(get_db), claims: dict = Depends(r
         TeacherSchoolSpace.school_id == school_id,
         TeacherSchoolSpace.is_verified.is_(True),
     ).first()
-    return {"status": True, "data": {"schoolId": school_id, "schedule": list((space.schedule_data or []) if space else [])}}
+    return {"status": True, "data": {"schoolId": school_id, "workspaceMode": "school", "schedule": list((space.schedule_data or []) if space else [])}}
 
 
 @app.put("/api/teacher/schedule")
 def save_teacher_schedule(payload: dict, db: Session = Depends(get_db), claims: dict = Depends(require_teacher)):
     teacher = db.query(Teacher).filter(Teacher.email == claims.get("email")).first()
+    if not teacher:
+        raise HTTPException(status_code=404, detail="Compte enseignant introuvable.")
+    independent_workspace = str(claims.get("workspace_mode") or "").strip().lower() == "independent"
     school_id = str(claims.get("school_id") or "").strip()
-    if not teacher or not school_id or not teacher_has_school_access(db, teacher, school_id):
+    if not independent_workspace and (not school_id or not teacher_has_school_access(db, teacher, school_id)):
         raise HTTPException(status_code=403, detail="Aucun espace scolaire actif n'est autorisé pour cet enseignant.")
-    blocked = teacher_school_block(db, teacher, school_id)
-    if blocked:
-        raise HTTPException(status_code=403, detail=blocked)
+    if not independent_workspace:
+        blocked = teacher_school_block(db, teacher, school_id)
+        if blocked:
+            raise HTTPException(status_code=403, detail=blocked)
     entries = payload.get("schedule")
     if not isinstance(entries, list) or len(entries) > 100:
         raise HTTPException(status_code=422, detail="L'horaire doit être une liste de 0 à 100 créneaux.")
@@ -3978,6 +4188,27 @@ def save_teacher_schedule(payload: dict, db: Session = Depends(get_db), claims: 
         if day not in allowed_days or not re.fullmatch(r"([01][0-9]|2[0-3]):[0-5][0-9]", start) or not re.fullmatch(r"([01][0-9]|2[0-3]):[0-5][0-9]", end) or end <= start or not course:
             raise HTTPException(status_code=422, detail="Chaque créneau doit avoir un jour, un cours et des heures valides.")
         clean_entries.append({"id": entry_id, "day": day, "start": start, "end": end, "course": course, "room": room, "order": index})
+
+    if independent_workspace:
+        row = db.query(ClassInkTeacherIndependentSnapshot).filter_by(teacher_email=teacher.email).first()
+        if not row:
+            row = ClassInkTeacherIndependentSnapshot(
+                teacher_email=teacher.email,
+                payload_data={
+                    "user": {"id": teacher.teacher_code or f"prof_{teacher.id}", "name": teacher.full_name,
+                             "email": teacher.email, "school": "Espace indépendant", "schoolId": ""},
+                    "classes": [], "courses": {}, "courseMax": {}, "students": {},
+                    "evaluations": {}, "grades": {}, "presences": [], "quizzes": [],
+                    "titulaireClasses": [], "classrooms": [],
+                },
+            )
+            db.add(row)
+        state = dict(row.payload_data or {})
+        state["teacherSchedule"] = clean_entries
+        row.payload_data = state
+        db.commit()
+        return {"status": True, "data": {"schoolId": "", "workspaceMode": "independent", "schedule": clean_entries}}
+
     space = db.query(TeacherSchoolSpace).filter(
         TeacherSchoolSpace.teacher_email == teacher.email,
         TeacherSchoolSpace.school_id == school_id,
@@ -3992,7 +4223,7 @@ def save_teacher_schedule(payload: dict, db: Session = Depends(get_db), claims: 
         raise HTTPException(status_code=403, detail="L'école n'a pas encore confirmé cet espace.")
     space.schedule_data = clean_entries
     db.commit()
-    return {"status": True, "data": {"schoolId": school_id, "schedule": clean_entries}}
+    return {"status": True, "data": {"schoolId": school_id, "workspaceMode": "school", "schedule": clean_entries}}
 
 
 @app.get("/api/teacher/classes")
@@ -4004,6 +4235,8 @@ def get_teacher_classroom_information(
     teacher = db.query(Teacher).filter(Teacher.email == claims.get("email")).first()
     if not teacher:
         raise HTTPException(status_code=404, detail="Compte enseignant introuvable.")
+    if str(claims.get("workspace_mode") or "").strip().lower() == "independent":
+        return {"status": True, "data": compose_teacher_classroom_context(teacher, None, [], [], [])}
     selected = str(school_id or claims.get("school_id") or teacher.school_id or "").strip()
     if not teacher_has_school_access(db, teacher, selected):
         raise HTTPException(status_code=403, detail="Cet espace n'est pas encore confirmé par l'école. Vérifiez son identifiant puis demandez à l'administration de vous ajouter dans PrimeInk.")

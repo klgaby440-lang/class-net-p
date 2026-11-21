@@ -754,6 +754,9 @@
                     <select id="setting-teacher-space-select" aria-label="Espace scolaire" style="flex:1;min-width:180px;"></select>
                     <button type="button" class="btn-secondary" onclick="prepareTeacherSpaceLogin()">Changer d'espace</button>
                 </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+                    <button type="button" class="btn-secondary" onclick="openIndependentTeacherWorkspace()">Ouvrir mon espace indépendant</button>
+                </div>
                 <small id="teacher-space-status" style="display:block;margin-top:6px;color:var(--text-muted);"></small>
             </div>
 
@@ -1518,6 +1521,47 @@ function mergeServerDataIntoLocal(local, server) {
         : { ...(local.grades || {}), ...(server.grades || {}) };
 
     merged.courseMax = { ...(server.courseMax || {}), ...(local.courseMax || {}) };
+
+    // Le serveur fournit un catalogue scolaire déjà filtré par enseignant.
+    // Ne pas réintroduire les anciennes classes/cours locaux d'un autre périmètre.
+    if (server.teacherCatalogScope === 'assigned') {
+        merged.classes = Array.isArray(server.classes) ? server.classes.slice() : [];
+        merged.students = { ...(server.students || {}) };
+        merged.courses = { ...(server.courses || {}) };
+        merged.courseMax = { ...(server.courseMax || {}) };
+        const restrictedEvaluations = {};
+        merged.classes.forEach(className => {
+            const allowedCourses = new Set((merged.courses[className] || []).map(String));
+            const localPeriods = (local.evaluations || {})[className] || {};
+            const serverPeriods = (server.evaluations || {})[className] || {};
+            restrictedEvaluations[className] = {};
+            new Set([...Object.keys(localPeriods), ...Object.keys(serverPeriods)]).forEach(period => {
+                const combined = mergeListMap(
+                    { [period]: localPeriods[period] || [] },
+                    { [period]: serverPeriods[period] || [] },
+                    item => item.id
+                )[period] || [];
+                restrictedEvaluations[className][period] = combined.filter(item =>
+                    item && allowedCourses.has(String(item.course || ''))
+                );
+            });
+        });
+        merged.evaluations = restrictedEvaluations;
+        const allowedEvaluationIds = new Set();
+        Object.values(merged.evaluations).forEach(periods => {
+            Object.values(periods || {}).forEach(items => (items || []).forEach(item => {
+                if (item && item.id) allowedEvaluationIds.add(String(item.id));
+            }));
+        });
+        const gradeSource = hasPending
+            ? { ...(server.grades || {}), ...(local.grades || {}) }
+            : { ...(local.grades || {}), ...(server.grades || {}) };
+        merged.grades = Object.fromEntries(Object.entries(gradeSource).filter(([key]) => {
+            const marker = String(key).indexOf('_EV-');
+            return marker >= 0 && allowedEvaluationIds.has('EV-' + String(key).slice(marker + 4));
+        }));
+    }
+
     const conduct = {};
     new Set([...Object.keys(local.conduct || {}), ...Object.keys(server.conduct || {})]).forEach(cls => {
         conduct[cls] = { ...((server.conduct || {})[cls] || {}), ...((local.conduct || {})[cls] || {}) };
@@ -1597,6 +1641,7 @@ async function handleLogin() {
             renderTitulaireCard();
             updateConduiteNav();
             renderConduiteList();
+            await refreshTeacherSessionStatus({ silent: true, refreshCatalogOnSame: false });
             closeLoginModal();
             const schoolClasses = (db.classes || []).length;
             const titularNote = (db.titulaireClasses || []).length
@@ -1727,15 +1772,18 @@ function renderTeacherSpacesSettings() {
     const select = document.getElementById('setting-teacher-space-select');
     if (!select) return;
     const spaces = Array.isArray(db.teacherSpaces) ? db.teacherSpaces : [];
+    const pending = Array.isArray(db.pendingTeacherSpaces) ? db.pendingTeacherSpaces : [];
     const active = String(db.user.schoolId || '');
-    select.innerHTML = '<option value="">Espace local / aucun espace sélectionné</option>' + spaces.map(space =>
+    select.innerHTML = '<option value="">Sélectionner un espace confirmé…</option>' + spaces.map(space =>
         '<option value="' + safeHTML(space.schoolId) + '">' + safeHTML(space.schoolName || 'Établissement') + (space.city ? ' · ' + safeHTML(space.city) : '') + '</option>'
     ).join('');
     if (active && spaces.some(space => String(space.schoolId) === active)) select.value = active;
     const status = document.getElementById('teacher-space-status');
-    if (status) status.textContent = spaces.length
-        ? spaces.length + ' espace(s) confirmé(s). Les noms sont affichés, jamais les identifiants.'
-        : 'Aucun espace confirmé pour le moment.';
+    const messages = [];
+    if (spaces.length) messages.push(spaces.length + ' espace(s) scolaire(s) confirmé(s).');
+    if (pending.length) messages.push(pending.length + ' demande(s) en attente : ' + pending.map(space => safeHTML(space.schoolName || 'Établissement')).join(', ') + '. ClassInk actualisera automatiquement l’accès après confirmation dans PrimeInk.');
+    if (!spaces.length && !pending.length) messages.push('Aucun espace scolaire associé. Vous pouvez commencer dans votre espace indépendant.');
+    if (status) status.innerHTML = messages.join(' ');
 }
 
 async function requestTeacherSchoolSpace(value, showMessage = true) {
@@ -1777,7 +1825,7 @@ function prepareTeacherSpaceLogin() {
     const schoolId = String(select?.value || '').trim();
     if (!schoolId) {
         if (typeof showCustomAlert === 'function') {
-            showCustomAlert("Sélectionnez un espace confirmé. Pour demander un nouvel espace, saisissez son identifiant masqué dans les paramètres.");
+            showCustomAlert("Sélectionnez un espace scolaire confirmé. Pour un espace personnel, utilisez « Ouvrir mon espace indépendant ».");
         }
         return;
     }
@@ -1787,6 +1835,138 @@ function prepareTeacherSpaceLogin() {
     if (field) field.value = schoolId;
     const email = document.getElementById('login-email');
     if (email && db.user.email) email.value = db.user.email;
+}
+
+let teacherSessionRefreshInFlight = false;
+let teacherWorkspaceWasLocked = false;
+let teacherCatalogLastRefresh = 0;
+
+function setTeacherWorkspaceBanner(message, locked = false) {
+    let banner = document.getElementById('classink-teacher-workspace-status');
+    if (!message) {
+        if (banner) banner.remove();
+        return;
+    }
+    if (!banner) {
+        banner = document.createElement('div');
+        banner.id = 'classink-teacher-workspace-status';
+        banner.setAttribute('role', 'status');
+        banner.style.cssText = 'position:sticky;top:0;z-index:99998;padding:10px 14px;text-align:center;font:600 13px/1.4 Arial,sans-serif;border-bottom:1px solid;';
+        document.body.insertBefore(banner, document.body.firstChild);
+    }
+    banner.style.background = locked ? '#7f1d1d' : '#eff6ff';
+    banner.style.color = locked ? '#fff' : '#1e3a8a';
+    banner.style.borderColor = locked ? '#991b1b' : '#bfdbfe';
+    banner.textContent = message;
+}
+
+async function openIndependentTeacherWorkspace() {
+    const token = (() => { try { return localStorage.getItem('classink_cloud_token') || ''; } catch (_) { return ''; } })();
+    if (!db.user || !db.user.isLoggedIn || !token) {
+        await showCustomAlert("Connectez-vous d'abord à votre compte enseignant pour créer ou ouvrir votre espace indépendant.");
+        return;
+    }
+    const button = document.querySelector('button[onclick="openIndependentTeacherWorkspace()"]');
+    if (button) { button.disabled = true; button.textContent = "Ouverture…"; }
+    try {
+        const canSeedLocal = !String(db.schoolId || db.user.schoolId || '').trim();
+        const response = await fetch(CLOUD_AUTH_URL + '/api/teacher/workspace/independent', {
+            method: 'POST',
+            headers: cloudAuthHeaders(),
+            cache: 'no-store',
+            body: JSON.stringify({ snapshot: canSeedLocal ? withoutSecrets(db) : null })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.status || !result.data || !result.token) {
+            throw new Error(result.detail || result.message || "Impossible d'ouvrir l'espace indépendant.");
+        }
+        const previous = db;
+        db = mergeServerDataIntoLocal(db, result.data);
+        db.teacherSpaces = Array.isArray(result.data.teacherSpaces) ? result.data.teacherSpaces : (db.teacherSpaces || []);
+        db.pendingTeacherSpaces = [];
+        db.workspaceMode = 'independent';
+        db.user.schoolId = '';
+        db.schoolId = '';
+        try { localStorage.setItem('classink_cloud_token', result.token); }
+        catch (error) {
+            db = previous;
+            throw new Error("Le navigateur ne permet pas d'enregistrer la session indépendante.");
+        }
+        db.user.isLoggedIn = true;
+        saveDB();
+        await loadTeacherScheduleFromServer(true);
+        updateLoginHeaderButton();
+        renderTeacherSpacesSettings();
+        renderTeacherAccessCode();
+        renderClassSelectors();
+        renderGradesTables();
+        renderTitulaireCard();
+        updateConduiteNav();
+        renderConduiteList();
+        setTeacherWorkspaceBanner("Espace indépendant actif : vos classes, cours, élèves et notes sont séparés des établissements.");
+        await showCustomAlert(result.created
+            ? "Votre espace indépendant a été créé. Il est distinct de chaque espace scolaire."
+            : "Votre espace indépendant est ouvert. Vos données scolaires restent séparées.");
+    } catch (error) {
+        await showCustomAlert(error.message || "Impossible d'ouvrir votre espace indépendant.");
+    } finally {
+        if (button) { button.disabled = false; button.textContent = "Ouvrir mon espace indépendant"; }
+    }
+}
+
+async function refreshTeacherSessionStatus(options = {}) {
+    const silent = options.silent !== false;
+    const refreshCatalogOnSame = options.refreshCatalogOnSame === true;
+    if (teacherSessionRefreshInFlight || !db.user || !db.user.isLoggedIn || document.visibilityState === 'hidden') return;
+    const token = (() => { try { return localStorage.getItem('classink_cloud_token') || ''; } catch (_) { return ''; } })();
+    if (!token) return;
+    teacherSessionRefreshInFlight = true;
+    try {
+        const response = await fetch(CLOUD_AUTH_URL + '/api/teacher/session/status', {
+            headers: cloudAuthHeaders(),
+            cache: 'no-store'
+        });
+        if (!response.ok) return;
+        const result = await response.json().catch(() => ({}));
+        if (result.status !== true) return;
+
+        const previousSchoolId = String(db.schoolId || db.user.schoolId || '').trim();
+        const previousLocked = teacherWorkspaceWasLocked;
+        const activeSchoolId = String(result.activeSchoolId || '').trim();
+        db.teacherSpaces = Array.isArray(result.teacherSpaces) ? result.teacherSpaces : [];
+        db.pendingTeacherSpaces = Array.isArray(result.pendingSpaces) ? result.pendingSpaces : [];
+        db.workspaceMode = result.workspaceMode || 'auto';
+        try { if (result.token) localStorage.setItem('classink_cloud_token', result.token); } catch (_) { /* la session courante reste valable */ }
+        renderTeacherSpacesSettings();
+
+        if (result.schoolLocked) {
+            teacherWorkspaceWasLocked = true;
+            setTeacherWorkspaceBanner(result.lockMessage || "L'accès à cet établissement est temporairement suspendu. Les données seront actualisées automatiquement après sa réactivation.", true);
+            saveDB();
+            return;
+        }
+
+        teacherWorkspaceWasLocked = false;
+        if (previousLocked) setTeacherWorkspaceBanner("L'établissement est réactivé. Actualisation de vos classes, élèves et cours…");
+        else if (result.workspaceMode === 'independent') setTeacherWorkspaceBanner("Espace indépendant actif : vos données restent séparées des établissements.");
+        else if (result.pendingSpaces && result.pendingSpaces.length) setTeacherWorkspaceBanner("Votre demande d'accès est en attente de confirmation par l'école. ClassInk vérifiera automatiquement.");
+        else setTeacherWorkspaceBanner("");
+
+        const workspaceChanged = activeSchoolId && activeSchoolId !== previousSchoolId;
+        const shouldRefreshSame = activeSchoolId && refreshCatalogOnSame;
+        if (workspaceChanged || previousLocked || shouldRefreshSame) {
+            if (activeSchoolId) {
+                // Ne pas changer l'espace local avant la fusion : le merge doit voir
+                // l'ancien et le nouveau schoolId pour isoler les deux jeux de données.
+                await refreshTeacherClassroomData(true);
+            }
+        }
+        saveDB();
+    } catch (error) {
+        if (!silent) await showCustomAlert(error.message || "Impossible d'actualiser la session enseignant.");
+    } finally {
+        teacherSessionRefreshInFlight = false;
+    }
 }
 
 function updateProfileInfo() {
@@ -3048,11 +3228,11 @@ async function saveTitulaire() {
     await showCustomAlert("Votre classe titulaire active est maintenant « " + chosen + " ».");
 }
 
-async function refreshTeacherClassroomData() {
+async function refreshTeacherClassroomData(silent = false) {
     const status = document.getElementById('titulaire-access-status');
     const headers = cloudAuthHeaders();
     if (!db.user || !db.user.isLoggedIn || !headers.Authorization) {
-        await showCustomAlert("Connectez-vous d'abord à votre compte enseignant.");
+        if (!silent) await showCustomAlert("Connectez-vous d'abord à votre compte enseignant.");
         return;
     }
     if (status) status.textContent = "Récupération des classes, élèves et cours de l'école…";
@@ -3065,7 +3245,7 @@ async function refreshTeacherClassroomData() {
         }
         const data = result.data;
         if (!data.schoolId) {
-            throw new Error("Votre compte enseignant n'est pas encore associé à une école. Vérifiez le nom de l'établissement lors de l'inscription ou demandez à l'administration de l'associer.");
+            throw new Error("Aucun espace scolaire confirmé n'est actif. Votre espace indépendant reste disponible.");
         }
         const serverState = {
             classes: data.classes || [],
@@ -3075,6 +3255,9 @@ async function refreshTeacherClassroomData() {
             titulaireClasses: data.titulaireClasses || [],
             classrooms: data.classrooms || [],
             schoolId: data.schoolId || '',
+            teacherCatalogScope: 'assigned',
+            teacherSpaces: Array.isArray(db.teacherSpaces) ? db.teacherSpaces : [],
+            pendingTeacherSpaces: Array.isArray(db.pendingTeacherSpaces) ? db.pendingTeacherSpaces : [],
             user: {
                 ...db.user,
                 school: data.schoolName || db.user.school || '',
@@ -3084,19 +3267,34 @@ async function refreshTeacherClassroomData() {
             }
         };
         db = mergeServerDataIntoLocal(db, serverState);
+        db.teacherSpaces = Array.isArray(serverState.teacherSpaces) ? serverState.teacherSpaces : (db.teacherSpaces || []);
+        db.pendingTeacherSpaces = Array.isArray(serverState.pendingTeacherSpaces) ? serverState.pendingTeacherSpaces : (db.pendingTeacherSpaces || []);
+        await loadTeacherScheduleFromServer(true);
         saveDB();
+        renderTeacherSpacesSettings();
+        renderTeacherAccessCode();
         renderClassSelectors();
         renderGradesTables();
         renderTitulaireCard();
         updateConduiteNav();
         renderConduiteList();
-        if (status) status.textContent = "Informations de l'école actualisées : " + (data.classes || []).length + " classe(s).";
-        await showCustomAlert("Les classes, élèves et cours de l'école ont été actualisés.", "Synchronisation terminée");
+        if (status) status.textContent = "Informations de l'école actualisées : " + (data.classes || []).length + " classe(s) et uniquement les cours qui vous sont attribués.";
+        teacherCatalogLastRefresh = Date.now();
+        if (!silent) await showCustomAlert("Les classes, élèves et cours attribués ont été actualisés.", "Synchronisation terminée");
     } catch (error) {
         if (status) status.textContent = "Échec de l'actualisation : " + (error.message || "Erreur réseau");
-        await showCustomAlert("Impossible de charger les classes de l'école : " + (error.message || "Erreur réseau"));
+        if (!silent) await showCustomAlert("Impossible de charger les classes de l'école : " + (error.message || "Erreur réseau"));
     }
 }
+
+// Après une demande d'espace ou une réactivation, la session se met à jour sans reconnexion.
+setInterval(() => refreshTeacherSessionStatus({ silent: true, refreshCatalogOnSame: Date.now() - teacherCatalogLastRefresh > 60000 }), 20000);
+window.addEventListener('focus', () => refreshTeacherSessionStatus({ silent: true, refreshCatalogOnSame: Date.now() - teacherCatalogLastRefresh > 60000 }));
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+        refreshTeacherSessionStatus({ silent: true, refreshCatalogOnSame: Date.now() - teacherCatalogLastRefresh > 60000 });
+    }
+});
 
 function defaultConduitePeriod() {
     const visible = CONDUCT_PERIODS.filter(p => db.periodVisibility && db.periodVisibility[p]);
@@ -4049,9 +4247,10 @@ function removeTeacherScheduleRow(id) {
 
 async function loadTeacherScheduleFromServer(silent = false) {
     const schoolId = String(db.user && db.user.schoolId || db.schoolId || '').trim();
+    const independent = String(db.workspaceMode || '').toLowerCase() === 'independent';
     let token = '';
     try { token = localStorage.getItem('classink_cloud_token') || ''; } catch (_) {}
-    if (!schoolId || !token) return false;
+    if ((!schoolId && !independent) || !token) return false;
     try {
         const response = await fetch(CLOUD_AUTH_URL + '/api/teacher/schedule', {
             method: 'GET',
@@ -4062,7 +4261,10 @@ async function loadTeacherScheduleFromServer(silent = false) {
         const result = await response.json().catch(() => ({}));
         if (!response.ok || !result.status) throw new Error(result.detail || result.message || 'Horaire serveur indisponible.');
         const returnedSchoolId = String(result.data && result.data.schoolId || '');
-        if (returnedSchoolId !== schoolId) throw new Error("L'horaire reçu ne correspond pas à l'espace scolaire actif.");
+        const returnedIndependent = String(result.data && result.data.workspaceMode || '') === 'independent';
+        if (independent ? !returnedIndependent : (returnedIndependent || returnedSchoolId !== schoolId)) {
+            throw new Error("L'horaire reçu ne correspond pas à l'espace actif.");
+        }
         db.teacherSchedule = Array.isArray(result.data.schedule) ? result.data.schedule : [];
         saveDB();
         renderTeacherScheduleEditor();
@@ -4081,9 +4283,10 @@ async function saveTeacherSchedule() {
     }
     const sorted = entries.sort((a,b) => TEACHER_SCHEDULE_DAYS.indexOf(a.day) - TEACHER_SCHEDULE_DAYS.indexOf(b.day) || a.start.localeCompare(b.start));
     const schoolId = String(db.user && db.user.schoolId || db.schoolId || '').trim();
+    const independent = String(db.workspaceMode || '').toLowerCase() === 'independent';
     let token = '';
     try { token = localStorage.getItem('classink_cloud_token') || ''; } catch (_) {}
-    if (schoolId && token) {
+    if ((schoolId || independent) && token) {
         try {
             const response = await fetch(CLOUD_AUTH_URL + '/api/teacher/schedule', {
                 method: 'PUT',
@@ -4093,13 +4296,19 @@ async function saveTeacherSchedule() {
                 credentials: 'omit'
             });
             const result = await response.json().catch(() => ({}));
-            if (!response.ok || !result.status || String(result.data && result.data.schoolId || '') !== schoolId) {
+            const returnedSchoolId = String(result.data && result.data.schoolId || '');
+            const returnedIndependent = String(result.data && result.data.workspaceMode || '') === 'independent';
+            if (!response.ok || !result.status || (independent
+                ? !returnedIndependent
+                : (returnedIndependent || returnedSchoolId !== schoolId))) {
                 throw new Error(result.detail || result.message || "L'horaire n'a pas été enregistré dans cet espace.");
             }
             db.teacherSchedule = Array.isArray(result.data.schedule) ? result.data.schedule : sorted;
             saveDB();
             renderTeacherScheduleEditor();
-            await showCustomAlert("Emploi du temps enregistré sur le serveur pour cet établissement.");
+            await showCustomAlert(independent
+                ? "Emploi du temps enregistré dans votre espace indépendant."
+                : "Emploi du temps enregistré sur le serveur pour cet établissement.");
             return;
         } catch (error) {
             await showCustomAlert((error.message || "Échec de la sauvegarde serveur.") + " Les données locales n'ont pas été remplacées.");
