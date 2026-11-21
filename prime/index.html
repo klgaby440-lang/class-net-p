@@ -6041,8 +6041,9 @@ function primeInkTeacherSelectOptions(rawValue = '') {
     const resolved = primeInkResolveTeacherOptionValue(raw);
     const teachers = Array.isArray(appState.teachers) ? appState.teachers : [];
     const hasMatch = teachers.some(teacher => String(teacher.uniqueId || '') === resolved);
+    const isUnassigned = ['non assigné', 'non attribué', 'aucun', 'aucune'].includes(raw.toLocaleLowerCase());
     let html = '<option value="">-- Aucun enseignant attribué --</option>';
-    if (raw && !hasMatch) {
+    if (raw && !hasMatch && !isUnassigned) {
         html += '<option value="' + safeHTML(raw) + '" selected>Attribution existante à vérifier : ' + safeHTML(raw) + '</option>';
     }
     html += teachers.filter(teacher => teacher && teacher.uniqueId).map(teacher => {
