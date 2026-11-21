@@ -628,7 +628,7 @@ class TestNewFeatureStatic(unittest.TestCase):
         classroom = backend.split("def compose_teacher_classroom_context(", 1)[1].split(
             "def apply_teacher_classroom_context(", 1
         )[0]
-        self.assertIn("if not teacher_matches_catalog_name(teacher, course.titulaire_name):", classroom)
+        self.assertIn('if not teacher_matches_catalog_name(teacher, getattr(course, "titulaire_name", "")):', classroom)
         self.assertIn("assigned_courses_by_class", classroom)
         self.assertIn("visible_class_names", classroom)
         apply_context = backend.split("def apply_teacher_classroom_context(", 1)[1].split(
