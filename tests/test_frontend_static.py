@@ -658,7 +658,7 @@ class TestNewFeatureStatic(unittest.TestCase):
         source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
         self.assertIn('<select id="name-titulaire-added-class"', source)
         self.assertIn('<select id="name-titulaire-added-cours"', source)
-        self.assertIn('data-field="titulaire">\${primeInkTeacherSelectOptions(crs.titulaire || \'\')}', source)
+        self.assertIn('data-field="titulaire">${primeInkTeacherSelectOptions(crs.titulaire || \'\')}', source)
         self.assertIn("function primeInkTeacherSelectOptions(rawValue = '')", source)
         self.assertIn("teacher.uniqueId", source)
         self.assertIn("function refreshPrimeInkTeacherAssignmentSelects()", source)
@@ -666,6 +666,15 @@ class TestNewFeatureStatic(unittest.TestCase):
         self.assertIn("if (primeInkSchoolSuspensionDetected)", source)
         self.assertIn("if (lockOverlay) lockOverlay.classList.add('hidden');", source)
         self.assertIn("setInterval(checkSchoolStatus, 15000)", source)
+
+        backend = (ROOT / "main.py").read_text(encoding="utf-8")
+        self.assertIn('if str(claims.get("workspace_mode") or "").strip().lower() == "independent":', backend)
+        self.assertIn('"workspaceMode": "independent", "schedule"', backend)
+        self.assertIn('state["teacherSchedule"] = clean_entries', backend)
+
+        app = (ROOT / "app/index.html").read_text(encoding="utf-8")
+        self.assertIn("const independent = String(db.workspaceMode || '').toLowerCase() === 'independent';", app)
+        self.assertIn("if ((!schoolId && !independent) || !token) return false;", app)
 
 
 if __name__ == "__main__":
