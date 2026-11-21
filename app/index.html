@@ -3266,7 +3266,11 @@ async function refreshTeacherClassroomData(silent = false) {
             }
         };
         db = mergeServerDataIntoLocal(db, serverState);
+        db.teacherSpaces = Array.isArray(serverState.teacherSpaces) ? serverState.teacherSpaces : (db.teacherSpaces || []);
+        db.pendingTeacherSpaces = Array.isArray(serverState.pendingTeacherSpaces) ? serverState.pendingTeacherSpaces : (db.pendingTeacherSpaces || []);
         saveDB();
+        renderTeacherSpacesSettings();
+        renderTeacherAccessCode();
         renderClassSelectors();
         renderGradesTables();
         renderTitulaireCard();
