@@ -634,7 +634,8 @@ class TestNewFeatureStatic(unittest.TestCase):
         apply_context = backend.split("def apply_teacher_classroom_context(", 1)[1].split(
             "def build_teacher_classroom_context(", 1
         )[0]
-        self.assertIn('state["courses"] = dict(context.get("courses") or {})', apply_context)
+        self.assertIn('str(name): list(values or [])', apply_context)
+        self.assertIn('state["courseCatalog"] = dict(context.get("courseCatalog") or {})', apply_context)
         self.assertIn('state["students"] = dict(context.get("students") or {})', apply_context)
         self.assertIn('state["teacherCatalogScope"] = "assigned"', apply_context)
 
