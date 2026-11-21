@@ -161,7 +161,9 @@ def test_primeink_catalog_write_and_classink_teacher_read_roundtrip_for_all_six_
             school_id=school_id, is_verified=True
         ).count() == 6
 
-        # Chaque compte enseignant récupère le catalogue officiel du même espace.
+        # Chaque enseignant ne récupère que ses classes (cours attribués ou titulariat)
+        # et uniquement les cours qui lui sont explicitement attribués.
+        class_names_by_id = {item["id"]: item["name"] for item in payload["classes"]}
         for teacher in teachers:
             recovered = get_teacher_classroom_information(
                 school_id=school_id,
@@ -175,9 +177,43 @@ def test_primeink_catalog_write_and_classink_teacher_read_roundtrip_for_all_six_
             assert recovered["status"] is True
             context = recovered["data"]
             assert context["schoolId"] == school_id
-            assert len(context["classes"]) == 3
-            assert sum(len(rows) for rows in context["students"].values()) == 15
-            assert sum(len(rows) for rows in context["courses"].values()) == 6
+
+            assigned_courses = [
+                item for item in payload["courses"]
+                if str(item.get("titulaire") or "").strip().casefold()
+                in {
+                    str(teacher.teacher_code or "").strip().casefold(),
+                    str(teacher.full_name or "").strip().casefold(),
+                    str(teacher.email or "").strip().casefold(),
+                }
+            ]
+            titular_class_ids = {
+                str(item["id"]) for item in payload["classes"]
+                if str(item.get("titulaire") or "").strip().casefold()
+                == str(teacher.teacher_code or "").strip().casefold()
+            }
+            assigned_class_ids = {str(item["classId"]) for item in assigned_courses}
+            visible_class_ids = titular_class_ids | assigned_class_ids
+            expected_class_names = {
+                class_names_by_id[class_id] for class_id in visible_class_ids
+            }
+            expected_courses_by_class = {}
+            for course in assigned_courses:
+                class_name = class_names_by_id[str(course["classId"])]
+                expected_courses_by_class.setdefault(class_name, set()).add(course["name"])
+
+            assert set(context["classes"]) == expected_class_names
+            assert set(context["students"]) == expected_class_names
+            assert sum(len(rows) for rows in context["students"].values()) == sum(
+                1 for item in payload["students"] if str(item["classId"]) in visible_class_ids
+            )
+            assert sum(len(rows) for rows in context["courses"].values()) == len(assigned_courses)
+            for class_name in expected_class_names:
+                assert set(context["courses"][class_name]) == expected_courses_by_class.get(class_name, set())
+            assert set(context["courseMax"]) == {
+                f"{class_names_by_id[str(item['classId'])]}_{item['name']}"
+                for item in assigned_courses
+            }
     finally:
         # Le jeu de recette est supprimé même si une assertion échoue.
         db.rollback()
