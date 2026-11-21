@@ -4246,9 +4246,10 @@ function removeTeacherScheduleRow(id) {
 
 async function loadTeacherScheduleFromServer(silent = false) {
     const schoolId = String(db.user && db.user.schoolId || db.schoolId || '').trim();
+    const independent = String(db.workspaceMode || '').toLowerCase() === 'independent';
     let token = '';
     try { token = localStorage.getItem('classink_cloud_token') || ''; } catch (_) {}
-    if (!schoolId || !token) return false;
+    if ((!schoolId && !independent) || !token) return false;
     try {
         const response = await fetch(CLOUD_AUTH_URL + '/api/teacher/schedule', {
             method: 'GET',
@@ -4259,7 +4260,10 @@ async function loadTeacherScheduleFromServer(silent = false) {
         const result = await response.json().catch(() => ({}));
         if (!response.ok || !result.status) throw new Error(result.detail || result.message || 'Horaire serveur indisponible.');
         const returnedSchoolId = String(result.data && result.data.schoolId || '');
-        if (returnedSchoolId !== schoolId) throw new Error("L'horaire reçu ne correspond pas à l'espace scolaire actif.");
+        const returnedIndependent = String(result.data && result.data.workspaceMode || '') === 'independent';
+        if (independent ? !returnedIndependent : (returnedIndependent || returnedSchoolId !== schoolId)) {
+            throw new Error("L'horaire reçu ne correspond pas à l'espace actif.");
+        }
         db.teacherSchedule = Array.isArray(result.data.schedule) ? result.data.schedule : [];
         saveDB();
         renderTeacherScheduleEditor();
@@ -4278,9 +4282,10 @@ async function saveTeacherSchedule() {
     }
     const sorted = entries.sort((a,b) => TEACHER_SCHEDULE_DAYS.indexOf(a.day) - TEACHER_SCHEDULE_DAYS.indexOf(b.day) || a.start.localeCompare(b.start));
     const schoolId = String(db.user && db.user.schoolId || db.schoolId || '').trim();
+    const independent = String(db.workspaceMode || '').toLowerCase() === 'independent';
     let token = '';
     try { token = localStorage.getItem('classink_cloud_token') || ''; } catch (_) {}
-    if (schoolId && token) {
+    if ((schoolId || independent) && token) {
         try {
             const response = await fetch(CLOUD_AUTH_URL + '/api/teacher/schedule', {
                 method: 'PUT',
@@ -4290,13 +4295,19 @@ async function saveTeacherSchedule() {
                 credentials: 'omit'
             });
             const result = await response.json().catch(() => ({}));
-            if (!response.ok || !result.status || String(result.data && result.data.schoolId || '') !== schoolId) {
+            const returnedSchoolId = String(result.data && result.data.schoolId || '');
+            const returnedIndependent = String(result.data && result.data.workspaceMode || '') === 'independent';
+            if (!response.ok || !result.status || (independent
+                ? !returnedIndependent
+                : (returnedIndependent || returnedSchoolId !== schoolId))) {
                 throw new Error(result.detail || result.message || "L'horaire n'a pas été enregistré dans cet espace.");
             }
             db.teacherSchedule = Array.isArray(result.data.schedule) ? result.data.schedule : sorted;
             saveDB();
             renderTeacherScheduleEditor();
-            await showCustomAlert("Emploi du temps enregistré sur le serveur pour cet établissement.");
+            await showCustomAlert(independent
+                ? "Emploi du temps enregistré dans votre espace indépendant."
+                : "Emploi du temps enregistré sur le serveur pour cet établissement.");
             return;
         } catch (error) {
             await showCustomAlert((error.message || "Échec de la sauvegarde serveur.") + " Les données locales n'ont pas été remplacées.");
