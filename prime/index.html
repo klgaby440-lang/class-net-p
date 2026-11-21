@@ -3271,8 +3271,11 @@ window.alert = function(message) { showCustomAlert(message); };
 
                     editingClassId = cls.id;
                     document.getElementById('name-added-class').value = cls.name;
-                    refreshPrimeInkTeacherAssignmentSelects();
-                    document.getElementById('name-titulaire-added-class').value = primeInkResolveTeacherOptionValue(cls.titulaire);
+                    const classTitularSelect = document.getElementById('name-titulaire-added-class');
+                    if (classTitularSelect) {
+                        classTitularSelect.innerHTML = primeInkTeacherSelectOptions(cls.titulaire);
+                        classTitularSelect.value = primeInkResolveTeacherOptionValue(cls.titulaire);
+                    }
                     document.getElementById('class-bulletin-model').value = bpClassModel(cls);
                     document.getElementById('class-bulletin-title').value = cls.bulletinTitle || '';
                     document.getElementById('class-signature-source').value = bpSignatureSource(cls);
@@ -6023,7 +6026,7 @@ function updateScheduleResultTables(joursCount, heuresCount) {
 // Les anciennes attributions par nom/e-mail sont converties à la volée quand le compte est disponible.
 function primeInkResolveTeacherOptionValue(rawValue) {
     const raw = String(rawValue || '').trim();
-    if (!raw) return '';
+    if (!raw || ['non assigné', 'non attribué', 'aucun', 'aucune'].includes(raw.toLocaleLowerCase())) return '';
     const key = raw.toLocaleLowerCase();
     const match = (appState.teachers || []).find(teacher =>
         [teacher.uniqueId, teacher.name, teacher.email].some(value =>
