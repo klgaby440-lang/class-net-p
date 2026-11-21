@@ -1529,7 +1529,24 @@ function mergeServerDataIntoLocal(local, server) {
         merged.students = { ...(server.students || {}) };
         merged.courses = { ...(server.courses || {}) };
         merged.courseMax = { ...(server.courseMax || {}) };
-        merged.evaluations = { ...(server.evaluations || {}) };
+        const restrictedEvaluations = {};
+        merged.classes.forEach(className => {
+            const allowedCourses = new Set((merged.courses[className] || []).map(String));
+            const localPeriods = (local.evaluations || {})[className] || {};
+            const serverPeriods = (server.evaluations || {})[className] || {};
+            restrictedEvaluations[className] = {};
+            new Set([...Object.keys(localPeriods), ...Object.keys(serverPeriods)]).forEach(period => {
+                const combined = mergeListMap(
+                    { [period]: localPeriods[period] || [] },
+                    { [period]: serverPeriods[period] || [] },
+                    item => item.id
+                )[period] || [];
+                restrictedEvaluations[className][period] = combined.filter(item =>
+                    item && allowedCourses.has(String(item.course || ''))
+                );
+            });
+        });
+        merged.evaluations = restrictedEvaluations;
         const allowedEvaluationIds = new Set();
         Object.values(merged.evaluations).forEach(periods => {
             Object.values(periods || {}).forEach(items => (items || []).forEach(item => {
@@ -1938,8 +1955,8 @@ async function refreshTeacherSessionStatus(options = {}) {
         const shouldRefreshSame = activeSchoolId && refreshCatalogOnSame;
         if (workspaceChanged || previousLocked || shouldRefreshSame) {
             if (activeSchoolId) {
-                db.user.schoolId = activeSchoolId;
-                db.schoolId = activeSchoolId;
+                // Ne pas changer l'espace local avant la fusion : le merge doit voir
+                // l'ancien et le nouveau schoolId pour isoler les deux jeux de données.
                 await refreshTeacherClassroomData(true);
             }
         }
@@ -3238,6 +3255,8 @@ async function refreshTeacherClassroomData(silent = false) {
             classrooms: data.classrooms || [],
             schoolId: data.schoolId || '',
             teacherCatalogScope: 'assigned',
+            teacherSpaces: Array.isArray(db.teacherSpaces) ? db.teacherSpaces : [],
+            pendingTeacherSpaces: Array.isArray(db.pendingTeacherSpaces) ? db.pendingTeacherSpaces : [],
             user: {
                 ...db.user,
                 school: data.schoolName || db.user.school || '',
