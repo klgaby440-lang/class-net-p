@@ -171,6 +171,86 @@ def test_teacher_classroom_context_identifies_only_the_official_titular():
     assert context["courseMax"]["1ère Scientifique_Mathématiques"] == 40
 
 
+def test_one_teacher_keeps_each_primeink_course_separate_in_the_same_class():
+    teacher = SimpleNamespace(
+        id=3,
+        teacher_code="teacher-code-3",
+        full_name="Jean Kabuya",
+        email="jean@example.cd",
+        school_name="École Horizon",
+    )
+    school = SimpleNamespace(school_id="school-1", name_school="École Horizon")
+    classe = SimpleNamespace(id="class-1", class_name="2ème Scientifique", titulaire_name="")
+    courses = [
+        SimpleNamespace(id="course-math", class_id="class-1", course_name="Mathématiques",
+                        max_per=40, category="Sciences", sub_category="Algèbre",
+                        titulaire_name="teacher-code-3"),
+        SimpleNamespace(id="course-physics", class_id="class-1", course_name="Physique",
+                        max_per=30, category="Sciences", sub_category="Sciences physiques",
+                        titulaire_name="teacher-code-3"),
+        SimpleNamespace(id="course-chemistry", class_id="class-1", course_name="Chimie",
+                        max_per=20, category="Sciences", sub_category="Chimie",
+                        titulaire_name="teacher-code-3"),
+        SimpleNamespace(id="course-french", class_id="class-1", course_name="Français",
+                        max_per=50, category="Langues", sub_category="Langues",
+                        titulaire_name="another-teacher"),
+    ]
+
+    context = compose_teacher_classroom_context(teacher, school, [classe], [], courses)
+
+    assert context["classes"] == ["2ème Scientifique"]
+    assert context["courses"]["2ème Scientifique"] == ["Chimie", "Mathématiques", "Physique"]
+    assert [item["id"] for item in context["courseCatalog"]["2ème Scientifique"]] == [
+        "course-chemistry", "course-math", "course-physics"
+    ]
+    assert context["courseMax"]["2ème Scientifique_Mathématiques"] == 40
+    assert all(item["name"] != "Français" for item in context["courseCatalog"]["2ème Scientifique"])
+
+
+def test_same_named_primeink_courses_are_disambiguated_and_old_notes_are_preserved():
+    teacher = SimpleNamespace(
+        id=4,
+        teacher_code="teacher-code-4",
+        full_name="Aline Mukendi",
+        email="aline@example.cd",
+        school_name="École Horizon",
+    )
+    school = SimpleNamespace(school_id="school-1", name_school="École Horizon")
+    classe = SimpleNamespace(id="class-1", class_name="1ère Scientifique", titulaire_name="")
+    courses = [
+        SimpleNamespace(id="course-algebra", class_id="class-1", course_name="Mathématiques",
+                        max_per=40, category="Sciences", sub_category="Algèbre",
+                        titulaire_name="teacher-code-4"),
+        SimpleNamespace(id="course-geometry", class_id="class-1", course_name="Mathématiques",
+                        max_per=30, category="Sciences", sub_category="Géométrie",
+                        titulaire_name="teacher-code-4"),
+    ]
+
+    context = compose_teacher_classroom_context(teacher, school, [classe], [], courses)
+    labels = context["courses"]["1ère Scientifique"]
+
+    assert labels == ["Mathématiques — Algèbre", "Mathématiques — Géométrie"]
+    assert [item["id"] for item in context["courseCatalog"]["1ère Scientifique"]] == [
+        "course-algebra", "course-geometry"
+    ]
+
+    previous = {
+        "evaluations": {
+            "1ère Scientifique": {
+                "P1": [{"id": "EV-legacy-math", "course": "Mathématiques", "name": "Interro", "max": 20}]
+            }
+        },
+        "grades": {"student-1_EV-legacy-math": 15},
+    }
+    updated = apply_teacher_classroom_context(previous, context)
+    archive_label = "Mathématiques — Notes historiques à classer"
+
+    assert updated["courses"]["1ère Scientifique"] == labels + [archive_label]
+    assert updated["evaluations"]["1ère Scientifique"]["P1"][0]["course"] == archive_label
+    assert updated["evaluations"]["1ère Scientifique"]["P1"][0]["legacyCourse"] is True
+    assert updated["grades"] == {"student-1_EV-legacy-math": 15}
+
+
 def test_teacher_classroom_context_does_not_grant_titular_role_by_school_membership_alone():
     teacher = SimpleNamespace(
         id=2,

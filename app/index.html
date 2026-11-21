@@ -1521,6 +1521,7 @@ function mergeServerDataIntoLocal(local, server) {
         : { ...(local.grades || {}), ...(server.grades || {}) };
 
     merged.courseMax = { ...(server.courseMax || {}), ...(local.courseMax || {}) };
+    merged.courseCatalog = { ...(local.courseCatalog || {}), ...(server.courseCatalog || {}) };
 
     // Le serveur fournit un catalogue scolaire déjà filtré par enseignant.
     // Ne pas réintroduire les anciennes classes/cours locaux d'un autre périmètre.
@@ -1529,9 +1530,12 @@ function mergeServerDataIntoLocal(local, server) {
         merged.students = { ...(server.students || {}) };
         merged.courses = { ...(server.courses || {}) };
         merged.courseMax = { ...(server.courseMax || {}) };
+        merged.courseCatalog = { ...(server.courseCatalog || {}) };
         const restrictedEvaluations = {};
         merged.classes.forEach(className => {
-            const allowedCourses = new Set((merged.courses[className] || []).map(String));
+            const classCourses = (merged.courses[className] || []).slice();
+            const legacyLabels = (server.legacyCourseLabels || {})[className] || {};
+            const allowedCourses = new Set(classCourses.map(String));
             const localPeriods = (local.evaluations || {})[className] || {};
             const serverPeriods = (server.evaluations || {})[className] || {};
             restrictedEvaluations[className] = {};
@@ -1541,10 +1545,17 @@ function mergeServerDataIntoLocal(local, server) {
                     { [period]: serverPeriods[period] || [] },
                     item => item.id
                 )[period] || [];
-                restrictedEvaluations[className][period] = combined.filter(item =>
-                    item && allowedCourses.has(String(item.course || ''))
-                );
+                restrictedEvaluations[className][period] = combined.map(item => {
+                    if (!item) return null;
+                    const courseName = String(item.course || '');
+                    if (allowedCourses.has(courseName)) return item;
+                    const legacyLabel = legacyLabels[courseName];
+                    if (!legacyLabel) return null;
+                    if (!classCourses.includes(legacyLabel)) classCourses.push(legacyLabel);
+                    return { ...item, course: legacyLabel, legacyCourse: true };
+                }).filter(Boolean);
             });
+            merged.courses[className] = classCourses;
         });
         merged.evaluations = restrictedEvaluations;
         const allowedEvaluationIds = new Set();
@@ -2009,9 +2020,12 @@ async function promptAddClass() {
 }
 
 function changeGradeCourseFilter(courseName) {
+    const allowed = (db.courses && db.courses[activeClass]) || [];
+    if (allowed.length && !allowed.includes(courseName)) return;
     if (!db.activeCourseFilter) db.activeCourseFilter = {};
     db.activeCourseFilter[activeClass] = courseName;
     saveDB();
+    renderClassSelectors();
     renderGradesTables();
 }
 
@@ -2072,27 +2086,47 @@ function renderClassSelectors() {
     }
 
     db.classes.forEach(cls => {
-        const courseList = (db.courses[cls] && db.courses[cls].length > 0) ? db.courses[cls].join(', ') : 'Aucun cours';
-        const classWithCourse = `${cls} (${courseList})`;
-
         const btn = document.createElement('button');
-        btn.className = `btn-badge ${cls === activeClass ? 'active' : ''}`;
-        btn.textContent = classWithCourse;
+        btn.className = 'btn-badge' + (cls === activeClass ? ' active' : '');
+        btn.textContent = cls;
         btn.onclick = () => syncSelectedClass(cls);
         classContainer.appendChild(btn);
 
-        selectStudentClass.innerHTML += `<option value="${safeHTML(cls)}" ${cls === activeClass ? 'selected' : ''}>${safeHTML(classWithCourse)}</option>`;
-        presenceSelectClass.innerHTML += `<option value="${safeHTML(cls)}" ${cls === activeClass ? 'selected' : ''}>${safeHTML(classWithCourse)}</option>`;
+        selectStudentClass.innerHTML += '<option value="' + safeHTML(cls) + '"' +
+            (cls === activeClass ? ' selected' : '') + '>' + safeHTML(cls) + '</option>';
+        presenceSelectClass.innerHTML += '<option value="' + safeHTML(cls) + '"' +
+            (cls === activeClass ? ' selected' : '') + '>' + safeHTML(cls) + '</option>';
     });
 
-    const activeCourseList = (db.courses[activeClass] && db.courses[activeClass].length > 0) ? db.courses[activeClass].join(', ') : 'Aucun cours';
-    
-    // Titre de la classe active avec le bouton de suppression intégrée
-    document.getElementById('current-class-title').innerHTML = activeClass 
-        ? `${safeHTML(activeClass)} — Cours : ${safeHTML(activeCourseList)} <button onclick="deleteClass(${jsArg(activeClass)})" style="background:none; border:none; cursor:pointer; font-size:1.1rem; margin-left:8px;" title="Supprimer cette classe">🗑️</button>`
+    const activeCourses = Array.isArray(db.courses[activeClass]) ? db.courses[activeClass] : [];
+    const requestedCourse = (db.activeCourseFilter || {})[activeClass] || '';
+    const selectedCourse = activeCourses.includes(requestedCourse) ? requestedCourse : (activeCourses[0] || '');
+    if (!db.activeCourseFilter) db.activeCourseFilter = {};
+    if (selectedCourse) db.activeCourseFilter[activeClass] = selectedCourse;
+    else delete db.activeCourseFilter[activeClass];
+    coursesDisplay.innerHTML = '';
+    coursesDisplay.className = 'course-chip-list';
+    coursesDisplay.style.cssText = 'display:inline-flex;flex-wrap:wrap;align-items:center;gap:6px;vertical-align:middle;';
+    if (!activeCourses.length) {
+        coursesDisplay.textContent = 'Aucun cours attribué';
+    } else {
+        activeCourses.forEach(courseName => {
+            const chip = document.createElement('button');
+            chip.type = 'button';
+            chip.className = 'btn-badge' + (courseName === selectedCourse ? ' active' : '');
+            chip.textContent = courseName;
+            chip.setAttribute('aria-pressed', courseName === selectedCourse ? 'true' : 'false');
+            chip.title = 'Afficher uniquement les notes de ' + courseName;
+            chip.onclick = () => changeGradeCourseFilter(courseName);
+            coursesDisplay.appendChild(chip);
+        });
+    }
+
+    // La classe reste distincte ; les cours apparaissent chacun comme un choix.
+    document.getElementById('current-class-title').innerHTML = activeClass
+        ? safeHTML(activeClass) + ' <button onclick="deleteClass(' + jsArg(activeClass) + ')" style="background:none;border:none;cursor:pointer;font-size:1.1rem;margin-left:8px;" title="Supprimer cette classe">🗑️</button>'
         : "Aucune classe";
 
-    coursesDisplay.textContent = activeCourseList;
     renderPresenceCourseOptions();
 }
 
@@ -2181,8 +2215,13 @@ function renderGradesTables() {
         });
     }
 
-    const selectedCourse = (db.activeCourseFilter && db.activeCourseFilter[activeClass]) || classCourses[0] || '';
-    const maxBulletin = (db.courseMax && db.courseMax[`${activeClass}_${selectedCourse}`]) || 100;
+    const requestedCourse = (db.activeCourseFilter && db.activeCourseFilter[activeClass]) || '';
+    const selectedCourse = classCourses.includes(requestedCourse) ? requestedCourse : (classCourses[0] || '');
+    if (!db.activeCourseFilter) db.activeCourseFilter = {};
+    if (selectedCourse) db.activeCourseFilter[activeClass] = selectedCourse;
+    else delete db.activeCourseFilter[activeClass];
+    if (courseSelect) courseSelect.value = selectedCourse;
+    const maxBulletin = (db.courseMax && db.courseMax[activeClass + '_' + selectedCourse]) || 100;
 
     // 2. Boutons d'action rapides (Édition des élèves & Fiche Récapitulative)
     const toolbarHTML = `
@@ -3252,6 +3291,8 @@ async function refreshTeacherClassroomData(silent = false) {
             students: data.students || {},
             courses: data.courses || {},
             courseMax: data.courseMax || {},
+            courseCatalog: data.courseCatalog || {},
+            legacyCourseLabels: data.legacyCourseLabels || {},
             titulaireClasses: data.titulaireClasses || [],
             classrooms: data.classrooms || [],
             schoolId: data.schoolId || '',

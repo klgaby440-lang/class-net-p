@@ -634,7 +634,8 @@ class TestNewFeatureStatic(unittest.TestCase):
         apply_context = backend.split("def apply_teacher_classroom_context(", 1)[1].split(
             "def build_teacher_classroom_context(", 1
         )[0]
-        self.assertIn('state["courses"] = dict(context.get("courses") or {})', apply_context)
+        self.assertIn('str(name): list(values or [])', apply_context)
+        self.assertIn('state["courseCatalog"] = dict(context.get("courseCatalog") or {})', apply_context)
         self.assertIn('state["students"] = dict(context.get("students") or {})', apply_context)
         self.assertIn('state["teacherCatalogScope"] = "assigned"', apply_context)
 
@@ -651,8 +652,17 @@ class TestNewFeatureStatic(unittest.TestCase):
         self.assertIn("function openIndependentTeacherWorkspace()", app)
         self.assertIn("setInterval(() => refreshTeacherSessionStatus", app)
         self.assertIn("server.teacherCatalogScope === 'assigned'", app)
-        self.assertIn("allowedCourses.has(String(item.course || ''))", app)
+        self.assertIn("allowedCourses.has(courseName)", app)
         self.assertIn("async function refreshTeacherClassroomData(silent = false)", app)
+
+    def test_classink_displays_each_assigned_course_as_an_independent_choice(self):
+        source = (ROOT / "app/index.html").read_text(encoding="utf-8")
+        self.assertIn("const activeCourses = Array.isArray(db.courses[activeClass]) ? db.courses[activeClass] : [];", source)
+        self.assertIn("chip.textContent = courseName;", source)
+        self.assertIn("chip.onclick = () => changeGradeCourseFilter(courseName);", source)
+        self.assertNotIn("const classWithCourse =", source)
+        self.assertIn("courseCatalog: data.courseCatalog || {}", source)
+        self.assertIn("legacyCourseLabels: data.legacyCourseLabels || {}", source)
 
     def test_primeink_teacher_assignments_use_available_teacher_selects_and_suspend_auto_restore(self):
         source = (ROOT / "prime/index.html").read_text(encoding="utf-8")

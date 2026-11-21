@@ -3755,7 +3755,7 @@ def teacher_matches_catalog_name(teacher, value: str) -> bool:
 
 
 def compose_teacher_classroom_context(teacher, school, classes, students, courses) -> dict:
-    """Construit uniquement le périmètre de classes et de cours officiellement attribué à l'enseignant."""
+    """Construit les classes et conserve chaque cours PrimeInk comme une affectation distincte."""
     classes_by_id = {str(item.id): item for item in classes}
     all_students_by_class = {}
     for item in classes:
@@ -3779,19 +3779,93 @@ def compose_teacher_classroom_context(teacher, school, classes, students, course
         item.class_name for item in classes
         if teacher_is_titulaire(teacher, item)
     ]
+
+    # Garder les lignes CourseInformation, pas seulement leurs noms : un même
+    # enseignant peut avoir plusieurs cours dans une classe et deux lignes PrimeInk
+    # peuvent même partager le même nom tout en ayant des domaines différents.
     assigned_courses_by_class = {}
-    course_max = {}
     for course in courses:
         if not teacher_matches_catalog_name(teacher, getattr(course, "titulaire_name", "")):
             continue
         classe = classes_by_id.get(str(course.class_id))
         if not classe:
             continue
-        class_name = str(classe.class_name)
-        values = assigned_courses_by_class.setdefault(class_name, [])
-        if course.course_name not in values:
-            values.append(course.course_name)
-        course_max[f"{class_name}_{course.course_name}"] = float(course.max_per or 40)
+        assigned_courses_by_class.setdefault(str(classe.class_name), []).append(course)
+
+    assigned_course_labels_by_class = {}
+    course_catalog_by_class = {}
+    course_max = {}
+    legacy_course_labels_by_class = {}
+
+    for class_name, assigned_rows in assigned_courses_by_class.items():
+        name_counts = {}
+        for course in assigned_rows:
+            raw_name = str(getattr(course, "course_name", "") or "").strip()
+            name_counts[raw_name.casefold()] = name_counts.get(raw_name.casefold(), 0) + 1
+
+        labels = []
+        used_labels = set()
+        catalog_rows = []
+        duplicated_names = {}
+
+        for course in sorted(
+            assigned_rows,
+            key=lambda item: (
+                str(getattr(item, "course_name", "") or "").casefold(),
+                str(getattr(item, "sub_category", "") or "").casefold(),
+                str(getattr(item, "category", "") or "").casefold(),
+                str(getattr(item, "id", "")),
+            ),
+        ):
+            raw_name = str(getattr(course, "course_name", "") or "").strip()
+            name_key = raw_name.casefold()
+            course_id = str(getattr(course, "id", "") or "")
+            category = str(getattr(course, "category", "") or "").strip()
+            sub_category = str(getattr(course, "sub_category", "") or "").strip()
+            max_per = float(getattr(course, "max_per", 0) or 40)
+
+            # Un nom unique reste inchangé. En cas de doublon, la catégorie ou
+            # le sous-domaine distingue les deux matières dans ClassInk.
+            label = raw_name
+            if name_counts.get(name_key, 0) > 1:
+                detail = sub_category or category
+                label = f"{raw_name} — {detail}" if detail else f"{raw_name} · {course_id[-6:] or course_id}"
+            if label.casefold() in used_labels:
+                label = f"{label} · {course_id[-6:] or course_id}"
+            if label.casefold() in used_labels:
+                label = f"{label} · {course_id}"
+            used_labels.add(label.casefold())
+
+            labels.append(label)
+            duplicated_names.setdefault(name_key, {"name": raw_name, "max": []})
+            duplicated_names[name_key]["max"].append(max_per)
+            catalog_rows.append({
+                "id": course_id,
+                "name": raw_name,
+                "label": label,
+                "maxPer": max_per,
+                "category": category,
+                "subCategory": sub_category,
+            })
+            course_max[f"{class_name}_{label}"] = max_per
+
+        assigned_course_labels_by_class[class_name] = labels
+        course_catalog_by_class[class_name] = catalog_rows
+
+        # Les anciennes évaluations ClassInk ne contenaient que le nom du cours.
+        # Si PrimeInk a maintenant plusieurs lignes de même nom, on les conserve
+        # sous une entrée historique distincte au lieu de les attribuer au hasard.
+        legacy_labels = {}
+        for name_key, info in duplicated_names.items():
+            if name_counts.get(name_key, 0) < 2:
+                continue
+            legacy_label = f"{info['name']} — Notes historiques à classer"
+            if legacy_label.casefold() in used_labels:
+                legacy_label += " · anciennes"
+            legacy_labels[info["name"]] = legacy_label
+            course_max[f"{class_name}_{legacy_label}"] = max(info["max"] or [40])
+        if legacy_labels:
+            legacy_course_labels_by_class[class_name] = legacy_labels
 
     # Une classe est visible si l'enseignant y donne au moins un cours,
     # ou s'il en est le titulaire officiel.
@@ -3802,11 +3876,13 @@ def compose_teacher_classroom_context(teacher, school, classes, students, course
         for name in (item.class_name for item in visible_classes)
     }
     courses_by_class = {
-        name: sorted(assigned_courses_by_class.get(name, []), key=str.casefold)
+        name: assigned_course_labels_by_class.get(str(name), [])
         for name in (item.class_name for item in visible_classes)
     }
-    # course_max a déjà été constitué exclusivement à partir des cours de cet enseignant.
-    visible_course_max = dict(course_max)
+    course_catalog = {
+        name: course_catalog_by_class.get(str(name), [])
+        for name in (item.class_name for item in visible_classes)
+    }
 
     classroom_rows = []
     for item in visible_classes:
@@ -3817,6 +3893,7 @@ def compose_teacher_classroom_context(teacher, school, classes, students, course
             "isTitulaire": teacher_is_titulaire(teacher, item),
             "students": students_by_class.get(item.class_name, []),
             "courses": courses_by_class.get(item.class_name, []),
+            "courseCatalog": course_catalog.get(item.class_name, []),
         })
     return {
         "schoolId": school.school_id if school else "",
@@ -3824,7 +3901,9 @@ def compose_teacher_classroom_context(teacher, school, classes, students, course
         "classes": [item.class_name for item in visible_classes],
         "students": students_by_class,
         "courses": courses_by_class,
-        "courseMax": visible_course_max,
+        "courseMax": course_max,
+        "courseCatalog": course_catalog,
+        "legacyCourseLabels": legacy_course_labels_by_class,
         "titulaireClasses": titulaire_classes,
         "classrooms": classroom_rows,
         "teacherCatalogScope": "assigned" if school else "independent",
@@ -3832,7 +3911,7 @@ def compose_teacher_classroom_context(teacher, school, classes, students, course
 
 
 def apply_teacher_classroom_context(state: dict, context: dict) -> dict:
-    """Applique le catalogue officiel filtré sans fusionner les cours d'autres enseignants."""
+    """Applique le catalogue officiel filtré sans supprimer les anciennes notes ambiguës."""
     state = dict(state or {})
     if not context.get("schoolId"):
         user = dict(state.get("user") or {})
@@ -3849,15 +3928,15 @@ def apply_teacher_classroom_context(state: dict, context: dict) -> dict:
     # Pour un espace scolaire, le catalogue du serveur est autoritaire : il remplace
     # les anciennes listes locales susceptibles de contenir les cours d'un autre enseignant.
     state["classes"] = list(context.get("classes") or [])
-    state["courses"] = dict(context.get("courses") or {})
+    state["courses"] = {
+        str(name): list(values or [])
+        for name, values in (context.get("courses") or {}).items()
+    }
     state["students"] = dict(context.get("students") or {})
     state["courseMax"] = dict(context.get("courseMax") or {})
+    state["courseCatalog"] = dict(context.get("courseCatalog") or {})
+    legacy_labels = context.get("legacyCourseLabels") or {}
 
-    allowed_courses = {
-        (str(class_name), str(course_name))
-        for class_name, names in state["courses"].items()
-        for course_name in (names or [])
-    }
     previous_evaluations = state.get("evaluations") if isinstance(state.get("evaluations"), dict) else {}
     filtered_evaluations = {}
     allowed_evaluation_ids = set()
@@ -3867,26 +3946,40 @@ def apply_teacher_classroom_context(state: dict, context: dict) -> dict:
         filtered_evaluations[class_name] = {}
         for period, entries in (periods or {}).items():
             kept = []
+            class_courses = state["courses"].setdefault(class_name, [])
+            class_legacy_labels = legacy_labels.get(class_name, {}) if isinstance(legacy_labels, dict) else {}
             for entry in (entries or []):
-                course_name = str((entry or {}).get("course") or "")
-                if (str(class_name), course_name) not in allowed_courses:
-                    continue
-                kept.append(entry)
-                if entry.get("id"):
-                    allowed_evaluation_ids.add(str(entry["id"]))
+                entry = entry or {}
+                course_name = str(entry.get("course") or "")
+                if course_name in class_courses:
+                    kept.append(entry)
+                    if entry.get("id"):
+                        allowed_evaluation_ids.add(str(entry["id"]))
+                elif course_name in class_legacy_labels:
+                    # L'ancien format ne contenait pas l'ID PrimeInk : on conserve
+                    # les notes sous un libellé d'archive plutôt que de les mélanger.
+                    archived = dict(entry)
+                    archived["course"] = class_legacy_labels[course_name]
+                    archived["legacyCourse"] = True
+                    kept.append(archived)
+                    if archived["course"] not in class_courses:
+                        class_courses.append(archived["course"])
+                    if entry.get("id"):
+                        allowed_evaluation_ids.add(str(entry["id"]))
             filtered_evaluations[class_name][period] = kept
     for class_name in state["classes"]:
         filtered_evaluations.setdefault(class_name, {"P1": [], "P2": [], "EX1": [], "P3": [], "P4": [], "EX2": []})
     state["evaluations"] = filtered_evaluations
 
     # Les clés de notes prennent la forme studentId_EV-xxxx ; seules les évaluations
-    # dont le cours est attribué restent dans le catalogue reçu par le professeur.
+    # encore visibles pour ce professeur sont conservées.
     grades = state.get("grades") if isinstance(state.get("grades"), dict) else {}
     state["grades"] = {
         key: value for key, value in grades.items()
         if "_EV-" in str(key) and ("EV-" + str(key).split("_EV-", 1)[1]) in allowed_evaluation_ids
     }
 
+    state["legacyCourseLabels"] = dict(legacy_labels)
     state["titulaireClasses"] = list(context.get("titulaireClasses") or [])
     state["classrooms"] = list(context.get("classrooms") or [])
     state["schoolId"] = context.get("schoolId") or ""
@@ -3899,6 +3992,7 @@ def apply_teacher_classroom_context(state: dict, context: dict) -> dict:
     user["titulaireClasses"] = list(context.get("titulaireClasses") or [])
     state["user"] = user
     return state
+
 
 def build_teacher_classroom_context(db: Session, teacher, school_id: Optional[str] = None) -> dict:
     selected_school_id = str(school_id or getattr(teacher, "school_id", "") or "").strip()
