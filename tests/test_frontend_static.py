@@ -618,7 +618,9 @@ class TestNewFeatureStatic(unittest.TestCase):
         self.assertIn("if (loadedSchoolId !== newSchoolId)", source)
         self.assertIn("window.localStorage.setItem('primeink_cloud_token', result.token)", source)
         self.assertIn("La base actuelle n'a pas été modifiée.", source)
-        self.assertIn("Pour changer l'identifiant, utilisez la commande UPDATE SCHOOL ID", source)
+        self.assertIn("openPrimeInkSchoolIdUpdate(true)", source)
+        self.assertIn("panel._primeInkSchoolIdUpdateModalState", source)
+        self.assertIn("panel.style.cssText += ';position:fixed;z-index:100001", source)
 
 
 if __name__ == "__main__":
