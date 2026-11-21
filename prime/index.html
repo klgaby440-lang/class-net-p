@@ -7198,7 +7198,7 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
             return String(value || "").trim().toLowerCase().replace(/\s+/g, " ") === "update school id";
         }
 
-        function openPrimeInkSchoolIdUpdate() {
+        function openPrimeInkSchoolIdUpdate(fromLockScreen = false) {
             const panel = document.getElementById('primeInkSchoolIdUpdatePanel');
             const currentInput = document.getElementById('primeInkCurrentSchoolId');
             const newIdInput = document.getElementById('primeInkSchoolIdUpdateInput');
@@ -7209,6 +7209,18 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
             if (newIdInput) newIdInput.value = '';
             if (passwordInput) passwordInput.value = '';
             if (status) status.textContent = '';
+
+            // Depuis l'écran verrouillé, déplace temporairement le même panneau au-dessus du verrou.
+            // Le verrou reste visible et aucune donnée n'est accessible avant l'authentification.
+            if (fromLockScreen && panel && panel.parentNode !== document.body) {
+                panel._primeInkSchoolIdUpdateModalState = {
+                    parent: panel.parentNode,
+                    nextSibling: panel.nextSibling,
+                    style: panel.getAttribute('style')
+                };
+                document.body.appendChild(panel);
+                panel.style.cssText += ';position:fixed;z-index:100001;left:50%;top:50%;transform:translate(-50%,-50%);width:min(560px,calc(100vw - 24px));max-height:85vh;overflow:auto;box-shadow:0 20px 60px #0008;';
+            }
             if (panel) panel.style.display = 'block';
             if (activationInput) activationInput.value = '';
             if (newIdInput) newIdInput.focus();
@@ -7219,6 +7231,15 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
             const newIdInput = document.getElementById('primeInkSchoolIdUpdateInput');
             const passwordInput = document.getElementById('primeInkSchoolIdUpdatePassword');
             const status = document.getElementById('primeInkSchoolIdUpdateStatus');
+            if (panel && panel._primeInkSchoolIdUpdateModalState) {
+                const saved = panel._primeInkSchoolIdUpdateModalState;
+                if (saved.parent && saved.parent.isConnected) {
+                    saved.parent.insertBefore(panel, saved.nextSibling && saved.nextSibling.parentNode === saved.parent ? saved.nextSibling : null);
+                }
+                if (saved.style === null) panel.removeAttribute('style');
+                else panel.setAttribute('style', saved.style);
+                delete panel._primeInkSchoolIdUpdateModalState;
+            }
             if (panel) panel.style.display = 'none';
             if (newIdInput) newIdInput.value = '';
             if (passwordInput) passwordInput.value = '';
@@ -7391,7 +7412,7 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
         async function verifyActivationFromLock() {
             const input = document.getElementById('lockActivationInput');
             if (input && isPrimeInkSchoolIdUpdateCommand(input.value)) {
-                alert("Pour changer l'identifiant, utilisez la commande UPDATE SCHOOL ID dans Paramètres > Licence et apparence.");
+                openPrimeInkSchoolIdUpdate(true);
                 return;
             }
             if (input) {
