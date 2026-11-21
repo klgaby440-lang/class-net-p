@@ -4897,6 +4897,7 @@ async function bpPushClassBulletin(cls) {
                 document.getElementById('class-bulletin-title').value = '';
                 document.getElementById('class-signature-source').value = 'titulaire';
                 document.getElementById('class-autocourses').checked = false;
+                document.getElementById('name-titulaire-added-class').value = '';
                 document.querySelector('#interface-classe h3').textContent = 'Ajouter une Classe';
 
                 saveState();
@@ -4957,6 +4958,7 @@ async function bpPushClassBulletin(cls) {
                 };
 
                 appState.courses.push(newCourse);
+                document.getElementById('name-titulaire-added-cours').value = '';
                 document.getElementById('sub-category-cours').value = '';
                 saveState();
                 loadClassData(activeClassId);
