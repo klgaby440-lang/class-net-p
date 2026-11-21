@@ -1894,6 +1894,7 @@ async function openIndependentTeacherWorkspace() {
         }
         db.user.isLoggedIn = true;
         saveDB();
+        await loadTeacherScheduleFromServer(true);
         updateLoginHeaderButton();
         renderTeacherSpacesSettings();
         renderTeacherAccessCode();
