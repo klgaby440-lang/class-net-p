@@ -135,7 +135,7 @@
 
 <div class="privacy-container">
     <h1>Politique de Confidentialité et de Traitement des Données</h1>
-    <div class="last-update">Édition officielle • CRYPT Tech Solutions • Révision d'Octobre 2026</div>
+    <div class="last-update">Édition officielle • CRYPT Tech Solutions • Révision d'Octobre 2026 · Complément fonctionnel du 22 novembre 2026</div>
 
     <p>La présente politique de confidentialité régit la collecte, le traitement, le stockage, la sécurité et l'utilisation des données au sein des logiciels <strong>ClassNet</strong>, <strong>PrimeNet</strong> et de leurs services associés édités par <strong>CRYPT Tech Solutions</strong>. En utilisant nos logiciels, applications mobiles ou services réseau, vous acceptez sans réserve les termes décrits ci-dessous.</p>
 
@@ -181,6 +181,50 @@
         CRYPT Tech Solutions • Service Juridique & Conformité<br>
         Email : klgaby440@gmail.com
     </p>
+
+
+    <section aria-labelledby="privacy-update-nov-2026" style="margin-top:2.5rem;padding-top:1.5rem;border-top:2px solid var(--border-color);">
+        <h2 id="privacy-update-nov-2026">Complément d'information — Fonctionnalités mises à jour le 22 novembre 2026</h2>
+        <p>Ce complément décrit le fonctionnement des nouvelles fonctionnalités de ClassInk App, ClassInk Suivi, ClassInk Manager et PrimeInk. Il apporte des précisions opérationnelles sur les profils, les présences, les communications et l'assistance Llink, sans remplacer les articles précédents.</p>
+
+        <h3 style="font-size:1.05rem;color:var(--text-main);margin:1.4rem 0 .6rem;">1. Profils des enseignants et des établissements</h3>
+        <ul>
+            <li>Un enseignant connecté peut actualiser son nom et son numéro de téléphone et choisir un nouveau mot de passe. L'adresse e-mail utilisée comme identifiant et le code unique ClassInk ne peuvent pas être modifiés depuis ce formulaire.</li>
+            <li>Un établissement peut actualiser le nom de l'école, le nom du responsable, le téléphone, la ville, la commune et l'adresse physique. Son identifiant unique et son adresse e-mail de connexion restent fixes dans cette interface.</li>
+            <li>Chaque modification sensible exige la vérification du mot de passe actuel. Le nouveau mot de passe doit respecter les limites affichées dans l'application. Le serveur conserve une empreinte de mot de passe dérivée par PBKDF2-SHA256 ; le mot de passe n'est pas renvoyé dans les données de profil.</li>
+            <li>Le téléphone est normalisé au format international lorsque c'est possible. Il est utilisé comme coordonnée de compte et n'est pas rendu public par le portail parent.</li>
+        </ul>
+
+        <h3 style="font-size:1.05rem;color:var(--text-main);margin:1.4rem 0 .6rem;">2. Présences des élèves</h3>
+        <p>Lorsqu'un enseignant enregistre un appel dans ClassInk App et synchronise ses données, le serveur conserve les informations nécessaires au suivi : établissement, enseignant, élève officiel, classe, cours, date, séance ou heure et statut de présence. PrimeInk récupère ces enregistrements pour les afficher et les consolider.</p>
+        <p>ClassInk Suivi présente au parent les appels de l'enfant lié, cours par cours et jour par jour. Le résumé journalier distingue une journée complète avec tous les appels positifs, une journée comportant au moins une absence et une journée dont certains appels attendus n'ont pas encore été reçus. Un état incomplet n'est pas présenté comme une journée entièrement présente.</p>
+        <p>L'espace parent ne permet pas de modifier les présences. Les informations affichées sont limitées à l'enfant sélectionné à l'aide de son identifiant individuel et aux données que le serveur associe à cet enfant.</p>
+
+        <h3 style="font-size:1.05rem;color:var(--text-main);margin:1.4rem 0 .6rem;">3. Communiqués et messages</h3>
+        <ul>
+            <li>Les communiqués publiés par la direction peuvent être destinés à toute l'école ou à une classe précise. Les parents les consultent en lecture seule dans ClassInk Suivi et ne peuvent pas les modifier.</li>
+            <li>Les conversations entre la direction et un enseignant sont conservées séparément par établissement et par compte enseignant. Elles sont accessibles à la direction de l'école concernée et à l'enseignant destinataire, pas aux autres enseignants ni aux parents.</li>
+        </ul>
+
+        <h3 style="font-size:1.05rem;color:var(--text-main);margin:1.4rem 0 .6rem;">4. Assistance Llink et contexte scolaire</h3>
+        <p>Dans les espaces connectés, le serveur prépare le contexte autorisé avant d'envoyer une requête à Llink. L'assistant enseignant reçoit uniquement les informations de l'espace et des cours attribués à cet enseignant. L'assistant de l'établissement reçoit les données du compte scolaire courant. Dans ClassInk Suivi, le contexte porte uniquement sur l'enfant sélectionné et sur les catégories de résultats autorisées par l'établissement.</p>
+        <div class="highlight-box">
+            <p style="margin-bottom:0;"><strong>Traitement d'une demande Llink :</strong> pour répondre à une question liée à un dossier scolaire, le texte de la question et les éléments du contexte nécessaires à la réponse sont transmis au service Llink distant. Selon la question, ce contexte peut contenir des informations réelles telles que le nom de l'enfant sélectionné, sa classe, les résultats autorisés, les présences ou les communiqués. Ces données ne doivent donc pas être considérées comme anonymes pendant cette opération. Le contexte est filtré côté serveur selon le rôle et l'établissement, et les mots de passe, jetons de connexion et identifiants secrets ne sont pas ajoutés au contexte de réponse.</p>
+        </div>
+        <p>Les conversations Llink affichées dans ces interfaces sont conservées dans la mémoire de la session de la page et ne sont pas ajoutées aux dossiers scolaires par défaut. Les utilisateurs ne doivent pas saisir de mot de passe, de code secret ou de donnée qui n'est pas nécessaire à leur question.</p>
+
+        <h3 style="font-size:1.05rem;color:var(--text-main);margin:1.4rem 0 .6rem;">5. Données conservées sur l'appareil</h3>
+        <ul>
+            <li>ClassInk App utilise une base de travail locale pour permettre la saisie et la préparation des données avant synchronisation. L'enseignant doit protéger l'accès à son appareil et utiliser la synchronisation prévue pour transmettre les mises à jour au serveur.</li>
+            <li>ClassInk Suivi peut conserver sur l'appareil les identifiants des enfants liés et certaines préférences d'affichage. Les notes, résultats et présences détaillés ne sont pas conservés dans son cache local ; ils sont récupérés depuis le serveur lors de l'actualisation.</li>
+            <li>ClassInk Manager conserve les données scolaires consultées en mémoire pendant la session et les efface lors de la fermeture ou de la sortie de la page. Le thème clair ou sombre est une préférence locale.</li>
+            <li>PrimeInk peut conserver la base de travail et ses réglages sur l'appareil, conformément à son fonctionnement de synchronisation. Les utilisateurs doivent effectuer des sauvegardes adaptées et fermer la session sur les appareils partagés.</li>
+        </ul>
+
+        <h3 style="font-size:1.05rem;color:var(--text-main);margin:1.4rem 0 .6rem;">6. Accès et apparence</h3>
+        <p>Les profils sont accessibles après authentification et les champs immuables sont affichés en lecture seule. Les thèmes clair et sombre modifient la présentation des contrôles et des panneaux ; ils ne changent pas les droits d'accès ni les données conservées. Les aperçus de bulletins peuvent rester sur fond blanc afin de représenter le document destiné à l'impression.</p>
+        <p>Ce complément décrit les comportements des fonctionnalités déployées. Pour toute question relative à un dossier, à une rectification ou à l'exercice des droits mentionnés dans les articles précédents, veuillez utiliser les coordonnées du service CRYPT Tech Solutions indiquées ci-dessus.</p>
+    </section>
 
     <footer-nav>
         <a href="https://class-net-p.vercel.app" class="btn-back">Retour à l'Accueil</a>
