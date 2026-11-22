@@ -404,6 +404,18 @@ $('#appRoot').hidden=true;
 #llink-assist-send{border:0;border-radius:10px;padding:10px 12px;background:#477fe5;color:#fff;font-weight:750;cursor:pointer}
 #llink-assist-send:disabled,#llink-assist-input:disabled{opacity:.5;cursor:wait}
 @media(max-width:600px){#llink-assist-root{left:12px;bottom:12px}#llink-assist-panel{width:calc(100vw - 24px);height:min(68vh,560px)}}
+
+/* Llink respecte le thème du Manager au lieu de conserver son panneau bleu nuit en mode clair. */
+[data-theme="light"] #llink-assist-panel{background:var(--panel);color:var(--text);border-color:var(--line)}
+[data-theme="light"] #llink-assist-head,[data-theme="light"] #llink-assist-foot{background:var(--panel-2);border-color:var(--line)}
+[data-theme="light"] #llink-assist-head small,[data-theme="light"] #llink-assist-warning{color:var(--muted)}
+[data-theme="light"] .llink-assist-message.assistant{background:var(--panel-2);color:var(--text);border-color:var(--line)}
+[data-theme="light"] .llink-assist-message.user{background:#dce9ff;color:#17345f}
+[data-theme="light"] #llink-assist-input{background:var(--panel);color:var(--text);border-color:var(--line);color-scheme:light}
+[data-theme="light"] #llink-assist-toggle{background:var(--panel);color:var(--text);border-color:var(--line)}
+[data-theme="light"] #llink-assist-send{background:var(--accent);color:#fff}
+[data-theme="dark"] #llink-assist-input{color-scheme:dark}
+
 </style>
 <div id="llink-assist-root" data-app="manager">
  <button type="button" id="llink-assist-toggle" aria-expanded="false" aria-controls="llink-assist-panel">✦ Demander à Llink</button>
