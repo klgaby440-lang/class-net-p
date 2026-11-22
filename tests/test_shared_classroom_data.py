@@ -5,6 +5,7 @@ from fastapi import HTTPException
 
 from main import (
     apply_teacher_classroom_context,
+    calculate_classink_period_average,
     compose_teacher_classroom_context,
     generate_suivi_student_code,
     is_suivi_results_allowed,
@@ -71,6 +72,18 @@ def sample_catalog():
             }
         ],
     }
+
+
+def test_classink_period_average_combines_multiple_interrogations_as_one_weighted_mean():
+    # 8/10 + 15/20 = 23/30, ramené au barème P1 sur 40 points.
+    assert calculate_classink_period_average([(8, 10), (15, 20)], 40, "P1") == 30.67
+    # Les examens sont ramenés au double du maximum du cours.
+    assert calculate_classink_period_average([(14, 20), (16, 20)], 40, "EX1") == 60.0
+    # Une note nulle reste une note valable et participe à la moyenne.
+    assert calculate_classink_period_average([(0, 10), (10, 10)], 20, "P2") == 10.0
+    # Une période sans note valide ne produit aucune moyenne artificielle.
+    assert calculate_classink_period_average([], 40, "P1") is None
+    assert calculate_classink_period_average([(15, 10)], 40, "P1") is None
 
 
 def test_school_catalog_validation_keeps_classes_students_courses_and_titulars():
