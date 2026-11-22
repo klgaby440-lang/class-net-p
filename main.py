@@ -601,8 +601,10 @@ class StudentGrade(Base):
     student_name = Column(String, nullable=False)
     class_name = Column(String, nullable=False)
     course_name = Column(String, nullable=False)
+    course_id = Column(String, index=True, nullable=True)
     eval_id = Column(String, index=True, nullable=False)
     eval_name = Column(String, nullable=False)
+    eval_date = Column(String(32), nullable=True)
     period = Column(String, nullable=False)
     score = Column(Float, nullable=False)
     max_score = Column(Float, nullable=False)
@@ -1170,6 +1172,9 @@ with engine.connect() as conn:
     conn.execute(text("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS signature TEXT;"))
     conn.execute(text("ALTER TABLE student_grades ADD COLUMN IF NOT EXISTS school_id VARCHAR;"))
     conn.execute(text("ALTER TABLE student_grades ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP;"))
+    conn.execute(text("ALTER TABLE student_grades ADD COLUMN IF NOT EXISTS course_id VARCHAR;"))
+    conn.execute(text("ALTER TABLE student_grades ADD COLUMN IF NOT EXISTS eval_date VARCHAR(32);"))
+    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_student_grades_course_id ON student_grades (course_id);"))
     conn.execute(text("ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS school_id VARCHAR;"))
     conn.execute(text("CREATE INDEX IF NOT EXISTS ix_quizzes_school_id ON quizzes (school_id);"))
     conn.execute(text("UPDATE quizzes q SET school_id = t.school_id FROM teachers t WHERE q.teacher_email = t.email AND q.school_id IS NULL AND t.school_id IS NOT NULL;"))
@@ -3013,8 +3018,21 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
     # --- 1. Catalogue scolaire officiel et périmètre du professeur ---
     official_classes_by_name = {}
     assigned_courses_by_class = {}
+    assigned_course_rows_by_class_label = {}
     official_course_max = {}
     teacher_allowed_classes = set()
+    course_catalog_payload = payload.get("courseCatalog") if isinstance(payload.get("courseCatalog"), dict) else {}
+    course_catalog_by_class_id = {}
+    for catalog_class_name, catalog_rows in course_catalog_payload.items():
+        if not isinstance(catalog_rows, list):
+            continue
+        for catalog_row in catalog_rows:
+            if not isinstance(catalog_row, dict):
+                continue
+            catalog_course_id = str(catalog_row.get("id") or "").strip()
+            catalog_label = str(catalog_row.get("label") or catalog_row.get("name") or "").strip()
+            if catalog_course_id and catalog_label:
+                course_catalog_by_class_id[(str(catalog_class_name), catalog_course_id)] = catalog_label
 
     if verified_school_id:
         official_classes = db.query(ClasseInformation).filter(
@@ -3038,8 +3056,12 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
                 continue
             class_name = str(official_class.class_name)
             teacher_allowed_classes.add(class_name)
-            assigned_courses_by_class.setdefault(class_name, set()).add(str(course.course_name))
-            official_course_max[(class_name, str(course.course_name))] = float(course.max_per or 40)
+            # Le cours est identifié par son ID PrimeInk. Le libellé n'est qu'une
+            # présentation et peut être identique pour deux cours différents.
+            label = course_catalog_by_class_id.get((class_name, str(course.id)), str(course.course_name))
+            assigned_courses_by_class.setdefault(class_name, set()).add(label)
+            assigned_course_rows_by_class_label[(class_name, label)] = course
+            official_course_max[(class_name, label)] = float(course.max_per or 40)
 
     # --- 2. Indexation des élèves réellement présents dans le catalogue autorisé ---
     student_lookup = {}  # { ClassInk student_id: {name, class, official_student_id} }
@@ -3070,7 +3092,7 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
             }
 
     # --- 3. Indexation des évaluations, limitée aux cours attribués ---
-    eval_lookup = {}  # { eval_id: {name, max, course, period, class} }
+    eval_lookup = {}  # { eval_id: {name, max, course, course_id, period, class, date} }
     for class_name, periods in evaluations_dict.items():
         if verified_school_id and class_name not in teacher_allowed_classes:
             continue
@@ -3083,17 +3105,22 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
                 ev_id = str(ev.get("id") or "").strip()
                 ev_course = str(ev.get("course") or "").strip()
                 ev_max = ev.get("max")
+                course_row = assigned_course_rows_by_class_label.get((str(class_name), ev_course)) if verified_school_id else None
                 if verified_school_id:
-                    if ev_course not in assigned_courses_by_class.get(class_name, set()):
+                    if ev_course not in assigned_courses_by_class.get(class_name, set()) or not course_row:
                         continue
                     catalog_max = official_course_max.get((class_name, ev_course))
                     if catalog_max is None:
                         continue
+                    course_id = str(course_row.id)
+                    raw_course_name = str(course_row.course_name or ev_course)
                 else:
                     valid_courses = courses_dict.get(class_name, [])
                     if ev_course not in valid_courses:
                         continue
                     catalog_max = None
+                    course_id = ""
+                    raw_course_name = ev_course
 
                 if not ev_id or not isinstance(ev_max, (int, float)) or isinstance(ev_max, bool) or ev_max <= 0:
                     continue
@@ -3103,8 +3130,11 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
                     "name": str(ev.get("name") or "Évaluation")[:160],
                     "max": float(ev_max),
                     "course": ev_course,
+                    "course_name": raw_course_name,
+                    "course_id": course_id,
                     "period": period_key,
-                    "class": class_name,
+                    "class": str(class_name),
+                    "date": clean_text(ev.get("date"), 32),
                 }
 
     # --- 3. Traitement & Validation des Notes (Grades) ---
@@ -3138,7 +3168,8 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
             errors.append(f"Note incohérente ({score}/{eval_info['max']}) pour {student_info['name']} sur {eval_info['name']}")
             continue
 
-        # Sauvegarde ou mise à jour dans la table StudentGrade
+        # Sauvegarde ou mise à jour de l'interrogation. course_id garde le
+        # lien vers la ligne exacte PrimeInk, même si deux cours partagent un nom.
         record = db.query(StudentGrade).filter_by(
             teacher_email=teacher.email,
             school_id=verified_school_id,
@@ -3153,8 +3184,10 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
                 student_name=student_info["name"],
                 class_name=student_info["class"],
                 course_name=eval_info["course"],
+                course_id=eval_info["course_id"] or None,
                 eval_id=eval_id,
                 eval_name=eval_info["name"],
+                eval_date=eval_info["date"],
                 period=eval_info["period"],
                 score=float(score),
                 max_score=eval_info["max"],
@@ -3162,7 +3195,15 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
             )
             db.add(record)
         else:
+            record.student_name = student_info["name"]
+            record.class_name = student_info["class"]
+            record.course_name = eval_info["course"]
+            record.course_id = eval_info["course_id"] or record.course_id
+            record.eval_name = eval_info["name"]
+            record.eval_date = eval_info["date"]
+            record.period = eval_info["period"]
             record.score = float(score)
+            record.max_score = eval_info["max"]
 
         updates_count += 1
 
@@ -3199,31 +3240,15 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
         for student_info in student_lookup.values():
             formatted_students.setdefault(student_info["class"], []).append(student_info["name"])
             
-        # Construction de la moyenne classe selon ta structure
-        moyenne_classe = {}
-        for c_name in classes_list:
-            moyenne_classe[c_name] = {}
-            # On récupère les cours de cette classe
-            c_courses = effective_courses_dict.get(c_name, [])
-            for course in c_courses:
-                moyenne_classe[c_name][course] = {"P1": {}, "P2": {}, "EX1": {}, "P3": {}, "P4": {}, "EX2": {}}
-                
-                # Remplissage des notes/moyennes pour ce cours et cette classe
-                for grade_key, score in grades_dict.items():
-                    if "_EV-" not in grade_key: continue
-                    parts = grade_key.split("_EV-")
-                    s_id = parts[0]
-                    e_id = "EV-" + parts[1]
-                    
-                    s_info = student_lookup.get(s_id)
-                    e_info = eval_lookup.get(e_id)
-                    
-                    if s_info and e_info and s_info["class"] == c_name and e_info["course"] == course and isinstance(score, (int, float)) and not isinstance(score, bool) and 0 <= score <= e_info["max"]:
-                        s_name = s_info["name"]
-                        period = e_info["period"]
-                        # Si tu as déjà précalculé la moyenne, on l'injecte. Sinon on injecte la note brute.
-                        if period in moyenne_classe[c_name][course]:
-                            moyenne_classe[c_name][course][period][s_name] = score
+        # Les valeurs de moyenne sont consolidées à partir de StudentGrade
+        # dans /api/primenet/sync/{school_id}. Ici, on enregistre uniquement le catalogue.
+        moyenne_classe = {
+            c_name: {
+                course: {"P1": {}, "P2": {}, "EX1": {}, "P3": {}, "P4": {}, "EX2": {}}
+                for course in effective_courses_dict.get(c_name, [])
+            }
+            for c_name in classes_list
+        }
 
         # Assemblage final du JSON PrimeNet pour cet enseignant
         primenet_data = {
