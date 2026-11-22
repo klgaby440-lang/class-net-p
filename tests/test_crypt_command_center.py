@@ -162,6 +162,17 @@ def test_llink_assistant_relays_velora_stream_without_school_context(monkeypatch
 
     monkeypatch.setattr(main.httpx, "AsyncClient", FakeAsyncClient)
     manager_token = main.create_token({"role": "school", "school_id": "ci-school"}, 3600)
+    school_db = main.SessionLocal()
+    try:
+        school_db.add(main.SchoolInformation(
+            school_id="ci-school", bulletin_seq_id="CI-0001", code="CI-0001",
+            name_school="CI School", city="Bukavu", commune="Ibanda",
+            name_responsable="Direction", num_tel="+243000000000",
+            adresse_physique="Bukavu", email="ci@example.test", pass_word="hashed",
+        ))
+        school_db.commit()
+    finally:
+        school_db.close()
     with TestClient(main.app) as client:
         response = client.post(
             "/api/llink/assist",

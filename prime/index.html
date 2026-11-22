@@ -1128,10 +1128,55 @@ body {
         <div class="nav-links">
             <button class="nav-btn active" data-target="section-classes">CLASSES</button>
             <button class="nav-btn" data-target="section-about">TOOLS</button>
+            <button class="nav-btn" data-target="section-communications">COMMUNICATIONS</button>
             <button class="nav-btn" data-target="section-llink">LLINK</button>
             <button class="nav-btn" data-target="section-settings">PARAMÈTRES</button>
         </div>
     </nav>
+
+    <!-- COMMUNICATIONS : COMMUNIQUÉS PARENTS ET MESSAGES PRIVÉS AUX ENSEIGNANTS -->
+    <div id="section-communications" class="app-section">
+        <div class="settings-card">
+            <h2>Communiqués aux parents</h2>
+            <p class="sub" style="margin:6px 0 14px">Les parents les consultent dans ClassInk Suivi. Ils ne peuvent pas répondre depuis cet espace.</p>
+            <div class="form-group">
+                <label for="primeParentCommunicationTitle">Titre du communiqué</label>
+                <input class="form-control" id="primeParentCommunicationTitle" maxlength="180" placeholder="Ex. Réunion des parents">
+            </div>
+            <div class="form-group">
+                <label for="primeParentCommunicationClass">Destinataires</label>
+                <select class="form-control" id="primeParentCommunicationClass"><option value="">Toutes les classes</option></select>
+            </div>
+            <div class="form-group">
+                <label for="primeParentCommunicationMessage">Message</label>
+                <textarea class="form-control" id="primeParentCommunicationMessage" rows="5" maxlength="8000" placeholder="Rédigez le communiqué à lire par les parents…"></textarea>
+            </div>
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+                <button class="btn-primary" id="primePublishCommunicationBtn" onclick="publishPrimeInkCommunication()">Publier le communiqué</button>
+                <span id="primeCommunicationStatus" class="sub" aria-live="polite"></span>
+            </div>
+            <h3 style="margin-top:22px">Communiqués publiés et brouillons</h3>
+            <div id="primeParentCommunicationsList" class="list" style="margin-top:10px"><p class="sub">Chargement…</p></div>
+        </div>
+
+        <div class="settings-card" style="margin-top:18px">
+            <h2>Messages aux enseignants</h2>
+            <p class="sub" style="margin:6px 0 14px">Cette conversation est privée : seul l’enseignant choisi et la direction y ont accès.</p>
+            <div class="form-group">
+                <label for="primeTeacherMessageSelect">Enseignant</label>
+                <select class="form-control" id="primeTeacherMessageSelect" onchange="renderPrimeInkTeacherMessages()"><option value="">Choisissez un enseignant</option></select>
+            </div>
+            <div id="primeTeacherMessagesList" class="list" style="min-height:90px;margin:10px 0"><p class="sub">Sélectionnez un enseignant.</p></div>
+            <div class="form-group">
+                <label for="primeTeacherMessageInput">Écrire à cet enseignant</label>
+                <textarea class="form-control" id="primeTeacherMessageInput" rows="3" maxlength="5000" placeholder="Votre message…"></textarea>
+            </div>
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+                <button class="btn-primary" id="primeSendTeacherMessageBtn" onclick="sendPrimeInkTeacherMessage()">Envoyer le message</button>
+                <span id="primeTeacherMessageStatus" class="sub" aria-live="polite"></span>
+            </div>
+        </div>
+    </div>
 
     <!-- Interface Llink AI -->
     <div id="section-llink" class="app-section">
@@ -1680,7 +1725,7 @@ body {
                 <div class="grid-2col" style="margin-bottom: 1rem;">
                     <div class="form-group">
                         <label>DATE</label>
-                        <input type="date" id="presEleveDate" class="form-control">
+                        <input type="date" id="presEleveDate" class="form-control" onchange="renderPresencesEleveTable()">
                     </div>
 
                     <div class="form-group">
@@ -1716,7 +1761,7 @@ body {
             <div id="pres-sub-prof" class="hidden">
                 <div class="form-group" style="max-width: 300px; margin-bottom: 1rem;">
                     <label>Date</label>
-                    <input type="date" id="presProfDate" class="form-control">
+                    <input type="date" id="presProfDate" class="form-control" onchange="renderPresencesProfTable()">
                 </div>
 
                 <div class="settings-card">
@@ -2118,9 +2163,11 @@ window.alert = function(message) { showCustomAlert(message); };
             // --- NOUVELLES STRUCTURES DE DONNÉES TOOLS ---
             tools: {
                 presences: {
-                    students: [], // Format: { date: '2026-09-12', classId: 'c1', studentId: 's1', courseId: 'k1', present: true }
-                    teachers: []  // Format: { date: '2026-09-12', teacherUniqueId: 'prof_63011_mwamba', checkIn: '07:30', checkOut: '12:30' }
+                    students: [], // Appels reçus du serveur : un élève/cours/date/séance
+                    teachers: []  // Arrivées et sorties du personnel
                 },
+            parentCommunications: [],
+            teacherMessages: [],
                 mixage: {
                     config: { exemplaires: 1, dureeExamen: 120, dureeHorsSession: 90, mode: 'deepseek-v3', instructions: '' },
                     surveillants: [],
@@ -5024,67 +5071,55 @@ async function bpPushClassBulletin(cls) {
                 document.getElementById('llinkStatusText').textContent = isLlinkOnline ? "En ligne" : "Hors ligne";
             };
 
+            const primeInkLlinkHistory = [];
             async function sendLlinkMessage() {
                 const text = llinkInput.value.trim();
-                if (text === '') return;
-
+                if (!text) return;
                 const userMsg = document.createElement('div');
                 userMsg.className = 'chat-message user';
-                userMsg.innerHTML = `<p>${escapeHTML(text)}</p>`;
+                userMsg.innerHTML = '<p>' + escapeHTML(text) + '</p>';
                 llinkChatBox.appendChild(userMsg);
-
                 llinkInput.value = '';
                 llinkChatBox.scrollTop = llinkChatBox.scrollHeight;
-
-                const loadingId = 'loading_' + Date.now();
                 const aiMsg = document.createElement('div');
                 aiMsg.className = 'chat-message ai';
-                aiMsg.id = loadingId;
-                aiMsg.innerHTML = `<p><em>Llink réfléchit... ⚡</em></p>`;
+                aiMsg.innerHTML = '<p><em>Llink consulte les données autorisées de l’école…</em></p>';
                 llinkChatBox.appendChild(aiMsg);
                 llinkChatBox.scrollTop = llinkChatBox.scrollHeight;
-
-                const selectedModel = llinkModelSelector ? llinkModelSelector.value : 'gemini-1.5-flash';
-
-                if (!isLlinkOnline) {
-                    setTimeout(() => {
-                        const targetMsg = document.getElementById(loadingId);
-                        if (targetMsg) {
-                            targetMsg.innerHTML = `<p>🤖 <strong>Mode Hors-Ligne :</strong> Message reçu : "${escapeHTML(text)}". Registre local mis à jour.</p>`;
-                        }
-                        llinkChatBox.scrollTop = llinkChatBox.scrollHeight;
-                    }, 500);
+                if (!cloudAuthHeaders().Authorization) {
+                    aiMsg.textContent = "Connectez-vous à l'espace scolaire PrimeInk pour permettre à Llink de consulter les données autorisées.";
                     return;
                 }
-
                 try {
-                    const payload = {
-                        prompt: text,
-                        model: selectedModel,
-                        source: "classnet_p",
-                        context: {
-                            school: appState.school.name,
-                            activeClass: appState.classes.find(c => c.id === activeClassId)?.name || "",
-                            totalTeachers: appState.teachers.length
-                        }
-                    };
-
-                    const response = await fetch(`${SERVER_URL}/api/chat`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
+                    const headers = cloudAuthHeaders();
+                    headers['X-CRYPT-App'] = 'primeink';
+                    headers['Accept'] = 'text/event-stream';
+                    const response = await fetch(API_BASE_URL + '/api/llink/assist', {
+                        method: 'POST', headers, cache: 'no-store',
+                        body: JSON.stringify({ message: text, history: primeInkLlinkHistory.slice(-8), source: 'primeink' })
                     });
-
-                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-                    const data = await response.json();
-                    const replyText = data.reply || data.response || data.content || "Analyse effectuée avec succès.";
-
-                    const targetMsg = document.getElementById(loadingId);
-                    if (targetMsg) targetMsg.innerHTML = `<p>${formatMarkdownResponse(replyText)}</p>`;
+                    if (!response.ok) {
+                        const raw = await response.text();
+                        let detail = raw;
+                        try { const parsed = JSON.parse(raw); detail = parsed.detail || parsed.message || raw; } catch (_) {}
+                        throw new Error(detail || ('Erreur HTTP ' + response.status));
+                    }
+                    aiMsg.textContent = '';
+                    if (response.body && response.body.getReader) {
+                        const reader = response.body.getReader(), decoder = new TextDecoder();
+                        while (true) {
+                            const part = await reader.read();
+                            if (part.done) break;
+                            aiMsg.textContent += decoder.decode(part.value, { stream: true });
+                            llinkChatBox.scrollTop = llinkChatBox.scrollHeight;
+                        }
+                        aiMsg.textContent += decoder.decode();
+                    } else aiMsg.textContent = await response.text();
+                    if (!aiMsg.textContent.trim()) aiMsg.textContent = "Llink n'a pas retourné de réponse.";
+                    primeInkLlinkHistory.push({ role: 'user', text }, { role: 'assistant', text: aiMsg.textContent });
+                    if (primeInkLlinkHistory.length > 12) primeInkLlinkHistory.splice(0, primeInkLlinkHistory.length - 12);
                 } catch (error) {
-                    const targetMsg = document.getElementById(loadingId);
-                    if (targetMsg) targetMsg.innerHTML = `<p>⚡ <strong>CRYPT Engine :</strong> Message traité localement. Serveur distant momentanément indisponible.</p>`;
+                    aiMsg.textContent = "Llink est momentanément indisponible : " + (error.message || "erreur réseau");
                 } finally {
                     llinkChatBox.scrollTop = llinkChatBox.scrollHeight;
                 }
@@ -5273,6 +5308,7 @@ async function bpPushClassBulletin(cls) {
             const targetContent = document.getElementById(tabId);
             if (targetContent) targetContent.classList.add('active');
             if (tabId === 'tab-mixage' && typeof renderMixClassChoices === 'function') renderMixClassChoices();
+            if (tabId === 'tab-presence' && typeof loadPrimeInkTeacherAttendance === 'function') loadPrimeInkTeacherAttendance();
         };
 
         // 2. PRÉSENCES : BASCULE ÉLÈVES / PROFESSEURS
@@ -5312,75 +5348,268 @@ async function bpPushClassBulletin(cls) {
             if(document.getElementById('presProfDate')) document.getElementById('presProfDate').value = today;
 
             renderPresencesEleveTable();
+            if (typeof loadPrimeInkTeacherAttendance === 'function') loadPrimeInkTeacherAttendance();
         }
 
         window.renderPresencesEleveTable = function() {
             const select = document.getElementById('presEleveClassSelect');
-            if(!select || !select.value) return;
-            const classId = select.value;
-
+            const dateValue = document.getElementById('presEleveDate')?.value || '';
+            if (!select || !select.value) return;
+            const classId = String(select.value);
+            const className = (appState.classes || []).find(c => String(c.id) === classId)?.name || '';
             const students = getSortedStudentsByClass(classId);
-            const courses = appState.courses.filter(c => c.classId === classId);
-
+            const courses = (appState.courses || []).filter(c => String(c.classId) === classId);
+            const allRecords = (appState.tools?.presences?.students || []).filter(row =>
+                String(row.classId) === classId && String(row.date) === dateValue
+            );
             const container = document.getElementById('presEleveCoursesContainer');
-            if(!container) return;
+            if (!container) return;
             container.innerHTML = '';
 
-            courses.forEach((crs, idx) => {
+            if (!courses.length) {
+                container.innerHTML = '<div class="settings-card"><p class="sub">Aucun cours enregistré pour cette classe.</p></div>';
+            }
+            courses.forEach((course, idx) => {
+                const records = allRecords.filter(row => String(row.courseId) === String(course.id));
+                const byStudent = new Map();
+                records.forEach(row => {
+                    const key = String(row.studentId);
+                    if (!byStudent.has(key)) byStudent.set(key, []);
+                    byStudent.get(key).push(row);
+                });
                 const card = document.createElement('div');
                 card.className = 'settings-card';
-                card.innerHTML = `
-                    <h2>Cours ${idx + 1} : ${safeHTML(crs.name)} | Prof. ${safeHTML(crs.titulaire)}</h2>
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Élève</th>
-                                <th>Présence</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${students.map(s => `
-                                <tr>
-                                    <td><strong>${safeHTML(s.name)} ${safeHTML(s.postname)}</strong></td>
-                                    <td>
-                                        <input type="checkbox" checked style="width: 18px; height: 18px;"> Présent(e)
-                                    </td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                `;
+                card.innerHTML = '<h2>Cours ' + (idx + 1) + ' : ' + safeHTML(course.name) +
+                    (course.titulaire ? ' | Prof. ' + safeHTML(course.titulaire) : '') + '</h2>' +
+                    '<p class="sub" style="margin:5px 0 10px">' + safeHTML(dateValue) + ' · ' + records.length + ' appel(s) reçu(s)</p>' +
+                    '<div style="overflow-x:auto"><table class="data-table"><thead><tr><th>Élève</th><th>Statut</th><th>Enseignant</th><th>Séance</th></tr></thead><tbody>' +
+                    students.map(student => {
+                        const studentRows = byStudent.get(String(student.id)) || [];
+                        if (!studentRows.length) return '<tr><td><strong>' + safeHTML([student.name, student.postname, student.prename].filter(Boolean).join(' ')) + '</strong></td><td>Non renseigné</td><td>—</td><td>—</td></tr>';
+                        return studentRows.map(record => {
+                            const status = String(record.status || '').toUpperCase();
+                            const label = status === 'P' ? 'Présent' : status === 'A' ? 'Absent' : status === 'R' ? 'En retard' : 'Non renseigné';
+                            const color = status === 'P' ? 'badge-success' : status === 'A' ? 'badge-danger' : status === 'R' ? 'badge-warning' : '';
+                            return '<tr><td><strong>' + safeHTML([student.name, student.postname, student.prename].filter(Boolean).join(' ')) + '</strong></td>' +
+                                '<td><span class="' + color + '">' + label + '</span></td>' +
+                                '<td>' + safeHTML(record.teacherName || '—') + '</td>' +
+                                '<td>' + safeHTML(record.slotKey || '—') + '</td></tr>';
+                        }).join('');
+                    }).join('') +
+                    '</tbody></table></div>';
                 container.appendChild(card);
             });
 
             const summaryBody = document.getElementById('presEleveSummaryBody');
-            if(summaryBody) {
-                summaryBody.innerHTML = students.map(s => `
-                    <tr>
-                        <td><strong>${safeHTML(s.name)} ${safeHTML(s.postname)} ${safeHTML(s.prename)}</strong></td>
-                        <td><span class="badge-success">Présent</span></td>
-                        <td>Participation à tous les cours de la journée</td>
-                    </tr>
-                `).join('');
+            if (summaryBody) {
+                summaryBody.innerHTML = students.map(student => {
+                    const studentRecords = allRecords.filter(row => String(row.studentId) === String(student.id));
+                    const statuses = studentRecords.map(row => String(row.status || '').toUpperCase());
+                    const hasAbsence = statuses.includes('A');
+                    const hasLate = statuses.includes('R');
+                    const recordedCourseIds = new Set(studentRecords.map(row => String(row.courseId)));
+                    const allCoursesRecorded = courses.length > 0 && courses.every(course => recordedCourseIds.has(String(course.id)));
+                    const isPresentAllDay = allCoursesRecorded && statuses.length > 0 && statuses.every(value => value === 'P');
+                    const statusLabel = hasAbsence ? 'Absent' : isPresentAllDay ? 'Présent toute la journée' : hasLate ? 'Présent avec retard' : 'Incomplet';
+                    const statusClass = hasAbsence ? 'badge-danger' : isPresentAllDay ? 'badge-success' : 'badge-warning';
+                    const details = studentRecords.length + ' / ' + courses.length + ' cours renseigné(s)' +
+                        (hasAbsence ? ' · au moins une heure manquée' : '');
+                    return '<tr><td><strong>' + safeHTML([student.name, student.postname, student.prename].filter(Boolean).join(' ')) +
+                        '</strong></td><td><span class="' + statusClass + '">' + statusLabel + '</span></td><td>' + safeHTML(details) + '</td></tr>';
+                }).join('');
             }
+        };
+
+        function primeInkAuthHeaders() {
+            const headers = cloudAuthHeaders();
+            headers['X-CRYPT-App'] = 'primeink';
+            return headers;
+        }
+
+        window.loadPrimeInkCommunications = async function() {
+            const status = document.getElementById('primeCommunicationStatus');
+            if (!cloudAuthHeaders().Authorization) {
+                if (status) status.textContent = "Connectez d'abord PrimeInk au compte de l'école.";
+                return;
+            }
+            try {
+                const [parentResponse, teacherResponse] = await Promise.all([
+                    fetch(API_BASE_URL + '/api/primenet/parent-communications', { headers: primeInkAuthHeaders(), cache: 'no-store' }),
+                    fetch(API_BASE_URL + '/api/primenet/teacher-messages', { headers: primeInkAuthHeaders(), cache: 'no-store' })
+                ]);
+                const [parentData, teacherData] = await Promise.all([parentResponse.json(), teacherResponse.json()]);
+                if (!parentResponse.ok || !parentData.status) throw new Error(parentData.detail || parentData.message || "Communiqués indisponibles.");
+                if (!teacherResponse.ok || !teacherData.status) throw new Error(teacherData.detail || teacherData.message || "Messages enseignants indisponibles.");
+                appState.parentCommunications = Array.isArray(parentData.data) ? parentData.data : [];
+                appState.teacherMessages = Array.isArray(teacherData.messages) ? teacherData.messages : [];
+                const teacherSelect = document.getElementById('primeTeacherMessageSelect');
+                if (teacherSelect) {
+                    const previous = teacherSelect.value;
+                    const teacherList = Array.isArray(teacherData.teachers) ? teacherData.teachers : [];
+                    teacherSelect.innerHTML = '<option value="">Choisissez un enseignant</option>' + teacherList.map(teacher =>
+                        '<option value="' + safeHTML(teacher.email) + '">' + safeHTML(teacher.name) +
+                        (teacher.teacherCode ? ' · ' + safeHTML(teacher.teacherCode) : '') + '</option>'
+                    ).join('');
+                    if (teacherList.some(teacher => teacher.email === previous)) teacherSelect.value = previous;
+                }
+                const classSelect = document.getElementById('primeParentCommunicationClass');
+                if (classSelect) {
+                    const previousClass = classSelect.value;
+                    classSelect.innerHTML = '<option value="">Toutes les classes</option>' + (appState.classes || []).map(cl =>
+                        '<option value="' + safeHTML(cl.id) + '">' + safeHTML(cl.name) + '</option>'
+                    ).join('');
+                    if ((appState.classes || []).some(cl => String(cl.id) === previousClass)) classSelect.value = previousClass;
+                }
+                renderPrimeInkParentCommunications();
+                renderPrimeInkTeacherMessages();
+                if (status) status.textContent = "Communications actualisées.";
+            } catch (error) {
+                if (status) status.textContent = error.message || "Échec du chargement.";
+            }
+        };
+
+        function renderPrimeInkParentCommunications() {
+            const container = document.getElementById('primeParentCommunicationsList');
+            if (!container) return;
+            const rows = appState.parentCommunications || [];
+            if (!rows.length) { container.innerHTML = '<p class="sub">Aucun communiqué enregistré.</p>'; return; }
+            container.innerHTML = rows.map(row =>
+                '<article class="settings-card" style="padding:12px;margin:6px 0">' +
+                '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><strong>' + safeHTML(row.title) + '</strong>' +
+                '<span class="sub">' + safeHTML(row.date || '') + '</span></div>' +
+                '<p style="white-space:pre-wrap;margin:8px 0">' + safeHTML(row.message) + '</p>' +
+                '<span class="sub">' + safeHTML(row.classId ? ((appState.classes || []).find(cl => String(cl.id) === String(row.classId))?.name || 'Classe') : 'Toutes les classes') +
+                ' · ' + (row.published ? 'Publié' : 'Brouillon') + '</span></article>'
+            ).join('');
+        }
+
+        window.publishPrimeInkCommunication = async function() {
+            const title = document.getElementById('primeParentCommunicationTitle')?.value.trim() || '';
+            const message = document.getElementById('primeParentCommunicationMessage')?.value.trim() || '';
+            const classId = document.getElementById('primeParentCommunicationClass')?.value || '';
+            const status = document.getElementById('primeCommunicationStatus');
+            const button = document.getElementById('primePublishCommunicationBtn');
+            if (!title || message.length < 3) { if (status) status.textContent = "Ajoutez un titre et un message."; return; }
+            if (!cloudAuthHeaders().Authorization) { if (status) status.textContent = "Connectez PrimeInk au serveur."; return; }
+            if (button) { button.disabled = true; button.textContent = "Publication…"; }
+            try {
+                const response = await fetch(API_BASE_URL + '/api/primenet/parent-communications', {
+                    method: 'POST', headers: primeInkAuthHeaders(),
+                    body: JSON.stringify({ title, message, class_id: classId || null, published: true })
+                });
+                const result = await response.json().catch(() => ({}));
+                if (!response.ok || !result.status) throw new Error(result.detail || result.message || "Publication refusée.");
+                document.getElementById('primeParentCommunicationTitle').value = '';
+                document.getElementById('primeParentCommunicationMessage').value = '';
+                await loadPrimeInkCommunications();
+                if (status) status.textContent = "Communiqué publié. Il est maintenant lisible dans ClassInk Suivi.";
+            } catch (error) {
+                if (status) status.textContent = error.message || "Impossible de publier.";
+            } finally {
+                if (button) { button.disabled = false; button.textContent = "Publier le communiqué"; }
+            }
+        };
+
+        function renderPrimeInkTeacherMessages() {
+            const container = document.getElementById('primeTeacherMessagesList');
+            const selected = document.getElementById('primeTeacherMessageSelect')?.value || '';
+            if (!container) return;
+            if (!selected) { container.innerHTML = '<p class="sub">Sélectionnez un enseignant.</p>'; return; }
+            const rows = (appState.teacherMessages || []).filter(row => row.teacherEmail === selected);
+            if (!rows.length) { container.innerHTML = '<p class="sub">Aucun message dans cette conversation.</p>'; return; }
+            container.innerHTML = rows.map(row => {
+                const fromSchool = row.senderRole === 'school';
+                return '<article style="align-self:' + (fromSchool ? 'flex-end' : 'flex-start') + ';background:' +
+                    (fromSchool ? 'rgba(59,130,246,.09)' : 'var(--bg-secondary,rgba(0,0,0,.04))') +
+                    ';border:1px solid var(--border-color);border-radius:10px;padding:10px;margin:6px 0;max-width:94%">' +
+                    '<strong>' + safeHTML(row.senderName || (fromSchool ? 'Direction' : 'Enseignant')) + '</strong>' +
+                    '<p style="white-space:pre-wrap;margin:6px 0">' + safeHTML(row.message) + '</p>' +
+                    '<small class="sub">' + safeHTML(row.date || '') + '</small></article>';
+            }).join('');
+        }
+
+        window.sendPrimeInkTeacherMessage = async function() {
+            const teacherEmail = document.getElementById('primeTeacherMessageSelect')?.value || '';
+            const input = document.getElementById('primeTeacherMessageInput');
+            const message = input?.value.trim() || '';
+            const status = document.getElementById('primeTeacherMessageStatus');
+            const button = document.getElementById('primeSendTeacherMessageBtn');
+            if (!teacherEmail) { if (status) status.textContent = "Choisissez un enseignant."; return; }
+            if (!message) { if (status) status.textContent = "Le message est vide."; return; }
+            if (button) { button.disabled = true; button.textContent = "Envoi…"; }
+            try {
+                const response = await fetch(API_BASE_URL + '/api/primenet/teacher-messages', {
+                    method: 'POST', headers: primeInkAuthHeaders(),
+                    body: JSON.stringify({ teacher_email: teacherEmail, message })
+                });
+                const result = await response.json().catch(() => ({}));
+                if (!response.ok || !result.status) throw new Error(result.detail || result.message || "Message non envoyé.");
+                input.value = '';
+                await loadPrimeInkCommunications();
+                if (status) status.textContent = "Message envoyé à l'enseignant.";
+            } catch (error) {
+                if (status) status.textContent = error.message || "Échec de l'envoi.";
+            } finally {
+                if (button) { button.disabled = false; button.textContent = "Envoyer le message"; }
+            }
+        };
+
+        async function loadPrimeInkTeacherAttendance() {
+            const dateValue = document.getElementById('presProfDate')?.value || '';
+            if (!dateValue || !cloudAuthHeaders().Authorization) return;
+            try {
+                const response = await fetch(API_BASE_URL + '/api/primenet/teacher-attendance?date=' + encodeURIComponent(dateValue), {
+                    headers: primeInkAuthHeaders(), cache: 'no-store'
+                });
+                const result = await response.json().catch(() => ({}));
+                if (!response.ok || !result.status) throw new Error(result.detail || result.message || "Présences du personnel indisponibles.");
+                appState.tools.presences.teachers = (appState.tools.presences.teachers || []).filter(row => row.date !== dateValue)
+                    .concat(Array.isArray(result.data) ? result.data : []);
+                renderPresencesProfTable();
+            } catch (error) {
+                const tbody = document.getElementById('presProfTableBody');
+                if (tbody) tbody.innerHTML = '<tr><td colspan="4">' + safeHTML(error.message || "Erreur de chargement") + '</td></tr>';
+            }
+        }
+
+        window.savePrimeInkTeacherAttendance = async function(teacherEmail) {
+            const dateValue = document.getElementById('presProfDate')?.value || '';
+            const checkIn = document.getElementById('pres-prof-in-' + teacherEmail)?.value || '';
+            const checkOut = document.getElementById('pres-prof-out-' + teacherEmail)?.value || '';
+            const headers = primeInkAuthHeaders();
+            if (!headers.Authorization) { alert("Connectez PrimeInk au compte de l'école."); return; }
+            try {
+                const response = await fetch(API_BASE_URL + '/api/primenet/teacher-attendance', {
+                    method: 'POST', headers,
+                    body: JSON.stringify({ teacher_email: teacherEmail, date: dateValue, check_in: checkIn, check_out: checkOut })
+                });
+                const result = await response.json().catch(() => ({}));
+                if (!response.ok || !result.status) throw new Error(result.detail || result.message || "Enregistrement refusé.");
+                await loadPrimeInkTeacherAttendance();
+                alert(result.message || "Présence du personnel enregistrée.");
+            } catch (error) { alert(error.message || "Impossible d'enregistrer la présence."); }
         };
 
         function renderPresencesProfTable() {
             const tbody = document.getElementById('presProfTableBody');
-            if(!tbody) return;
+            if (!tbody) return;
+            const dateValue = document.getElementById('presProfDate')?.value || '';
+            const records = appState.tools?.presences?.teachers || [];
             tbody.innerHTML = '';
-
-            appState.teachers.forEach(t => {
+            (appState.teachers || []).forEach(teacher => {
+                const email = String(teacher.email || (String(teacher.uniqueId || '').includes('@') ? teacher.uniqueId : '')).trim();
+                const record = records.find(row => row.date === dateValue && row.teacherEmail === email) || {};
                 const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td><strong>${safeHTML(t.name)}</strong></td>
-                    <td><input type="time" class="form-control" value="07:30" style="width: 120px;"></td>
-                    <td><input type="time" class="form-control" value="12:30" style="width: 120px;"></td>
-                    <td><button class="btn-primary" style="padding:0.3rem 0.6rem; font-size:0.8rem;" onclick="alert('Présence enregistrée !')">Sauvegarder</button></td>
-                `;
+                tr.innerHTML = '<td><strong>' + safeHTML(teacher.name) + '</strong></td>' +
+                    '<td><input id="pres-prof-in-' + safeHTML(email) + '" type="time" class="form-control" value="' + safeHTML(record.checkIn || '') + '" style="width:120px"></td>' +
+                    '<td><input id="pres-prof-out-' + safeHTML(email) + '" type="time" class="form-control" value="' + safeHTML(record.checkOut || '') + '" style="width:120px"></td>' +
+                    '<td><button class="btn-primary" ' + (!email ? 'disabled title="E-mail enseignant indisponible"' : '') +
+                    ' style="padding:.3rem .6rem;font-size:.8rem" onclick="savePrimeInkTeacherAttendance(' + jsArg(email) + ')">Sauvegarder</button></td>';
                 tbody.appendChild(tr);
             });
+            if (!appState.teachers.length) tbody.innerHTML = '<tr><td colspan="4">Aucun enseignant enregistré.</td></tr>';
         }
+
 
         // 3. GESTION DYNAMIQUE MIXAGE & SALLES
         function populateMixageTeacherSelect() {
@@ -6439,6 +6668,7 @@ function refreshPrimeInkTeacherAssignmentSelects() {
                     btn.classList.add('active');
                     const target = btn.getAttribute('data-target');
                     document.getElementById(target).classList.add('active');
+                    if (target === 'section-communications' && typeof loadPrimeInkCommunications === 'function') loadPrimeInkCommunications();
                 });
             });
 
@@ -6622,6 +6852,21 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
                     }
                 });
             }
+            // Les présences élèves viennent des enregistrements structurés reçus des espaces ClassInk.
+            if (!appState.tools) appState.tools = JSON.parse(JSON.stringify(defaultState.tools));
+            if (!appState.tools.presences) appState.tools.presences = { students: [], teachers: [] };
+            if (Array.isArray(mergedData.attendanceRecords)) {
+                appState.tools.presences.students = mergedData.attendanceRecords.map(row => ({
+                    id: row.id, date: row.date, classId: String(row.classId), className: row.className,
+                    courseId: String(row.courseId), course: row.courseName,
+                    studentId: String(row.studentId), studentName: row.studentName,
+                    status: row.status, slotKey: row.slotKey || '',
+                    teacherName: row.teacherName || '', teacherCode: row.teacherCode || ''
+                }));
+            }
+            if (Array.isArray(mergedData.teacherAttendance)) {
+                appState.tools.presences.teachers = mergedData.teacherAttendance.slice();
+            }
         }
 
         // Jeton de session Cloud reçu au chargement de l'école. Stocké à part de appState pour ne jamais être renvoyé dans les synchronisations.
@@ -6656,9 +6901,10 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
                     renderOfficialBulletin(activeStudentId);
                 }
                 const report = mergedData.classinkSync || {};
-                const summary = report.averages
+                const attendanceCount = Array.isArray(mergedData.attendanceRecords) ? mergedData.attendanceRecords.length : 0;
+                const summary = (report.averages
                     ? ` ${report.teachers || 0} enseignant(s), ${report.interrogations || 0} interrogation(s), ${report.averages} moyenne(s) recalculée(s).`
-                    : '';
+                    : '') + ` ${attendanceCount} présence(s) détaillée(s) reçue(s).`;
                 alert("✅ Données synchronisées et fusionnées avec succès depuis Internet !" + summary);
             } catch (err) {
                 alert("❌ Échec de la récupération des données : " + err.message);

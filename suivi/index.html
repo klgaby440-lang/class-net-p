@@ -123,19 +123,20 @@ table.t td:first-child, table.t th:first-child { text-align: left; }
 .chart { width: 100%; height: auto; display: block; }
 
 /* ---------- Bouton flottant et menu (style Think) ---------- */
-.fab { position: fixed; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); z-index: 60; width: 56px; height: 56px; border-radius: 50%; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow); display: grid; place-items: center; transition: transform .2s; }
+.fab { position: fixed; right: 18px; bottom: calc(16px + env(safe-area-inset-bottom)); z-index: 1102; width: 56px; height: 56px; border-radius: 50%; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow); display: grid; place-items: center; transition: transform .2s; }
 .fab:active { transform: scale(.94); }
 .fab svg { width: 28px; height: 28px; grid-area: 1/1; transition: opacity .2s, transform .3s; }
 .fab .x { opacity: 0; transform: rotate(-90deg) scale(.6); }
 .fab.open .dots { opacity: 0; transform: rotate(90deg) scale(.6); }
 .fab.open .x { opacity: 1; transform: none; }
-.dock { position: fixed; z-index: 55; right: 16px; bottom: calc(84px + env(safe-area-inset-bottom)); left: 16px; display: flex; justify-content: space-between; gap: 2px; padding: 8px; border-radius: 22px; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow); opacity: 0; visibility: hidden; transform: translateY(14px) scale(.97); transform-origin: bottom right; transition: opacity .2s, transform .25s, visibility .25s; }
+.dock { position: fixed; z-index: 1100; left: 12px; right: 88px; bottom: calc(17px + env(safe-area-inset-bottom)); width: auto; max-width: 720px; margin: 0 auto; display: flex; justify-content: flex-start; align-items: center; gap: 4px; padding: 7px; border-radius: 20px; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow); overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; opacity: 0; visibility: hidden; transform: translateY(14px) scale(.97); transform-origin: bottom right; transition: opacity .2s, transform .25s, visibility .25s; }
+.dock::-webkit-scrollbar { display: none; }
 .dock.open { opacity: 1; visibility: visible; transform: none; }
-.dock button { position: relative; flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 9px 4px; border-radius: 14px; font-size: .68rem; font-weight: 600; color: var(--muted); }
+.dock button { position: relative; flex: 0 0 84px; min-width: 84px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 9px 4px; border-radius: 14px; font-size: .68rem; font-weight: 600; color: var(--muted); white-space: nowrap; }
 .dock button.on { color: var(--accent); background: rgba(124,92,255,.12); }
 @media (min-width: 640px) {
-    .dock { left: auto; bottom: calc(16px + env(safe-area-inset-bottom)); right: 84px; gap: 6px; padding: 7px 10px; transform-origin: right center; }
-    .dock button { flex: none; width: 92px; font-size: .72rem; }
+    .dock { right: 88px; bottom: calc(17px + env(safe-area-inset-bottom)); }
+    .dock button { flex-basis: 92px; min-width: 92px; font-size: .72rem; }
 }
 
 /* ---------- Fenêtres de message ---------- */
@@ -186,6 +187,7 @@ table.t td:first-child, table.t th:first-child { text-align: left; }
 <nav class="dock" id="dock" aria-label="Navigation principale" aria-hidden="true">
     <button data-go="home"><svg class="i" viewBox="0 0 24 24"><path d="M3 12l9-9 9 9M5 10v10h5v-6h4v6h5V10"/></svg>Accueil</button>
     <button data-go="notes"><svg class="i" viewBox="0 0 24 24"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>Notes</button>
+    <button data-go="attendance"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18M8 14l2 2 5-5"/></svg>Présences</button>
     <button data-go="fees"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="14" rx="3"/><path d="M3 10h18"/><circle cx="16.5" cy="15" r="1.2"/></svg>Frais</button>
     <button data-go="messages"><svg class="i" viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>Messages<i class="badge-dot hidden" id="msgDot"></i></button>
     <button data-go="settings"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>Réglages</button>
@@ -239,7 +241,7 @@ const DEMO_FLAG = 'classink_suivi_demo';
 const PERIODS = ['P1', 'P2', 'EX1', 'P3', 'P4', 'EX2'];
 const LABELS = { P1: '1ère période', P2: '2ème période', EX1: 'Examens S1', S1: 'Semestre 1', P3: '3ème période', P4: '4ème période', EX2: 'Examens S2', S2: 'Semestre 2', TG: 'Année' };
 const SHORT = { P1: 'P1', P2: 'P2', EX1: 'Ex. 1', S1: 'Sem. 1', P3: 'P3', P4: 'P4', EX2: 'Ex. 2', S2: 'Sem. 2', TG: 'Année' };
-const VIEWS = ['home', 'notes', 'fees', 'messages', 'settings'];
+const VIEWS = ['home', 'notes', 'attendance', 'fees', 'messages', 'settings'];
 const IDLE_LOCK_MS = 5 * 60 * 1000;
 
 /* ---------- Outils ---------- */
@@ -307,6 +309,10 @@ const demoState = { kids: [], active: '', read: [] };
 const kids = () => DEMO ? demoState.kids : S.kids;
 const activeKey = () => DEMO ? demoState.active : S.active;
 const activeKid = () => kids().find(k => k.key === activeKey()) || null;
+window.__CLASSINK_SUIVI_LLINK_CONTEXT__ = () => {
+    const kid = activeKid();
+    return kid ? { school_id: kid.schoolId, student_code: kid.code } : null;
+};
 const readIds = () => DEMO ? demoState.read : S.read;
 // Les résultats autorisés restent uniquement en mémoire vive. Le cache local ne conserve
 // jamais les notes : une révocation côté école doit être appliquée au prochain rafraîchissement.
@@ -318,6 +324,9 @@ function redactedParentData(data) {
     safe.evaluations = null;
     safe.grades = null;
     safe.notes = null;
+    safe.attendance = null;
+    safe.communications = [];
+    safe.teacherNotes = [];
     safe.resultsAccess = {
         allowed: false,
         reason: 'offline',
@@ -686,6 +695,32 @@ function viewNotes() {
     out += '</div>';
     return out;
 }
+function viewAttendance() {
+    const k = activeKid(), d = curData();
+    if (!k || !d) return demoBanner() + kidBar() + needKid();
+    const attendance = d.attendance || {};
+    const days = Array.isArray(attendance.days) ? attendance.days : [];
+    let out = demoBanner() + offlineBanner() + kidBar();
+    out += '<div class="card"><div class="row sb wrap"><div><h2>Présences</h2><p class="sub">Historique des appels de ' + esc(d.student.name) + ' par cours et par jour.</p></div><span class="chip">' + days.length + ' jour(s)</span></div></div>';
+    if (!days.length) return out + '<div class="card empty"><p>Aucune présence n’a encore été transmise par les enseignants.</p><p class="sub" style="margin-top:6px">Les appels apparaîtront ici après leur synchronisation avec PrimeInk.</p></div>';
+    days.forEach(day => {
+        const status = String(day.status || '?').toUpperCase();
+        const label = day.statusLabel || ({P:'Présent toute la journée',A:'Absent (au moins un cours manqué)',R:'Présence avec retard'}[status] || 'Incomplet');
+        const color = status === 'P' ? 'var(--ok)' : status === 'A' ? 'var(--bad)' : 'var(--warn)';
+        out += '<div class="card"><div class="row sb wrap"><div><div class="sub">' + esc(fdate(day.date)) + '</div><h3 style="color:' + color + '">' + esc(label) + '</h3></div><span class="chip">' + (num(day.coursesRecorded) || (day.records || []).length) + ' cours enregistré(s)</span></div>';
+        out += '<div class="row wrap" style="gap:12px;margin-top:10px"><span class="sub">Présent : <strong>' + (num(day.presentCount) || 0) + '</strong></span><span class="sub">Absent : <strong>' + (num(day.absentCount) || 0) + '</strong></span><span class="sub">Retard : <strong>' + (num(day.lateCount) || 0) + '</strong></span></div>';
+        const records = Array.isArray(day.records) ? day.records : [];
+        if (records.length) {
+            out += '<div class="list" style="margin-top:10px">' + records.map(record => {
+                const recordStatus = String(record.status || '?').toUpperCase();
+                const recordLabel = record.statusLabel || ({P:'Présent',A:'Absent',R:'En retard'}[recordStatus] || 'Non renseigné');
+                return '<article class="item" style="display:block"><div class="row sb wrap"><strong class="t">' + esc(record.course || 'Cours') + '</strong><span class="chip">' + esc(recordLabel) + '</span></div><div class="m" style="margin-top:5px">Enseignant : <strong>' + esc(record.teacherName || 'Non renseigné') + '</strong></div><div class="m">N° du professeur : <strong>' + esc(record.teacherCode || 'Non renseigné') + '</strong></div>' + (record.slot ? '<div class="m">Séance : ' + esc(record.slot) + '</div>' : '') + '</article>';
+            }).join('') + '</div>';
+        }
+        out += '</div>';
+    });
+    return out;
+}
 const needKid = () => '<div class="card empty"><div class="big">👨‍👩‍👧</div><p>Liez d’abord un enfant depuis l’Accueil pour voir cette page.</p><p style="margin-top:12px"><button class="btn" data-go="home">Aller à l’Accueil</button></p></div>';
 
 function courseSheet(i) {
@@ -762,7 +797,7 @@ function updateMsgDot() {
 }
 function render() {
     const view = $('#view');
-    const fn = { home: viewHome, notes: viewNotes, fees: viewFees, messages: viewMessages, settings: viewSettings }[V.tab] || viewHome;
+    const fn = { home: viewHome, notes: viewNotes, attendance: viewAttendance, fees: viewFees, messages: viewMessages, settings: viewSettings }[V.tab] || viewHome;
     view.innerHTML = fn();
     document.querySelectorAll('#dock button').forEach(b => b.classList.toggle('on', b.dataset.go === V.tab));
     const k = activeKid();
@@ -1057,9 +1092,10 @@ window.addEventListener('pageshow', event => {
     const button = document.createElement('button');
     button.id = 'cryptComplaintButton';
     button.type = 'button';
-    button.textContent = 'Aide / Réclamation';
-    button.setAttribute('aria-label','Envoyer une réclamation à CRYPT');
-    button.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:99990;border:0;border-radius:24px;padding:10px 15px;background:#244d83;color:white;font:600 12px system-ui;box-shadow:0 6px 24px #0004;cursor:pointer';
+    button.innerHTML = '<span aria-hidden="true" style="font-size:23px;line-height:1">?</span>';
+    button.setAttribute('aria-label','Aide / Réclamation à CRYPT');
+    button.title = 'Aide / Réclamation';
+    button.style.cssText = 'position:fixed;right:18px;bottom:calc(84px + env(safe-area-inset-bottom));z-index:1103;width:56px;height:56px;display:flex;align-items:center;justify-content:center;border:0;border-radius:50%;padding:0;background:#244d83;color:white;font:700 22px system-ui;box-shadow:0 6px 24px #0004;cursor:pointer';
     button.addEventListener('click', async () => {
       const subject = window.prompt('Sujet de votre réclamation ou demande :');
       if (!subject || !subject.trim()) return;
@@ -1085,7 +1121,7 @@ window.addEventListener('pageshow', event => {
 
 
 <style id="llink-assist-widget-style">
-#llink-assist-root{position:fixed;left:18px;bottom:18px;z-index:99980;font:13px/1.45 Inter,system-ui,sans-serif;color:#edf2fb}
+#llink-assist-root{position:fixed;left:18px;bottom:calc(84px + env(safe-area-inset-bottom));z-index:99980;font:13px/1.45 Inter,system-ui,sans-serif;color:#edf2fb}
 #llink-assist-toggle{border:1px solid #5379cb;background:#172b4b;color:#fff;border-radius:24px;padding:11px 16px;font-weight:750;box-shadow:0 8px 25px #0003;cursor:pointer}
 #llink-assist-toggle:hover{background:#203b64}
 #llink-assist-panel{position:absolute;left:0;bottom:58px;width:min(370px,calc(100vw - 36px));height:min(520px,calc(100vh - 115px));background:#101a2b;border:1px solid #304361;border-radius:16px;box-shadow:0 18px 55px #0007;display:flex;flex-direction:column;overflow:hidden}
@@ -1109,9 +1145,9 @@ window.addEventListener('pageshow', event => {
  <button type="button" id="llink-assist-toggle" aria-expanded="false" aria-controls="llink-assist-panel">✦ Demander à Llink</button>
  <section id="llink-assist-panel" hidden aria-label="Llink · Aide aux parents">
   <header id="llink-assist-head"><div><strong>Llink · Aide aux parents</strong><small>VELORA · Réponse en ligne</small></div><button type="button" id="llink-assist-close" aria-label="Fermer">×</button></header>
-  <div id="llink-assist-messages" aria-live="polite"><div class="llink-assist-message assistant">Posez vos questions sur l’utilisation de Class-Ink Suivi. Je ne reçois pas automatiquement les notes ni les dossiers de l’école.</div></div>
+  <div id="llink-assist-messages" aria-live="polite"><div class="llink-assist-message assistant">Bonjour ! Je peux expliquer les résultats autorisés, les présences de l’enfant sélectionné et les communiqués publiés par son école.</div></div>
   <div id="llink-assist-foot">
-   <p id="llink-assist-warning">N’envoyez pas de nom d’élève, de note, de code d’accès ou d’information personnelle.</p>
+   <p id="llink-assist-warning">Llink consulte uniquement le dossier de l’enfant actuellement sélectionné. Ne partagez aucun mot de passe ni code parent dans le message.</p>
    <form id="llink-assist-form"><textarea id="llink-assist-input" rows="2" maxlength="5000" placeholder="Écrivez votre question…" required></textarea><button id="llink-assist-send" type="submit">Envoyer</button></form>
   </div>
  </section>
@@ -1158,6 +1194,9 @@ window.addEventListener('pageshow', event => {
   if(!message||busy)return;
   if(APP==='manager'&&!sessionToken()){addMessage('assistant','Connectez-vous à ClassInk Manager pour utiliser Llink.');return;}
   if(APP==='crypt'&&!sessionToken()){addMessage('assistant','Connectez-vous au centre de contrôle pour utiliser Llink.');return;}
+  const studentContext = APP==='suivi' && typeof window.__CLASSINK_SUIVI_LLINK_CONTEXT__==='function'
+   ? window.__CLASSINK_SUIVI_LLINK_CONTEXT__() : null;
+  if(APP==='suivi'&&!studentContext){addMessage('assistant','Liez ou sélectionnez d’abord un enfant dans ClassInk Suivi.');return;}
   addMessage('user',message);
   input.value='';
   busy=true;send.disabled=true;input.disabled=true;send.textContent='…';
@@ -1167,7 +1206,7 @@ window.addEventListener('pageshow', event => {
    const token=sessionToken();if(token)headers.set('Authorization','Bearer '+token);
    const response=await fetch(API+'/api/llink/assist',{
     method:'POST',headers,cache:'no-store',credentials:'omit',referrerPolicy:'no-referrer',
-    body:JSON.stringify({message,history:history.slice(-8),source:APP})
+    body:JSON.stringify({message,history:history.slice(-8),source:APP,...(studentContext?{student:studentContext}:{})})
    });
    if(!response.ok){
     const raw=await response.text();

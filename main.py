@@ -611,6 +611,73 @@ class StudentGrade(Base):
     school_id = Column(String, index=True, nullable=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+class StudentAttendance(Base):
+    """Appels nominaux par enseignant, séance, cours et date, rattachés aux IDs officiels."""
+    __tablename__ = "student_attendance"
+    __table_args__ = (
+        UniqueConstraint("school_id", "teacher_email", "student_id", "course_id", "date", "slot_key",
+                         name="uq_student_attendance_school_teacher_student_course_date_slot"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    school_id = Column(String, ForeignKey("school_information.school_id"), index=True, nullable=False)
+    teacher_email = Column(String, ForeignKey("teachers.email"), index=True, nullable=False)
+    class_id = Column(String, index=True, nullable=False)
+    class_name = Column(String, nullable=False)
+    student_id = Column(String, index=True, nullable=False)
+    classink_student_id = Column(String, index=True, nullable=False)
+    student_name = Column(String, nullable=False)
+    course_id = Column(String, index=True, nullable=False)
+    course_name = Column(String, nullable=False)
+    date = Column(String(10), index=True, nullable=False)
+    slot_key = Column(String(80), nullable=False, default="", server_default="")
+    status = Column(String(8), nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class TeacherAttendance(Base):
+    """Présences du personnel saisies par l'administration dans PrimeInk."""
+    __tablename__ = "teacher_attendance"
+    __table_args__ = (
+        UniqueConstraint("school_id", "teacher_email", "date", name="uq_teacher_attendance_school_teacher_date"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    school_id = Column(String, ForeignKey("school_information.school_id"), index=True, nullable=False)
+    teacher_email = Column(String, ForeignKey("teachers.email"), index=True, nullable=False)
+    date = Column(String(10), index=True, nullable=False)
+    check_in = Column(String(5), nullable=True)
+    check_out = Column(String(5), nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class SchoolCommunication(Base):
+    """Communiqués de l'établissement, en lecture seule dans l'espace parent."""
+    __tablename__ = "school_communications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    school_id = Column(String, ForeignKey("school_information.school_id"), index=True, nullable=False)
+    class_id = Column(String, nullable=True, index=True)
+    title = Column(String(180), nullable=False)
+    message = Column(Text, nullable=False)
+    from_label = Column(String(120), nullable=False, default="Direction")
+    is_published = Column(Boolean, nullable=False, default=True, server_default="true")
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+
+
+class TeacherMessage(Base):
+    """Conversation privée entre un enseignant déterminé et la direction de son école."""
+    __tablename__ = "teacher_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    school_id = Column(String, ForeignKey("school_information.school_id"), index=True, nullable=False)
+    teacher_email = Column(String, ForeignKey("teachers.email"), index=True, nullable=False)
+    sender_role = Column(String(16), nullable=False)  # school | teacher
+    sender_name = Column(String(160), nullable=False)
+    message = Column(Text, nullable=False)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+
+
 class PrimeNetPayload(Base):
     __tablename__ = "primenet_payloads"
 
@@ -1561,7 +1628,10 @@ def login_teacher(data: LoginSchema, db: Session = Depends(get_db)):
     )
     db_quizzes = quiz_query.all()
     # Si vous avez un modèle Attendance pour les présences :
-    db_presences = db.query(Attendance).filter(Attendance.teacher_email == teacher.email).all() if 'Attendance' in globals() else []
+    db_presences = db.query(StudentAttendance).filter(
+        StudentAttendance.teacher_email == teacher.email,
+        StudentAttendance.school_id == active_school_id if active_school_id else StudentAttendance.school_id.is_(None),
+    ).order_by(StudentAttendance.date.asc(), StudentAttendance.id.asc()).all() if active_school_id else []
 
     classes_set = set()
     courses_dict = {}
@@ -1633,8 +1703,11 @@ def login_teacher(data: LoginSchema, db: Session = Depends(get_db)):
             "date": str(p.date),
             "class": p.class_name,
             "course": p.course_name,
-            "studentId": p.student_id,
+            "studentId": p.classink_student_id,
             "studentName": p.student_name,
+            "courseId": p.course_id,
+            "courseLabel": p.course_name,
+            "slotKey": p.slot_key,
             "status": p.status
         } for p in db_presences
     ]
@@ -2771,17 +2844,21 @@ def crypt_telemetry_complaint(payload: dict, request: Request, db: Session = Dep
 
 
 @app.post("/api/llink/assist")
-async def classink_llink_assist(payload: dict, request: Request):
-    """Relais Llink limité à VELORA ; aucune donnée scolaire n'est ajoutée au contexte."""
+async def classink_llink_assist(payload: dict, request: Request, db: Session = Depends(get_db)):
+    """Relais Llink : le contexte scolaire est construit côté serveur et filtré par rôle."""
     app_name = str(request.headers.get("x-crypt-app") or "").strip().lower()
-    if app_name not in ("suivi", "manager", "crypt"):
+    if app_name not in ("suivi", "classink", "primeink", "manager", "crypt"):
         raise HTTPException(status_code=403, detail="Application non autorisée pour Llink.")
 
     authorization = request.headers.get("authorization", "")
     claims = verify_token(authorization[7:].strip()) if authorization.lower().startswith("bearer ") else None
     claims = claims or {}
-    if app_name == "manager" and claims.get("role") != "school":
-        raise HTTPException(status_code=401, detail="Connectez-vous à Manager avant d'utiliser Llink.")
+    if app_name in ("classink", "primeink", "manager") and not claims:
+        raise HTTPException(status_code=401, detail="Connectez-vous pour utiliser Llink.")
+    if app_name == "classink" and claims.get("role") != "teacher":
+        raise HTTPException(status_code=403, detail="Session enseignant requise.")
+    if app_name in ("primeink", "manager") and claims.get("role") != "school":
+        raise HTTPException(status_code=401, detail="Session établissement requise.")
     if app_name == "crypt" and claims.get("role") != "crypt_admin":
         raise HTTPException(status_code=403, detail="Session CRYPT administrateur requise.")
 
@@ -2810,11 +2887,167 @@ async def classink_llink_assist(payload: dict, request: Request):
     if sum(len(item["text"]) for item in history) > 12000:
         history = history[-4:]
 
-    context_by_app = {
-        "suivi": "Tu es Llink, l'assistant d'aide de Class-Ink Suivi, destiné aux parents. Explique simplement l'utilisation de l'application et les notions générales. Tu ne reçois aucun dossier d'élève, aucune note et aucune identité. Ne prétends jamais consulter le compte du parent. Réponds en français sauf si la personne écrit dans une autre langue.",
-        "manager": "Tu es Llink, l'assistant d'aide de ClassInk Manager, destiné aux responsables d'établissement. Explique la consultation des classes, élèves, indicateurs, accès Suivi et horaires. Tu ne reçois aucune donnée de l'école ni aucun dossier. Ne prétends pas voir l'écran ou exécuter une action.",
-        "crypt": "Tu es Llink, l'assistant du centre de contrôle CRYPT. Aide à comprendre les fonctions de supervision et à diagnostiquer des problèmes généraux. Tu ne reçois ni les données du tableau de bord, ni les journaux, ni les réclamations, ni le contenu de la base. N'invente aucune observation.",
-    }
+    context = {}
+    system_instruction = ""
+    if app_name == "suivi":
+        parent_ref = payload.get("student") if isinstance(payload.get("student"), dict) else {}
+        school_id = str(parent_ref.get("school_id") or "").strip()
+        student_code = str(parent_ref.get("student_code") or "").strip().upper()
+        if not school_id or not student_code or len(student_code) > 40:
+            raise HTTPException(status_code=401, detail="Sélectionnez un enfant lié dans ClassInk Suivi.")
+        parent_rate_key = "suivi:" + remote + ":" + school_id
+        if SUIVI_LOOKUP_LIMITER.is_blocked(parent_rate_key):
+            raise HTTPException(status_code=429, detail="Trop d'essais. Réessayez dans 15 minutes.")
+        school = db.query(SchoolInformation).filter(SchoolInformation.school_id == school_id).first()
+        if not school or licence_state(school)["locked"]:
+            raise HTTPException(status_code=404, detail="Établissement indisponible.")
+        student = db.query(SchoolStudentInformation).filter(
+            SchoolStudentInformation.school_id == school_id,
+            func.upper(SchoolStudentInformation.suivi_code) == student_code,
+        ).first()
+        if not student:
+            SUIVI_LOOKUP_LIMITER.record(parent_rate_key)
+            raise HTTPException(status_code=404, detail="Enfant introuvable. Actualisez son espace.")
+        SUIVI_LOOKUP_LIMITER.reset(parent_rate_key)
+        class_row = db.query(ClasseInformation).filter(
+            ClasseInformation.id == student.class_id,
+            ClasseInformation.school_id == school_id,
+        ).first()
+        context = {
+            "role": "parent",
+            "school": school.name_school,
+            "student": " ".join(part for part in (
+                student.student_name or "", student.student_post_name or "", student.student_pre_name or ""
+            ) if part).strip(),
+            "class": class_row.class_name if class_row else "",
+            "schoolYear": school.school_year or "",
+            "attendance": build_suivi_attendance_payload(db, school, student),
+            "communications": [
+                {"date": row.created_at.date().isoformat() if row.created_at else "", "title": row.title, "message": row.message, "from": row.from_label}
+                for row in db.query(SchoolCommunication).filter(
+                    SchoolCommunication.school_id == school_id,
+                    SchoolCommunication.is_published.is_(True),
+                    or_(SchoolCommunication.class_id.is_(None), SchoolCommunication.class_id == student.class_id),
+                ).order_by(SchoolCommunication.created_at.desc()).limit(20).all()
+            ],
+        }
+        if is_suivi_results_allowed(db, school_id, student):
+            results = build_suivi_results_payload(db, school, student)
+            context["results"] = {"courses": results.get("courses", [])[:30], "behaviour": results.get("behaviour", {})}
+        else:
+            context["results"] = "Les résultats sont verrouillés par l'établissement et ne sont pas accessibles."
+        system_instruction = (
+            "Tu es Llink dans ClassInk Suivi, destiné au parent connecté à l'enfant sélectionné. "
+            "Tu peux répondre à partir du dossier autorisé fourni ci-dessous : résultats seulement si l'école les a ouverts, "
+            "présences détaillées et communiqués publiés. Ne révèle jamais un autre élève ni les conversations privées avec les enseignants. "
+            "Ne demande jamais le code parent, le mot de passe ou des informations sensibles. Si une information manque, dis-le."
+        )
+    elif app_name in ("primeink", "manager"):
+        school_id = str(claims.get("school_id") or "").strip()
+        school = db.query(SchoolInformation).filter(SchoolInformation.school_id == school_id).first()
+        if not school or licence_state(school)["locked"]:
+            raise HTTPException(status_code=403, detail="L'établissement n'est pas accessible.")
+        classes = db.query(ClasseInformation).filter(ClasseInformation.school_id == school_id).all()
+        courses = db.query(CourseInformation).filter(CourseInformation.school_id == school_id).all()
+        students = db.query(SchoolStudentInformation).filter(SchoolStudentInformation.school_id == school_id).all()
+        teacher_emails = {
+            email for (email,) in db.query(TeacherSchoolSpace.teacher_email).filter(
+                TeacherSchoolSpace.school_id == school_id,
+                TeacherSchoolSpace.is_verified.is_(True),
+            ).all()
+        }
+        teacher_emails.update(
+            email for (email,) in db.query(Teacher.email).filter(
+                Teacher.school_id == school_id,
+                Teacher.school_access_verified.is_(True),
+            ).all()
+        )
+        grade_rows = db.query(StudentGrade).filter(
+            StudentGrade.school_id == school_id,
+            StudentGrade.teacher_email.in_(list(teacher_emails)),
+        ).order_by(StudentGrade.updated_at.desc()).limit(120).all() if teacher_emails else []
+        attendance_rows = db.query(StudentAttendance).filter(
+            StudentAttendance.school_id == school_id,
+        ).order_by(StudentAttendance.date.desc(), StudentAttendance.id.desc()).limit(150).all()
+        teachers = db.query(Teacher).filter(Teacher.email.in_(list(teacher_emails))).all() if teacher_emails else []
+        communication_rows = db.query(SchoolCommunication).filter(
+            SchoolCommunication.school_id == school_id,
+        ).order_by(SchoolCommunication.created_at.desc()).limit(30).all()
+        context = {
+            "role": "school_administrator",
+            "school": school.name_school,
+            "schoolYear": school.school_year or "",
+            "classes": [{"name": row.class_name, "id": row.id} for row in classes],
+            "courses": [{"classId": row.class_id, "name": row.course_name, "category": row.category, "teacher": row.titulaire_name} for row in courses],
+            "studentCount": len(students),
+            "teachers": [{"name": row.full_name, "code": row.teacher_code or "", "subject": row.subject or ""} for row in teachers],
+            "recentInterrogations": [{"student": row.student_name, "class": row.class_name, "course": row.course_name, "period": row.period, "score": row.score, "max": row.max_score, "date": row.eval_date or ""} for row in grade_rows],
+            "recentAttendance": [{"date": row.date, "class": row.class_name, "course": row.course_name, "student": row.student_name, "status": row.status, "teacher": row.teacher_email} for row in attendance_rows],
+            "publishedCommunications": [{"date": row.created_at.date().isoformat() if row.created_at else "", "title": row.title, "message": row.message} for row in communication_rows],
+            "counts": {
+                "classes": len(classes), "courses": len(courses), "students": len(students),
+                "verifiedTeachers": len(teacher_emails), "interrogationsLoaded": len(grade_rows),
+                "attendanceEntriesLoaded": len(attendance_rows),
+            },
+        }
+        system_instruction = (
+            "Tu es Llink, assistant de gestion de l'établissement connecté. Utilise exclusivement le contexte DB de CETTE école. "
+            "Tu peux analyser les notes, présences, classes, enseignants et communiqués fournis. "
+            "Si aucune donnée de l'école n'est présente dans le contexte, explique clairement qu'aucune donnée de l'école n'est disponible. "
+            "Le contexte peut être limité aux enregistrements récents : signale toute limite. Ne révèle aucun secret ni jeton."
+        )
+    elif app_name == "classink":
+        teacher = db.query(Teacher).filter(Teacher.email == claims.get("email")).first()
+        school_id = str(claims.get("school_id") or "").strip()
+        independent = str(claims.get("workspace_mode") or "").strip().lower() == "independent"
+        if not teacher:
+            raise HTTPException(status_code=401, detail="Compte enseignant introuvable.")
+        if school_id and not independent:
+            if not teacher_has_school_access(db, teacher, school_id):
+                raise HTTPException(status_code=403, detail="Cet espace enseignant n'est pas autorisé.")
+            blocked = teacher_school_block(db, teacher, school_id)
+            if blocked:
+                raise HTTPException(status_code=403, detail=blocked)
+            assigned_courses = db.query(CourseInformation).filter(
+                CourseInformation.school_id == school_id,
+            ).all()
+            assigned_courses = [row for row in assigned_courses if teacher_matches_catalog_name(teacher, row.titulaire_name)]
+            course_ids = [str(row.id) for row in assigned_courses]
+            grades = db.query(StudentGrade).filter(
+                StudentGrade.school_id == school_id,
+                StudentGrade.teacher_email == teacher.email,
+            ).order_by(StudentGrade.updated_at.desc()).limit(100).all()
+            attendance_rows = db.query(StudentAttendance).filter(
+                StudentAttendance.school_id == school_id,
+                StudentAttendance.teacher_email == teacher.email,
+            ).order_by(StudentAttendance.date.desc()).limit(100).all()
+            context = {
+                "role": "teacher",
+                "teacher": teacher.full_name,
+                "school": db.query(SchoolInformation.name_school).filter(SchoolInformation.school_id == school_id).scalar() or "",
+                "assignedCourses": [{"id": row.id, "name": row.course_name, "classId": row.class_id} for row in assigned_courses],
+                "recentGrades": [{"student": row.student_name, "class": row.class_name, "course": row.course_name, "period": row.period, "score": row.score, "max": row.max_score, "date": row.eval_date or ""} for row in grades if str(row.course_id or "") in set(course_ids)],
+                "recentAttendance": [{"date": row.date, "student": row.student_name, "class": row.class_name, "course": row.course_name, "status": row.status} for row in attendance_rows],
+            }
+            system_instruction = (
+                "Tu es Llink, assistant de l'enseignant connecté. Réponds à partir de son espace scolaire et des cours qui lui sont attribués seulement. "
+                "Tu peux expliquer ses notes et présences enregistrées, mais ne consulte pas les autres enseignants ni les autres écoles."
+            )
+        else:
+            context = {"role": "teacher", "teacher": teacher.full_name, "workspace": "independent"}
+            system_instruction = "Tu es Llink, assistant de l'enseignant dans son espace indépendant. Aucune donnée scolaire de l'établissement n'est disponible."
+    else:
+        context = {}
+        system_instruction = (
+            "Tu es Llink, assistant du centre de contrôle CRYPT. Aide à comprendre les fonctions et diagnostics généraux. "
+            "Aucun dossier scolaire détaillé n'est chargé dans cette interface."
+        )
+
+    try:
+        context_text = json.dumps(context, ensure_ascii=False, separators=(",", ":"), default=str)
+    except (TypeError, ValueError):
+        context_text = "{}"
+    context_text = context_text[:30000]
     request_payload = {
         "message": message,
         "history": history,
@@ -2823,7 +3056,8 @@ async def classink_llink_assist(payload: dict, request: Request):
         "effort": "normal",
         "mode": "chat",
         "source": "classink_" + app_name,
-        "preferences": context_by_app[app_name] + " Les données scolaires et personnelles ne doivent jamais être demandées ni supposées. Ne demande pas à l'utilisateur de coller de notes, noms, identifiants ou informations confidentielles.",
+        "preferences": system_instruction + "\nCONTEXTE AUTORISÉ DE LA BASE :\n" + context_text
+            + "\nLes données ci-dessus sont des données vérifiées côté serveur. Ne prétends pas accéder à d'autres tables.",
         "data_collection_consent": False,
     }
     CRYPT_LLINK_LIMITER.record(limiter_key)
@@ -2863,7 +3097,6 @@ async def classink_llink_assist(payload: dict, request: Request):
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache, no-store", "X-Accel-Buffering": "no", "Connection": "keep-alive"},
     )
-
 
 
 @app.get("/api/cloud/{school_id}/status")
@@ -3019,6 +3252,7 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
     official_classes_by_name = {}
     assigned_courses_by_class = {}
     assigned_course_rows_by_class_label = {}
+    assigned_course_rows_by_class_id = {}
     official_course_max = {}
     teacher_allowed_classes = set()
     course_catalog_payload = payload.get("courseCatalog") if isinstance(payload.get("courseCatalog"), dict) else {}
@@ -3061,6 +3295,7 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
             label = course_catalog_by_class_id.get((class_name, str(course.id)), str(course.course_name))
             assigned_courses_by_class.setdefault(class_name, set()).add(label)
             assigned_course_rows_by_class_label[(class_name, label)] = course
+            assigned_course_rows_by_class_id[(class_name, str(course.id))] = course
             official_course_max[(class_name, label)] = float(course.max_per or 40)
 
     # --- 2. Indexation des élèves réellement présents dans le catalogue autorisé ---
@@ -3137,7 +3372,82 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
                     "date": clean_text(ev.get("date"), 32),
                 }
 
-    # --- 3. Traitement & Validation des Notes (Grades) ---
+    # --- 3. Validation et enregistrement des présences par cours ---
+    # Une présence n'est acceptée que si l'élève, sa classe et le cours appartiennent
+    # à l'espace scolaire actif et si le cours est attribué à cet enseignant.
+    accepted_attendance = 0
+    attendance_items = payload.get("presences", [])
+    if verified_school_id and isinstance(attendance_items, list):
+        for item in attendance_items:
+            if not isinstance(item, dict):
+                continue
+            local_student_id = str(item.get("studentId") or item.get("student_id") or "").strip()
+            student_info = student_lookup.get(local_student_id)
+            class_name = str(item.get("class") or item.get("className") or "").strip()
+            course_label = str(item.get("course") or item.get("courseName") or "").strip()
+            date_value = str(item.get("date") or "").strip()[:10]
+            status_value = str(item.get("status") or "").strip().upper()
+            slot_key = str(item.get("slotKey") or item.get("slot") or item.get("hour") or "").strip()[:80]
+            if status_value in ("PRESENT", "PRESENT(E)", "PRESENTE", "TRUE", "1"):
+                status_value = "P"
+            elif status_value in ("ABSENT", "ABSENTE", "FALSE", "0"):
+                status_value = "A"
+            elif status_value in ("RETARD", "LATE"):
+                status_value = "R"
+            if status_value not in ("P", "A", "R") or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date_value):
+                continue
+            if not student_info or normalize_name(student_info.get("class")) != normalize_name(class_name):
+                continue
+            incoming_course_id = str(item.get("courseId") or item.get("course_id") or "").strip()
+            course_row = (
+                assigned_course_rows_by_class_id.get((str(student_info.get("class") or ""), incoming_course_id))
+                if incoming_course_id else None
+            )
+            if course_row is None:
+                course_row = assigned_course_rows_by_class_label.get((class_name, course_label))
+            official_student_id = str(student_info.get("official_student_id") or "").strip()
+            if not course_row or not official_student_id:
+                continue
+            # Un identifiant de cours exact prime sur le seul libellé pour éviter
+            # de fusionner deux cours homonymes. Le libellé envoyé est conservé.
+            course_label = course_catalog_by_class_id.get(
+                (str(student_info.get("class") or ""), str(course_row.id)), course_label
+            ) or str(course_row.course_name)
+            attendance_row = db.query(StudentAttendance).filter(
+                StudentAttendance.school_id == verified_school_id,
+                StudentAttendance.teacher_email == teacher.email,
+                StudentAttendance.student_id == official_student_id,
+                StudentAttendance.course_id == str(course_row.id),
+                StudentAttendance.date == date_value,
+                StudentAttendance.slot_key == slot_key,
+            ).first()
+            if not attendance_row:
+                attendance_row = StudentAttendance(
+                    school_id=verified_school_id,
+                    teacher_email=teacher.email,
+                    class_id=str(course_row.class_id),
+                    class_name=class_name,
+                    student_id=official_student_id,
+                    classink_student_id=local_student_id,
+                    student_name=str(student_info.get("name") or item.get("studentName") or "")[:180],
+                    course_id=str(course_row.id),
+                    course_name=str(course_label or course_row.course_name)[:180],
+                    date=date_value,
+                    slot_key=slot_key,
+                    status=status_value,
+                )
+                db.add(attendance_row)
+            else:
+                attendance_row.class_name = class_name
+                attendance_row.class_id = str(course_row.class_id)
+                attendance_row.classink_student_id = local_student_id
+                attendance_row.student_name = str(student_info.get("name") or item.get("studentName") or "")[:180]
+                attendance_row.course_name = str(course_label or course_row.course_name)[:180]
+                attendance_row.status = status_value
+                attendance_row.updated_at = datetime.utcnow()
+            accepted_attendance += 1
+
+    # --- 4. Traitement & Validation des Notes (Grades) ---
     updates_count = 0
     errors = []
 
@@ -3307,7 +3617,8 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
 
     return {
         "status": True,
-        "message": f"Synchronisation terminée avec succès. {updates_count} notes validées.",
+        "message": f"Synchronisation terminée avec succès. {updates_count} notes et {accepted_attendance} présence(s) validée(s).",
+        "attendance_accepted": accepted_attendance,
         "warnings_or_errors": errors,
         "conduct": conduct_report
     }
@@ -4379,6 +4690,69 @@ def is_suivi_results_allowed(db: Session, school_id: str, student: SchoolStudent
     )
 
 
+def build_suivi_attendance_payload(db: Session, school: SchoolInformation, student: SchoolStudentInformation) -> dict:
+    """Renvoie au parent les appels détaillés et le résumé de chaque journée."""
+    rows = db.query(StudentAttendance).filter(
+        StudentAttendance.school_id == school.school_id,
+        StudentAttendance.student_id == student.id,
+    ).order_by(StudentAttendance.date.desc(), StudentAttendance.course_name.asc(), StudentAttendance.id.asc()).all()
+    expected_course_ids = {
+        str(row.id) for row in db.query(CourseInformation).filter(
+            CourseInformation.school_id == school.school_id,
+            CourseInformation.class_id == student.class_id,
+        ).all()
+    }
+    teacher_emails = {str(row.teacher_email) for row in rows}
+    teachers = db.query(Teacher).filter(Teacher.email.in_(list(teacher_emails))).all() if teacher_emails else []
+    teacher_by_email = {str(row.email): row for row in teachers}
+    records = []
+    by_date = {}
+    for row in rows:
+        teacher = teacher_by_email.get(str(row.teacher_email))
+        entry = {
+            "id": row.id,
+            "date": row.date,
+            "className": row.class_name,
+            "courseId": row.course_id,
+            "course": row.course_name,
+            "status": row.status,
+            "statusLabel": {"P": "Présent", "A": "Absent", "R": "En retard"}.get(row.status, "Non renseigné"),
+            "teacherName": teacher.full_name if teacher else "Enseignant",
+            "teacherCode": (teacher.teacher_code or f"prof_{teacher.id}") if teacher else "",
+            "slot": row.slot_key or "",
+        }
+        records.append(entry)
+        by_date.setdefault(row.date, []).append(entry)
+
+    days = []
+    for date_value, day_records in sorted(by_date.items(), reverse=True):
+        statuses = [str(item["status"]).upper() for item in day_records]
+        recorded_course_ids = {str(item["courseId"]) for item in day_records if item.get("courseId")}
+        full_day_recorded = bool(expected_course_ids) and expected_course_ids.issubset(recorded_course_ids)
+        if "A" in statuses:
+            daily_status = "A"
+        elif statuses and full_day_recorded and all(value == "P" for value in statuses):
+            daily_status = "P"
+        elif statuses and full_day_recorded and "R" in statuses:
+            daily_status = "R"
+        else:
+            daily_status = "?"
+        days.append({
+            "date": date_value,
+            "status": daily_status,
+            "statusLabel": {"P": "Présent toute la journée", "A": "Absent (au moins un cours manqué)", "R": "Présence avec retard", "?": "Incomplet"}.get(daily_status, "Incomplet"),
+            "coursesRecorded": len(recorded_course_ids),
+            "sessionsRecorded": len(day_records),
+            "expectedCourses": len(expected_course_ids),
+            "isComplete": full_day_recorded,
+            "presentCount": sum(1 for value in statuses if value == "P"),
+            "absentCount": sum(1 for value in statuses if value == "A"),
+            "lateCount": sum(1 for value in statuses if value == "R"),
+            "records": day_records,
+        })
+    return {"records": records, "days": days}
+
+
 def build_suivi_results_payload(db: Session, school: SchoolInformation, student: SchoolStudentInformation) -> dict:
     """Construit le suivi parent depuis les moyennes finales et les interrogations ClassInk."""
     classe = db.query(ClasseInformation).filter(
@@ -4598,6 +4972,12 @@ def suivi_get_student(payload: dict, request: Request, db: Session = Depends(get
                 "Veuillez contacter l'administration scolaire."
             )
 
+    parent_communications = db.query(SchoolCommunication).filter(
+        SchoolCommunication.school_id == school_id,
+        SchoolCommunication.is_published.is_(True),
+        or_(SchoolCommunication.class_id.is_(None), SchoolCommunication.class_id == student.class_id),
+    ).order_by(SchoolCommunication.created_at.desc(), SchoolCommunication.id.desc()).all()
+    attendance_payload = build_suivi_attendance_payload(db, school, student)
     return {
         "status": True,
         "data": {
@@ -4634,7 +5014,18 @@ def suivi_get_student(payload: dict, request: Request, db: Session = Depends(get
                 "paymentRequired": bool(not results_allowed and not individual_access_allowed),
                 "message": access_message,
             },
-            "communications": [],
+            "attendance": attendance_payload,
+            "communications": [
+                {
+                    "id": row.id,
+                    "date": row.created_at.date().isoformat() if row.created_at else "",
+                    "title": row.title,
+                    "message": row.message,
+                    "from": row.from_label or "Direction",
+                }
+                for row in parent_communications
+            ],
+            # Les conversations avec les enseignants restent strictement privées.
             "teacherNotes": [],
             "updatedAt": datetime.utcnow().isoformat() + "Z",
         },
@@ -4687,6 +5078,178 @@ def suivi_school_class_students(
             "students": students,
         },
     }
+
+
+@app.get("/api/primenet/parent-communications")
+def primenet_get_parent_communications(db: Session = Depends(get_db), claims: dict = Depends(require_active_school)):
+    school_id = str(claims.get("school_id") or "")
+    rows = db.query(SchoolCommunication).filter(
+        SchoolCommunication.school_id == school_id,
+    ).order_by(SchoolCommunication.created_at.desc(), SchoolCommunication.id.desc()).all()
+    return {"status": True, "data": [
+        {"id": row.id, "classId": row.class_id, "title": row.title, "message": row.message,
+         "from": row.from_label, "published": bool(row.is_published),
+         "date": row.created_at.isoformat() + "Z" if row.created_at else ""}
+        for row in rows
+    ]}
+
+
+@app.post("/api/primenet/parent-communications")
+def primenet_create_parent_communication(payload: dict, db: Session = Depends(get_db), claims: dict = Depends(require_active_school)):
+    school_id = str(claims.get("school_id") or "")
+    title = clean_text(payload.get("title"), 180)
+    message = clean_text(payload.get("message"), 8000)
+    class_id = str(payload.get("class_id") or "").strip() or None
+    if not title or len(message) < 3:
+        raise HTTPException(status_code=422, detail="Ajoutez un titre et un communiqué d'au moins 3 caractères.")
+    if class_id and not db.query(ClasseInformation).filter(
+        ClasseInformation.id == class_id, ClasseInformation.school_id == school_id
+    ).first():
+        raise HTTPException(status_code=404, detail="Classe introuvable dans cet établissement.")
+    row = SchoolCommunication(
+        school_id=school_id, class_id=class_id, title=title, message=message,
+        from_label="Direction", is_published=bool(payload.get("published", True)),
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return {"status": True, "message": "Communiqué enregistré.", "data": {"id": row.id}}
+
+
+def _verified_school_teachers(db: Session, school_id: str):
+    emails = {
+        email for (email,) in db.query(TeacherSchoolSpace.teacher_email).filter(
+            TeacherSchoolSpace.school_id == school_id, TeacherSchoolSpace.is_verified.is_(True)
+        ).all()
+    }
+    emails.update(
+        email for (email,) in db.query(Teacher.email).filter(
+            Teacher.school_id == school_id, Teacher.school_access_verified.is_(True)
+        ).all()
+    )
+    return db.query(Teacher).filter(Teacher.email.in_(list(emails))).order_by(Teacher.full_name.asc()).all() if emails else []
+
+
+@app.get("/api/primenet/teacher-messages")
+def primenet_get_teacher_messages(db: Session = Depends(get_db), claims: dict = Depends(require_active_school)):
+    school_id = str(claims.get("school_id") or "")
+    teachers = _verified_school_teachers(db, school_id)
+    teacher_by_email = {row.email: row for row in teachers}
+    rows = db.query(TeacherMessage).filter(
+        TeacherMessage.school_id == school_id,
+        TeacherMessage.teacher_email.in_(list(teacher_by_email)),
+    ).order_by(TeacherMessage.created_at.asc(), TeacherMessage.id.asc()).all() if teacher_by_email else []
+    messages = [{
+        "id": row.id, "teacherEmail": row.teacher_email, "senderRole": row.sender_role,
+        "senderName": row.sender_name, "message": row.message,
+        "date": row.created_at.isoformat() + "Z" if row.created_at else "",
+    } for row in rows]
+    return {"status": True, "teachers": [
+        {"email": row.email, "name": row.full_name, "teacherCode": row.teacher_code or ""}
+        for row in teachers
+    ], "messages": messages}
+
+
+@app.post("/api/primenet/teacher-messages")
+def primenet_send_teacher_message(payload: dict, db: Session = Depends(get_db), claims: dict = Depends(require_active_school)):
+    school_id = str(claims.get("school_id") or "")
+    teacher_email = str(payload.get("teacher_email") or "").strip().lower()
+    message = clean_text(payload.get("message"), 5000)
+    teacher = db.query(Teacher).filter(Teacher.email == teacher_email).first()
+    if not teacher or not teacher_has_school_access(db, teacher, school_id):
+        raise HTTPException(status_code=404, detail="Enseignant non associé à cet établissement.")
+    if len(message) < 1:
+        raise HTTPException(status_code=422, detail="Le message est vide.")
+    db.add(TeacherMessage(
+        school_id=school_id, teacher_email=teacher.email, sender_role="school",
+        sender_name="Direction", message=message,
+    ))
+    db.commit()
+    return {"status": True, "message": "Message envoyé à l'enseignant."}
+
+
+@app.get("/api/teacher/messages")
+def teacher_get_messages(db: Session = Depends(get_db), claims: dict = Depends(require_teacher)):
+    teacher = db.query(Teacher).filter(Teacher.email == claims.get("email")).first()
+    school_id = str(claims.get("school_id") or "").strip()
+    if not teacher or not school_id or not teacher_has_school_access(db, teacher, school_id):
+        raise HTTPException(status_code=403, detail="Aucun espace scolaire confirmé.")
+    blocked = teacher_school_block(db, teacher, school_id)
+    if blocked:
+        raise HTTPException(status_code=403, detail=blocked)
+    rows = db.query(TeacherMessage).filter(
+        TeacherMessage.school_id == school_id, TeacherMessage.teacher_email == teacher.email,
+    ).order_by(TeacherMessage.created_at.asc(), TeacherMessage.id.asc()).all()
+    return {"status": True, "messages": [
+        {"id": row.id, "senderRole": row.sender_role, "senderName": row.sender_name,
+         "message": row.message, "date": row.created_at.isoformat() + "Z" if row.created_at else ""}
+        for row in rows
+    ]}
+
+
+@app.post("/api/teacher/messages")
+def teacher_send_message(payload: dict, db: Session = Depends(get_db), claims: dict = Depends(require_teacher)):
+    teacher = db.query(Teacher).filter(Teacher.email == claims.get("email")).first()
+    school_id = str(claims.get("school_id") or "").strip()
+    message = clean_text(payload.get("message"), 5000)
+    if not teacher or not school_id or not teacher_has_school_access(db, teacher, school_id):
+        raise HTTPException(status_code=403, detail="Aucun espace scolaire confirmé.")
+    blocked = teacher_school_block(db, teacher, school_id)
+    if blocked:
+        raise HTTPException(status_code=403, detail=blocked)
+    if not message:
+        raise HTTPException(status_code=422, detail="Le message est vide.")
+    db.add(TeacherMessage(
+        school_id=school_id, teacher_email=teacher.email, sender_role="teacher",
+        sender_name=teacher.full_name, message=message,
+    ))
+    db.commit()
+    return {"status": True, "message": "Message transmis à la direction."}
+
+
+@app.get("/api/primenet/teacher-attendance")
+def primenet_get_teacher_attendance(date: str, db: Session = Depends(get_db), claims: dict = Depends(require_active_school)):
+    school_id = str(claims.get("school_id") or "")
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(date or "")):
+        raise HTTPException(status_code=422, detail="Date invalide.")
+    records = db.query(TeacherAttendance).filter(
+        TeacherAttendance.school_id == school_id, TeacherAttendance.date == date
+    ).all()
+    teachers = {row.email: row for row in _verified_school_teachers(db, school_id)}
+    return {"status": True, "data": [
+        {"teacherEmail": row.teacher_email, "teacherName": teachers[row.teacher_email].full_name if row.teacher_email in teachers else "",
+         "date": row.date, "checkIn": row.check_in or "", "checkOut": row.check_out or ""}
+        for row in records
+    ]}
+
+
+@app.post("/api/primenet/teacher-attendance")
+def primenet_save_teacher_attendance(payload: dict, db: Session = Depends(get_db), claims: dict = Depends(require_active_school)):
+    school_id = str(claims.get("school_id") or "")
+    teacher_email = str(payload.get("teacher_email") or "").strip().lower()
+    date_value = str(payload.get("date") or "").strip()
+    check_in = str(payload.get("check_in") or "").strip()
+    check_out = str(payload.get("check_out") or "").strip()
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date_value):
+        raise HTTPException(status_code=422, detail="Date invalide.")
+    if any(value and not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", value) for value in (check_in, check_out)):
+        raise HTTPException(status_code=422, detail="Heure invalide.")
+    teacher = db.query(Teacher).filter(Teacher.email == teacher_email).first()
+    if not teacher or not teacher_has_school_access(db, teacher, school_id):
+        raise HTTPException(status_code=404, detail="Enseignant non associé à cet établissement.")
+    row = db.query(TeacherAttendance).filter(
+        TeacherAttendance.school_id == school_id,
+        TeacherAttendance.teacher_email == teacher_email,
+        TeacherAttendance.date == date_value,
+    ).first()
+    if not row:
+        row = TeacherAttendance(school_id=school_id, teacher_email=teacher_email, date=date_value)
+        db.add(row)
+    row.check_in = check_in or None
+    row.check_out = check_out or None
+    row.updated_at = datetime.utcnow()
+    db.commit()
+    return {"status": True, "message": "Présence du personnel enregistrée."}
 
 
 @app.put("/api/suivi/school/students/{student_id}/access")
@@ -5458,6 +6021,39 @@ def get_primenet_data(school_id: str, db: Session = Depends(get_db), claims: dic
                         merged_data["presences"][date_p][c_name][course_name] = {}
                         
                     merged_data["presences"][date_p][c_name][course_name].update(statuses)
+
+    # Ajouter les appels élèves reçus des espaces enseignants vérifiés, en conservant les IDs officiels.
+    attendance_rows = db.query(StudentAttendance).filter(
+        StudentAttendance.school_id == school_id
+    ).order_by(StudentAttendance.date.desc(), StudentAttendance.id.asc()).all()
+    attendance_teachers = {
+        row.email: row for row in db.query(Teacher).filter(
+            Teacher.email.in_(list({item.teacher_email for item in attendance_rows}))
+        ).all()
+    } if attendance_rows else {}
+    merged_data["attendanceRecords"] = [
+        {
+            "id": row.id, "date": row.date, "classId": row.class_id, "className": row.class_name,
+            "courseId": row.course_id, "courseName": row.course_name,
+            "studentId": row.student_id, "studentName": row.student_name,
+            "status": row.status, "slotKey": row.slot_key,
+            "teacherEmail": row.teacher_email,
+            "teacherName": attendance_teachers[row.teacher_email].full_name if row.teacher_email in attendance_teachers else "Enseignant",
+            "teacherCode": (attendance_teachers[row.teacher_email].teacher_code or f"prof_{attendance_teachers[row.teacher_email].id}") if row.teacher_email in attendance_teachers else "",
+        }
+        for row in attendance_rows
+    ]
+    teacher_attendance_rows = db.query(TeacherAttendance).filter(
+        TeacherAttendance.school_id == school_id
+    ).order_by(TeacherAttendance.date.desc(), TeacherAttendance.id.asc()).all()
+    teacher_by_email = {row.email: row for row in db.query(Teacher).filter(
+        Teacher.email.in_(list({item.teacher_email for item in teacher_attendance_rows}))
+    ).all()} if teacher_attendance_rows else {}
+    merged_data["teacherAttendance"] = [
+        {"teacherEmail": row.teacher_email, "teacherName": teacher_by_email[row.teacher_email].full_name if row.teacher_email in teacher_by_email else "",
+         "date": row.date, "checkIn": row.check_in or "", "checkOut": row.check_out or ""}
+        for row in teacher_attendance_rows
+    ]
 
     # Consolider les interrogations ClassInk de tous les enseignants vérifiés.
     # Chaque couple élève/cours/période reçoit une seule moyenne pondérée.

@@ -664,7 +664,9 @@ class TestNewFeatureStatic(unittest.TestCase):
         self.assertIn("class=\"classink-grade-input\"", app)
         self.assertIn("findClassInkGradeNeighbor(input, direction)", app)
         self.assertIn("data-grid-row=", app)
-        self.assertIn("Enregistrer mes notes sur le serveur", app)
+        self.assertIn("Enregistrer mes notes et présences sur le serveur", app)
+        self.assertIn('id="presence-slot"', app)
+        self.assertIn("slotKey: selectedSlot", app)
         sync = app.split("async function syncWithCloud()", 1)[1].split("/* ==========================================================================", 1)[0]
         self.assertIn("cloudAuthHeaders()", sync)
         self.assertNotIn("showCustomPrompt", sync)
@@ -685,6 +687,58 @@ class TestNewFeatureStatic(unittest.TestCase):
         self.assertIn("N° du professeur", suivi)
         self.assertIn("teacherName", suivi)
         self.assertIn("teacherCode", suivi)
+        self.assertIn("function viewAttendance()", suivi)
+        self.assertIn("safe.attendance = null;", redaction)
+        self.assertIn("window.__CLASSINK_SUIVI_LLINK_CONTEXT__", suivi)
+        self.assertIn("student:studentContext", suivi)
+
+    def test_attendance_communications_and_llink_are_connected_across_classink_surfaces(self):
+        backend = (ROOT / "main.py").read_text(encoding="utf-8")
+        for marker in (
+            "class StudentAttendance(Base)",
+            "class TeacherAttendance(Base)",
+            "class SchoolCommunication(Base)",
+            "class TeacherMessage(Base)",
+            '@app.get("/api/primenet/parent-communications")',
+            '@app.post("/api/primenet/parent-communications")',
+            '@app.get("/api/primenet/teacher-messages")',
+            '@app.post("/api/primenet/teacher-messages")',
+            '@app.get("/api/teacher/messages")',
+            '@app.post("/api/teacher/messages")',
+            "accepted_attendance = 0",
+            'merged_data["attendanceRecords"]',
+            "def build_suivi_attendance_payload",
+            "full_day_recorded",
+            "context_text = context_text[:30000]",
+            "student_code = str(parent_ref.get(\"student_code\")",
+        ):
+            self.assertIn(marker, backend)
+
+        app = (ROOT / "app/index.html").read_text(encoding="utf-8")
+        self.assertIn("/api/teacher/messages", app)
+        self.assertIn("X-CRYPT-App'] = 'classink'", app)
+        self.assertIn("/api/llink/assist", app)
+        self.assertIn("slotKey: selectedSlot", app)
+
+        prime = (ROOT / "prime/index.html").read_text(encoding="utf-8")
+        for marker in (
+            'id="section-communications"',
+            'id="primeParentCommunicationTitle"',
+            'id="primeTeacherMessageSelect"',
+            "/api/primenet/parent-communications",
+            "/api/primenet/teacher-messages",
+            "/api/primenet/teacher-attendance",
+            "mergedData.attendanceRecords",
+            "Llink consulte les données autorisées",
+            "window.renderPresencesEleveTable = function",
+        ):
+            self.assertIn(marker, prime)
+
+        suivi = (ROOT / "suivi/index.html").read_text(encoding="utf-8")
+        self.assertIn('data-go="attendance"', suivi)
+        self.assertIn("Présent toute la journée", suivi)
+        self.assertIn("window.__CLASSINK_SUIVI_LLINK_CONTEXT__", suivi)
+        self.assertIn("position:fixed;right:18px;bottom:calc(84px + env(safe-area-inset-bottom))", suivi)
 
     def test_server_persists_exact_course_and_evaluation_date_and_consolidates_averages(self):
         backend = (ROOT / "main.py").read_text(encoding="utf-8")
