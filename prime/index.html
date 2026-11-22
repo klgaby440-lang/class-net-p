@@ -3159,7 +3159,25 @@ window.alert = function(message) { showCustomAlert(message); };
                         '#bp-print-toolbar{display:flex!important;} .no-print{display:none!important;} .print-sheet{page-break-after:always;break-after:page;}' +
                         '.print-sheet:last-child{page-break-after:auto;break-after:auto;}' +
                         '@media print{#bp-print-toolbar{display:none!important;}body.bp-printing #pdfExportContainer{margin:0!important;}html,body{min-height:0!important;} }' +
-                        '</style></head><body class="bp-printing">' + toolbar + sourceElement.outerHTML + '</body></html>');
+                        '
+/* Saisie de notes et contrôles natifs : surfaces lisibles dans les deux thèmes.
+   Les feuilles de bulletin et aperçus imprimables restent volontairement blancs. */
+body.theme-dark .fiche-grade-input{background:#172438;color:#f8fafc;border-color:#52627a;color-scheme:dark}
+body.theme-dark .fiche-grade-input:focus{background:#24364f;color:#fff}
+body.theme-dark .fiche-grade-input:invalid,
+body.theme-dark .fiche-grade-input[aria-invalid="true"]{background:#3a202b;color:#fff;border-color:#fb7185}
+body.theme-dark .fiche-total-missing{color:#fbbf24}
+body.theme-dark .edit-beh{background:#3b321c;color:#fef3c7}
+body.theme-dark input.form-control,
+body.theme-dark select.form-control,
+body.theme-dark textarea.form-control{color-scheme:dark}
+body.theme-light input.form-control,
+body.theme-light select.form-control,
+body.theme-light textarea.form-control{color-scheme:light}
+body.theme-dark .settings-card small,
+body.theme-dark .settings-card p{color:var(--text-secondary)}
+
+</style></head><body class="bp-printing">' + toolbar + sourceElement.outerHTML + '</body></html>');
                     doc.close();
 
                     // Laisse les images et les polices se charger avant d'autoriser l'impression.
