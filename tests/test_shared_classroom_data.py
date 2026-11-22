@@ -1,11 +1,24 @@
 from types import SimpleNamespace
+from uuid import uuid4
 
 import pytest
 from fastapi import HTTPException
 
 from main import (
+    ClasseInformation,
+    CourseInformation,
+    SchoolInformation,
+    SchoolStudentInformation,
+    SessionLocal,
+    StudentGrade,
+    StudentLink,
+    Teacher,
+    TeacherEvaluation,
+    TeacherSchoolSpace,
     apply_teacher_classroom_context,
+    calculate_classink_period_average,
     compose_teacher_classroom_context,
+    consolidate_classink_period_averages,
     generate_suivi_student_code,
     is_suivi_results_allowed,
     teacher_has_verified_school_access,
@@ -71,6 +84,182 @@ def sample_catalog():
             }
         ],
     }
+
+
+def test_classink_period_average_combines_multiple_interrogations_as_one_weighted_mean():
+    # 8/10 + 15/20 = 23/30, ramené au barème P1 sur 40 points.
+    assert calculate_classink_period_average([(8, 10), (15, 20)], 40, "P1") == 30.67
+    # Les examens sont ramenés au double du maximum du cours.
+    assert calculate_classink_period_average([(14, 20), (16, 20)], 40, "EX1") == 60.0
+    # Une note nulle reste une note valable et participe à la moyenne.
+    assert calculate_classink_period_average([(0, 10), (10, 10)], 20, "P2") == 10.0
+    # Une période sans note valide ne produit aucune moyenne artificielle.
+    assert calculate_classink_period_average([], 40, "P1") is None
+    assert calculate_classink_period_average([(15, 10)], 40, "P1") is None
+
+
+def test_verified_teacher_interrogations_are_consolidated_by_official_student_course_and_period():
+    suffix = uuid4().hex[:12].upper()
+    school_id = "SCHOOL-CLASSINK-AVERAGE-" + suffix
+    teacher_email = "teacher-" + suffix.lower() + "@example.invalid"
+    teacher_code = "PROF-" + suffix
+    class_id = "CLASS-" + suffix
+    course_id = "COURSE-" + suffix
+    student_id = "STUDENT-" + suffix
+    student_permanent = "PERMANENT-" + suffix
+    db = SessionLocal()
+    try:
+        db.add(SchoolInformation(
+            school_id=school_id,
+            bulletin_seq_id="BUL-" + suffix,
+            code="CODE-" + suffix,
+            name_school="École de test moyenne ClassInk",
+            city="Bukavu",
+            commune="Ibanda",
+            name_responsable="Responsable test",
+            num_tel="+243000000000",
+            adresse_physique="Adresse test",
+            email="school-" + suffix.lower() + "@example.invalid",
+            pass_word="test-only-password",
+            licence_date="2026-12-31",
+            is_locked=False,
+        ))
+        teacher = Teacher(
+            teacher_code=teacher_code,
+            email=teacher_email,
+            full_name="Enseignant Test",
+            password="test-only-password",
+            school_name="École de test moyenne ClassInk",
+        )
+        db.add(teacher)
+        db.flush()
+        db.add(TeacherSchoolSpace(
+            teacher_email=teacher_email,
+            school_id=school_id,
+            is_verified=True,
+        ))
+        db.add(ClasseInformation(
+            id=class_id,
+            school_id=school_id,
+            class_name="2ème Scientifique",
+            titulaire_name=teacher_code,
+        ))
+        db.add(CourseInformation(
+            id=course_id,
+            school_id=school_id,
+            class_id=class_id,
+            course_name="Mathématiques",
+            max_per=40,
+            category="Sciences",
+            titulaire_name=teacher_code,
+            sub_category="Algèbre",
+        ))
+        db.add(SchoolStudentInformation(
+            id=student_id,
+            school_id=school_id,
+            class_id=class_id,
+            student_name="KABUYA",
+            student_post_name="Jean",
+            student_pre_name="Paul",
+            student_sexe="M",
+            student_n_permanent=student_permanent,
+        ))
+        db.flush()
+        db.add(StudentLink(
+            school_id=school_id,
+            teacher_email=teacher_email,
+            classink_student_id="local-student-" + suffix,
+            student_id=student_id,
+            match_method="permanent",
+        ))
+        db.add_all([
+            StudentGrade(
+                teacher_email=teacher_email,
+                student_id="local-student-" + suffix,
+                student_name="KABUYA Jean Paul",
+                class_name="2ème Scientifique",
+                course_name="Mathématiques — Algèbre",
+                course_id=course_id,
+                eval_id="EV-P1-A-" + suffix,
+                eval_name="Interrogation 1",
+                eval_date="2026-10-01",
+                period="P1",
+                score=8,
+                max_score=10,
+                school_id=school_id,
+            ),
+            StudentGrade(
+                teacher_email=teacher_email,
+                student_id="local-student-" + suffix,
+                student_name="KABUYA Jean Paul",
+                class_name="2ème Scientifique",
+                course_name="Mathématiques — Algèbre",
+                course_id=course_id,
+                eval_id="EV-P1-B-" + suffix,
+                eval_name="Interrogation 2",
+                eval_date="2026-10-15",
+                period="P1",
+                score=15,
+                max_score=20,
+                school_id=school_id,
+            ),
+            StudentGrade(
+                teacher_email=teacher_email,
+                student_id="local-student-" + suffix,
+                student_name="KABUYA Jean Paul",
+                class_name="2ème Scientifique",
+                course_name="Mathématiques — Algèbre",
+                course_id=course_id,
+                eval_id="EV-EX1-A-" + suffix,
+                eval_name="Examen 1",
+                eval_date="2026-11-01",
+                period="EX1",
+                score=14,
+                max_score=20,
+                school_id=school_id,
+            ),
+            StudentGrade(
+                teacher_email=teacher_email,
+                student_id="local-student-" + suffix,
+                student_name="KABUYA Jean Paul",
+                class_name="2ème Scientifique",
+                course_name="Mathématiques — Algèbre",
+                course_id=course_id,
+                eval_id="EV-EX1-B-" + suffix,
+                eval_name="Examen 2",
+                eval_date="2026-11-15",
+                period="EX1",
+                score=16,
+                max_score=20,
+                school_id=school_id,
+            ),
+        ])
+        db.commit()
+
+        report = consolidate_classink_period_averages(db, school_id)
+        db.commit()
+
+        assert report == {"teachers": 1, "interrogations": 4, "averages": 2}
+        row = db.query(TeacherEvaluation).filter_by(
+            school_id=school_id,
+            student_n_permanent=student_permanent,
+            course_id=course_id,
+        ).one()
+        assert row.p1 == 30.67
+        assert row.ex1 == 60.0
+    finally:
+        db.rollback()
+        db.query(TeacherEvaluation).filter_by(school_id=school_id).delete(synchronize_session=False)
+        db.query(StudentGrade).filter_by(school_id=school_id).delete(synchronize_session=False)
+        db.query(StudentLink).filter_by(school_id=school_id).delete(synchronize_session=False)
+        db.query(TeacherSchoolSpace).filter_by(school_id=school_id).delete(synchronize_session=False)
+        db.query(CourseInformation).filter_by(school_id=school_id).delete(synchronize_session=False)
+        db.query(SchoolStudentInformation).filter_by(school_id=school_id).delete(synchronize_session=False)
+        db.query(ClasseInformation).filter_by(school_id=school_id).delete(synchronize_session=False)
+        db.query(Teacher).filter_by(email=teacher_email).delete(synchronize_session=False)
+        db.query(SchoolInformation).filter_by(school_id=school_id).delete(synchronize_session=False)
+        db.commit()
+        db.close()
 
 
 def test_school_catalog_validation_keeps_classes_students_courses_and_titulars():

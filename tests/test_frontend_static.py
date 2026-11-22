@@ -80,6 +80,9 @@ class FrontendStaticTests(unittest.TestCase):
     def test_primeink_html_ids_and_inline_javascript(self):
         self.inspect_file("prime/index.html")
 
+    def test_suivi_html_ids_and_inline_javascript(self):
+        self.inspect_file("suivi/index.html")
+
     def test_no_unsupported_abort_signal_timeout_usage(self):
         for relative in ("app/index.html", "prime/index.html"):
             source = (ROOT / relative).read_text(encoding="utf-8")
@@ -654,6 +657,47 @@ class TestNewFeatureStatic(unittest.TestCase):
         self.assertIn("server.teacherCatalogScope === 'assigned'", app)
         self.assertIn("allowedCourses.has(courseName)", app)
         self.assertIn("async function refreshTeacherClassroomData(silent = false)", app)
+
+    def test_classink_grade_sync_and_keyboard_navigation_are_enabled(self):
+        app = (ROOT / "app/index.html").read_text(encoding="utf-8")
+        self.assertIn("<title>ClassInk App</title>", app)
+        self.assertIn("class=\"classink-grade-input\"", app)
+        self.assertIn("findClassInkGradeNeighbor(input, direction)", app)
+        self.assertIn("data-grid-row=", app)
+        self.assertIn("Enregistrer mes notes sur le serveur", app)
+        sync = app.split("async function syncWithCloud()", 1)[1].split("/* ==========================================================================", 1)[0]
+        self.assertIn("cloudAuthHeaders()", sync)
+        self.assertNotIn("showCustomPrompt", sync)
+        self.assertIn("courseCatalog: data.courseCatalog || {}", app)
+        self.assertIn("button.style.cssText = 'position:fixed;right:18px;bottom:84px", app)
+        self.assertIn("bottom: 16px;", app)
+        self.assertIn("left: 12px;", app)
+
+    def test_classink_suivi_persists_only_student_identifiers_not_results(self):
+        suivi = (ROOT / "suivi/index.html").read_text(encoding="utf-8")
+        self.assertIn("localStorage.getItem(key)", suivi)
+        self.assertIn("localStorage.setItem(key, serialized)", suivi)
+        redaction = suivi.split("function redactedParentData(data)", 1)[1].split("function cacheGet(", 1)[0]
+        self.assertIn("safe.results = null;", redaction)
+        self.assertIn("safe.evaluations = null;", redaction)
+        self.assertIn("safe.grades = null;", redaction)
+        self.assertIn("Toutes les interrogations", suivi)
+        self.assertIn("N° du professeur", suivi)
+        self.assertIn("teacherName", suivi)
+        self.assertIn("teacherCode", suivi)
+
+    def test_server_persists_exact_course_and_evaluation_date_and_consolidates_averages(self):
+        backend = (ROOT / "main.py").read_text(encoding="utf-8")
+        self.assertIn('course_id = Column(String, index=True, nullable=True)', backend)
+        self.assertIn('eval_date = Column(String(32), nullable=True)', backend)
+        self.assertIn('def consolidate_classink_period_averages(db: Session, school_id: str)', backend)
+        self.assertIn('def calculate_classink_period_average(scores, course_max: float, period: str)', backend)
+        self.assertIn('TeacherEvaluation.course_id == course_id', backend)
+        self.assertIn('merged_data["moyenne_classe"] = {}', backend)
+        self.assertIn('"__id__" + str(student.id)', backend)
+        prime = (ROOT / "prime/index.html").read_text(encoding="utf-8")
+        self.assertIn('String(c.id) === String(courseName)', prime)
+        self.assertIn("String(studentName).startsWith('__id__')", prime)
 
     def test_classink_displays_each_assigned_course_as_an_independent_choice(self):
         source = (ROOT / "app/index.html").read_text(encoding="utf-8")

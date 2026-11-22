@@ -601,8 +601,10 @@ class StudentGrade(Base):
     student_name = Column(String, nullable=False)
     class_name = Column(String, nullable=False)
     course_name = Column(String, nullable=False)
+    course_id = Column(String, index=True, nullable=True)
     eval_id = Column(String, index=True, nullable=False)
     eval_name = Column(String, nullable=False)
+    eval_date = Column(String(32), nullable=True)
     period = Column(String, nullable=False)
     score = Column(Float, nullable=False)
     max_score = Column(Float, nullable=False)
@@ -1170,6 +1172,9 @@ with engine.connect() as conn:
     conn.execute(text("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS signature TEXT;"))
     conn.execute(text("ALTER TABLE student_grades ADD COLUMN IF NOT EXISTS school_id VARCHAR;"))
     conn.execute(text("ALTER TABLE student_grades ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP;"))
+    conn.execute(text("ALTER TABLE student_grades ADD COLUMN IF NOT EXISTS course_id VARCHAR;"))
+    conn.execute(text("ALTER TABLE student_grades ADD COLUMN IF NOT EXISTS eval_date VARCHAR(32);"))
+    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_student_grades_course_id ON student_grades (course_id);"))
     conn.execute(text("ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS school_id VARCHAR;"))
     conn.execute(text("CREATE INDEX IF NOT EXISTS ix_quizzes_school_id ON quizzes (school_id);"))
     conn.execute(text("UPDATE quizzes q SET school_id = t.school_id FROM teachers t WHERE q.teacher_email = t.email AND q.school_id IS NULL AND t.school_id IS NOT NULL;"))
@@ -3013,8 +3018,21 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
     # --- 1. Catalogue scolaire officiel et périmètre du professeur ---
     official_classes_by_name = {}
     assigned_courses_by_class = {}
+    assigned_course_rows_by_class_label = {}
     official_course_max = {}
     teacher_allowed_classes = set()
+    course_catalog_payload = payload.get("courseCatalog") if isinstance(payload.get("courseCatalog"), dict) else {}
+    course_catalog_by_class_id = {}
+    for catalog_class_name, catalog_rows in course_catalog_payload.items():
+        if not isinstance(catalog_rows, list):
+            continue
+        for catalog_row in catalog_rows:
+            if not isinstance(catalog_row, dict):
+                continue
+            catalog_course_id = str(catalog_row.get("id") or "").strip()
+            catalog_label = str(catalog_row.get("label") or catalog_row.get("name") or "").strip()
+            if catalog_course_id and catalog_label:
+                course_catalog_by_class_id[(str(catalog_class_name), catalog_course_id)] = catalog_label
 
     if verified_school_id:
         official_classes = db.query(ClasseInformation).filter(
@@ -3038,8 +3056,12 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
                 continue
             class_name = str(official_class.class_name)
             teacher_allowed_classes.add(class_name)
-            assigned_courses_by_class.setdefault(class_name, set()).add(str(course.course_name))
-            official_course_max[(class_name, str(course.course_name))] = float(course.max_per or 40)
+            # Le cours est identifié par son ID PrimeInk. Le libellé n'est qu'une
+            # présentation et peut être identique pour deux cours différents.
+            label = course_catalog_by_class_id.get((class_name, str(course.id)), str(course.course_name))
+            assigned_courses_by_class.setdefault(class_name, set()).add(label)
+            assigned_course_rows_by_class_label[(class_name, label)] = course
+            official_course_max[(class_name, label)] = float(course.max_per or 40)
 
     # --- 2. Indexation des élèves réellement présents dans le catalogue autorisé ---
     student_lookup = {}  # { ClassInk student_id: {name, class, official_student_id} }
@@ -3070,7 +3092,7 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
             }
 
     # --- 3. Indexation des évaluations, limitée aux cours attribués ---
-    eval_lookup = {}  # { eval_id: {name, max, course, period, class} }
+    eval_lookup = {}  # { eval_id: {name, max, course, course_id, period, class, date} }
     for class_name, periods in evaluations_dict.items():
         if verified_school_id and class_name not in teacher_allowed_classes:
             continue
@@ -3083,17 +3105,22 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
                 ev_id = str(ev.get("id") or "").strip()
                 ev_course = str(ev.get("course") or "").strip()
                 ev_max = ev.get("max")
+                course_row = assigned_course_rows_by_class_label.get((str(class_name), ev_course)) if verified_school_id else None
                 if verified_school_id:
-                    if ev_course not in assigned_courses_by_class.get(class_name, set()):
+                    if ev_course not in assigned_courses_by_class.get(class_name, set()) or not course_row:
                         continue
                     catalog_max = official_course_max.get((class_name, ev_course))
                     if catalog_max is None:
                         continue
+                    course_id = str(course_row.id)
+                    raw_course_name = str(course_row.course_name or ev_course)
                 else:
                     valid_courses = courses_dict.get(class_name, [])
                     if ev_course not in valid_courses:
                         continue
                     catalog_max = None
+                    course_id = ""
+                    raw_course_name = ev_course
 
                 if not ev_id or not isinstance(ev_max, (int, float)) or isinstance(ev_max, bool) or ev_max <= 0:
                     continue
@@ -3103,8 +3130,11 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
                     "name": str(ev.get("name") or "Évaluation")[:160],
                     "max": float(ev_max),
                     "course": ev_course,
+                    "course_name": raw_course_name,
+                    "course_id": course_id,
                     "period": period_key,
-                    "class": class_name,
+                    "class": str(class_name),
+                    "date": clean_text(ev.get("date"), 32),
                 }
 
     # --- 3. Traitement & Validation des Notes (Grades) ---
@@ -3138,7 +3168,8 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
             errors.append(f"Note incohérente ({score}/{eval_info['max']}) pour {student_info['name']} sur {eval_info['name']}")
             continue
 
-        # Sauvegarde ou mise à jour dans la table StudentGrade
+        # Sauvegarde ou mise à jour de l'interrogation. course_id garde le
+        # lien vers la ligne exacte PrimeInk, même si deux cours partagent un nom.
         record = db.query(StudentGrade).filter_by(
             teacher_email=teacher.email,
             school_id=verified_school_id,
@@ -3153,8 +3184,10 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
                 student_name=student_info["name"],
                 class_name=student_info["class"],
                 course_name=eval_info["course"],
+                course_id=eval_info["course_id"] or None,
                 eval_id=eval_id,
                 eval_name=eval_info["name"],
+                eval_date=eval_info["date"],
                 period=eval_info["period"],
                 score=float(score),
                 max_score=eval_info["max"],
@@ -3162,7 +3195,15 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
             )
             db.add(record)
         else:
+            record.student_name = student_info["name"]
+            record.class_name = student_info["class"]
+            record.course_name = eval_info["course"]
+            record.course_id = eval_info["course_id"] or record.course_id
+            record.eval_name = eval_info["name"]
+            record.eval_date = eval_info["date"]
+            record.period = eval_info["period"]
             record.score = float(score)
+            record.max_score = eval_info["max"]
 
         updates_count += 1
 
@@ -3199,31 +3240,15 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
         for student_info in student_lookup.values():
             formatted_students.setdefault(student_info["class"], []).append(student_info["name"])
             
-        # Construction de la moyenne classe selon ta structure
-        moyenne_classe = {}
-        for c_name in classes_list:
-            moyenne_classe[c_name] = {}
-            # On récupère les cours de cette classe
-            c_courses = effective_courses_dict.get(c_name, [])
-            for course in c_courses:
-                moyenne_classe[c_name][course] = {"P1": {}, "P2": {}, "EX1": {}, "P3": {}, "P4": {}, "EX2": {}}
-                
-                # Remplissage des notes/moyennes pour ce cours et cette classe
-                for grade_key, score in grades_dict.items():
-                    if "_EV-" not in grade_key: continue
-                    parts = grade_key.split("_EV-")
-                    s_id = parts[0]
-                    e_id = "EV-" + parts[1]
-                    
-                    s_info = student_lookup.get(s_id)
-                    e_info = eval_lookup.get(e_id)
-                    
-                    if s_info and e_info and s_info["class"] == c_name and e_info["course"] == course and isinstance(score, (int, float)) and not isinstance(score, bool) and 0 <= score <= e_info["max"]:
-                        s_name = s_info["name"]
-                        period = e_info["period"]
-                        # Si tu as déjà précalculé la moyenne, on l'injecte. Sinon on injecte la note brute.
-                        if period in moyenne_classe[c_name][course]:
-                            moyenne_classe[c_name][course][period][s_name] = score
+        # Les valeurs de moyenne sont consolidées à partir de StudentGrade
+        # dans /api/primenet/sync/{school_id}. Ici, on enregistre uniquement le catalogue.
+        moyenne_classe = {
+            c_name: {
+                course: {"P1": {}, "P2": {}, "EX1": {}, "P3": {}, "P4": {}, "EX2": {}}
+                for course in effective_courses_dict.get(c_name, [])
+            }
+            for c_name in classes_list
+        }
 
         # Assemblage final du JSON PrimeNet pour cet enseignant
         primenet_data = {
@@ -4355,7 +4380,7 @@ def is_suivi_results_allowed(db: Session, school_id: str, student: SchoolStudent
 
 
 def build_suivi_results_payload(db: Session, school: SchoolInformation, student: SchoolStudentInformation) -> dict:
-    """Construit le suivi parent depuis les notes PrimeInk et les évaluations ClassInk."""
+    """Construit le suivi parent depuis les moyennes finales et les interrogations ClassInk."""
     classe = db.query(ClasseInformation).filter(
         ClasseInformation.id == student.class_id,
         ClasseInformation.school_id == school.school_id,
@@ -4363,52 +4388,79 @@ def build_suivi_results_payload(db: Session, school: SchoolInformation, student:
     courses = db.query(CourseInformation).filter(
         CourseInformation.school_id == school.school_id,
         CourseInformation.class_id == student.class_id,
-    ).order_by(CourseInformation.course_name.asc()).all()
+    ).order_by(CourseInformation.course_name.asc(), CourseInformation.id.asc()).all()
 
-    # Notes semestrielles / périodes enregistrées par PrimeInk.
     official_rows = db.query(TeacherEvaluation).filter(
         TeacherEvaluation.school_id == school.school_id,
         TeacherEvaluation.student_n_permanent == (student.student_n_permanent or student.id),
-    ).all()
-    official_by_course = {str(row.course_id): row for row in official_rows}
+    ).order_by(TeacherEvaluation.id.asc()).all()
+    official_by_course = {}
+    for row in official_rows:
+        official_by_course.setdefault(str(row.course_id), row)
 
-    # Les notes détaillées ClassInk sont indexées par l'identifiant local transmis par l'enseignant.
-    linked_ids = [student.id]
+    # Les notes ClassInk utilisent l'ID d'élève local de l'enseignant.
+    linked_ids = [str(student.id)]
     links = db.query(StudentLink).filter(
         StudentLink.school_id == school.school_id,
         StudentLink.student_id == student.id,
     ).all()
-    linked_ids.extend(link.classink_student_id for link in links if link.classink_student_id)
-    linked_teacher_emails = [
+    linked_ids.extend(str(link.classink_student_id) for link in links if link.classink_student_id)
+
+    teacher_emails = {
         email for (email,) in db.query(TeacherSchoolSpace.teacher_email).filter(
             TeacherSchoolSpace.school_id == school.school_id,
             TeacherSchoolSpace.is_verified.is_(True),
         ).all()
-    ]
-    legacy_teacher_emails = [
+    }
+    teacher_emails.update(
         email for (email,) in db.query(Teacher.email).filter(
             Teacher.school_id == school.school_id,
             Teacher.school_access_verified.is_(True),
         ).all()
-    ]
-    teacher_emails = list(set(linked_teacher_emails + legacy_teacher_emails))
+    )
+    teachers = db.query(Teacher).filter(Teacher.email.in_(list(teacher_emails))).all() if teacher_emails else []
+    teacher_by_email = {str(item.email): item for item in teachers}
+    course_by_id = {str(course.id): course for course in courses}
+    courses_by_name = {}
+    for course in courses:
+        courses_by_name.setdefault(normalize_name(course.course_name), []).append(course)
+
     detailed_rows = []
     if linked_ids and teacher_emails:
         detailed_rows = db.query(StudentGrade).filter(
             StudentGrade.school_id == school.school_id,
             StudentGrade.student_id.in_(list(set(linked_ids))),
-            StudentGrade.teacher_email.in_(teacher_emails),
-        ).order_by(StudentGrade.updated_at.asc()).all()
+            StudentGrade.teacher_email.in_(list(teacher_emails)),
+        ).order_by(StudentGrade.updated_at.asc(), StudentGrade.id.asc()).all()
 
     details_by_course = {}
     for row in detailed_rows:
-        key = normalize_name(row.course_name)
-        details_by_course.setdefault(key, []).append({
+        course = course_by_id.get(str(row.course_id or ""))
+        if not course:
+            # Anciennes lignes: on n'utilise le nom que s'il désigne un cours unique.
+            candidates = courses_by_name.get(normalize_name(row.course_name), [])
+            if len(candidates) == 1:
+                course = candidates[0]
+        if not course:
+            continue
+
+        teacher = teacher_by_email.get(str(row.teacher_email))
+        if not teacher:
+            continue
+        teacher_number = str(teacher.teacher_code or f"prof_{teacher.id}")
+        evaluation_date = str(row.eval_date or "") or (
+            row.updated_at.isoformat() if row.updated_at else ""
+        )
+        details_by_course.setdefault(str(course.id), []).append({
+            "id": str(row.eval_id),
             "period": row.period,
             "title": row.eval_name,
-            "date": row.updated_at.isoformat() if row.updated_at else "",
+            "date": evaluation_date,
             "max": float(row.max_score),
             "obtained": float(row.score),
+            "course": course.course_name,
+            "teacherName": teacher.full_name or "Enseignant",
+            "teacherCode": teacher_number,
             "content": "",
         })
 
@@ -4424,9 +4476,9 @@ def build_suivi_results_payload(db: Session, school: SchoolInformation, student:
                 value = getattr(official, attr, None)
                 if value is not None:
                     scores[period] = float(value)
-        # Les résultats par évaluation sont aussi affichés quand les notes viennent de ClassInk.
-        evals = details_by_course.get(normalize_name(course.course_name), [])
+        evals = details_by_course.get(str(course.id), [])
         result_courses.append({
+            "courseId": str(course.id),
             "name": course.course_name,
             "category": course.category or "",
             "subCategory": course.sub_category or "",
@@ -5165,6 +5217,160 @@ def get_teacher_info(identifier: str, db: Session = Depends(get_db), claims: dic
     }
 
 
+def calculate_classink_period_average(scores, course_max: float, period: str):
+    """Moyenne pondérée des interrogations, ramenée au barème du bulletin pour la période."""
+    valid = []
+    for item in scores or []:
+        try:
+            obtained = float(item[0])
+            maximum = float(item[1])
+        except (TypeError, ValueError, IndexError):
+            continue
+        if maximum > 0 and 0 <= obtained <= maximum:
+            valid.append((obtained, maximum))
+    if not valid or float(course_max or 0) <= 0:
+        return None
+    total_obtained = sum(item[0] for item in valid)
+    total_maximum = sum(item[1] for item in valid)
+    period_maximum = float(course_max) * (2 if str(period).upper() in ("EX1", "EX2") else 1)
+    return round((total_obtained / total_maximum) * period_maximum, 2)
+
+
+def consolidate_classink_period_averages(db: Session, school_id: str) -> dict:
+    """Calcule une moyenne par élève/cours/période à partir des interrogations de tous les enseignants vérifiés."""
+    verified_emails = {
+        email for (email,) in db.query(TeacherSchoolSpace.teacher_email).filter(
+            TeacherSchoolSpace.school_id == school_id,
+            TeacherSchoolSpace.is_verified.is_(True),
+        ).all()
+    }
+    verified_emails.update(
+        email for (email,) in db.query(Teacher.email).filter(
+            Teacher.school_id == school_id,
+            Teacher.school_access_verified.is_(True),
+        ).all()
+    )
+    if not verified_emails:
+        return {"teachers": 0, "interrogations": 0, "averages": 0}
+
+    teachers = db.query(Teacher).filter(Teacher.email.in_(list(verified_emails))).all()
+    teachers_by_email = {str(item.email): item for item in teachers}
+    students = db.query(SchoolStudentInformation).filter(
+        SchoolStudentInformation.school_id == school_id
+    ).all()
+    students_by_id = {str(item.id): item for item in students}
+    courses = db.query(CourseInformation).filter(
+        CourseInformation.school_id == school_id
+    ).all()
+    courses_by_id = {str(item.id): item for item in courses}
+    classes = db.query(ClasseInformation).filter(
+        ClasseInformation.school_id == school_id
+    ).all()
+    classes_by_id = {str(item.id): item for item in classes}
+
+    links = db.query(StudentLink).filter(StudentLink.school_id == school_id).all()
+    linked_students = {
+        (str(link.teacher_email), str(link.classink_student_id)): str(link.student_id)
+        for link in links
+    }
+
+    rows = db.query(StudentGrade).filter(
+        StudentGrade.school_id == school_id,
+        StudentGrade.teacher_email.in_(list(verified_emails)),
+    ).order_by(StudentGrade.updated_at.asc(), StudentGrade.id.asc()).all()
+
+    # Les anciennes notes n'ont pas toujours course_id. On les rattache uniquement
+    # lorsqu'un seul cours du même nom est attribué à cet enseignant dans cette classe.
+    courses_by_class_and_name = {}
+    for course in courses:
+        classe = classes_by_id.get(str(course.class_id))
+        if not classe:
+            continue
+        key = (str(classe.class_name), normalize_name(course.course_name))
+        courses_by_class_and_name.setdefault(key, []).append(course)
+
+    grouped_scores = {}
+    processed_eval_ids = set()
+    for row in rows:
+        teacher = teachers_by_email.get(str(row.teacher_email))
+        if not teacher:
+            continue
+        course = courses_by_id.get(str(row.course_id or ""))
+        if not course:
+            candidates = courses_by_class_and_name.get(
+                (str(row.class_name), normalize_name(row.course_name)), []
+            )
+            candidates = [
+                candidate for candidate in candidates
+                if teacher_matches_catalog_name(teacher, candidate.titulaire_name)
+            ]
+            if len(candidates) == 1:
+                course = candidates[0]
+        if not course or not teacher_matches_catalog_name(teacher, course.titulaire_name):
+            continue
+
+        class_name = classes_by_id.get(str(course.class_id))
+        if not class_name or normalize_name(class_name.class_name) != normalize_name(row.class_name):
+            continue
+
+        official_student_id = linked_students.get(
+            (str(row.teacher_email), str(row.student_id))
+        ) or str(row.student_id)
+        student = students_by_id.get(official_student_id)
+        if not student or str(student.class_id) != str(course.class_id):
+            continue
+        if row.period not in PERIODS:
+            continue
+
+        # Une interrogation ne compte qu'une fois par enseignant/élève/cours.
+        evaluation_identity = (
+            str(row.teacher_email), str(row.student_id), str(course.id), str(row.eval_id)
+        )
+        if evaluation_identity in processed_eval_ids:
+            continue
+        processed_eval_ids.add(evaluation_identity)
+
+        permanent = str(student.student_n_permanent or student.id)
+        key = (permanent, str(course.id), str(row.period))
+        grouped_scores.setdefault(key, []).append((row.score, row.max_score))
+
+    averages_written = 0
+    for (permanent, course_id, period), scores in grouped_scores.items():
+        course = courses_by_id.get(course_id)
+        if not course:
+            continue
+        average = calculate_classink_period_average(scores, float(course.max_per or 40), period)
+        if average is None:
+            continue
+        field = PERIOD_TO_KEY.get(period)
+        if not field:
+            continue
+        evaluation = db.query(TeacherEvaluation).filter(
+            TeacherEvaluation.school_id == school_id,
+            TeacherEvaluation.student_n_permanent == permanent,
+            TeacherEvaluation.course_id == course_id,
+        ).order_by(TeacherEvaluation.id.asc()).first()
+        if not evaluation:
+            evaluation = TeacherEvaluation(
+                school_id=school_id,
+                student_n_permanent=permanent,
+                course_id=course_id,
+            )
+            db.add(evaluation)
+            # SessionLocal utilise autoflush=False : rendre cette ligne visible
+            # avant la prochaine période du même élève/cours afin de la réutiliser.
+            db.flush()
+        setattr(evaluation, field, average)
+        averages_written += 1
+
+    db.flush()
+    return {
+        "teachers": len(teachers_by_email),
+        "interrogations": len(processed_eval_ids),
+        "averages": averages_written,
+    }
+
+
 @app.get("/api/primenet/sync/{school_id}")
 def get_primenet_data(school_id: str, db: Session = Depends(get_db), claims: dict = Depends(require_active_school)):
     """
@@ -5253,10 +5459,65 @@ def get_primenet_data(school_id: str, db: Session = Depends(get_db), claims: dic
                         
                     merged_data["presences"][date_p][c_name][course_name].update(statuses)
 
+    # Consolider les interrogations ClassInk de tous les enseignants vérifiés.
+    # Chaque couple élève/cours/période reçoit une seule moyenne pondérée.
+    classink_report = consolidate_classink_period_averages(db, school_id)
+    db.commit()
+
+    # Remplacer les anciennes valeurs PrimeNet potentiellement issues d'une seule
+    # interrogation par les moyennes finales de la table canonique TeacherEvaluation.
+    merged_data["moyenne_classe"] = {}
+    official_classes = {
+        str(item.id): item for item in db.query(ClasseInformation).filter(
+            ClasseInformation.school_id == school_id
+        ).all()
+    }
+    official_students_by_permanent = {
+        str(item.student_n_permanent or item.id): item
+        for item in db.query(SchoolStudentInformation).filter(
+            SchoolStudentInformation.school_id == school_id
+        ).all()
+    }
+    official_courses = {
+        str(item.id): item for item in db.query(CourseInformation).filter(
+            CourseInformation.school_id == school_id
+        ).all()
+    }
+    period_fields = {
+        "P1": "p1", "P2": "p2", "EX1": "ex1",
+        "P3": "p3", "P4": "p4", "EX2": "ex2",
+    }
+    for average_row in db.query(TeacherEvaluation).filter(
+        TeacherEvaluation.school_id == school_id
+    ).all():
+        course = official_courses.get(str(average_row.course_id))
+        student = official_students_by_permanent.get(str(average_row.student_n_permanent))
+        if not course or not student or str(course.class_id) != str(student.class_id):
+            continue
+        classe = official_classes.get(str(course.class_id))
+        if not classe:
+            continue
+        class_name = str(classe.class_name)
+        # Clé par ID pour ne pas fusionner deux matières qui ont le même libellé.
+        course_key = str(course.id)
+        merged_data["moyenne_classe"].setdefault(class_name, {})
+        merged_data["moyenne_classe"][class_name].setdefault(
+            course_key, {"P1": {}, "P2": {}, "EX1": {}, "P3": {}, "P4": {}, "EX2": {}}
+        )
+        full_name = " ".join(part for part in (
+            student.student_name or "", student.student_post_name or "", student.student_pre_name or ""
+        ) if part).strip()
+        for period, field in period_fields.items():
+            value = getattr(average_row, field, None)
+            if value is not None:
+                # L'ID évite les collisions entre deux élèves ayant le même nom.
+                merged_data["moyenne_classe"][class_name][course_key][period]["__id__" + str(student.id)] = float(value)
+
     # Convertir les sets en listes pour que le JSON soit valide (sérialisable)
     merged_data["classes"] = list(merged_data["classes"])
     merged_data["date_presence"] = list(merged_data["date_presence"])
-    
+
+    merged_data["classinkSync"] = classink_report
     merged_data["signatures"] = signatures_map
     merged_data["conduct"] = verified_behaviour
     return {

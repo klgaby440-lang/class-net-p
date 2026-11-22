@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Class-Ink App | Suite Pédagogique</title>
+    <title>ClassInk App</title>
     <!-- LIBRAIRIES JSPDF ET AUTO-TABLE POUR EXPORT PDF -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <link rel="icon" type="image/svg+xml" href="../assets/classink-logo.svg">
     <link rel="preload" href="../assets/crypt-logo.svg" as="image" type="image/svg+xml">
-    <meta name="application-name" content="ClassInk — CRYPT">
+    <meta name="application-name" content="ClassInk App — CRYPT">
     <style>
         /* --- VARIABLES & RESET --- */
         :root {
@@ -113,8 +113,10 @@
             border: 1px solid var(--border-color);
         }
         .card-header-toggle {
-            display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;
+            display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px;
         }
+        .card-header-toggle h4 { flex: 1 1 220px; min-width: 0; }
+        .card-header-toggle button { flex: 0 0 auto; }
         .class-selector { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 10px; align-items: center; }
         .btn-badge {
             background-color: var(--bg-color); color: var(--text-main);
@@ -132,7 +134,8 @@
         td, th { padding: 8px; text-align: left; border-bottom: 1px solid var(--border-color); font-size: 0.85rem; }
         tr:nth-child(even) { background-color: rgba(0,0,0,0.02); }
         
-        .push-actions { display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap; }
+        .push-actions { display: flex; flex-direction: column; align-items: stretch; gap: 8px; margin-top: 15px; }
+        .push-actions button { width: 100%; min-height: 44px; }
         .btn-primary, .btn-secondary, .btn-action {
             padding: 10px 14px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 0.85rem;
         }
@@ -286,19 +289,19 @@
 /* --- Bouton Flottant & Cercles Tourbillonnants --- */
 .floating-nav-btn {
     position: fixed;
-    bottom: 25px;
-    right: 25px;
+    bottom: 16px;
+    right: 18px;
     width: 56px;
     height: 56px;
     border-radius: 50%;
-    background-color: #6D28D9;
+    background: var(--primary-gradient);
     border: none;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 4px 15px rgba(109, 40, 217, 0.4);
-    z-index: 1001;
+    box-shadow: 0 5px 20px rgba(65, 43, 102, 0.34);
+    z-index: 1102;
     transition: transform 0.3s ease;
 }
 
@@ -335,43 +338,59 @@
 /* --- Barre de navigation (Masquée / Glissante) --- */
 .bottom-nav {
     position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    background-color: #FFFFFF;
+    left: 12px;
+    right: 88px;
+    bottom: 17px;
+    width: auto;
+    max-width: 720px;
+    margin: 0 auto;
+    background: var(--nav-bg);
+    color: var(--text-main);
     display: flex;
-    justify-content: space-around;
-    padding: 10px 0;
-    z-index: 1000;
-    border-top: 1px solid #E5E7EB;
-    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.08);
-    
-    /* Cachée par défaut en bas de l'écran */
-    transform: translateY(100%);
-    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    justify-content: flex-start;
+    align-items: center;
+    gap: 4px;
+    padding: 7px;
+    z-index: 1100;
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    box-shadow: 0 8px 28px rgba(0,0,0,.16);
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    transform: translateY(150%);
+    transition: transform 0.32s cubic-bezier(.2,.8,.2,1);
 }
-
-/* Classe ajoutée en JS pour afficher la barre */
-.bottom-nav.show {
-    transform: translateY(0);
-}
-
+.bottom-nav::-webkit-scrollbar { display:none; }
+.bottom-nav.show { transform: translateY(0); }
 .bottom-nav button.nav-btn {
-    background: none;
-    border: none;
-    color: #6B7280;
-    font-size: 0.75rem;
+    flex: 0 0 auto;
+    min-width: 62px;
+    min-height: 54px;
+    background: transparent;
+    border: 0;
+    border-radius: 14px;
+    color: var(--text-muted);
+    font-size: .69rem;
+    line-height: 1.15;
     display: flex;
     flex-direction: column;
+    justify-content: center;
     align-items: center;
+    gap: 3px;
     cursor: pointer;
-    padding: 4px 8px;
-    transition: color 0.2s;
+    padding: 5px 9px;
+    transition: background .2s, color .2s;
 }
-
+.bottom-nav button.nav-btn::before { font-size: 1.15rem; margin: 0; }
 .bottom-nav button.nav-btn.active {
-    color: #6D28D9;
-    font-weight: bold;
+    color: var(--primary);
+    background: color-mix(in srgb, var(--primary) 12%, transparent);
+    font-weight: 700;
+}
+@media (min-width: 760px) {
+    .bottom-nav { left: 50%; right: auto; width: min(620px, calc(100vw - 160px)); transform: translate(-50%, 150%); }
+    .bottom-nav.show { transform: translate(-50%, 0); }
 }
     </style>
 </head>
@@ -543,7 +562,7 @@
 
         <div class="push-actions">
             <button class="btn-primary" onclick="saveOfflineCommit()">Push Off (WiFi)</button>
-            <button class="btn-secondary" onclick="syncWithCloud()">Push On (API)</button>
+            <button class="btn-secondary" onclick="syncWithCloud()">Enregistrer mes notes sur le serveur</button>
         </div>
     </main>
 
@@ -727,21 +746,10 @@
         <div class="card">
             <h3 style="color: var(--primary); margin-bottom: 15px;">Profil & Identité Enseignant</h3>
             
-            <div class="form-group">
-                <label>NOM COMPLET DE L'ENSEIGNANT</label>
-                <input type="text" id="setting-user-name" value="Kahorha Gabriel">
-            </div>
-
-            <div class="form-group">
-                <label>ADRESSE E-MAIL DE L'ENSEIGNANT</label>
-                <div style="display: flex; gap: 8px;">
-                    <input type="email" id="setting-user-email" readonly style="font-weight: bold; background: rgba(0,0,0,0.05);">
-                </div>
-            </div>
-
-            <div class="form-group">
-                <label>ÉTABLISSEMENT / ÉCOLE</label>
-                <input type="text" id="setting-school-id" value="Enfant du Monde - Bukavu">
+            <div class="account-summary" style="display:grid;gap:5px;padding:12px;border-radius:10px;background:var(--bg-color);">
+                <strong id="setting-user-name">Compte enseignant</strong>
+                <span id="setting-user-email" style="color:var(--text-muted);font-size:.86rem;"></span>
+                <span id="setting-school-id" style="font-size:.86rem;"></span>
             </div>
             <div class="form-group">
                 <label>IDENTIFIANT D'ÉCOLE À ASSOCIER (MASQUÉ)</label>
@@ -768,30 +776,6 @@
                 </div>
                 <small style="display:block;margin-top:6px;color:var(--text-muted);">L'administration doit ajouter cet identifiant dans PrimeInk › Gestion des enseignants, puis préparer les informations des classes pour vous donner accès aux données de l'école.</small>
             </div>
-
-            <div class="form-group">
-                <label>MOT DE PASSE DU COMPTE LOCAL</label>
-                <input type="password" id="setting-user-pass" value="123456">
-            </div>
-
-            <!-- AJOUTS CRYPT : Téléphone et Âge -->
-            <div class="form-group">
-                <label>NUMÉRO DE TÉLÉPHONE</label>
-                <input type="tel" id="setting-user-phone" placeholder="Ex: 089...">
-            </div>
-
-            <div class="form-group">
-                <label>ÂGE</label>
-                <input type="number" id="setting-user-age" placeholder="Ex: 25">
-            </div>
-
-            <!-- NOUVEAU : ID de l'école -->
-            <div class="form-group">
-                <label>ID DE L'ÉCOLE (Peut être vide si enseignant indépendant)</label>
-                <input type="text" id="setting-school-code" placeholder="Ex: ECOLE-123">
-            </div>
-
-            <button class="btn-primary" onclick="openEditProfileModal()">✏️ Modifier le profil</button>
 
         </div>
 
@@ -913,53 +897,6 @@
             <div style="display: flex; gap: 10px;">
                 <button class="btn-secondary" id="custom-confirm-cancel" style="flex: 1;">Annuler</button>
                 <button class="btn-primary" id="custom-confirm-ok" style="flex: 1;">Confirmer</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- MODAL SÉCURISÉE DE MODIFICATION DU PROFIL ENSEIGNANT -->
-    <div id="edit-profile-modal" class="modal-overlay">
-        <div class="modal-content" style="max-width: 420px; width: 92%;">
-            <h3 style="color: var(--primary); margin-bottom: 15px;">Profil & Identité Enseignant</h3>
-            
-            <div class="form-group">
-                <label>NOM COMPLET DE L'ENSEIGNANT</label>
-                <input type="text" id="edit-profile-user-name">
-            </div>
-
-            <div class="form-group">
-                <label>ADRESSE E-MAIL DE L'ENSEIGNANT (IDENTIFIANT UNIQUE)</label>
-                <input type="email" id="edit-profile-user-email">
-            </div>
-
-            <div class="form-group">
-                <label>ÉTABLISSEMENT / ÉCOLE</label>
-                <input type="text" id="edit-profile-school-id">
-            </div>
-
-            <div class="form-group">
-                <label>NOUVEAU MOT DE PASSE (Optionnel)</label>
-                <input type="password" id="edit-profile-user-pass" placeholder="••••••••">
-            </div>
-
-            <div class="form-group">
-                <label>NUMÉRO DE TÉLÉPHONE</label>
-                <input type="tel" id="edit-profile-user-phone">
-            </div>
-
-            <div class="form-group">
-                <label>ÂGE</label>
-                <input type="number" id="edit-profile-user-age">
-            </div>
-
-            <div class="form-group">
-                <label>ID DE L'ÉCOLE (MASQUÉ)</label>
-                <input type="password" id="edit-profile-school-code" autocomplete="off" spellcheck="false">
-            </div>
-
-            <div style="display: flex; gap: 10px; margin-top: 15px;">
-                <button class="btn-action" onclick="closeEditProfileModal()" style="flex:1;">Annuler</button>
-                <button class="btn-primary" onclick="verifyAndSaveProfile()" style="flex:1;">💾 Valider les modifications</button>
             </div>
         </div>
     </div>
@@ -1229,6 +1166,7 @@ const defaultDB = {
     },
     classes: [], 
     courses: {},  
+    courseCatalog: {},
     courseMax: {}, // { "3ème Scientifique_SVT": 20 }
     periodVisibility: { "P1": true, "P2": false, "EX1": false, "P3": false, "P4": false, "EX2": false },
     activeCourseFilter: {},
@@ -1367,9 +1305,9 @@ function initApp() {
     }
     loadTheme();
     if (!db.user.id) db.user.id = generateUniqueId("SYS-CRYPT");
-    document.getElementById('setting-user-name').value = db.user.name;
-    document.getElementById('setting-school-id').value = db.user.school;
-    document.getElementById('setting-user-email').value = db.user.email || 'Non renseigné';
+    document.getElementById('setting-user-name').textContent = db.user.name || 'Compte enseignant';
+    document.getElementById('setting-school-id').textContent = db.user.school || 'Espace indépendant';
+    document.getElementById('setting-user-email').textContent = db.user.email || 'E-mail non renseigné';
     renderTeacherAccessCode();
 
     updateLoginHeaderButton();
@@ -1981,12 +1919,9 @@ async function refreshTeacherSessionStatus(options = {}) {
 }
 
 function updateProfileInfo() {
-    db.user.name = document.getElementById('setting-user-name').value;
-    db.user.email = document.getElementById('setting-user-email').value; // Ajout
-    db.user.password = document.getElementById('setting-user-pass').value;
-    db.user.school = document.getElementById('setting-school-id').value;
-    saveDB();
-    updateLoginHeaderButton();
+    // Identité et établissement sont fournis par la session serveur.
+    // Les champs locaux sensibles ne sont donc pas modifiables depuis les réglages.
+    return false;
 }
 
 /* ==========================================================================
@@ -2283,7 +2218,8 @@ function renderGradesTables() {
                 let total = 0;
                 let maxTotal = 0;
 
-                tableHTML += `<tr><td><strong>${safeHTML(st.name)}</strong></td><td><button type="button" class="student-note-access-placeholder" disabled title="Commande prévue dans une prochaine version">Bloquer / afficher les notes</button></td>`;
+                const studentRowIndex = filteredStudents.indexOf(st);
+                tableHTML += `<tr><td><strong>${safeHTML(st.name)}</strong></td><td><button type="button" class="student-note-access-placeholder" disabled title="Gestion des accès parent dans PrimeInk">Accès parent</button></td>`;
 
                 evals.forEach(ev => {
                     const gradeKey = `${st.id}_${ev.id}`;
@@ -2315,20 +2251,29 @@ function renderGradesTables() {
 
                     tableHTML += `
                         <td style="text-align:center;">
-                            <input type="number" 
-                                   value="${safeHTML(gradeVal)}" 
-                                   placeholder="-" 
+                            <input type="number"
+                                   class="classink-grade-input"
+                                   data-student-id="${safeHTML(st.id)}"
+                                   data-evaluation-id="${safeHTML(ev.id)}"
+                                   data-grade-max="${Number(ev.max) || 0}"
+                                   data-current-max="${Number(currentMaxBulletin) || 0}"
+                                   data-grid-row="${studentRowIndex}"
+                                   data-grid-col="${evals.indexOf(ev)}"
+                                   value="${safeHTML(gradeVal)}"
+                                   placeholder="-"
                                    min="0" max="${safeHTML(ev.max)}"
+                                   inputmode="decimal"
+                                   aria-label="Note de ${safeHTML(st.name)} - ${safeHTML(ev.name)}"
                                    style="${inputStyle}"
-                                   onchange="updateGrade(${jsArg(st.id)}, ${jsArg(ev.id)}, this.value, ${Number(ev.max) || 0})">
+                                   onchange="updateGrade(${jsArg(st.id)}, ${jsArg(ev.id)}, this.value, ${Number(ev.max) || 0}, this)">
                         </td>`;
                 });
 
                 const moyenneBulletin = maxTotal > 0 ? ((total / maxTotal) * currentMaxBulletin).toFixed(1) : "0.0";
 
                 tableHTML += `
-                    <td style="text-align:center; font-weight:bold; color:var(--primary);">${safeHTML(total)}/${safeHTML(maxTotal)}</td>
-                    <td style="text-align:center; font-weight:bold; color:var(--success);">${safeHTML(moyenneBulletin)} / ${safeHTML(currentMaxBulletin)}</td>
+                    <td data-grade-total style="text-align:center; font-weight:bold; color:var(--primary);">${safeHTML(total)}/${safeHTML(maxTotal)}</td>
+                    <td data-grade-average style="text-align:center; font-weight:bold; color:var(--success);">${safeHTML(moyenneBulletin)} / ${safeHTML(currentMaxBulletin)}</td>
                 </tr>`;
             });
         }
@@ -2621,30 +2566,102 @@ async function addEvaluationColumn(pKey) {
     renderGradesTables();
 }
 
-function updateGrade(studentId, evalId, value, maxVal) {
+function refreshClassInkGradeRow(input) {
+    const row = input && input.closest ? input.closest('tr') : null;
+    if (!row) return;
+    let total = 0;
+    let maxTotal = 0;
+    row.querySelectorAll('input.classink-grade-input').forEach(cell => {
+        const raw = String(cell.value || '').trim().replace(',', '.');
+        const score = raw === '' ? null : Number(raw);
+        const maximum = Number(cell.dataset.gradeMax || 0);
+        if (score !== null && Number.isFinite(score) && score >= 0 && score <= maximum && maximum > 0) {
+            total += score;
+            maxTotal += maximum;
+        }
+        if (score === null) {
+            cell.style.backgroundColor = '';
+            cell.style.color = '';
+            cell.style.borderColor = 'var(--border-color)';
+        } else if (!Number.isFinite(score) || score > maximum) {
+            cell.style.backgroundColor = '#FEE2E2';
+            cell.style.color = '#DC2626';
+            cell.style.borderColor = '#EF4444';
+        } else if (score < maximum / 2) {
+            cell.style.backgroundColor = '#FEF3C7';
+            cell.style.color = '#D97706';
+            cell.style.borderColor = '#F59E0B';
+        } else {
+            cell.style.backgroundColor = '#DCFCE7';
+            cell.style.color = '#15803D';
+            cell.style.borderColor = '#22C55E';
+        }
+    });
+    const totalCell = row.querySelector('[data-grade-total]');
+    const averageCell = row.querySelector('[data-grade-average]');
+    const periodMax = Number(input.dataset.currentMax || 0);
+    const average = maxTotal > 0 ? ((total / maxTotal) * periodMax).toFixed(1) : '0.0';
+    if (totalCell) totalCell.textContent = total + '/' + maxTotal;
+    if (averageCell) averageCell.textContent = average + ' / ' + periodMax;
+}
+
+function findClassInkGradeNeighbor(input, direction) {
+    const table = input && input.closest ? input.closest('table') : null;
+    const row = input && input.closest ? input.closest('tr') : null;
+    const cell = input && input.closest ? input.closest('td') : null;
+    if (!table || !row || !cell) return null;
+    const rows = Array.from(table.rows);
+    const rowIndex = rows.indexOf(row);
+    const columnIndex = cell.cellIndex;
+    if (direction === 'ArrowLeft' || direction === 'ArrowRight') {
+        const step = direction === 'ArrowLeft' ? -1 : 1;
+        for (let c = columnIndex + step; c >= 0 && c < row.cells.length; c += step) {
+            const candidate = row.cells[c].querySelector('input.classink-grade-input');
+            if (candidate) return candidate;
+        }
+        return null;
+    }
+    const step = direction === 'ArrowUp' ? -1 : 1;
+    for (let r = rowIndex + step; r >= 0 && r < rows.length; r += step) {
+        const candidateCell = rows[r].cells[columnIndex];
+        const candidate = candidateCell ? candidateCell.querySelector('input.classink-grade-input') : null;
+        if (candidate) return candidate;
+    }
+    return null;
+}
+
+function updateGrade(studentId, evalId, value, maxVal, input = null) {
     const gradeKey = `${studentId}_${evalId}`;
-    if (value === "") delete db.grades[gradeKey];
-    else {
-        let num = parseFloat(value);
+    const previous = db.grades[gradeKey] === undefined ? '' : String(db.grades[gradeKey]);
+    let next = '';
+    if (value !== '') {
+        let num = Number(String(value).replace(',', '.'));
+        if (!Number.isFinite(num)) return;
         if (num < 0) num = 0;
         if (num > maxVal) num = maxVal;
-        db.grades[gradeKey] = num;
+        next = num;
     }
-    
-    // NOUVEAU : Sauvegarde dans l'historique pour le Push Off
-    // On extrait le cours lié à cette évaluation
+    if (String(next) === previous) return;
+    if (next === '') delete db.grades[gradeKey];
+    else db.grades[gradeKey] = next;
+    if (input) input.value = next === '' ? '' : String(next);
+
     let courseName = "Général";
-    Object.keys(db.evaluations).forEach(cls => {
-        Object.values(db.evaluations[cls]).flat().forEach(ev => {
-            if(ev.id === evalId) courseName = ev.course || "Général";
+    let periodKey = "";
+    Object.values(db.evaluations || {}).forEach(periods => {
+        Object.entries(periods || {}).forEach(([period, entries]) => {
+            (entries || []).forEach(ev => {
+                if (ev.id === evalId) {
+                    courseName = ev.course || "Général";
+                    periodKey = period;
+                }
+            });
         });
     });
-    
-    logGradeChange(studentId, courseName, evalId, value);
-    
-    db.pendingCommits++;
+    logGradeChange(studentId, courseName, periodKey || evalId, next);
+    db.pendingCommits = (Number(db.pendingCommits) || 0) + 1;
     saveDB();
-    renderGradesTables();
+    refreshClassInkGradeRow(input);
 }
 
 /* ==========================================================================
@@ -2956,45 +2973,46 @@ async function saveOfflineCommit() {
 
 async function syncWithCloud() {
     if (!navigator.onLine) {
-        await showCustomAlert("⚠️ Mode Hors-Ligne détecté. Connexion Internet requise pour le Push On.");
+        await showCustomAlert("Mode hors ligne : une connexion Internet est requise pour envoyer les notes.");
         return;
     }
-
-    const inputPass = await showCustomPrompt("🔒 Entrez votre mot de passe pour autoriser la synchronisation Internet (Push On) :");
-    if (inputPass === null) return;
-    if (inputPass !== db.user.password) {
-        await showCustomAlert("❌ Mot de passe incorrect. Synchronisation Cloud annulée.");
+    const headers = cloudAuthHeaders();
+    if (!headers.Authorization) {
+        await showCustomAlert("Connectez-vous à votre compte enseignant avant d'envoyer les notes.");
         return;
     }
-
     const targetUrl = "https://class-net-p.onrender.com";
-    
+    const button = document.querySelector('.push-actions button[onclick="syncWithCloud()"]');
+    if (button) { button.disabled = true; button.textContent = "Envoi en cours…"; }
     try {
+        saveDB();
         const response = await fetch(`${targetUrl}/api/sync/classnet-app`, {
             method: 'POST',
-            headers: cloudAuthHeaders(),
+            headers,
             body: JSON.stringify(withoutSecrets(db))
         });
-
+        const result = await response.json().catch(() => ({}));
         if (response.status === 401 || response.status === 403) {
-            await showCustomAlert("🔒 Session Cloud absente ou expirée. Reconnectez-vous avec le bouton Connexion, puis relancez le Push On.");
+            await showCustomAlert(result.detail || "Session enseignante absente ou expirée. Reconnectez-vous.");
             return;
         }
-
-        const result = await response.json();
-
-        if (response.ok && result.status) {
-            db.pendingCommits = 0;
-            if (typeof appState !== 'undefined' && appState.syncHistory) {
-                appState.syncHistory.internet.push(Date.now());
-            }
-            saveDB();
-            await showCustomAlert(`🚀 ${result.message}`);
-        } else {
-            await showCustomAlert(`❌ Erreur du serveur : ${result.message || "Refus de synchronisation."}`);
+        if (!response.ok || !result.status) {
+            await showCustomAlert(result.detail || result.message || "Le serveur a refusé les notes.");
+            return;
         }
+        db.pendingCommits = 0;
+        saveDB();
+        const rejected = Array.isArray(result.warnings_or_errors) ? result.warnings_or_errors.length : 0;
+        await showCustomAlert(
+            (result.message || "Notes enregistrées sur le serveur.") +
+            (rejected ? " Certaines lignes ont été rejetées : " + rejected + ". Vérifiez les avertissements." : ""),
+            "Synchronisation ClassInk App"
+        );
     } catch (error) {
-        logSystemEvent('error', "Erreur de réseau critique lors du Push On Cloud.", error);
+        logSystemEvent('error', "Erreur lors de l'envoi des notes ClassInk au serveur.", error);
+        await showCustomAlert("Envoi impossible : " + (error.message || "erreur réseau"));
+    } finally {
+        if (button) { button.disabled = false; button.textContent = "Enregistrer mes notes sur le serveur"; }
     }
 }
 
@@ -3457,8 +3475,8 @@ async function submitConductToServer(period) {
 }
 
 async function regenerateCryptoID() {
-    const name = document.getElementById('setting-user-name').value;
-    const school = document.getElementById('setting-school-id').value;
+    const name = db.user.name || document.getElementById('setting-user-name')?.textContent || '';
+    const school = db.user.school || document.getElementById('setting-school-id')?.textContent || '';
     
     if (await showCustomConfirm("Voulez-vous générer une nouvelle clé d'identification cryptographique ?")) {
         const newID = await generateSecureTeacherID(name, school);
@@ -4042,56 +4060,7 @@ function logSystemEvent(level, message, detail = null) {
    GÉRATION SÉCURISÉE DES PARAMS ET PROFIL ENSEIGNANT (E-MAIL UNIQUE)
    ========================================================================== */
 
-function openEditProfileModal() {
-    document.getElementById('edit-profile-user-name').value = db.user.name || '';
-    document.getElementById('edit-profile-user-email').value = db.user.email || '';
-    document.getElementById('edit-profile-school-id').value = db.user.school || '';
-    document.getElementById('edit-profile-user-phone').value = db.user.phone || '';
-    document.getElementById('edit-profile-user-age').value = db.user.age || '';
-    document.getElementById('edit-profile-school-code').value = db.user.schoolCode || '';
-    document.getElementById('edit-profile-modal').classList.add('active');
-}
 
-function closeEditProfileModal() {
-    document.getElementById('edit-profile-modal').classList.remove('active');
-}
-
-async function verifyAndSaveProfile() {
-    const enteredPassword = await showCustomPrompt("🔑 Veuillez saisir votre mot de passe actuel pour confirmer les modifications :");
-    
-    if (enteredPassword === null) return;
-    if (enteredPassword !== db.user.password) {
-        await showCustomAlert("❌ Mot de passe incorrect. Modifications refusées.", "Erreur Authentification");
-        return;
-    }
-
-    const newEmail = document.getElementById('edit-profile-user-email').value.trim();
-    if (!newEmail || !newEmail.includes('@')) {
-        await showCustomAlert("⚠️ Veuillez saisir une adresse e-mail valide.");
-        return;
-    }
-
-    db.user.name = document.getElementById('edit-profile-user-name').value.trim();
-    db.user.email = newEmail;
-    db.user.school = document.getElementById('edit-profile-school-id').value.trim();
-    db.user.phone = document.getElementById('edit-profile-user-phone').value.trim();
-    db.user.age = document.getElementById('edit-profile-user-age').value.trim();
-    const profileSchoolId = document.getElementById('edit-profile-school-code').value.trim();
-    if (profileSchoolId) {
-        const request = await requestTeacherSchoolSpace(profileSchoolId, false);
-        if (!request.ok) await showCustomAlert(request.message || "La demande d'espace n'a pas pu être envoyée.");
-    }
-
-    const newPass = document.getElementById('edit-profile-user-pass').value.trim();
-    if (newPass) {
-        db.user.password = newPass;
-    }
-
-    saveDB();
-    closeEditProfileModal();
-    updateLoginHeaderButton();
-    await showCustomAlert("✅ Informations du profil mises à jour avec succès !");
-}
 
 // 1. Définir et sauvegarder le thème
 function setTheme(mode) {
@@ -4435,10 +4404,24 @@ document.addEventListener('DOMContentLoaded', () => {
     const bottomNav = document.getElementById('bottom-nav');
     const navButtons = document.querySelectorAll('.bottom-nav .nav-btn');
     const viewSections = document.querySelectorAll('.view-section');
+    const gradeGrid = document.getElementById('periods-container');
 
-    // 1. Afficher / Masquer la barre de navigation au clic sur le bouton à cercles
-    toggleBtn.addEventListener('click', () => {
+    // Navigation de feuille de calcul : flèches et Entrée passent d'une note à l'autre.
+    if (gradeGrid) gradeGrid.addEventListener('keydown', event => {
+        const input = event.target;
+        if (!input.classList || !input.classList.contains('classink-grade-input')) return;
+        let direction = event.key;
+        if (direction === 'Enter') direction = 'ArrowDown';
+        if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(direction)) return;
+        event.preventDefault();
+        const next = findClassInkGradeNeighbor(input, direction);
+        if (next) { next.focus(); if (typeof next.select === 'function') next.select(); }
+    });
+
+    // Le bouton du bas contrôle le dock horizontal, sans être recouvert par les réclamations.
+    if (toggleBtn && bottomNav) toggleBtn.addEventListener('click', () => {
         bottomNav.classList.toggle('show');
+        toggleBtn.setAttribute('aria-expanded', bottomNav.classList.contains('show') ? 'true' : 'false');
     });
 
     // 2. Gérer le changement de sections (Notes, Présences, Llink, Quiz, Réglages)
@@ -4528,9 +4511,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const button = document.createElement('button');
     button.id = 'cryptComplaintButton';
     button.type = 'button';
-    button.textContent = 'Aide / Réclamation';
-    button.setAttribute('aria-label','Envoyer une réclamation à CRYPT');
-    button.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:99990;border:0;border-radius:24px;padding:10px 15px;background:#244d83;color:white;font:600 12px system-ui;box-shadow:0 6px 24px #0004;cursor:pointer';
+    button.innerHTML = '<span aria-hidden="true" style="font-size:23px;line-height:1">?</span>';
+    button.setAttribute('aria-label','Aide / Réclamation à CRYPT');
+    button.title = 'Aide / Réclamation';
+    button.style.cssText = 'position:fixed;right:18px;bottom:84px;z-index:1103;width:56px;height:56px;display:flex;align-items:center;justify-content:center;border:0;border-radius:50%;padding:0;background:#244d83;color:white;font:700 22px system-ui;box-shadow:0 6px 24px #0004;cursor:pointer';
     button.addEventListener('click', async () => {
       const subject = window.prompt('Sujet de votre réclamation ou demande :');
       if (!subject || !subject.trim()) return;
