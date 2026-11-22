@@ -265,12 +265,24 @@ const tone = p => p >= 70 ? 'var(--ok)' : p >= 50 ? 'var(--warn)' : 'var(--bad)'
 const icon = (d, extra) => '<svg class="i" viewBox="0 0 24 24"' + (extra || '') + '>' + d + '</svg>';
 
 /* ---------- Stockage ---------- */
-// Stockage éphémère en mémoire vive : rien n'est écrit dans le navigateur.
+// Les identifiants d'élèves liés sont conservés sur l'appareil.
+// Les notes restent exclusivement en mémoire vive : cacheSet() les expurge avant tout stockage.
 const memoryStore = new Map();
 const store = {
-    get(key) { return memoryStore.has(key) ? memoryStore.get(key) : null; },
-    set(key, value) { memoryStore.set(key, String(value)); return true; },
-    del(key) { memoryStore.delete(key); }
+    get(key) {
+        try { return localStorage.getItem(key); }
+        catch (_) { return memoryStore.has(key) ? memoryStore.get(key) : null; }
+    },
+    set(key, value) {
+        const serialized = String(value);
+        memoryStore.set(key, serialized);
+        try { localStorage.setItem(key, serialized); } catch (_) { /* fallback mémoire */ }
+        return true;
+    },
+    del(key) {
+        memoryStore.delete(key);
+        try { localStorage.removeItem(key); } catch (_) { /* fallback mémoire */ }
+    }
 };
 const defaults = () => ({ theme: 'dark', pin: null, kids: [], active: '', history: [], read: [] });
 function loadSavedSuiviTheme() {
@@ -302,6 +314,10 @@ const liveData = new Map();
 function redactedParentData(data) {
     const safe = Object.assign({}, data || {});
     safe.results = null;
+    // Défense supplémentaire si un ancien ou futur backend expose les notes à plat.
+    safe.evaluations = null;
+    safe.grades = null;
+    safe.notes = null;
     safe.resultsAccess = {
         allowed: false,
         reason: 'offline',
@@ -639,6 +655,32 @@ function viewNotes() {
             return '<button class="item" data-act="course" data-i="' + i + '"><div class="grow"><div class="t">' + esc(c.name) + '</div>' + (s ? '<div class="bar" style="margin-top:6px"><i style="width:' + Math.min(100, s.pct) + '%;background:' + tone(s.pct) + '"></i></div>' : '<div class="m">Pas de note</div>') + '</div><div style="text-align:right" class="num">' + (s ? '<strong>' + fmt(s.got) + '</strong><span style="color:var(--muted)"> / ' + fmt(s.max) + '</span><div class="m">' + fmt(s.pct) + ' %</div>' : '—') + '</div></button>';
         }).join('') + '</div></div>';
     });
+
+    const allEvaluations = [];
+    (r.courses || []).forEach(course => {
+        (course.evaluations || []).forEach(evaluation => allEvaluations.push({
+            ...evaluation,
+            courseName: evaluation.course || course.name,
+            courseCategory: course.category || ''
+        }));
+    });
+    allEvaluations.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+    out += '<div class="card"><div class="row sb wrap"><div><h3>Toutes les interrogations</h3><p class="sub">Historique complet des évaluations de votre enfant.</p></div><span class="chip">' + allEvaluations.length + ' évaluation(s)</span></div>';
+    if (!allEvaluations.length) {
+        out += '<p class="sub" style="margin-top:10px">Aucune interrogation n’a encore été enregistrée.</p>';
+    } else {
+        out += '<div class="list" style="margin-top:10px">' + allEvaluations.map(e => {
+            const teacher = e.teacherName || 'Enseignant non renseigné';
+            const teacherCode = e.teacherCode || 'Non renseigné';
+            return '<article class="item" style="display:block"><div class="row sb wrap"><strong class="t">' + esc(e.title || 'Interrogation') + '</strong><span class="m">' + esc(fdate(e.date)) + '</span></div>' +
+                '<div class="m" style="margin-top:5px">Cours : <strong>' + esc(e.courseName) + '</strong>' + (e.courseCategory ? ' · ' + esc(e.courseCategory) : '') + '</div>' +
+                '<div class="m" style="margin-top:4px">Professeur : <strong>' + esc(teacher) + '</strong></div>' +
+                '<div class="m">N° du professeur : <strong>' + esc(teacherCode) + '</strong></div>' +
+                '<div class="row sb" style="margin-top:8px"><span class="m">' + esc(LABELS[e.period] || e.period || '') + '</span><strong class="num">' + fmt(e.obtained) + ' / ' + fmt(e.max) + '</strong></div>' +
+                (e.content ? '<p class="m" style="margin-top:6px">' + esc(e.content) + '</p>' : '') + '</article>';
+        }).join('') + '</div>';
+    }
+    out += '</div>';
     return out;
 }
 const needKid = () => '<div class="card empty"><div class="big">👨‍👩‍👧</div><p>Liez d’abord un enfant depuis l’Accueil pour voir cette page.</p><p style="margin-top:12px"><button class="btn" data-go="home">Aller à l’Accueil</button></p></div>';
@@ -650,7 +692,7 @@ function courseSheet(i) {
     const evs = (c.evaluations || []).slice().sort((a, b) => String(b.date).localeCompare(String(a.date)));
     const html = '<table class="t"><thead><tr><th>Période</th><th>Points</th><th>Maximum</th></tr></thead><tbody>' + row + '</tbody></table>' +
         '<p class="sub" style="margin:12px 0"><strong>Pour réussir.</strong> ' + esc(passAdvice(c)) + '</p>' +
-        (evs.length ? '<h4 style="margin:14px 0 4px">Évaluations</h4><div class="list">' + evs.map(e => '<div class="item" style="display:block"><div class="row sb"><span class="t">' + esc(e.title) + '</span><strong class="num">' + (num(e.obtained) === null ? '—' : fmt(e.obtained)) + ' / ' + fmt(e.max) + '</strong></div><div class="m">' + esc(fdate(e.date)) + (e.period ? ' · ' + esc(LABELS[e.period] || e.period) : '') + '</div>' + (e.content ? '<div class="m" style="margin-top:4px;color:var(--text)">' + esc(e.content) + '</div>' : '') + '</div>').join('') + '</div>' : '');
+        (evs.length ? '<h4 style="margin:14px 0 4px">Évaluations</h4><div class="list">' + evs.map(e => '<div class="item" style="display:block"><div class="row sb"><span class="t">' + esc(e.title) + '</span><strong class="num">' + (num(e.obtained) === null ? '—' : fmt(e.obtained)) + ' / ' + fmt(e.max) + '</strong></div><div class="m">' + esc(fdate(e.date)) + (e.period ? ' · ' + esc(LABELS[e.period] || e.period) : '') + '</div><div class="m">Professeur : <strong>' + esc(e.teacherName || 'Non renseigné') + '</strong></div><div class="m">N° du professeur : <strong>' + esc(e.teacherCode || 'Non renseigné') + '</strong></div>' + (e.content ? '<div class="m" style="margin-top:4px;color:var(--text)">' + esc(e.content) + '</div>' : '') + '</div>').join('') + '</div>' : '');
     ui.sheet(c.name, html);
 }
 
@@ -701,8 +743,8 @@ function viewSettings() {
     const list = kids();
     out += '<div class="card"><h3 style="margin-bottom:4px">Enfants liés</h3>' + (list.length ? '<div class="list">' + list.map(k => '<div class="item"><div class="grow"><div class="t">' + esc(k.name || k.code) + '</div><div class="m">' + esc(k.schoolName || '') + (k.className ? ' · ' + esc(k.className) : '') + '</div></div><button class="icon-btn" data-act="unlink" data-key="' + esc(k.key) + '" aria-label="Retirer ' + esc(k.name || k.code) + '">' + icon(IC.trash) + '</button></div>').join('') + '</div>' : '<p class="sub">Aucun enfant lié.</p>') + '<div style="margin-top:12px"><button class="btn sm ghost" data-act="addkid">' + icon(IC.plus, ' style="width:16px;height:16px"') + ' Lier un enfant</button></div></div>';
     out += '<div class="card"><h3>Démonstration</h3><p class="sub" style="margin:4px 0 12px">Essayez l’application avec des données fictives. Rien n’est enregistré.</p><button class="btn sm ghost" data-act="' + (DEMO ? 'demo-off' : 'demo-on') + '">' + (DEMO ? 'Quitter la démonstration' : 'Activer la démonstration') + '</button></div>';
-    out += '<div class="card"><h3>Données de cet appareil</h3><p class="sub" style="margin:4px 0 12px">Efface les enfants liés, l’historique, le PIN et les résultats gardés pour la lecture hors connexion.</p><button class="btn sm danger" data-act="erase">Tout effacer</button></div>';
-    out += '<p class="sub" style="text-align:center;font-size:.78rem">Class-Ink Suivi · version ' + VERSION + '<br>Serveur : ' + esc(API_BASE.replace(/^https?:\/\//, '')) + '</p>';
+    out += '<div class="card"><h3>Données de cet appareil</h3><p class="sub" style="margin:4px 0 12px">Efface les identifiants des enfants liés, l’historique et le PIN. Les notes ne sont jamais conservées hors ligne.</p><button class="btn sm danger" data-act="erase">Tout effacer</button></div>';
+    out += '<p class="sub" style="text-align:center;font-size:.78rem">ClassInk Suivi · identifiants conservés sur cet appareil, notes non conservées · version ' + VERSION + '<br>Serveur : ' + esc(API_BASE.replace(/^https?:\/\//, '')) + '</p>';
     return out;
 }
 
