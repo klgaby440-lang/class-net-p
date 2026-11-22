@@ -3252,6 +3252,7 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
     official_classes_by_name = {}
     assigned_courses_by_class = {}
     assigned_course_rows_by_class_label = {}
+    assigned_course_rows_by_class_id = {}
     official_course_max = {}
     teacher_allowed_classes = set()
     course_catalog_payload = payload.get("courseCatalog") if isinstance(payload.get("courseCatalog"), dict) else {}
@@ -3294,6 +3295,7 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
             label = course_catalog_by_class_id.get((class_name, str(course.id)), str(course.course_name))
             assigned_courses_by_class.setdefault(class_name, set()).add(label)
             assigned_course_rows_by_class_label[(class_name, label)] = course
+            assigned_course_rows_by_class_id[(class_name, str(course.id))] = course
             official_course_max[(class_name, label)] = float(course.max_per or 40)
 
     # --- 2. Indexation des élèves réellement présents dans le catalogue autorisé ---
@@ -3396,10 +3398,21 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
                 continue
             if not student_info or normalize_name(student_info.get("class")) != normalize_name(class_name):
                 continue
-            course_row = assigned_course_rows_by_class_label.get((class_name, course_label))
+            incoming_course_id = str(item.get("courseId") or item.get("course_id") or "").strip()
+            course_row = (
+                assigned_course_rows_by_class_id.get((str(student_info.get("class") or ""), incoming_course_id))
+                if incoming_course_id else None
+            )
+            if course_row is None:
+                course_row = assigned_course_rows_by_class_label.get((class_name, course_label))
             official_student_id = str(student_info.get("official_student_id") or "").strip()
             if not course_row or not official_student_id:
                 continue
+            # Un identifiant de cours exact prime sur le seul libellé pour éviter
+            # de fusionner deux cours homonymes. Le libellé envoyé est conservé.
+            course_label = course_catalog_by_class_id.get(
+                (str(student_info.get("class") or ""), str(course_row.id)), course_label
+            ) or str(course_row.course_name)
             attendance_row = db.query(StudentAttendance).filter(
                 StudentAttendance.school_id == verified_school_id,
                 StudentAttendance.teacher_email == teacher.email,
