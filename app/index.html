@@ -3465,8 +3465,8 @@ async function submitConductToServer(period) {
 }
 
 async function regenerateCryptoID() {
-    const name = document.getElementById('setting-user-name').value;
-    const school = document.getElementById('setting-school-id').value;
+    const name = db.user.name || document.getElementById('setting-user-name')?.textContent || '';
+    const school = db.user.school || document.getElementById('setting-school-id')?.textContent || '';
     
     if (await showCustomConfirm("Voulez-vous générer une nouvelle clé d'identification cryptographique ?")) {
         const newID = await generateSecureTeacherID(name, school);
