@@ -1152,6 +1152,11 @@ window.addEventListener('pageshow', event => {
 [data-theme="light"] #llink-assist-send{background:var(--accent);color:#fff}
 [data-theme="dark"] #llink-assist-input{color-scheme:dark}
 
+
+[data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]),[data-theme="dark"] select,[data-theme="dark"] textarea{color-scheme:dark}
+[data-theme="light"] input:not([type="checkbox"]):not([type="radio"]),[data-theme="light"] select,[data-theme="light"] textarea{color-scheme:light}
+[data-theme="dark"] input::placeholder,[data-theme="dark"] textarea::placeholder{color:var(--muted);opacity:1}
+
 </style>
 <div id="llink-assist-root" data-app="suivi">
  <button type="button" id="llink-assist-toggle" aria-expanded="false" aria-controls="llink-assist-panel">✦ Demander à Llink</button>
