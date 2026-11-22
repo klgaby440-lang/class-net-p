@@ -7617,7 +7617,8 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
                 schoolId = (await showCustomPrompt("Saisissez l'identifiant de l'école (communiqué par ClassInk) :", "", "Connexion à l'école")) || "";
                 if (!schoolId) return;
             }
-            const password = document.getElementById('appPasswordInput')?.value || "";
+            const password = window.prompt("Saisissez le mot de passe actuel de l'établissement pour charger sa base :") || "";
+            if (!password) return;
             
             try {
                 const response = await fetch(`${API_BASE_URL}/api/primenet/load`, {
