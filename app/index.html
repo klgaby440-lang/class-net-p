@@ -2644,14 +2644,21 @@ function updateGrade(studentId, evalId, value, maxVal, input = null) {
     if (String(next) === previous) return;
     if (next === '') delete db.grades[gradeKey];
     else db.grades[gradeKey] = next;
+    if (input) input.value = next === '' ? '' : String(next);
 
     let courseName = "Général";
-    Object.keys(db.evaluations || {}).forEach(cls => {
-        Object.values(db.evaluations[cls] || {}).flat().forEach(ev => {
-            if (ev.id === evalId) courseName = ev.course || "Général";
+    let periodKey = "";
+    Object.values(db.evaluations || {}).forEach(periods => {
+        Object.entries(periods || {}).forEach(([period, entries]) => {
+            (entries || []).forEach(ev => {
+                if (ev.id === evalId) {
+                    courseName = ev.course || "Général";
+                    periodKey = period;
+                }
+            });
         });
     });
-    logGradeChange(studentId, courseName, evalId, next);
+    logGradeChange(studentId, courseName, periodKey || evalId, next);
     db.pendingCommits = (Number(db.pendingCommits) || 0) + 1;
     saveDB();
     refreshClassInkGradeRow(input);
