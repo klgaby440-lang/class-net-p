@@ -5357,6 +5357,9 @@ def consolidate_classink_period_averages(db: Session, school_id: str) -> dict:
                 course_id=course_id,
             )
             db.add(evaluation)
+            # SessionLocal utilise autoflush=False : rendre cette ligne visible
+            # avant la prochaine période du même élève/cours afin de la réutiliser.
+            db.flush()
         setattr(evaluation, field, average)
         averages_written += 1
 
