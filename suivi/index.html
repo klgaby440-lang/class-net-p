@@ -1140,6 +1140,23 @@ window.addEventListener('pageshow', event => {
 #llink-assist-send{border:0;border-radius:10px;padding:10px 12px;background:#477fe5;color:#fff;font-weight:750;cursor:pointer}
 #llink-assist-send:disabled,#llink-assist-input:disabled{opacity:.5;cursor:wait}
 @media(max-width:600px){#llink-assist-root{left:12px;bottom:12px}#llink-assist-panel{width:calc(100vw - 24px);height:min(68vh,560px)}}
+
+/* Contrastes Llink adaptés au thème de l'application */
+[data-theme="light"] #llink-assist-panel{background:var(--surface);color:var(--text);border-color:var(--border)}
+[data-theme="light"] #llink-assist-head,[data-theme="light"] #llink-assist-foot{background:var(--surface-2);border-color:var(--border)}
+[data-theme="light"] #llink-assist-head small,[data-theme="light"] #llink-assist-warning{color:var(--muted)}
+[data-theme="light"] .llink-assist-message.assistant{background:var(--surface-2);color:var(--text);border-color:var(--border)}
+[data-theme="light"] .llink-assist-message.user{background:#dce9ff;color:#17345f}
+[data-theme="light"] #llink-assist-input{background:var(--surface);color:var(--text);border-color:var(--border);color-scheme:light}
+[data-theme="light"] #llink-assist-toggle{background:var(--surface);color:var(--text);border-color:var(--border)}
+[data-theme="light"] #llink-assist-send{background:var(--accent);color:#fff}
+[data-theme="dark"] #llink-assist-input{color-scheme:dark}
+
+
+[data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]),[data-theme="dark"] select,[data-theme="dark"] textarea{color-scheme:dark}
+[data-theme="light"] input:not([type="checkbox"]):not([type="radio"]),[data-theme="light"] select,[data-theme="light"] textarea{color-scheme:light}
+[data-theme="dark"] input::placeholder,[data-theme="dark"] textarea::placeholder{color:var(--muted);opacity:1}
+
 </style>
 <div id="llink-assist-root" data-app="suivi">
  <button type="button" id="llink-assist-toggle" aria-expanded="false" aria-controls="llink-assist-panel">✦ Demander à Llink</button>

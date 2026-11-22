@@ -1115,7 +1115,29 @@ body {
 .bp-autosave-hint { margin-left: auto; }
 @media (max-width: 900px) { #view-fiches .detail-display-area { overflow-x: auto; } #view-fiches .data-table { min-width: 820px; } .bp-autosave-hint { margin-left: 0; width: 100%; } }
 
-    </style>
+    
+/* Saisie de notes et contrôles natifs : surfaces lisibles dans les deux thèmes.
+   Les feuilles de bulletin et aperçus imprimables restent volontairement blancs. */
+body.theme-dark .fiche-grade-input{background:#172438;color:#f8fafc;border-color:#52627a;color-scheme:dark}
+body.theme-dark .fiche-grade-input:focus{background:#24364f;color:#fff}
+body.theme-dark .fiche-grade-input:invalid,
+body.theme-dark .fiche-grade-input[aria-invalid="true"]{background:#3a202b;color:#fff;border-color:#fb7185}
+body.theme-dark .fiche-total-missing{color:#fbbf24}
+body.theme-dark .edit-beh{background:#3b321c;color:#fef3c7}
+body.theme-dark input.form-control,
+body.theme-dark select.form-control,
+body.theme-dark textarea.form-control{color-scheme:dark}
+body.theme-light input.form-control,
+body.theme-light select.form-control,
+body.theme-light textarea.form-control{color-scheme:light}
+body.theme-dark .settings-card small,
+body.theme-dark .settings-card p{color:var(--text-secondary)}
+body.theme-dark input:not([type="checkbox"]):not([type="radio"]):not(.bp-input),
+body.theme-dark select,body.theme-dark textarea{color-scheme:dark}
+body.theme-light input:not([type="checkbox"]):not([type="radio"]):not(.bp-input),
+body.theme-light select,body.theme-light textarea{color-scheme:light}
+body.theme-dark input::placeholder,body.theme-dark textarea::placeholder{color:var(--text-secondary);opacity:1}
+</style>
     <link rel="icon" type="image/svg+xml" href="../assets/classink-logo.svg">
     <link rel="apple-touch-icon" href="../assets/classink-logo.svg">
 </head>
@@ -1624,31 +1646,30 @@ body {
                 </div>
             </div>
             </section>
-            <div class="settings-card">
-                <h2>INFORMATIONS DE L'ÉTABLISSEMENT</h2>
-                <div class="form-group">
-                    <label>IDENTIFIANT UNIQUE ÉCOLE</label>
-                    <span class="id-badge">cnxcrypt_63017_63011_90006_56001</span>
+            <div class="settings-card" style="grid-column:1 / -1;" id="primeInkAccountProfileCard">
+                <h2>INFORMATIONS DE L'ÉTABLISSEMENT</h2><h3 style="font-size:.9rem;margin:-.6rem 0 1rem;color:var(--text-secondary);">Compte, coordonnées et sécurité</h3>
+                <p style="font-size:.84rem;color:var(--text-secondary);margin:-.5rem 0 1rem;">Modifiez le nom, les coordonnées et le mot de passe du compte connecté. L'identifiant unique et l'adresse e-mail de connexion sont fixes.</p>
+                <div class="grid-2col">
+                    <div class="form-group"><label>IDENTIFIANT UNIQUE ÉCOLE (FIXE)</label><input type="text" class="form-control" id="primeSchoolProfileId" readonly></div>
+                    <div class="form-group"><label>ADRESSE E-MAIL (FIXE)</label><input type="email" class="form-control" id="primeSchoolProfileEmail" readonly></div>
+                    <div class="form-group"><label>NOM DE L'ÉTABLISSEMENT</label><input type="text" class="form-control" id="primeSchoolProfileName" maxlength="180"></div>
+                    <div class="form-group"><label>NOM COMPLET DU RESPONSABLE</label><input type="text" class="form-control" id="primeSchoolProfileResponsible" maxlength="180"></div>
+                    <div class="form-group"><label>NUMÉRO DE TÉLÉPHONE</label><input type="tel" class="form-control" id="primeSchoolProfilePhone" maxlength="40" placeholder="+243…"></div>
+                    <div class="form-group"><label>VILLE</label><input type="text" class="form-control" id="primeSchoolProfileCity" maxlength="100"></div>
+                    <div class="form-group"><label>COMMUNE / TERRITOIRE</label><input type="text" class="form-control" id="primeSchoolProfileCommune" maxlength="100"></div>
+                    <div class="form-group"><label>ADRESSE PHYSIQUE</label><input type="text" class="form-control" id="primeSchoolProfileAddress" maxlength="240"></div>
                 </div>
-                <div class="form-group">
-                    <label>NOM DE L'ÉTABLISSEMENT</label>
-                    <input type="text" class="form-control" id="inputSchoolName" value="Enfant du Monde">
+                <div style="border-top:1px solid var(--border-color);margin:.7rem 0 1rem;padding-top:1rem;">
+                    <h3 style="font-size:.95rem;margin-bottom:.8rem;">Sécurité du compte</h3>
+                    <div class="grid-2col">
+                        <div class="form-group"><label>MOT DE PASSE ACTUEL</label><input type="password" class="form-control" id="primeSchoolProfileCurrentPassword" autocomplete="current-password"></div>
+                        <div class="form-group"><label>NOUVEAU MOT DE PASSE (FACULTATIF)</label><input type="password" class="form-control" id="primeSchoolProfileNewPassword" minlength="8" maxlength="128" autocomplete="new-password" placeholder="8 caractères minimum"></div>
+                        <div class="form-group"><label>CONFIRMER LE NOUVEAU MOT DE PASSE</label><input type="password" class="form-control" id="primeSchoolProfileConfirmPassword" minlength="8" maxlength="128" autocomplete="new-password"></div>
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label>NOM COMPLET DU RESPONSABLE</label>
-                    <input type="text" class="form-control" placeholder="Gabriel Kahorha">
-                </div>
-                <div class="form-group">
-                    <label>NUMÉRO DE TÉLÉPHONE</label>
-                    <input type="number" class="form-control" placeholder="EX : 0895281305">
-                </div>
-                <div class="form-group">
-                    <label>ADRESSE PHYSIQUE</label>
-                    <input type="text" class="form-control" placeholder="EX : Bukavu Av. Mbaki N°86">
-                </div>
-                <div class="form-group">
-                    <label>MOT DE PASSE ÉCOLE</label>
-                    <input type="password" id="appPasswordInput" class="form-control" value="12345678">
+                <div style="display:flex;gap:.7rem;align-items:center;flex-wrap:wrap;">
+                    <button type="button" class="btn-primary" id="primeSchoolProfileSave" onclick="savePrimeInkSchoolProfile()">Enregistrer les informations</button>
+                    <span id="primeSchoolProfileStatus" role="status" aria-live="polite" style="font-size:.8rem;color:var(--text-secondary);"></span>
                 </div>
             </div>
             <!-- IDENTITÉ DU BULLETIN, SCEAU ET SIGNATURES -->
@@ -3535,6 +3556,7 @@ window.alert = function(message) { showCustomAlert(message); };
                             if (b) bpHandleImageAction(b.getAttribute('data-bp-target'), b.getAttribute('data-bp-action'));
                         });
                         document.querySelectorAll('.nav-btn[data-target="section-settings"]').forEach(b => b.addEventListener('click', bpRenderIdentityCard));
+                        document.querySelectorAll('.nav-btn[data-target="section-settings"]').forEach(b => b.addEventListener('click', () => loadPrimeInkSchoolProfile()));
                         bpRenderIdentityCard();
                     }
                 });
@@ -3542,6 +3564,93 @@ window.alert = function(message) { showCustomAlert(message); };
 
 // ---- Envoi immédiat des réglages au serveur (en plus de la synchronisation complète) ----
 // En cas de coupure, rien n'est perdu : les réglages restent sur cet appareil et partent avec la prochaine synchronisation.
+
+        async function loadPrimeInkSchoolProfile(options = {}) {
+            const status = document.getElementById('primeSchoolProfileStatus');
+            const headers = primeInkAuthHeaders();
+            if (!headers.Authorization) {
+                if (status && !options.silent) status.textContent = "Connectez d'abord le compte de l'école.";
+                return false;
+            }
+            try {
+                const response = await fetch(API_BASE_URL + '/api/school/profile', {
+                    method: 'GET', headers, cache: 'no-store'
+                });
+                const result = await response.json().catch(() => ({}));
+                if (!response.ok || !result.status || !result.data) throw new Error(result.detail || result.message || "Profil indisponible.");
+                const p = result.data;
+                document.getElementById('primeSchoolProfileId').value = p.school_id || '';
+                document.getElementById('primeSchoolProfileEmail').value = p.email || '';
+                document.getElementById('primeSchoolProfileName').value = p.name_school || '';
+                document.getElementById('primeSchoolProfileResponsible').value = p.name_responsable || '';
+                document.getElementById('primeSchoolProfilePhone').value = p.num_tel || '';
+                document.getElementById('primeSchoolProfileCity').value = p.city || '';
+                document.getElementById('primeSchoolProfileCommune').value = p.commune || '';
+                document.getElementById('primeSchoolProfileAddress').value = p.adresse_physique || '';
+                Object.assign(appState.school, {
+                    id: p.school_id || appState.school.id || '',
+                    name: p.name_school || '',
+                    city: p.city || '',
+                    commune: p.commune || '',
+                    responsable: p.name_responsable || '',
+                    phone: p.num_tel || '',
+                    address: p.adresse_physique || '',
+                    email: p.email || ''
+                });
+                if (status && !options.silent) status.textContent = "Profil chargé depuis le serveur.";
+                return true;
+            } catch (error) {
+                if (status && !options.silent) status.textContent = error.message || "Erreur de chargement.";
+                return false;
+            }
+        }
+
+        window.savePrimeInkSchoolProfile = async function() {
+            const status = document.getElementById('primeSchoolProfileStatus');
+            const button = document.getElementById('primeSchoolProfileSave');
+            const currentPassword = document.getElementById('primeSchoolProfileCurrentPassword').value;
+            const newPassword = document.getElementById('primeSchoolProfileNewPassword').value;
+            const confirmPassword = document.getElementById('primeSchoolProfileConfirmPassword').value;
+            if (!currentPassword) { status.textContent = "Le mot de passe actuel est obligatoire."; return; }
+            if (newPassword && newPassword.length < 8) { status.textContent = "8 caractères minimum pour le nouveau mot de passe."; return; }
+            if (newPassword !== confirmPassword) { status.textContent = "Les deux nouveaux mots de passe ne correspondent pas."; return; }
+            if (button) { button.disabled = true; button.textContent = "Enregistrement…"; }
+            status.textContent = "Vérification sécurisée…";
+            try {
+                const response = await fetch(API_BASE_URL + '/api/school/profile', {
+                    method: 'PUT', headers: primeInkAuthHeaders(), cache: 'no-store',
+                    body: JSON.stringify({
+                        current_password: currentPassword,
+                        new_password: newPassword || '',
+                        name_school: document.getElementById('primeSchoolProfileName').value.trim(),
+                        name_responsable: document.getElementById('primeSchoolProfileResponsible').value.trim(),
+                        num_tel: document.getElementById('primeSchoolProfilePhone').value.trim(),
+                        city: document.getElementById('primeSchoolProfileCity').value.trim(),
+                        commune: document.getElementById('primeSchoolProfileCommune').value.trim(),
+                        adresse_physique: document.getElementById('primeSchoolProfileAddress').value.trim()
+                    })
+                });
+                const result = await response.json().catch(() => ({}));
+                if (!response.ok || !result.status || !result.data) throw new Error(result.detail || result.message || "Modifications refusées.");
+                Object.assign(appState.school, {
+                    id: result.data.school_id, name: result.data.name_school,
+                    city: result.data.city, commune: result.data.commune,
+                    responsable: result.data.name_responsable, phone: result.data.num_tel,
+                    address: result.data.adresse_physique, email: result.data.email
+                });
+                saveState();
+                document.getElementById('primeSchoolProfileCurrentPassword').value = '';
+                document.getElementById('primeSchoolProfileNewPassword').value = '';
+                document.getElementById('primeSchoolProfileConfirmPassword').value = '';
+                status.textContent = "Profil mis à jour. L'identifiant et l'adresse e-mail sont inchangés.";
+                if (typeof bpRenderIdentityCard === 'function') bpRenderIdentityCard();
+            } catch (error) {
+                status.textContent = error.message || "Impossible d'enregistrer le profil.";
+            } finally {
+                if (button) { button.disabled = false; button.textContent = "Enregistrer les informations"; }
+            }
+        };
+
 async function bpServerCall(method, path, body) {
     const headers = cloudAuthHeaders();
     if (!headers['Authorization']) return { ok: false, offline: true };
@@ -6712,13 +6821,34 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
             });
 
             // 7. Déverrouillage Écran
-            document.getElementById('unlockBtn').addEventListener('click', () => {
+            document.getElementById('unlockBtn').addEventListener('click', async () => {
                 const pass = document.getElementById('lockPasswordInput').value;
-                const setPass = document.getElementById('appPasswordInput').value || "12345678";
-                if (pass === setPass) {
+                const schoolId = String(appState.school?.id || '').trim();
+                const button = document.getElementById('unlockBtn');
+                if (!pass) return alert("Saisissez le mot de passe de l'établissement.");
+                if (!schoolId) {
+                    // Une installation locale qui n'a pas encore chargé de compte scolaire
+                    // ne dispose pas d'un mot de passe cloud à vérifier.
                     document.getElementById('lock-screen-overlay').classList.add('hidden');
-                } else {
-                    alert("Mot de passe incorrect.");
+                    return;
+                }
+                if (button) { button.disabled = true; button.textContent = "Vérification…"; }
+                try {
+                    const response = await fetch(API_BASE_URL + '/api/auth/school/login', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        cache: 'no-store', body: JSON.stringify({ identifier: schoolId, password: pass })
+                    });
+                    const result = await response.json().catch(() => ({}));
+                    if (!response.ok || !result.status || !result.token) {
+                        throw new Error(result.message || result.detail || "Mot de passe incorrect ou compte indisponible.");
+                    }
+                    try { localStorage.setItem('primeink_cloud_token', result.token); } catch (_) {}
+                    document.getElementById('lockPasswordInput').value = '';
+                    document.getElementById('lock-screen-overlay').classList.add('hidden');
+                } catch (error) {
+                    alert(error.message || "Vérification du mot de passe impossible.");
+                } finally {
+                    if (button) { button.disabled = false; button.textContent = "Déverrouiller"; }
                 }
             });
 
@@ -7491,7 +7621,8 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
                 schoolId = (await showCustomPrompt("Saisissez l'identifiant de l'école (communiqué par ClassInk) :", "", "Connexion à l'école")) || "";
                 if (!schoolId) return;
             }
-            const password = document.getElementById('appPasswordInput')?.value || "";
+            const password = window.prompt("Saisissez le mot de passe actuel de l'établissement pour charger sa base :") || "";
+            if (!password) return;
             
             try {
                 const response = await fetch(`${API_BASE_URL}/api/primenet/load`, {

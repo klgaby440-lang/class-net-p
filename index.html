@@ -485,6 +485,7 @@
                     <li><a href="#ecosystem">Établissement & parents</a></li>
                     <li><a href="#architecture">Fonctionnement</a></li>
                     <li><a href="#download">Accès & téléchargements</a></li>
+                    <li><a href="#updates">Nouveautés</a></li>
                     <li><a href="#faq">FAQ</a></li>
                     <li>
                         <button class="theme-toggle-btn" id="themeToggle" aria-label="Changer de thème">
@@ -560,7 +561,8 @@
                     <p>Un journal numérique pour enregistrer la situation des élèves au fil des journées.</p>
                     <ul class="feature-list">
                         <li>Présent, absent, retard et absence justifiée</li>
-                        <li>Recherche d’un élève dans la classe</li>
+                        <li>Appel enregistré par cours, date et séance / heure</li>
+                        <li>Synchronisation des appels avec PrimeInk</li>
                         <li>Historique et rapports de présence</li>
                     </ul>
                 </article>
@@ -591,7 +593,9 @@
                     <ul class="feature-list">
                         <li>Compte enseignant et identifiant ClassInk</li>
                         <li>Récupération du catalogue préparé dans PrimeInk</li>
-                        <li>Profil, rôle, emploi du temps et signature</li>
+                        <li>Profil modifiable : nom et téléphone, avec changement sécurisé du mot de passe</li>
+                        <li>Adresse e-mail et identifiant ClassInk conservés comme identifiants fixes</li>
+                        <li>Rôle, emploi du temps, signature et conversation privée avec la direction</li>
                     </ul>
                 </article>
                 <article class="feature-card">
@@ -673,7 +677,9 @@
                     <p>Les informations de l’école et des bulletins se configurent dans les paramètres de PrimeInk.</p>
                     <ul class="feature-list">
                         <li>Export et import de la base au format Excel</li>
-                        <li>Informations de l’établissement et année scolaire</li>
+                        <li>Communiqués destinés aux parents dans ClassInk Suivi</li>
+                        <li>Messages privés entre la direction et chaque enseignant</li>
+                        <li>Profil de l'école : coordonnées et mot de passe modifiables, identifiant et e-mail fixes</li>
                         <li>Sceau, signatures et identité des bulletins</li>
                     </ul>
                 </article>
@@ -697,7 +703,9 @@
                         <li>Vue générale des classes et des effectifs</li>
                         <li>Résultats par période et indicateurs de réussite</li>
                         <li>Rapports, horaires et gestion des enseignants</li>
-                        <li>Paramètres de l’établissement et accès aux résultats Suivi</li>
+                        <li>Consultation des indicateurs, avec gestion du profil de connexion</li>
+                        <li>Coordonnées et mot de passe modifiables après vérification du mot de passe actuel</li>
+                        <li>Adresse e-mail et identifiant de l’école non modifiables</li>
                     </ul>
                     <a href="./manager/" class="btn btn-outline">Ouvrir ClassInk Manager</a>
                 </article>
@@ -708,6 +716,9 @@
                     <ul class="feature-list">
                         <li>Recherche de l’établissement et liaison par identifiant élève</li>
                         <li>Consultation des résultats lorsque l’école l’autorise</li>
+                        <li>Présences détaillées par jour, cours et séance, avec résumé journalier</li>
+                        <li>Lecture seule des communiqués publiés par l’école</li>
+                        <li>Assistant Llink contextualisé sur l’enfant sélectionné et les données autorisées</li>
                         <li>Résultats masqués lorsque l’accès est bloqué par l’établissement</li>
                         <li>Possibilité de lier plusieurs enfants dans l’espace parent</li>
                     </ul>
@@ -818,6 +829,81 @@
                     <div class="version">Application mobile (.APK)</div>
                     <p style="color:var(--text-muted);font-size:.9rem;margin-bottom:1.8rem;">Paquet Android pour les smartphones et tablettes compatibles.</p>
                     <a href="https://github.com/klgaby440-lang/Compilateur-sm/releases/download/build-v1.3.0-99/Class-Ink-Enseignant.apk" download class="btn btn-secondary" style="width:100%;justify-content:center;">Télécharger pour Android</a>
+                </article>
+            </div>
+        </section>
+
+        <!-- NOUVEAUTÉS DE LA SUITE -->
+        <section id="updates">
+            <div class="section-header">
+                <h2 class="section-title">Nouveautés — Mise à jour du 22 novembre 2026</h2>
+                <p class="section-subtitle">Évolutions récentes des comptes, des présences, des communications et de l'assistance Llink dans les quatre espaces ClassInk.</p>
+            </div>
+            <div class="features-grid">
+                <article class="feature-card">
+                    <span class="feature-icon">🔐</span>
+                    <h3>Profil et sécurité du compte</h3>
+                    <p>Les enseignants et les établissements peuvent actualiser leurs coordonnées et changer leur mot de passe depuis leur espace authentifié.</p>
+                    <ul class="feature-list">
+                        <li>Modification du nom et du numéro de téléphone</li>
+                        <li>Changement du mot de passe après vérification de l'ancien</li>
+                        <li>Adresse e-mail et identifiant de connexion non modifiables dans le profil</li>
+                        <li>Mot de passe stocké sous forme de hachage sécurisé côté serveur</li>
+                    </ul>
+                </article>
+                <article class="feature-card">
+                    <span class="feature-icon">🕘</span>
+                    <h3>Présences synchronisées</h3>
+                    <p>Les appels effectués dans ClassInk App sont maintenant enregistrés sur le serveur et récupérés dans PrimeInk avec les notes.</p>
+                    <ul class="feature-list">
+                        <li>Présences par élève, cours, date et séance</li>
+                        <li>Identification de l'enseignant qui a effectué l'appel</li>
+                        <li>Résumé journalier : présent, absent ou incomplet selon les appels reçus</li>
+                        <li>Historique détaillé disponible pour le parent dans Suivi</li>
+                    </ul>
+                </article>
+                <article class="feature-card">
+                    <span class="feature-icon">📣</span>
+                    <h3>Communications entre l'école, les parents et les enseignants</h3>
+                    <p>PrimeInk centralise les communiqués aux familles et les échanges privés avec le personnel.</p>
+                    <ul class="feature-list">
+                        <li>Communiqués à toutes les classes ou à une classe précise</li>
+                        <li>Lecture seule pour les parents dans ClassInk Suivi</li>
+                        <li>Conversation privée entre la direction et chaque enseignant</li>
+                        <li>Messages lisibles et envoyables depuis l'espace enseignant</li>
+                    </ul>
+                </article>
+                <article class="feature-card">
+                    <span class="feature-icon">🤖</span>
+                    <h3>Llink connecté au contexte autorisé</h3>
+                    <p>Llink reçoit un contexte préparé côté serveur pour répondre à partir des informations permises dans l'espace courant.</p>
+                    <ul class="feature-list">
+                        <li>École : classes, cours, enseignants, notes, présences et communiqués</li>
+                        <li>Enseignant : uniquement son espace et ses cours autorisés</li>
+                        <li>Parent : uniquement l'enfant sélectionné et les données accessibles</li>
+                        <li>Les conversations privées des enseignants ne sont pas exposées au parent</li>
+                    </ul>
+                </article>
+                <article class="feature-card">
+                    <span class="feature-icon">🌗</span>
+                    <h3>Affichage clair et sombre</h3>
+                    <p>Les champs de saisie, les panneaux Llink et les éléments de navigation sont harmonisés pour rester lisibles dans les deux thèmes.</p>
+                    <ul class="feature-list">
+                        <li>Contraste amélioré dans App, Suivi, Manager et PrimeInk</li>
+                        <li>Champs désactivés et champs de cotation plus lisibles</li>
+                        <li>Aperçus de bulletins conservés sur fond papier pour l'impression</li>
+                    </ul>
+                </article>
+                <article class="feature-card">
+                    <span class="feature-icon">🛡️</span>
+                    <h3>Accès et confidentialité</h3>
+                    <p>Les profils et les données scolaires restent soumis à une authentification et à des règles d'accès propres à chaque rôle.</p>
+                    <ul class="feature-list">
+                        <li>Vérification du mot de passe actuel lors d'une modification sensible</li>
+                        <li>Identifiants de connexion non modifiables depuis ces formulaires</li>
+                        <li>Données parentales limitées à l'enfant associé</li>
+                        <li>Notes et présences de l'enfant non conservées dans le cache local de Suivi</li>
+                    </ul>
                 </article>
             </div>
         </section>

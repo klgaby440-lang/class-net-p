@@ -133,6 +133,11 @@
         table { width: 100%; border-collapse: collapse; margin-top: 8px; }
         td, th { padding: 8px; text-align: left; border-bottom: 1px solid var(--border-color); font-size: 0.85rem; }
         tr:nth-child(even) { background-color: rgba(0,0,0,0.02); }
+        [data-theme="dark"] tr:nth-child(even) { background-color: rgba(255,255,255,0.035); }
+        [data-theme="dark"] input[readonly], [data-theme="dark"] input:disabled, [data-theme="dark"] select:disabled {
+            background-color: #273449 !important; color: #dbe5f4 !important; border-color: #46556d !important;
+        }
+        [data-theme="dark"] #setting-teacher-access-code { background: #273449 !important; color: #f8fafc !important; border-color: var(--border-color); }
         
         .push-actions { display: flex; flex-direction: column; align-items: stretch; gap: 8px; margin-top: 15px; }
         .push-actions button { width: 100%; min-height: 44px; }
@@ -392,7 +397,11 @@
     .bottom-nav { left: 50%; right: auto; width: min(620px, calc(100vw - 160px)); transform: translate(-50%, 150%); }
     .bottom-nav.show { transform: translate(-50%, 0); }
 }
-    </style>
+    
+        [data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]), [data-theme="dark"] select, [data-theme="dark"] textarea { color-scheme: dark; }
+        [data-theme="light"] input:not([type="checkbox"]):not([type="radio"]), [data-theme="light"] select, [data-theme="light"] textarea { color-scheme: light; }
+        [data-theme="dark"] input::placeholder, [data-theme="dark"] textarea::placeholder { color: var(--text-muted); opacity: 1; }
+</style>
 </head>
 
 <!-- SPLASH SCREEN ANIMÉ -->
@@ -755,7 +764,18 @@
                 <span id="setting-user-email" style="color:var(--text-muted);font-size:.86rem;"></span>
                 <span id="setting-school-id" style="font-size:.86rem;"></span>
             </div>
-            <div class="form-group">
+            <div class="card" style="margin-top:14px;background:var(--bg-color);box-shadow:none;">
+                <h4 style="color:var(--primary);margin-bottom:8px;">Informations du compte</h4>
+                <p style="font-size:.82rem;color:var(--text-muted);margin-bottom:12px;">Modifiez votre nom, votre téléphone ou votre mot de passe. L’adresse e-mail est votre identifiant permanent et ne peut pas être modifiée.</p>
+                <div class="form-group"><label for="teacher-profile-email">ADRESSE E-MAIL — IDENTIFIANT FIXE</label><input type="email" id="teacher-profile-email" readonly aria-readonly="true"></div>
+                <div class="form-group"><label for="teacher-profile-name">NOM COMPLET</label><input type="text" id="teacher-profile-name" maxlength="180" autocomplete="name"></div>
+                <div class="form-group"><label for="teacher-profile-phone">NUMÉRO DE TÉLÉPHONE</label><input type="tel" id="teacher-profile-phone" maxlength="40" autocomplete="tel" placeholder="+243…"></div>
+                <div class="form-group"><label for="teacher-profile-current-password">MOT DE PASSE ACTUEL</label><input type="password" id="teacher-profile-current-password" autocomplete="current-password"></div>
+                <div class="form-group"><label for="teacher-profile-new-password">NOUVEAU MOT DE PASSE (FACULTATIF)</label><input type="password" id="teacher-profile-new-password" minlength="8" maxlength="128" autocomplete="new-password" placeholder="8 caractères minimum"></div>
+                <div class="form-group"><label for="teacher-profile-confirm-password">CONFIRMER LE NOUVEAU MOT DE PASSE</label><input type="password" id="teacher-profile-confirm-password" minlength="8" maxlength="128" autocomplete="new-password"></div>
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><button type="button" class="btn-primary" id="teacher-profile-save" onclick="saveTeacherAccountProfile()">Enregistrer mes informations</button><small id="teacher-profile-status" role="status" aria-live="polite" style="color:var(--text-muted);"></small></div>
+            </div>
+            <div class="form-group" style="margin-top:14px;">
                 <label>IDENTIFIANT D'ÉCOLE À ASSOCIER (MASQUÉ)</label>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;">
                     <input type="password" id="setting-school-space-id" autocomplete="off" spellcheck="false" placeholder="Identifiant fourni par l'école" style="flex:1;min-width:180px;">
@@ -1312,6 +1332,7 @@ function initApp() {
     document.getElementById('setting-school-id').textContent = db.user.school || 'Espace indépendant';
     document.getElementById('setting-user-email').textContent = db.user.email || 'E-mail non renseigné';
     renderTeacherAccessCode();
+    if (db.user && db.user.isLoggedIn) loadTeacherAccountProfile({ silent: true });
 
     updateLoginHeaderButton();
     renderClassSelectors();
@@ -1609,6 +1630,7 @@ async function handleLogin() {
             updateConduiteNav();
             renderConduiteList();
             await refreshTeacherSessionStatus({ silent: true, refreshCatalogOnSame: false });
+            await loadTeacherAccountProfile({ silent: true });
             closeLoginModal();
             await loadAdminMessages();
             const schoolClasses = (db.classes || []).length;
@@ -1937,10 +1959,83 @@ async function refreshTeacherSessionStatus(options = {}) {
     }
 }
 
+async function loadTeacherAccountProfile(options = {}) {
+    const status = document.getElementById('teacher-profile-status');
+    if (!db.user || !db.user.isLoggedIn) {
+        if (status) status.textContent = "Connectez-vous pour gérer votre compte.";
+        return false;
+    }
+    try {
+        const response = await fetch(CLOUD_AUTH_URL + '/api/teacher/profile', {
+            method: 'GET', headers: cloudAuthHeaders(), cache: 'no-store'
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.status || !result.data) throw new Error(result.detail || result.message || "Profil indisponible.");
+        const p = result.data;
+        const email = document.getElementById('teacher-profile-email');
+        const name = document.getElementById('teacher-profile-name');
+        const phone = document.getElementById('teacher-profile-phone');
+        if (email) email.value = p.email || db.user.email || '';
+        if (name) name.value = p.full_name || '';
+        if (phone) phone.value = p.phone_number || '';
+        db.user.name = p.full_name || db.user.name;
+        db.user.phone_number = p.phone_number || '';
+        const summaryName = document.getElementById('setting-user-name');
+        if (summaryName) summaryName.textContent = db.user.name || 'Compte enseignant';
+        if (status && !options.silent) status.textContent = "Profil actualisé.";
+        return true;
+    } catch (error) {
+        if (status && !options.silent) status.textContent = error.message || "Erreur de chargement.";
+        return false;
+    }
+}
+
+async function saveTeacherAccountProfile() {
+    const status = document.getElementById('teacher-profile-status');
+    const button = document.getElementById('teacher-profile-save');
+    const currentPassword = document.getElementById('teacher-profile-current-password')?.value || '';
+    const newPassword = document.getElementById('teacher-profile-new-password')?.value || '';
+    const confirmPassword = document.getElementById('teacher-profile-confirm-password')?.value || '';
+    const fullName = document.getElementById('teacher-profile-name')?.value.trim() || '';
+    const phone = document.getElementById('teacher-profile-phone')?.value.trim() || '';
+    if (!db.user || !db.user.isLoggedIn || !cloudAuthHeaders().Authorization) {
+        if (status) status.textContent = "Connectez-vous avant de modifier votre profil.";
+        return false;
+    }
+    if (!currentPassword) { if (status) status.textContent = "Le mot de passe actuel est obligatoire."; return false; }
+    if (!fullName) { if (status) status.textContent = "Le nom complet est obligatoire."; return false; }
+    if (newPassword && newPassword.length < 8) { if (status) status.textContent = "8 caractères minimum pour le nouveau mot de passe."; return false; }
+    if (newPassword !== confirmPassword) { if (status) status.textContent = "Les deux nouveaux mots de passe ne correspondent pas."; return false; }
+    if (button) { button.disabled = true; button.textContent = "Enregistrement…"; }
+    if (status) status.textContent = "Vérification sécurisée…";
+    try {
+        const response = await fetch(CLOUD_AUTH_URL + '/api/teacher/profile', {
+            method: 'PUT', headers: cloudAuthHeaders(), cache: 'no-store',
+            body: JSON.stringify({ current_password: currentPassword, new_password: newPassword || '', full_name: fullName, phone_number: phone })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.status || !result.data) throw new Error(result.detail || result.message || "Modifications refusées.");
+        db.user.name = result.data.full_name || fullName;
+        db.user.phone_number = result.data.phone_number || '';
+        if (newPassword) db.user.password = newPassword;
+        saveDB();
+        const summary = document.getElementById('setting-user-name');
+        if (summary) summary.textContent = db.user.name;
+        document.getElementById('teacher-profile-current-password').value = '';
+        document.getElementById('teacher-profile-new-password').value = '';
+        document.getElementById('teacher-profile-confirm-password').value = '';
+        if (status) status.textContent = "Profil mis à jour. L’adresse e-mail et l’identifiant ClassInk restent inchangés.";
+        return true;
+    } catch (error) {
+        if (status) status.textContent = error.message || "Impossible d'enregistrer le profil.";
+        return false;
+    } finally {
+        if (button) { button.disabled = false; button.textContent = "Enregistrer mes informations"; }
+    }
+}
+
 function updateProfileInfo() {
-    // Identité et établissement sont fournis par la session serveur.
-    // Les champs locaux sensibles ne sont donc pas modifiables depuis les réglages.
-    return false;
+    return saveTeacherAccountProfile();
 }
 
 /* ==========================================================================
