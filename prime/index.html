@@ -5348,6 +5348,7 @@ async function bpPushClassBulletin(cls) {
             if(document.getElementById('presProfDate')) document.getElementById('presProfDate').value = today;
 
             renderPresencesEleveTable();
+            if (typeof loadPrimeInkTeacherAttendance === 'function') loadPrimeInkTeacherAttendance();
         }
 
         window.renderPresencesEleveTable = function() {
@@ -5370,7 +5371,12 @@ async function bpPushClassBulletin(cls) {
             }
             courses.forEach((course, idx) => {
                 const records = allRecords.filter(row => String(row.courseId) === String(course.id));
-                const byStudent = new Map(records.map(row => [String(row.studentId), row]));
+                const byStudent = new Map();
+                records.forEach(row => {
+                    const key = String(row.studentId);
+                    if (!byStudent.has(key)) byStudent.set(key, []);
+                    byStudent.get(key).push(row);
+                });
                 const card = document.createElement('div');
                 card.className = 'settings-card';
                 card.innerHTML = '<h2>Cours ' + (idx + 1) + ' : ' + safeHTML(course.name) +
@@ -5378,14 +5384,17 @@ async function bpPushClassBulletin(cls) {
                     '<p class="sub" style="margin:5px 0 10px">' + safeHTML(dateValue) + ' · ' + records.length + ' appel(s) reçu(s)</p>' +
                     '<div style="overflow-x:auto"><table class="data-table"><thead><tr><th>Élève</th><th>Statut</th><th>Enseignant</th><th>Séance</th></tr></thead><tbody>' +
                     students.map(student => {
-                        const record = byStudent.get(String(student.id));
-                        const status = record ? String(record.status || '').toUpperCase() : '';
-                        const label = status === 'P' ? 'Présent' : status === 'A' ? 'Absent' : status === 'R' ? 'En retard' : 'Non renseigné';
-                        const color = status === 'P' ? 'badge-success' : status === 'A' ? 'badge-danger' : status === 'R' ? 'badge-warning' : '';
-                        return '<tr><td><strong>' + safeHTML([student.name, student.postname, student.prename].filter(Boolean).join(' ')) + '</strong></td>' +
-                            '<td><span class="' + color + '">' + label + '</span></td>' +
-                            '<td>' + safeHTML(record?.teacherName || '—') + '</td>' +
-                            '<td>' + safeHTML(record?.slotKey || '—') + '</td></tr>';
+                        const studentRows = byStudent.get(String(student.id)) || [];
+                        if (!studentRows.length) return '<tr><td><strong>' + safeHTML([student.name, student.postname, student.prename].filter(Boolean).join(' ')) + '</strong></td><td>Non renseigné</td><td>—</td><td>—</td></tr>';
+                        return studentRows.map(record => {
+                            const status = String(record.status || '').toUpperCase();
+                            const label = status === 'P' ? 'Présent' : status === 'A' ? 'Absent' : status === 'R' ? 'En retard' : 'Non renseigné';
+                            const color = status === 'P' ? 'badge-success' : status === 'A' ? 'badge-danger' : status === 'R' ? 'badge-warning' : '';
+                            return '<tr><td><strong>' + safeHTML([student.name, student.postname, student.prename].filter(Boolean).join(' ')) + '</strong></td>' +
+                                '<td><span class="' + color + '">' + label + '</span></td>' +
+                                '<td>' + safeHTML(record.teacherName || '—') + '</td>' +
+                                '<td>' + safeHTML(record.slotKey || '—') + '</td></tr>';
+                        }).join('');
                     }).join('') +
                     '</tbody></table></div>';
                 container.appendChild(card);
@@ -5398,8 +5407,9 @@ async function bpPushClassBulletin(cls) {
                     const statuses = studentRecords.map(row => String(row.status || '').toUpperCase());
                     const hasAbsence = statuses.includes('A');
                     const hasLate = statuses.includes('R');
-                    const allCoursesRecorded = courses.length > 0 && studentRecords.length >= courses.length;
-                    const isPresentAllDay = allCoursesRecorded && statuses.length >= courses.length && statuses.slice(0, courses.length).every(value => value === 'P');
+                    const recordedCourseIds = new Set(studentRecords.map(row => String(row.courseId)));
+                    const allCoursesRecorded = courses.length > 0 && courses.every(course => recordedCourseIds.has(String(course.id)));
+                    const isPresentAllDay = allCoursesRecorded && statuses.length > 0 && statuses.every(value => value === 'P');
                     const statusLabel = hasAbsence ? 'Absent' : isPresentAllDay ? 'Présent toute la journée' : hasLate ? 'Présent avec retard' : 'Incomplet';
                     const statusClass = hasAbsence ? 'badge-danger' : isPresentAllDay ? 'badge-success' : 'badge-warning';
                     const details = studentRecords.length + ' / ' + courses.length + ' cours renseigné(s)' +
