@@ -868,7 +868,7 @@ class TestAccountProfileThemeAndRelease(unittest.TestCase):
         for marker in (
             "Complément d'information — Fonctionnalités mises à jour le 22 novembre 2026",
             "PBKDF2-SHA256",
-            "Le texte de la question et les éléments du contexte nécessaires",
+            "le texte de la question et les éléments du contexte nécessaires",
             "Les notes, résultats et présences détaillés ne sont pas conservés dans son cache local",
             "Les conversations privées des enseignants",
         ):
