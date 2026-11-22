@@ -6599,13 +6599,17 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
                     if (clsObj) {
                         const courses = mergedData.moyenne_classe[className];
                         Object.keys(courses).forEach(courseName => {
-                            const crsObj = appState.courses.find(c => c.name === courseName && c.classId === clsObj.id);
+                            const crsObj = appState.courses.find(c => String(c.id) === String(courseName) && c.classId === clsObj.id)
+                                || appState.courses.find(c => c.name === courseName && c.classId === clsObj.id);
                             if (crsObj) {
                                 const periods = courses[courseName];
                                 Object.keys(periods).forEach(periodKey => {
                                     const studentGrades = periods[periodKey];
                                     Object.keys(studentGrades).forEach(studentName => {
-                                        const stObj = appState.students.find(s => `${s.name} ${s.postname}`.trim() === studentName.trim());
+                                        const stObj = String(studentName).startsWith('__id__')
+                                            ? appState.students.find(s => String(s.id) === String(studentName).slice(6))
+                                            : appState.students.find(s => `${s.name} ${s.postname}`.trim() === studentName.trim()
+                                                || `${s.name} ${s.postname} ${s.prename || ''}`.trim() === studentName.trim());
                                         if (stObj) {
                                             const gradeKey = `${stObj.id}_${crsObj.id}`;
                                             if (!appState.grades[gradeKey]) appState.grades[gradeKey] = {};
@@ -6651,7 +6655,11 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
                 if (typeof renderOfficialBulletin === "function" && activeStudentId) {
                     renderOfficialBulletin(activeStudentId);
                 }
-                alert("✅ Données synchronisées et fusionnées avec succès depuis Internet !");
+                const report = mergedData.classinkSync || {};
+                const summary = report.averages
+                    ? ` ${report.teachers || 0} enseignant(s), ${report.interrogations || 0} interrogation(s), ${report.averages} moyenne(s) recalculée(s).`
+                    : '';
+                alert("✅ Données synchronisées et fusionnées avec succès depuis Internet !" + summary);
             } catch (err) {
                 alert("❌ Échec de la récupération des données : " + err.message);
             }
