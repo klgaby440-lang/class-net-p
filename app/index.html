@@ -562,7 +562,7 @@
 
         <div class="push-actions">
             <button class="btn-primary" onclick="saveOfflineCommit()">Push Off (WiFi)</button>
-            <button class="btn-secondary" onclick="syncWithCloud()">Enregistrer mes notes sur le serveur</button>
+            <button class="btn-secondary" onclick="syncWithCloud()">Enregistrer mes notes et présences sur le serveur</button>
         </div>
     </main>
 
@@ -583,6 +583,10 @@
                 <div class="form-group">
                     <label>DATE DU JOURNAL</label>
                     <input type="date" id="presence-date" onchange="renderAttendanceList()">
+                </div>
+                <div class="form-group">
+                    <label>HEURE / SÉANCE (FACULTATIF)</label>
+                    <input type="text" id="presence-slot" maxlength="80" placeholder="Ex. 1ère heure" onchange="renderAttendanceList()">
                 </div>
             </div>
 
@@ -2688,6 +2692,7 @@ function renderAttendanceList() {
     const selectedClass = document.getElementById('presence-select-class').value;
     const selectedCourse = document.getElementById('presence-select-course').value;
     const selectedDate = document.getElementById('presence-date').value;
+    const selectedSlot = (document.getElementById('presence-slot')?.value || '').trim();
     
     // Récupération des critères de filtrage
     const filterSearch = (document.getElementById('presence-filter-search')?.value || '').toLowerCase().trim();
@@ -2716,7 +2721,7 @@ function renderAttendanceList() {
     }
 
     let html = `<p style="font-size: 0.8rem; margin-bottom: 10px; color: var(--text-muted);">
-                    Appel du <strong>${safeHTML(selectedDate)}</strong> | Cours : <strong>${safeHTML(selectedCourse)}</strong>
+                    Appel du <strong>${safeHTML(selectedDate)}</strong> | Cours : <strong>${safeHTML(selectedCourse)}</strong> | Séance : <strong>${safeHTML(selectedSlot || 'Journée')}</strong>
                 </p>
                 <table>
                     <thead>
@@ -2734,7 +2739,8 @@ function renderAttendanceList() {
             p.date === selectedDate && 
             p.class === selectedClass && 
             p.course === selectedCourse && 
-            p.studentId === st.id
+            p.studentId === st.id &&
+            String(p.slotKey || '') === selectedSlot
         );
 
         const currentStatus = existingRecord ? existingRecord.status : 'P';
@@ -2892,6 +2898,7 @@ function saveAttendanceSession() {
     const selectedClass = document.getElementById('presence-select-class').value;
     const selectedCourse = document.getElementById('presence-select-course').value;
     const selectedDate = document.getElementById('presence-date').value;
+    const selectedSlot = (document.getElementById('presence-slot')?.value || '').trim().slice(0, 80);
 
     if (!selectedClass || !selectedCourse || !selectedDate) {
         alert("Veuillez vérifier la classe, le cours et la date.");
@@ -2911,11 +2918,13 @@ function saveAttendanceSession() {
                 p.date === selectedDate && 
                 p.class === selectedClass && 
                 p.course === selectedCourse && 
-                p.studentId === st.id
+                p.studentId === st.id &&
+                String(p.slotKey || '') === selectedSlot
             );
 
             if (existingIndex !== -1) {
                 db.presences[existingIndex].status = statusVal;
+                db.presences[existingIndex].slotKey = selectedSlot;
             } else {
                 db.presences.push({
                     id: generateUniqueId("ATT"),
@@ -2924,6 +2933,7 @@ function saveAttendanceSession() {
                     course: selectedCourse,
                     studentId: st.id,
                     studentName: st.name,
+                    slotKey: selectedSlot,
                     status: statusVal
                 });
             }
@@ -2933,7 +2943,7 @@ function saveAttendanceSession() {
 
     db.pendingCommits++;
     saveDB();
-    alert(`✅ Présence du ${selectedDate} enregistrée pour ${savedCount} élève(s) (${selectedClass} - ${selectedCourse}) !`);
+    alert(`✅ Présence du ${selectedDate} enregistrée pour ${savedCount} élève(s) (${selectedClass} - ${selectedCourse}${selectedSlot ? ' · ' + selectedSlot : ''}) !`);
 }
 
 /* ==========================================================================
@@ -3027,7 +3037,7 @@ async function syncWithCloud() {
         logSystemEvent('error', "Erreur lors de l'envoi des notes ClassInk au serveur.", error);
         await showCustomAlert("Envoi impossible : " + (error.message || "erreur réseau"));
     } finally {
-        if (button) { button.disabled = false; button.textContent = "Enregistrer mes notes sur le serveur"; }
+        if (button) { button.disabled = false; button.textContent = "Enregistrer mes notes et présences sur le serveur"; }
     }
 }
 
