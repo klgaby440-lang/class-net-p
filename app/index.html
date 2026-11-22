@@ -397,7 +397,11 @@
     .bottom-nav { left: 50%; right: auto; width: min(620px, calc(100vw - 160px)); transform: translate(-50%, 150%); }
     .bottom-nav.show { transform: translate(-50%, 0); }
 }
-    </style>
+    
+        [data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]), [data-theme="dark"] select, [data-theme="dark"] textarea { color-scheme: dark; }
+        [data-theme="light"] input:not([type="checkbox"]):not([type="radio"]), [data-theme="light"] select, [data-theme="light"] textarea { color-scheme: light; }
+        [data-theme="dark"] input::placeholder, [data-theme="dark"] textarea::placeholder { color: var(--text-muted); opacity: 1; }
+</style>
 </head>
 
 <!-- SPLASH SCREEN ANIMÉ -->
@@ -3977,12 +3981,7 @@ function printQuiz(quizId) {
         '.meta { display: flex; justify-content: space-between; margin-bottom: 25px; font-weight: bold; font-size: 0.9rem; }' +
         '.content { font-size: 1rem; white-space: pre-wrap; }' +
         '.footer { margin-top: 50px; text-align: right; font-style: italic; font-size: 0.8rem; }' +
-        '
-        [data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]), [data-theme="dark"] select, [data-theme="dark"] textarea { color-scheme: dark; }
-        [data-theme="light"] input:not([type="checkbox"]):not([type="radio"]), [data-theme="light"] select, [data-theme="light"] textarea { color-scheme: light; }
-        [data-theme="dark"] input::placeholder, [data-theme="dark"] textarea::placeholder { color: var(--text-muted); opacity: 1; }
-
-</style></head><body>' +
+        '</style></head><body>' +
         '<div class="header"><h2>ÉCOLE : ' + safeHTML(db.user.school || 'Enfant du Monde') + '</h2><h3>EVALUATION DE : ' + safeHTML(quiz.course.toUpperCase()) + '</h3></div>' +
         '<div class="meta"><span>Nom de l\'élève : _______________________</span><span>Classe : ' + safeHTML(quiz.class) + '</span><span>Max : /' + safeHTML(quiz.maxScore) + ' pts</span></div><hr>' +
         '<h4 style="text-align: center;">' + safeHTML(quiz.title) + '</h4>' +
