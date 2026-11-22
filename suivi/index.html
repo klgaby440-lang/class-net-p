@@ -652,7 +652,8 @@ function viewNotes() {
     Object.keys(groups).forEach(cat => {
         out += '<div class="card"><h3 style="margin-bottom:6px">' + esc(cat) + '</h3><div class="list">' + groups[cat].map(([c, i]) => {
             const s = scoreOf(c, V.period);
-            return '<button class="item" data-act="course" data-i="' + i + '"><div class="grow"><div class="t">' + esc(c.name) + '</div>' + (s ? '<div class="bar" style="margin-top:6px"><i style="width:' + Math.min(100, s.pct) + '%;background:' + tone(s.pct) + '"></i></div>' : '<div class="m">Pas de note</div>') + '</div><div style="text-align:right" class="num">' + (s ? '<strong>' + fmt(s.got) + '</strong><span style="color:var(--muted)"> / ' + fmt(s.max) + '</span><div class="m">' + fmt(s.pct) + ' %</div>' : '—') + '</div></button>';
+            const courseLabel = c.subCategory ? c.name + ' — ' + c.subCategory : c.name;
+            return '<button class="item" data-act="course" data-i="' + i + '"><div class="grow"><div class="t">' + esc(courseLabel) + '</div>' + (s ? '<div class="bar" style="margin-top:6px"><i style="width:' + Math.min(100, s.pct) + '%;background:' + tone(s.pct) + '"></i></div>' : '<div class="m">Pas de note</div>') + '</div><div style="text-align:right" class="num">' + (s ? '<strong>' + fmt(s.got) + '</strong><span style="color:var(--muted)"> / ' + fmt(s.max) + '</span><div class="m">' + fmt(s.pct) + ' %</div>' : '—') + '</div></button>';
         }).join('') + '</div></div>';
     });
 
@@ -660,7 +661,9 @@ function viewNotes() {
     (r.courses || []).forEach(course => {
         (course.evaluations || []).forEach(evaluation => allEvaluations.push({
             ...evaluation,
-            courseName: evaluation.course || course.name,
+            courseName: course.subCategory
+                ? course.name + ' — ' + course.subCategory
+                : (evaluation.course || course.name),
             courseCategory: course.category || ''
         }));
     });
@@ -693,7 +696,7 @@ function courseSheet(i) {
     const html = '<table class="t"><thead><tr><th>Période</th><th>Points</th><th>Maximum</th></tr></thead><tbody>' + row + '</tbody></table>' +
         '<p class="sub" style="margin:12px 0"><strong>Pour réussir.</strong> ' + esc(passAdvice(c)) + '</p>' +
         (evs.length ? '<h4 style="margin:14px 0 4px">Évaluations</h4><div class="list">' + evs.map(e => '<div class="item" style="display:block"><div class="row sb"><span class="t">' + esc(e.title) + '</span><strong class="num">' + (num(e.obtained) === null ? '—' : fmt(e.obtained)) + ' / ' + fmt(e.max) + '</strong></div><div class="m">' + esc(fdate(e.date)) + (e.period ? ' · ' + esc(LABELS[e.period] || e.period) : '') + '</div><div class="m">Professeur : <strong>' + esc(e.teacherName || 'Non renseigné') + '</strong></div><div class="m">N° du professeur : <strong>' + esc(e.teacherCode || 'Non renseigné') + '</strong></div>' + (e.content ? '<div class="m" style="margin-top:4px;color:var(--text)">' + esc(e.content) + '</div>' : '') + '</div>').join('') + '</div>' : '');
-    ui.sheet(c.name, html);
+    ui.sheet(c.subCategory ? c.name + ' — ' + c.subCategory : c.name, html);
 }
 
 function viewFees() {
