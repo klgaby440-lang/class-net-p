@@ -1706,6 +1706,7 @@ def login_teacher(data: LoginSchema, db: Session = Depends(get_db)):
             "studentId": p.classink_student_id,
             "studentName": p.student_name,
             "courseId": p.course_id,
+            "courseLabel": p.course_name,
             "slotKey": p.slot_key,
             "status": p.status
         } for p in db_presences
@@ -2992,6 +2993,7 @@ async def classink_llink_assist(payload: dict, request: Request, db: Session = D
         system_instruction = (
             "Tu es Llink, assistant de gestion de l'établissement connecté. Utilise exclusivement le contexte DB de CETTE école. "
             "Tu peux analyser les notes, présences, classes, enseignants et communiqués fournis. "
+            "Si aucune donnée de l'école n'est présente dans le contexte, explique clairement qu'aucune donnée de l'école n'est disponible. "
             "Le contexte peut être limité aux enregistrements récents : signale toute limite. Ne révèle aucun secret ni jeton."
         )
     elif app_name == "classink":
@@ -3416,7 +3418,7 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
                     classink_student_id=local_student_id,
                     student_name=str(student_info.get("name") or item.get("studentName") or "")[:180],
                     course_id=str(course_row.id),
-                    course_name=str(course_row.course_name or course_label)[:180],
+                    course_name=str(course_label or course_row.course_name)[:180],
                     date=date_value,
                     slot_key=slot_key,
                     status=status_value,
@@ -3427,7 +3429,7 @@ def sync_classnet_app(payload: dict, db: Session = Depends(get_db), claims: dict
                 attendance_row.class_id = str(course_row.class_id)
                 attendance_row.classink_student_id = local_student_id
                 attendance_row.student_name = str(student_info.get("name") or item.get("studentName") or "")[:180]
-                attendance_row.course_name = str(course_row.course_name or course_label)[:180]
+                attendance_row.course_name = str(course_label or course_row.course_name)[:180]
                 attendance_row.status = status_value
                 attendance_row.updated_at = datetime.utcnow()
             accepted_attendance += 1
