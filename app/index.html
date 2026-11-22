@@ -1524,7 +1524,7 @@ function mergeServerDataIntoLocal(local, server) {
     // tant que des modifications n'ont pas encore été envoyées.
     const attendanceKey = item => [
         item && item.date || '', item && (item.class || item.className) || '',
-        item && (item.courseId || item.course) || '', item && item.studentId || '',
+        item && (item.courseLabel || item.course || item.courseName || item.courseId) || '', item && item.studentId || '',
         item && (item.slotKey || item.slot || item.hour) || ''
     ].join('|');
     const presenceMap = new Map();
@@ -2899,6 +2899,10 @@ function saveAttendanceSession() {
     const selectedCourse = document.getElementById('presence-select-course').value;
     const selectedDate = document.getElementById('presence-date').value;
     const selectedSlot = (document.getElementById('presence-slot')?.value || '').trim().slice(0, 80);
+    const selectedCourseMeta = ((db.courseCatalog || {})[selectedClass] || []).find(row =>
+        String(row.label || row.name || '') === selectedCourse
+    ) || {};
+    const selectedCourseId = String(selectedCourseMeta.id || '');
 
     if (!selectedClass || !selectedCourse || !selectedDate) {
         alert("Veuillez vérifier la classe, le cours et la date.");
@@ -2924,6 +2928,8 @@ function saveAttendanceSession() {
 
             if (existingIndex !== -1) {
                 db.presences[existingIndex].status = statusVal;
+                db.presences[existingIndex].courseId = selectedCourseId;
+                db.presences[existingIndex].courseLabel = selectedCourse;
                 db.presences[existingIndex].slotKey = selectedSlot;
             } else {
                 db.presences.push({
@@ -2931,6 +2937,8 @@ function saveAttendanceSession() {
                     date: selectedDate,
                     class: selectedClass,
                     course: selectedCourse,
+                    courseId: selectedCourseId,
+                    courseLabel: selectedCourse,
                     studentId: st.id,
                     studentName: st.name,
                     slotKey: selectedSlot,
