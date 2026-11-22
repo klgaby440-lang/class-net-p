@@ -2894,6 +2894,9 @@ async def classink_llink_assist(payload: dict, request: Request, db: Session = D
         student_code = str(parent_ref.get("student_code") or "").strip().upper()
         if not school_id or not student_code or len(student_code) > 40:
             raise HTTPException(status_code=401, detail="Sélectionnez un enfant lié dans ClassInk Suivi.")
+        parent_rate_key = "suivi:" + remote + ":" + school_id
+        if SUIVI_LOOKUP_LIMITER.is_blocked(parent_rate_key):
+            raise HTTPException(status_code=429, detail="Trop d'essais. Réessayez dans 15 minutes.")
         school = db.query(SchoolInformation).filter(SchoolInformation.school_id == school_id).first()
         if not school or licence_state(school)["locked"]:
             raise HTTPException(status_code=404, detail="Établissement indisponible.")
@@ -2902,7 +2905,9 @@ async def classink_llink_assist(payload: dict, request: Request, db: Session = D
             func.upper(SchoolStudentInformation.suivi_code) == student_code,
         ).first()
         if not student:
+            SUIVI_LOOKUP_LIMITER.record(parent_rate_key)
             raise HTTPException(status_code=404, detail="Enfant introuvable. Actualisez son espace.")
+        SUIVI_LOOKUP_LIMITER.reset(parent_rate_key)
         class_row = db.query(ClasseInformation).filter(
             ClasseInformation.id == student.class_id,
             ClasseInformation.school_id == school_id,
@@ -3019,7 +3024,7 @@ async def classink_llink_assist(payload: dict, request: Request, db: Session = D
                 "teacher": teacher.full_name,
                 "school": db.query(SchoolInformation.name_school).filter(SchoolInformation.school_id == school_id).scalar() or "",
                 "assignedCourses": [{"id": row.id, "name": row.course_name, "classId": row.class_id} for row in assigned_courses],
-                "recentGrades": [{"student": row.student_name, "class": row.class_name, "course": row.course_name, "period": row.period, "score": row.score, "max": row.max_score, "date": row.eval_date or ""} for row in grades if not course_ids or str(row.course_id) in course_ids],
+                "recentGrades": [{"student": row.student_name, "class": row.class_name, "course": row.course_name, "period": row.period, "score": row.score, "max": row.max_score, "date": row.eval_date or ""} for row in grades if str(row.course_id or "") in set(course_ids)],
                 "recentAttendance": [{"date": row.date, "student": row.student_name, "class": row.class_name, "course": row.course_name, "status": row.status} for row in attendance_rows],
             }
             system_instruction = (
@@ -4676,6 +4681,12 @@ def build_suivi_attendance_payload(db: Session, school: SchoolInformation, stude
         StudentAttendance.school_id == school.school_id,
         StudentAttendance.student_id == student.id,
     ).order_by(StudentAttendance.date.desc(), StudentAttendance.course_name.asc(), StudentAttendance.id.asc()).all()
+    expected_course_ids = {
+        str(row.id) for row in db.query(CourseInformation).filter(
+            CourseInformation.school_id == school.school_id,
+            CourseInformation.class_id == student.class_id,
+        ).all()
+    }
     teacher_emails = {str(row.teacher_email) for row in rows}
     teachers = db.query(Teacher).filter(Teacher.email.in_(list(teacher_emails))).all() if teacher_emails else []
     teacher_by_email = {str(row.email): row for row in teachers}
@@ -4701,11 +4712,13 @@ def build_suivi_attendance_payload(db: Session, school: SchoolInformation, stude
     days = []
     for date_value, day_records in sorted(by_date.items(), reverse=True):
         statuses = [str(item["status"]).upper() for item in day_records]
+        recorded_course_ids = {str(item["courseId"]) for item in day_records if item.get("courseId")}
+        full_day_recorded = bool(expected_course_ids) and expected_course_ids.issubset(recorded_course_ids)
         if "A" in statuses:
             daily_status = "A"
-        elif statuses and all(value == "P" for value in statuses):
+        elif statuses and full_day_recorded and all(value == "P" for value in statuses):
             daily_status = "P"
-        elif "R" in statuses:
+        elif statuses and full_day_recorded and "R" in statuses:
             daily_status = "R"
         else:
             daily_status = "?"
@@ -4713,7 +4726,10 @@ def build_suivi_attendance_payload(db: Session, school: SchoolInformation, stude
             "date": date_value,
             "status": daily_status,
             "statusLabel": {"P": "Présent toute la journée", "A": "Absent (au moins un cours manqué)", "R": "Présence avec retard", "?": "Incomplet"}.get(daily_status, "Incomplet"),
-            "coursesRecorded": len(day_records),
+            "coursesRecorded": len(recorded_course_ids),
+            "sessionsRecorded": len(day_records),
+            "expectedCourses": len(expected_course_ids),
+            "isComplete": full_day_recorded,
             "presentCount": sum(1 for value in statuses if value == "P"),
             "absentCount": sum(1 for value in statuses if value == "A"),
             "lateCount": sum(1 for value in statuses if value == "R"),
