@@ -785,5 +785,105 @@ class TestNewFeatureStatic(unittest.TestCase):
         self.assertIn("if ((!schoolId && !independent) || !token) return false;", app)
 
 
+class TestAccountProfileThemeAndRelease(unittest.TestCase):
+    def test_account_profile_routes_require_current_password_and_keep_identifiers_immutable(self):
+        backend = (ROOT / "main.py").read_text(encoding="utf-8")
+        for marker in (
+            '@app.get("/api/teacher/profile")',
+            '@app.put("/api/teacher/profile")',
+            '@app.get("/api/school/profile")',
+            '@app.put("/api/school/profile")',
+            'PROFILE_UPDATE_LIMITER = AttemptLimiter(max_attempts=5, window_seconds=900)',
+            'verify_password(current_password, teacher.password)',
+            'verify_password(current_password, school.pass_word)',
+            'teacher.password = hash_password(new_password)',
+            'school.pass_word = hash_password(new_password)',
+            'Les champs email, school_id, code et bulletin_seq_id ne sont volontairement',
+            'L\'adresse e-mail, le code enseignant, les associations scolaires',
+        ):
+            self.assertIn(marker, backend)
+
+        app = (ROOT / "app/index.html").read_text(encoding="utf-8")
+        for marker in (
+            'id="teacher-profile-email"',
+            'id="teacher-profile-phone"',
+            'id="teacher-profile-current-password"',
+            'id="teacher-profile-new-password"',
+            'async function loadTeacherAccountProfile',
+            'async function saveTeacherAccountProfile',
+            "CLOUD_AUTH_URL + '/api/teacher/profile'",
+            'aria-readonly="true"',
+        ):
+            self.assertIn(marker, app)
+
+        manager = (ROOT / "manager/index.html").read_text(encoding="utf-8")
+        for marker in (
+            'id="page-account"',
+            'id="manager-account-school-id"',
+            'id="manager-account-email"',
+            'id="manager-account-phone"',
+            'async function loadManagerAccountProfile',
+            'async function saveManagerAccountProfile',
+            "API_BASE_URL+'/api/school/profile'",
+        ):
+            self.assertIn(marker, manager)
+
+        prime = (ROOT / "prime/index.html").read_text(encoding="utf-8")
+        for marker in (
+            'id="primeInkAccountProfileCard"',
+            'id="primeSchoolProfileId"',
+            'id="primeSchoolProfileEmail"',
+            'id="primeSchoolProfilePhone"',
+            'async function loadPrimeInkSchoolProfile',
+            'window.savePrimeInkSchoolProfile = async function',
+            "API_BASE_URL + '/api/school/profile'",
+        ):
+            self.assertIn(marker, prime)
+        self.assertNotIn("appPasswordInput", prime)
+        self.assertNotIn('value="12345678"', prime)
+
+    def test_theme_contrast_overrides_cover_all_four_apps(self):
+        app = (ROOT / "app/index.html").read_text(encoding="utf-8")
+        suivi = (ROOT / "suivi/index.html").read_text(encoding="utf-8")
+        manager = (ROOT / "manager/index.html").read_text(encoding="utf-8")
+        prime = (ROOT / "prime/index.html").read_text(encoding="utf-8")
+        self.assertIn('[data-theme="dark"] tr:nth-child(even)', app)
+        self.assertIn('[data-theme="light"] #llink-assist-panel', suivi)
+        self.assertIn('[data-theme="light"] #llink-assist-panel', manager)
+        self.assertIn('body.theme-dark .fiche-grade-input', prime)
+        self.assertIn('color-scheme:dark', prime)
+
+    def test_public_website_and_privacy_supplement_include_november_updates(self):
+        site = (ROOT / "index.html").read_text(encoding="utf-8")
+        privacy = (ROOT / "confidentialite/index.html").read_text(encoding="utf-8")
+        for marker in (
+            'id="updates"',
+            'Nouveautés — Mise à jour du 22 novembre 2026',
+            "Présences synchronisées",
+            "Communiqués destinés aux parents",
+            "Llink connecté au contexte autorisé",
+            "Profil et sécurité",
+        ):
+            self.assertIn(marker, site)
+        for marker in (
+            "Complément d'information — Fonctionnalités mises à jour le 22 novembre 2026",
+            "PBKDF2-SHA256",
+            "Le texte de la question et les éléments du contexte nécessaires",
+            "Les notes, résultats et présences détaillés ne sont pas conservés dans son cache local",
+            "Les conversations privées des enseignants",
+        ):
+            self.assertIn(marker, privacy)
+        # Les six articles existants sont conservés ; le complément est séparé et ajouté après eux.
+        for heading in (
+            "Article 1. Architecture Technique et Isolement du Code",
+            "Article 2. Souveraineté des Données et Contrôle par Mot de Passe",
+            "Article 3. Anonymisation et Amélioration Continue des Produits",
+            "Article 4. Option 100% Réseau Local (Mode Isolateur LAN / PrimeNet)",
+            "Article 5. Système Cryptographique d'Intégrité et Comparaison Anti-Altération",
+            "Article 6. Droits d'Accès et Contact",
+        ):
+            self.assertIn(heading, privacy)
+
+
 if __name__ == "__main__":
     unittest.main()
