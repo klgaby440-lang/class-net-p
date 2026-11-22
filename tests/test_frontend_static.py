@@ -730,7 +730,7 @@ class TestNewFeatureStatic(unittest.TestCase):
             "/api/primenet/teacher-attendance",
             "mergedData.attendanceRecords",
             "Llink consulte les données autorisées",
-            "function renderPresencesEleveTable",
+            "window.renderPresencesEleveTable = function",
         ):
             self.assertIn(marker, prime)
 
