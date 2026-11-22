@@ -1051,6 +1051,7 @@ CRYPT_CONSOLE_LOGIN_LIMITER = AttemptLimiter(max_attempts=5, window_seconds=900)
 CRYPT_TELEMETRY_LIMITER = AttemptLimiter(max_attempts=180, window_seconds=60)
 CRYPT_TICKET_LIMITER = AttemptLimiter(max_attempts=5, window_seconds=3600)
 CRYPT_LLINK_LIMITER = AttemptLimiter(max_attempts=12, window_seconds=300)
+PROFILE_UPDATE_LIMITER = AttemptLimiter(max_attempts=5, window_seconds=900)  # 5 mots de passe erronés / 15 min
 
 
 
@@ -5410,6 +5411,88 @@ def build_signature_map(db, school_id):
     return out
 
 
+@app.get("/api/school/profile")
+def get_school_account_profile(db: Session = Depends(get_db), claims: dict = Depends(require_school)):
+    """Renvoie les coordonnées du compte école, sans jamais exposer le mot de passe."""
+    school = db.query(SchoolInformation).filter(
+        SchoolInformation.school_id == str(claims.get("school_id") or "")
+    ).first()
+    if not school:
+        raise HTTPException(status_code=404, detail="Établissement introuvable.")
+    return {"status": True, "data": {
+        "school_id": school.school_id,
+        "email": school.email,
+        "name_school": school.name_school,
+        "name_responsable": school.name_responsable,
+        "num_tel": school.num_tel or "",
+        "city": school.city or "",
+        "commune": school.commune or "",
+        "adresse_physique": school.adresse_physique or "",
+    }}
+
+
+@app.put("/api/school/profile")
+def update_school_account_profile(payload: dict, request: Request, db: Session = Depends(get_db), claims: dict = Depends(require_school)):
+    """Modifie les coordonnées et le mot de passe de l'école. school_id et e-mail sont immuables."""
+    school_id = str(claims.get("school_id") or "")
+    school = db.query(SchoolInformation).filter(SchoolInformation.school_id == school_id).first()
+    if not school:
+        raise HTTPException(status_code=404, detail="Établissement introuvable.")
+
+    limiter_key = "school-profile:" + school_id
+    if PROFILE_UPDATE_LIMITER.is_blocked(limiter_key):
+        raise HTTPException(status_code=429, detail="Trop de mots de passe incorrects. Réessayez dans 15 minutes.")
+
+    current_password = str(payload.get("current_password") or "")
+    if not verify_password(current_password, school.pass_word):
+        PROFILE_UPDATE_LIMITER.record(limiter_key)
+        raise HTTPException(status_code=403, detail="Le mot de passe actuel est incorrect.")
+    PROFILE_UPDATE_LIMITER.reset(limiter_key)
+
+    new_password = str(payload.get("new_password") or "")
+    if new_password and (len(new_password) < 8 or len(new_password) > 128):
+        raise HTTPException(status_code=422, detail="Le nouveau mot de passe doit contenir entre 8 et 128 caractères.")
+
+    fields = {
+        "name_school": ("name_school", 180),
+        "name_responsable": ("name_responsable", 180),
+        "city": ("city", 100),
+        "commune": ("commune", 100),
+        "adresse_physique": ("adresse_physique", 240),
+    }
+    for field, (attribute, max_len) in fields.items():
+        if field in payload:
+            value = clean_text(payload.get(field), max_len)
+            if field in ("name_school", "name_responsable") and not value:
+                raise HTTPException(status_code=422, detail="Le nom de l'établissement et celui du responsable sont obligatoires.")
+            setattr(school, attribute, value)
+
+    if "num_tel" in payload:
+        raw_phone = clean_text(payload.get("num_tel"), 40)
+        phone = format_phone_e164(raw_phone) if raw_phone else ""
+        digits = re.sub(r"\D", "", phone)
+        if raw_phone and not 8 <= len(digits) <= 15:
+            raise HTTPException(status_code=422, detail="Le numéro de téléphone n'est pas valide.")
+        school.num_tel = phone
+
+    if new_password:
+        school.pass_word = hash_password(new_password)
+
+    # Les champs email, school_id, code et bulletin_seq_id ne sont volontairement
+    # jamais affectés depuis cette route, même si le client les inclut.
+    db.commit()
+    return {"status": True, "message": "Profil de l'établissement mis à jour.", "data": {
+        "school_id": school.school_id,
+        "email": school.email,
+        "name_school": school.name_school,
+        "name_responsable": school.name_responsable,
+        "num_tel": school.num_tel or "",
+        "city": school.city or "",
+        "commune": school.commune or "",
+        "adresse_physique": school.adresse_physique or "",
+    }}
+
+
 @app.put("/api/school/settings")
 def update_school_settings(payload: dict, db: Session = Depends(get_db), claims: dict = Depends(require_active_school)):
     """Identité du bulletin : province, année scolaire, chef d'établissement, sceau, signature, armoiries."""
@@ -5445,6 +5528,79 @@ def update_class_bulletin(class_id: str, payload: dict, db: Session = Depends(ge
         classe.bulletin_title = clean_text(payload.get("bulletinTitle"), 160)
     db.commit()
     return {"status": True, "message": "Bulletin de la classe enregistré."}
+
+
+@app.get("/api/teacher/profile")
+def get_teacher_account_profile(db: Session = Depends(get_db), claims: dict = Depends(require_teacher)):
+    """Renvoie le profil du compte enseignant connecté, sans mot de passe."""
+    teacher = db.query(Teacher).filter(Teacher.email == str(claims.get("email") or "").lower()).first()
+    if not teacher:
+        raise HTTPException(status_code=404, detail="Compte enseignant introuvable.")
+    return {"status": True, "data": {
+        "full_name": teacher.full_name,
+        "email": teacher.email,
+        "phone_number": teacher.phone_number or "",
+        "teacher_code": teacher.teacher_code or "",
+        "age": teacher.age,
+    }}
+
+
+@app.put("/api/teacher/profile")
+def update_teacher_account_profile(payload: dict, db: Session = Depends(get_db), claims: dict = Depends(require_teacher)):
+    """Modifie nom, téléphone et mot de passe. L'adresse e-mail reste l'identifiant immuable."""
+    email = str(claims.get("email") or "").strip().lower()
+    teacher = db.query(Teacher).filter(Teacher.email == email).first()
+    if not teacher:
+        raise HTTPException(status_code=404, detail="Compte enseignant introuvable.")
+
+    limiter_key = "teacher-profile:" + email
+    if PROFILE_UPDATE_LIMITER.is_blocked(limiter_key):
+        raise HTTPException(status_code=429, detail="Trop de mots de passe incorrects. Réessayez dans 15 minutes.")
+
+    current_password = str(payload.get("current_password") or "")
+    if not verify_password(current_password, teacher.password):
+        PROFILE_UPDATE_LIMITER.record(limiter_key)
+        raise HTTPException(status_code=403, detail="Le mot de passe actuel est incorrect.")
+    PROFILE_UPDATE_LIMITER.reset(limiter_key)
+
+    new_password = str(payload.get("new_password") or "")
+    if new_password and (len(new_password) < 8 or len(new_password) > 128):
+        raise HTTPException(status_code=422, detail="Le nouveau mot de passe doit contenir entre 8 et 128 caractères.")
+
+    if "full_name" in payload:
+        full_name = clean_text(payload.get("full_name"), 180)
+        if not full_name:
+            raise HTTPException(status_code=422, detail="Le nom complet est obligatoire.")
+        teacher.full_name = full_name
+
+    if "phone_number" in payload:
+        raw_phone = clean_text(payload.get("phone_number"), 40)
+        phone = format_phone_e164(raw_phone) if raw_phone else None
+        if phone:
+            digits = re.sub(r"\D", "", phone)
+            if not 8 <= len(digits) <= 15:
+                raise HTTPException(status_code=422, detail="Le numéro de téléphone n'est pas valide.")
+            duplicate = db.query(Teacher).filter(
+                Teacher.phone_number == phone,
+                Teacher.email != email,
+            ).first()
+            if duplicate:
+                raise HTTPException(status_code=409, detail="Ce numéro de téléphone est déjà associé à un autre compte.")
+        teacher.phone_number = phone
+
+    if new_password:
+        teacher.password = hash_password(new_password)
+
+    # L'adresse e-mail, le code enseignant, les associations scolaires et les
+    # matières attribuées ne sont pas modifiables par le profil personnel.
+    db.commit()
+    return {"status": True, "message": "Profil enseignant mis à jour.", "data": {
+        "full_name": teacher.full_name,
+        "email": teacher.email,
+        "phone_number": teacher.phone_number or "",
+        "teacher_code": teacher.teacher_code or "",
+        "age": teacher.age,
+    }}
 
 
 @app.put("/api/teacher/signature")
