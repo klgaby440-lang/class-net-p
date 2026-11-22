@@ -6817,13 +6817,34 @@ document.querySelectorAll('.sub-nav-btn').forEach(btn => {
             });
 
             // 7. Déverrouillage Écran
-            document.getElementById('unlockBtn').addEventListener('click', () => {
+            document.getElementById('unlockBtn').addEventListener('click', async () => {
                 const pass = document.getElementById('lockPasswordInput').value;
-                const setPass = document.getElementById('appPasswordInput').value || "12345678";
-                if (pass === setPass) {
+                const schoolId = String(appState.school?.id || '').trim();
+                const button = document.getElementById('unlockBtn');
+                if (!pass) return alert("Saisissez le mot de passe de l'établissement.");
+                if (!schoolId) {
+                    // Une installation locale qui n'a pas encore chargé de compte scolaire
+                    // ne dispose pas d'un mot de passe cloud à vérifier.
                     document.getElementById('lock-screen-overlay').classList.add('hidden');
-                } else {
-                    alert("Mot de passe incorrect.");
+                    return;
+                }
+                if (button) { button.disabled = true; button.textContent = "Vérification…"; }
+                try {
+                    const response = await fetch(API_BASE_URL + '/api/auth/school/login', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        cache: 'no-store', body: JSON.stringify({ identifier: schoolId, password: pass })
+                    });
+                    const result = await response.json().catch(() => ({}));
+                    if (!response.ok || !result.status || !result.token) {
+                        throw new Error(result.message || result.detail || "Mot de passe incorrect ou compte indisponible.");
+                    }
+                    try { localStorage.setItem('primeink_cloud_token', result.token); } catch (_) {}
+                    document.getElementById('lockPasswordInput').value = '';
+                    document.getElementById('lock-screen-overlay').classList.add('hidden');
+                } catch (error) {
+                    alert(error.message || "Vérification du mot de passe impossible.");
+                } finally {
+                    if (button) { button.disabled = false; button.textContent = "Déverrouiller"; }
                 }
             });
 
