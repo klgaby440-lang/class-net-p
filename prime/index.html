@@ -3177,6 +3177,13 @@ body.theme-light textarea.form-control{color-scheme:light}
 body.theme-dark .settings-card small,
 body.theme-dark .settings-card p{color:var(--text-secondary)}
 
+
+body.theme-dark input:not([type="checkbox"]):not([type="radio"]):not(.bp-input),
+body.theme-dark select,body.theme-dark textarea{color-scheme:dark}
+body.theme-light input:not([type="checkbox"]):not([type="radio"]):not(.bp-input),
+body.theme-light select,body.theme-light textarea{color-scheme:light}
+body.theme-dark input::placeholder,body.theme-dark textarea::placeholder{color:var(--text-secondary);opacity:1}
+
 </style></head><body class="bp-printing">' + toolbar + sourceElement.outerHTML + '</body></html>');
                     doc.close();
 
