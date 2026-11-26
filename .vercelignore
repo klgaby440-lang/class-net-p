@@ -1,0 +1,10 @@
+# Le backend est hébergé séparément sur Render. Vercel ne publie que les interfaces web.
+*.py
+*.pyc
+__pycache__/
+requirements*.txt
+/.env*
+/tests/
+/test.html
+/test_p.html
+/crypt/SETUP.md
