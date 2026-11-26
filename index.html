@@ -5,6 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ClassInk | Suite de gestion scolaire pour les établissements</title>
     <meta name="description" content="ClassInk et PrimeInk accompagnent les écoles : gestion des classes, notes, bulletins, horaires, mixage des examens, tableaux de bord et accès parent contrôlé.">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="ClassInk | Suite de gestion scolaire pour les établissements">
+    <meta property="og:description" content="Une suite scolaire pour organiser les classes, les notes, les bulletins, les horaires, le mixage des examens et le suivi des familles.">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="ClassInk | Suite de gestion scolaire">
+    <meta name="twitter:description" content="Découvrez ClassInk, PrimeInk, Manager et Class-Ink Suivi.">
     <meta name="theme-color" content="#0f172a">
     <link rel="icon" type="image/svg+xml" href="./assets/classink-logo.svg">
     <style>
@@ -547,9 +553,18 @@
             .contact-panel { padding:1.35rem; }
         }
 
+    
+        .skip-link {
+            position: fixed; top: .75rem; left: .75rem; z-index: 10000;
+            transform: translateY(-160%); padding: .7rem 1rem; border-radius: .6rem;
+            color: var(--text-main); background: var(--bg-card); border: 2px solid var(--primary);
+            box-shadow: var(--shadow); font-weight: 750;
+        }
+        .skip-link:focus { transform: translateY(0); outline: 3px solid var(--accent); outline-offset: 3px; }
     </style>
 </head>
 <body>
+    <a class="skip-link" href="#advantages">Aller au contenu</a>
 
     <!-- BARRE DE NAVIGATION -->
     <header id="top">
@@ -579,6 +594,7 @@
         </div>
     </header>
 
+    <main id="contenu">
     <div class="container">
         <!-- PRÉSENTATION GÉNÉRALE -->
         <section class="hero">
@@ -1049,14 +1065,14 @@
                     <h3>ClassInk pour Windows</h3>
                     <p class="version">Installateur de bureau (.EXE)</p>
                     <p>Pour les ordinateurs compatibles utilisés par les enseignants.</p>
-                    <a href="https://github.com/klgaby440-lang/Compilateur-sm/releases/download/build-v1.3.0-99/ClassNet_App_Setup_v1.3.0.exe" class="btn btn-outline">Télécharger pour Windows</a>
+                    <a href="https://github.com/klgaby440-lang/Compilateur-sm/releases/download/build-v1.3.0-100/ClassNet_App_Setup_v1.3.0.exe" class="btn btn-outline">Télécharger pour Windows</a>
                 </article>
                 <article class="download-card">
                     <span class="feature-icon">📱</span>
                     <h3>ClassInk pour Android</h3>
                     <p class="version">Application mobile (.APK)</p>
                     <p>Pour les smartphones et tablettes Android compatibles.</p>
-                    <a href="https://github.com/klgaby440-lang/Compilateur-sm/releases/download/build-v1.3.0-99/Class-Ink-Enseignant.apk" class="btn btn-outline">Télécharger pour Android</a>
+                    <a href="https://github.com/klgaby440-lang/Compilateur-sm/releases/download/build-v1.3.0-100/Class-Ink-Enseignant.apk" class="btn btn-outline">Télécharger pour Android</a>
                 </article>
             </div>
         </section>
@@ -1159,14 +1175,14 @@
             <div class="contact-panel">
                 <div>
                     <h3 style="font-size:1.4rem;margin-bottom:.6rem;">Parlons de votre établissement</h3>
-                    <p style="color:var(--text-muted);margin-bottom:1rem;">Contactez CRYPT Entreprise pour préparer une présentation de ClassInk et PrimeInk et échanger sur la mise en place des comptes, des classes et des accès parents.</p>
+                    <p style="color:var(--text-muted);margin-bottom:1rem;">Contactez l’équipe CRYPT pour préparer une présentation de ClassInk et PrimeInk et échanger sur la mise en place des comptes, des classes et des accès parents.</p>
                     <div class="contact-links">
                         <a href="https://wa.me/243895281304" class="btn btn-primary">Écrire sur WhatsApp</a>
                         <a href="mailto:klgaby440@gmail.com" class="btn btn-outline">Envoyer un e-mail</a>
                     </div>
                 </div>
                 <div>
-                    <p><strong>CRYPT Entreprise</strong></p>
+                    <p><strong>Équipe CRYPT</strong></p>
                     <p class="muted-inline">E-mail : klgaby440@gmail.com</p>
                     <p class="muted-inline">WhatsApp / Téléphone : +243 895 281 304</p>
                     <p class="muted-inline">ClassInk · PrimeInk · Services associés</p>
@@ -1176,10 +1192,12 @@
         </section>
     </div>
 
+    </main>
+
     <!-- FOOTER -->
     <footer>
         <div class="container">
-            <p>&copy; 2026 CRYPT Entreprise. ClassInk, PrimeInk et les services associés.</p>
+            <p>&copy; 2026 CRYPT. Projet ClassInk, PrimeInk et services associés.</p>
             <p style="margin-top:.7rem;">
                 <a href="./confidentialite/" style="color:var(--primary);text-decoration:none;font-weight:600;">Politique de confidentialité</a>
                 <span aria-hidden="true"> · </span>
@@ -1190,41 +1208,49 @@
 
     <!-- SCRIPT DE GESTION DU THÈME (DARK/LIGHT MODE) -->
     <script>
+    (function () {
+        'use strict';
+        const root = document.documentElement;
         const themeToggleBtn = document.getElementById('themeToggle');
         const themeIcon = document.getElementById('themeIcon');
         const themeText = document.getElementById('themeText');
-        const htmlElement = document.documentElement;
+        const themeMeta = document.querySelector('meta[name="theme-color"]');
 
-        // Détection de la préférence enregistrée ou du système
-        const savedTheme = localStorage.getItem('theme');
-        const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-
-        if (savedTheme) {
-            setTheme(savedTheme);
-        } else if (systemPrefersDark) {
-            setTheme('dark');
-        } else {
-            setTheme('light');
+        let savedTheme = null;
+        try {
+            savedTheme = localStorage.getItem('theme');
+        } catch (_) {
+            // Le site reste utilisable même si le stockage local est bloqué.
         }
+        const systemPrefersDark = typeof window.matchMedia === 'function'
+            && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const initialTheme = savedTheme === 'dark' || savedTheme === 'light'
+            ? savedTheme
+            : (systemPrefersDark ? 'dark' : 'light');
 
-        function setTheme(theme) {
-            htmlElement.setAttribute('data-theme', theme);
-            localStorage.setItem('theme', theme);
-
-            if (theme === 'dark') {
-                themeIcon.textContent = '☀️';
-                themeText.textContent = 'Clair';
-            } else {
-                themeIcon.textContent = '🌙';
-                themeText.textContent = 'Sombre';
+        function setTheme(theme, persist) {
+            const nextTheme = theme === 'dark' ? 'dark' : 'light';
+            root.setAttribute('data-theme', nextTheme);
+            if (themeMeta) themeMeta.setAttribute('content', nextTheme === 'dark' ? '#0f172a' : '#ffffff');
+            if (themeIcon) themeIcon.textContent = nextTheme === 'dark' ? '☀️' : '🌙';
+            if (themeText) themeText.textContent = nextTheme === 'dark' ? 'Clair' : 'Sombre';
+            if (persist) {
+                try {
+                    localStorage.setItem('theme', nextTheme);
+                } catch (_) {
+                    // La préférence s'applique à la page courante même sans stockage.
+                }
             }
         }
 
-        themeToggleBtn.addEventListener('click', () => {
-            const currentTheme = htmlElement.getAttribute('data-theme');
-            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-            setTheme(newTheme);
-        });
+        setTheme(initialTheme, false);
+        if (themeToggleBtn) {
+            themeToggleBtn.addEventListener('click', function () {
+                const nextTheme = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+                setTheme(nextTheme, true);
+            });
+        }
+    })();
     </script>
 </body>
 </html>
