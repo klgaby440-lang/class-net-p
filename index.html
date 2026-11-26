@@ -165,6 +165,17 @@ tbody th{font:600 1.02rem var(--head-font);white-space:nowrap}
 .app small{color:var(--tone);font-weight:700;font-size:.95rem}
 .app p{color:var(--muted);margin:.6rem 0 1.4rem;font-size:1rem}
 .app .btn{margin-top:auto}
+.app-actions{display:grid;gap:.65rem;margin-top:auto}
+.app-actions>.btn{width:100%}
+.app .app-tutorial{margin:0;border:0;background:transparent}
+.app .app-tutorial summary{display:flex;justify-content:center;align-items:center;min-height:46px;padding:.65rem 1.1rem;border:1px solid var(--line);border-radius:10px;background:var(--surface);font:600 1rem/1.2 var(--body-font);text-align:center}
+.app .app-tutorial summary::after{content:"+";font:400 1.25rem/1 var(--body-font);color:var(--blue)}
+.app .app-tutorial[open] summary::after{content:"−"}
+.app .app-tutorial-content{padding:.8rem .25rem .1rem;color:var(--muted);font-size:.9rem;line-height:1.5}
+.app .app-tutorial-content ol{padding-left:1.2rem;margin:.35rem 0 0}
+.app .app-tutorial-content li+li{margin-top:.25rem}
+.app .app-tutorial-content p{padding:0;margin:0;color:var(--muted);font-size:.9rem}
+.app-setup-note{margin:.7rem 0 0;padding:.65rem .75rem;border-radius:8px;background:var(--tone-soft);color:var(--tone);font-size:.9rem;line-height:1.4}
 .downloads{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1.25rem;margin-top:1.25rem}
 .dl{display:flex;flex-wrap:wrap;align-items:center;gap:1rem 1.2rem;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:1.5rem}
 .dl .chip{margin:0}
@@ -626,25 +637,65 @@ footer{background:var(--band);color:var(--band-muted);border-top:1px solid #3542
         <span class="chip"><svg class="icon" aria-hidden="true"><use href="#i-teacher"/></svg></span>
         <h3>ClassInk</h3><small>Espace enseignant, sur le Web</small>
         <p>Connexion enseignant, classes autorisées, notes, présences et conduite.</p>
-        <a href="./app/" class="btn btn-primary">Ouvrir ClassInk</a>
+        <div class="app-actions">
+          <a href="./app/" class="btn btn-primary">Ouvrir ClassInk</a>
+          <details class="app-tutorial">
+            <summary>Voir le tutoriel</summary>
+            <div class="app-tutorial-content">
+              <ol>
+                <li>Connectez-vous avec votre compte enseignant.</li>
+                <li>Sélectionnez une classe et un cours qui vous sont attribués.</li>
+                <li>Saisissez les notes, effectuez l’appel et complétez les informations de conduite.</li>
+                <li>Enregistrez vos opérations et synchronisez les données lorsque la connexion est disponible.</li>
+              </ol>
+            </div>
+          </details>
+        </div>
       </article>
       <article class="app t-green">
         <span class="chip"><svg class="icon" aria-hidden="true"><use href="#i-school"/></svg></span>
         <h3>PrimeInk</h3><small>Espace école, sur le Web</small>
         <p>Classes, élèves, cours, fiches, bulletins et synchronisation avec ClassInk.</p>
+        <p class="app-setup-note">La vidéo tutorielle est fournie avec le setup PrimeInk.</p>
         <a href="./prime/" class="btn btn-primary">Ouvrir PrimeInk</a>
       </article>
       <article class="app t-plum">
         <span class="chip"><svg class="icon" aria-hidden="true"><use href="#i-chart"/></svg></span>
         <h3>ClassInk Manager</h3><small>Espace de la direction, sur le Web</small>
         <p>Tableaux de bord, résultats, rapports, horaires et enseignants.</p>
-        <a href="./manager/" class="btn btn-primary">Ouvrir Manager</a>
+        <div class="app-actions">
+          <a href="./manager/" class="btn btn-primary">Ouvrir Manager</a>
+          <details class="app-tutorial">
+            <summary>Voir le tutoriel</summary>
+            <div class="app-tutorial-content">
+              <ol>
+                <li>Connectez-vous avec le compte de votre établissement.</li>
+                <li>Ouvrez le tableau de bord et choisissez la période ou la classe à consulter.</li>
+                <li>Parcourez les effectifs, les résultats, les rapports et les horaires disponibles.</li>
+                <li>Consultez les informations relatives aux enseignants et aux indicateurs de l’école.</li>
+              </ol>
+            </div>
+          </details>
+        </div>
       </article>
       <article class="app t-amber">
         <span class="chip"><svg class="icon" aria-hidden="true"><use href="#i-family"/></svg></span>
         <h3>Class-Ink Suivi</h3><small>Espace parent, sur le Web</small>
         <p>Liaison de l’enfant et consultation des informations autorisées.</p>
-        <a href="./suivi/" class="btn btn-primary">Ouvrir Suivi</a>
+        <div class="app-actions">
+          <a href="./suivi/" class="btn btn-primary">Ouvrir Suivi</a>
+          <details class="app-tutorial">
+            <summary>Voir le tutoriel</summary>
+            <div class="app-tutorial-content">
+              <ol>
+                <li>Sélectionnez l’établissement fréquenté par votre enfant.</li>
+                <li>Associez son dossier à l’aide de l’identifiant communiqué par l’école.</li>
+                <li>Choisissez l’enfant à consulter pour afficher ses informations disponibles.</li>
+                <li>Consultez les résultats, les présences et les communiqués lorsque l’établissement autorise leur accès.</li>
+              </ol>
+            </div>
+          </details>
+        </div>
       </article>
     </div>
     <div class="downloads t-blue">
