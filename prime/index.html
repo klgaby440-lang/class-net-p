@@ -1079,6 +1079,13 @@ body {
 .tp-table th { background: #d9d9d9; }
 .tp-table td.tp-left { text-align: left; }
 .tp-cell small { display: block; font-size: 7pt; color: #333; }
+#horResultsArea .detail-display-area { min-width:0; overflow-x:auto; }
+#horResultsArea .tp-table { min-width:760px; background:var(--bg-card); color:var(--text-primary); }
+#horResultsArea .tp-table th, #horResultsArea .tp-table td { border:1px solid var(--border-color); padding:.65rem .45rem; font-size:.8rem; }
+#horResultsArea .tp-table th { background:var(--bg-main); color:var(--text-primary); }
+#horResultsArea .tp-table th:first-child { min-width:132px; }
+#horResultsArea .tp-cell strong { display:block; overflow-wrap:anywhere; }
+#horResultsArea .tp-cell small { margin-top:.25rem; font-size:.72rem; color:var(--text-secondary); overflow-wrap:anywhere; }
 
 /* Cases de saisie du bulletin */
 .bp-table td.bp-edit-cell { padding: 0; background: #fffbe6; }
@@ -1946,10 +1953,12 @@ body.theme-dark input::placeholder,body.theme-dark textarea::placeholder{color:v
                     <div class="retractable-sidebar" id="horTeachersListSidebar"></div>
                     <div class="detail-display-area" id="horTeachersDetailArea">
                         <h3>Professeur : <span id="horSelectedTeacherName">-</span></h3>
-                        <table class="data-table" style="margin-top:1rem;">
-                            <thead><tr id="horTeacherTableHeader"><th>Heure | Jour</th></tr></thead>
-                            <tbody id="horTeacherTableBody"></tbody>
-                        </table>
+                        <div id="horTeacherGridMount">
+                            <table class="data-table" style="margin-top:1rem;">
+                                <thead><tr id="horTeacherTableHeader"><th>Tranche horaire</th></tr></thead>
+                                <tbody id="horTeacherTableBody"></tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
 
@@ -1957,10 +1966,12 @@ body.theme-dark input::placeholder,body.theme-dark textarea::placeholder{color:v
                     <div class="retractable-sidebar" id="horClassesListSidebar"></div>
                     <div class="detail-display-area" id="horClassesDetailArea">
                         <h3>Classe : <span id="horSelectedClassName">-</span></h3>
-                        <table class="data-table" style="margin-top:1rem;">
-                            <thead><tr id="horClassTableHeader"><th>Heure | Jour</th></tr></thead>
-                            <tbody id="horClassTableBody"></tbody>
-                        </table>
+                        <div id="horClassGridMount">
+                            <table class="data-table" style="margin-top:1rem;">
+                                <thead><tr id="horClassTableHeader"><th>Tranche horaire</th></tr></thead>
+                                <tbody id="horClassTableBody"></tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -6363,15 +6374,16 @@ const HOR_DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
         window.bpSelectScheduleClass = function(index) {
             const entry = __lastSchedule && __lastSchedule.result.schedules.classes[index];
             if (!entry) return;
-            document.getElementById('horSelectedClassName').textContent = entry.class_name;
-            document.getElementById('horClassesDetailArea').querySelector('table').outerHTML = bpScheduleTableHTML(entry.grid, bpClassCell);
+            document.getElementById('horSelectedClassName').textContent = entry.class_name || 'Classe';
+            const mount = document.getElementById('horClassGridMount');
+            if (mount) mount.innerHTML = bpScheduleTableHTML(entry.grid, bpClassCell);
         };
         window.bpSelectScheduleTeacher = function(index) {
             const entry = __lastSchedule && __lastSchedule.result.schedules.teachers[index];
             if (!entry) return;
-            document.getElementById('horSelectedTeacherName').textContent = __lastSchedule.names[entry.teacher_id] || entry.teacher_id;
-            const area = document.getElementById('horTeachersDetailArea');
-            area.querySelector('table').outerHTML = bpScheduleTableHTML(entry.grid, bpTeacherCell);
+            document.getElementById('horSelectedTeacherName').textContent = __lastSchedule.names[entry.teacher_id] || entry.teacher_id || 'Enseignant';
+            const mount = document.getElementById('horTeacherGridMount');
+            if (mount) mount.innerHTML = bpScheduleTableHTML(entry.grid, bpTeacherCell);
         };
 
         function bpRestorePublishedSchedule() {
@@ -6428,16 +6440,16 @@ const HOR_DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
             if (classes.length) bpSelectScheduleClass(0);
             else {
                 const title = document.getElementById('horSelectedClassName');
-                const area = document.getElementById('horClassesDetailArea');
+                const mount = document.getElementById('horClassGridMount');
                 if (title) title.textContent = 'Aucune classe';
-                if (area) area.querySelector('table').outerHTML = '<p style="color:var(--text-secondary)">Aucun cours à afficher.</p>';
+                if (mount) mount.innerHTML = '<p style="color:var(--text-secondary)">Aucun cours à afficher.</p>';
             }
             if (teachers.length) bpSelectScheduleTeacher(0);
             else {
                 const title = document.getElementById('horSelectedTeacherName');
-                const area = document.getElementById('horTeachersDetailArea');
+                const mount = document.getElementById('horTeacherGridMount');
                 if (title) title.textContent = 'Aucun enseignant';
-                if (area) area.querySelector('table').outerHTML = '<p style="color:var(--text-secondary)">Aucun cours à afficher.</p>';
+                if (mount) mount.innerHTML = '<p style="color:var(--text-secondary)">Aucun cours à afficher.</p>';
             }
         }
 
