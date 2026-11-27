@@ -2015,6 +2015,11 @@ def manager_get_attendance(date: str = "", db: Session = Depends(get_db), claims
         query = query.filter(StudentAttendance.date == date)
     rows = query.order_by(StudentAttendance.date.desc(), StudentAttendance.class_name.asc(), StudentAttendance.student_name.asc()).limit(10000).all()
     teacher_emails = {row.teacher_email for row in rows}
+    teachers_query = db.query(TeacherAttendance).filter(TeacherAttendance.school_id == school_id)
+    if date:
+        teachers_query = teachers_query.filter(TeacherAttendance.date == date)
+    teacher_rows = teachers_query.order_by(TeacherAttendance.date.desc(), TeacherAttendance.id.asc()).all()
+    teacher_emails.update(row.teacher_email for row in teacher_rows)
     teacher_by_email = {row.email: row for row in db.query(Teacher).filter(Teacher.email.in_(list(teacher_emails))).all()} if teacher_emails else {}
     student_rows = [{
         "id": row.id, "date": row.date, "classId": row.class_id, "className": row.class_name,
@@ -2022,10 +2027,6 @@ def manager_get_attendance(date: str = "", db: Session = Depends(get_db), claims
         "studentName": row.student_name, "status": row.status, "slot": row.slot_key,
         "teacher": teacher_by_email[row.teacher_email].full_name if row.teacher_email in teacher_by_email else "Enseignant",
     } for row in rows]
-    teachers_query = db.query(TeacherAttendance).filter(TeacherAttendance.school_id == school_id)
-    if date:
-        teachers_query = teachers_query.filter(TeacherAttendance.date == date)
-    teacher_rows = teachers_query.order_by(TeacherAttendance.date.desc(), TeacherAttendance.id.asc()).all()
     return {
         "status": True,
         "data": {
