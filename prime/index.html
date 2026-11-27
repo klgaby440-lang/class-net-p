@@ -6265,51 +6265,152 @@ const HOR_DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
             if (!headers) return;
             const collected = bpCollectSchedulePayload();
             if (collected.error) return alert(collected.error);
+            const exemplarCount = Math.max(1, Math.min(5, parseInt(document.getElementById('horExemplaires')?.value, 10) || 1));
+            const generateButton = document.querySelector('#tab-horaire button[onclick="requestServerScheduleGeneration()"]');
+            if (generateButton) {
+                generateButton.disabled = true;
+                generateButton.textContent = 'Génération des exemplaires…';
+            }
             try {
                 const response = await window.primeInkFetchWithTimeout(API_BASE_URL + '/api/schedule/generate', {
-                    method: 'POST', headers,
+                    method: 'POST',
+                    headers,
                     body: JSON.stringify({
                         school_id: appState.school.id,
                         academic_year: appState.school.schoolYear || bpDefaultSchoolYear(),
                         config: { jours_travail: collected.jours, heures_par_jour: collected.heures },
                         time_slots: collected.slots,
-                        teachers: collected.teachers
-                    })
-                }, 60000);
+                        teachers: collected.teachers,
+                        exemplaires: exemplarCount
+                    }),
+                    cache: 'no-store'
+                }, 90000);
                 if (!response.ok) return alert(await bpServerErrorMessage(response));
-                const result = await response.json();
-                const schedules = result && result.schedules ? result.schedules : {};
-                const hasPreview = Array.isArray(schedules.classes) && Array.isArray(schedules.teachers);
-                const names = {};
-                collected.teachers.forEach(t => names[t.teacher_id] = t.name);
-                if (!result.success) {
-                    if (!hasPreview) return alert(result.message || "L'horaire n'a pas pu être généré.");
-                    __lastSchedule = { result, jours: collected.jours, heures: collected.heures, slots: collected.slots, names };
-                    showScheduleResultsView();
-                    return alert((result.message || "La génération est incomplète.") +
-                        "\n\nUn aperçu des cours placés est affiché par classe et par enseignant. Il n'a pas été publié : corrigez les conflits et relancez la génération.");
+                const responseData = await response.json();
+                const rawCandidates = Array.isArray(responseData.exemplaires) && responseData.exemplaires.length
+                    ? responseData.exemplaires
+                    : (responseData.schedules ? [responseData] : []);
+                if (!rawCandidates.length) {
+                    return alert(responseData.message || "Le serveur n'a retourné aucun exemplaire d'horaire.");
                 }
-                if (!result.published) return alert("L'horaire a été généré mais sa publication officielle n'a pas été confirmée. Aucun horaire n'est présenté comme publié.");
-                __lastSchedule = { result, jours: collected.jours, heures: collected.heures, slots: collected.slots, names };
-                if (!appState.tools) appState.tools = {};
-                if (!appState.tools.horaire) appState.tools.horaire = {};
-                appState.managerSchedule = {
-                    academicYear: appState.school.schoolYear || bpDefaultSchoolYear(),
-                    generatedAt: result.generated_at || new Date().toISOString(),
-                    config: { jours: collected.jours, heures: collected.heures },
+                const names = {};
+                collected.teachers.forEach(teacher => { names[teacher.teacher_id] = teacher.name; });
+                const metadata = {
+                    jours: collected.jours,
+                    heures: collected.heures,
                     slots: collected.slots,
                     teachers: collected.teachers,
-                    result
+                    academicYear: appState.school.schoolYear || bpDefaultSchoolYear()
                 };
-                appState.tools.horaire.generatedSchedules = [{
-                    ...result,
-                    _managerSchedule: { config: { jours: collected.jours, heures: collected.heures }, slots: collected.slots, teachers: collected.teachers }
-                }];
-                saveState();
-                showScheduleResultsView();
-                alert("Horaire publié. Il est disponible dans ClassInk App et ClassInk Manager, ainsi que dans Class-Ink Suivi pour les parents.");
+                __scheduleCandidates = rawCandidates.map((candidate, index) => ({
+                    result: candidate,
+                    jours: collected.jours,
+                    heures: collected.heures,
+                    slots: collected.slots,
+                    names,
+                    teachers: collected.teachers,
+                    academicYear: metadata.academicYear,
+                    config: { jours: collected.jours, heures: collected.heures },
+                    candidateIndex: index
+                }));
+                __selectedScheduleExemplar = 0;
+                __lastSchedule = __scheduleCandidates[0];
+                await showScheduleResultsView();
+                const complete = __scheduleCandidates.filter(item =>
+                    item.result && item.result.success && Number(item.result.unassigned_count || 0) === 0
+                ).length;
+                if (complete === 0) {
+                    alert("Les exemplaires ont été générés, mais aucun n'est complet. Consultez les cours non placés, ajustez les disponibilités ou les affectations, puis relancez la génération. Aucun horaire n'a été publié.");
+                } else if (__scheduleCandidates.length < exemplarCount) {
+                    alert(__scheduleCandidates.length + " exemplaire(s) distinct(s) ont été générés sur " + exemplarCount + " demandés. Vous pouvez comparer ceux qui sont disponibles et publier un exemplaire complet.");
+                }
             } catch (error) {
                 alert(error.message || "Le serveur est injoignable. Vérifiez la connexion internet et réessayez.");
+            } finally {
+                if (generateButton) {
+                    generateButton.disabled = false;
+                    generateButton.textContent = "Générer l'Horaire";
+                }
+            }
+        };
+
+        window.selectScheduleExemplar = function(value) {
+            const index = Number.parseInt(value, 10);
+            if (!Number.isInteger(index) || index < 0 || index >= __scheduleCandidates.length) return;
+            __selectedScheduleExemplar = index;
+            __lastSchedule = __scheduleCandidates[index];
+            bpRenderSchedule();
+        };
+
+        window.publishSelectedScheduleExemplar = async function() {
+            if (!__lastSchedule || !__lastSchedule.result) {
+                return alert("Sélectionnez d'abord un exemplaire.");
+            }
+            const candidate = __lastSchedule;
+            const result = candidate.result;
+            if (!result.success || Number(result.unassigned_count || 0) > 0) {
+                return alert("Cet exemplaire contient encore des cours non placés. Seuls les exemplaires complets peuvent être publiés.");
+            }
+            if (result.published) return alert("Cet exemplaire est déjà publié.");
+            const headers = bpRequireSession();
+            if (!headers) return;
+            const button = document.getElementById('horPublishExemplarButton');
+            if (button) {
+                button.disabled = true;
+                button.textContent = 'Publication…';
+            }
+            const publishedResult = { ...result, published: true };
+            const schedule = {
+                academicYear: candidate.academicYear || appState.school.schoolYear || bpDefaultSchoolYear(),
+                generatedAt: result.generated_at || new Date().toISOString(),
+                config: candidate.config || { jours: candidate.jours, heures: candidate.heures },
+                slots: candidate.slots || [],
+                teachers: candidate.teachers || [],
+                result: publishedResult
+            };
+            try {
+                const response = await window.primeInkFetchWithTimeout(API_BASE_URL + '/api/manager/schedule', {
+                    method: 'PUT',
+                    headers,
+                    body: JSON.stringify({ school_id: appState.school.id, schedule }),
+                    cache: 'no-store'
+                }, 30000);
+                if (!response.ok) throw new Error(await bpServerErrorMessage(response));
+                const confirmation = await response.json().catch(() => ({}));
+                if (!confirmation.status) throw new Error(confirmation.message || "La publication n'a pas été confirmée par le serveur.");
+
+                candidate.result = publishedResult;
+                __lastSchedule = candidate;
+                if (!appState.tools) appState.tools = {};
+                if (!appState.tools.horaire) appState.tools.horaire = {};
+                appState.managerSchedule = schedule;
+                appState.tools.horaire.config = {
+                    ...(appState.tools.horaire.config || {}),
+                    exemplaires: Number(document.getElementById('horExemplaires')?.value) || __scheduleCandidates.length,
+                    joursTravail: candidate.jours,
+                    heuresParJour: candidate.heures
+                };
+                appState.tools.horaire.generatedSchedules = [{
+                    ...publishedResult,
+                    _managerSchedule: {
+                        config: schedule.config,
+                        slots: schedule.slots,
+                        teachers: schedule.teachers,
+                        academicYear: schedule.academicYear
+                    }
+                }];
+                saveState();
+                bpRenderSchedule();
+                alert("L'exemplaire " + (__selectedScheduleExemplar + 1) + " a été publié. Il est maintenant disponible dans ClassInk Manager et dans l'espace enseignant.");
+            } catch (error) {
+                alert("La publication a échoué : " + (error.message || "Erreur serveur."));
+            } finally {
+                if (button) {
+                    button.disabled = !!(candidate.result && candidate.result.published);
+                    button.textContent = candidate.result && candidate.result.published
+                        ? "Exemplaire publié"
+                        : "Publier l'exemplaire sélectionné";
+                }
             }
         };
 
