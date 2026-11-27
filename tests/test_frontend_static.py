@@ -636,6 +636,36 @@ class TestNewFeatureStatic(unittest.TestCase):
         self.assertIn("renderTeacherScheduleEditor", app)
         self.assertNotIn("function saveTeacherSchedule()", app)
 
+    def test_classink_schedule_views_use_primeink_weekly_table_layout(self):
+        app = (ROOT / "app/index.html").read_text(encoding="utf-8")
+        self.assertIn("teacher-schedule-table-wrap", app)
+        self.assertIn("table.teacher-schedule-table", app)
+        self.assertIn("db.teacherScheduleDays = Array.isArray(result.data.days)", app)
+        self.assertIn("db.teacherScheduleSlots = Array.isArray(result.data.slots)", app)
+        self.assertIn("db.teacherScheduleHours = Number(result.data.hours)", app)
+        self.assertIn("Tranche horaire", app)
+        self.assertIn("teacher-schedule-empty-cell", app)
+
+        suivi = (ROOT / "suivi/index.html").read_text(encoding="utf-8")
+        self.assertIn("schedule-grid-wrap", suivi)
+        self.assertIn('table class="t schedule-grid"', suivi)
+        self.assertIn("Number(schedule.hours)", suivi)
+        self.assertIn("slotByHour", suivi)
+        self.assertIn("schedule-empty-cell", suivi)
+
+        manager = (ROOT / "manager/index.html").read_text(encoding="utf-8")
+        self.assertIn("const dayOrder = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];", manager)
+        self.assertIn(".schedule-table{width:100%;min-width:760px;table-layout:fixed}", manager)
+        self.assertIn("Tranche horaire", manager)
+
+        backend = (ROOT / "main.py").read_text(encoding="utf-8")
+        self.assertIn("def published_schedule_table_metadata(published: dict, grid: dict | None = None)", backend)
+        self.assertIn('"days": list(SCHEDULE_DAY_NAMES[:day_count])', backend)
+        self.assertIn('"slots": slots', backend)
+        self.assertIn('"hours": hour_count', backend)
+        self.assertIn("**published_schedule_table_metadata(published, grid)", backend)
+        self.assertIn("**metadata,", backend)
+
     def test_quiz_data_and_schema_migrations_are_scoped_safely_by_school(self):
         source = (ROOT / "main.py").read_text(encoding="utf-8")
         self.assertIn('school_id = Column(String, ForeignKey("school_information.school_id"), nullable=True, index=True)', source)
