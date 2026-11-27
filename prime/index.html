@@ -6197,7 +6197,7 @@ const HOR_DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
                     const classIds = Array.from(classSelect?.selectedOptions || []).map(option => String(option.value)).filter(Boolean);
                     const courseName = String(courseSelect?.value || '');
                     const trunk = !!row.querySelector('.schedule-trunk-toggle')?.checked;
-                    if (!classIds.length && !courseName && !hours) continue;
+                    if (!classIds.length && !courseName) continue;
                     if (!classIds.length || !courseName || !(hours > 0)) return { error: "Une affectation de « " + teacherName + " » est incomplète. Choisissez la classe, le cours affecté et le nombre d'heures." };
                     if (!trunk && classIds.length !== 1) return { error: "Sélectionnez une seule classe ou activez le tronc commun." };
                     if (hours > jours * heures) return { error: "Le nombre d'heures de « " + courseName + " » dépasse la capacité de la semaine." };
