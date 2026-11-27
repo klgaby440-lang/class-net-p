@@ -83,6 +83,24 @@ class FrontendStaticTests(unittest.TestCase):
     def test_suivi_html_ids_and_inline_javascript(self):
         self.inspect_file("suivi/index.html")
 
+    def test_primeink_schedule_ranges_and_manager_planned_hours_render_consistently(self):
+        prime = (ROOT / "prime/index.html").read_text(encoding="utf-8")
+        self.assertIn("function bpScheduleTimeToMinutes(value)", prime)
+        self.assertIn("const startMinutes = bpScheduleTimeToMinutes(slot.start)", prime)
+        self.assertIn("const endMinutes = bpScheduleTimeToMinutes(slot.end)", prime)
+        self.assertIn("previousEndMinutes !== null && startMinutes < previousEndMinutes", prime)
+        self.assertNotIn(r"!/^([01]\\d|2[0-3]):[0-5]\\d$/.test(slot.start)", prime)
+        self.assertIn("function bpScheduleTableHTML(grid, cellFn)", prime)
+        self.assertIn("for (let h = 1; h <= s.heures; h++)", prime)
+        self.assertIn('id="horClassGridMount"', prime)
+        self.assertIn('id="horTeacherGridMount"', prime)
+
+        manager = (ROOT / "manager/index.html").read_text(encoding="utf-8")
+        self.assertIn("const configuredHours = Number(managerSchedule.config && managerSchedule.config.heures) || 0;", manager)
+        self.assertIn("Math.max(configuredHours, configuredSlots.length, usedHours)", manager)
+        self.assertIn("configuredSlots.find(item => Number(item && item.hour) === hour)", manager)
+        self.assertIn("Tranche horaire", manager)
+
     def test_no_unsupported_abort_signal_timeout_usage(self):
         for relative in ("app/index.html", "prime/index.html"):
             source = (ROOT / relative).read_text(encoding="utf-8")
