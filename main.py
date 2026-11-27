@@ -4658,7 +4658,10 @@ def get_teacher_schedule(db: Session = Depends(get_db), claims: dict = Depends(r
     if not teacher:
         raise HTTPException(status_code=404, detail="Compte enseignant introuvable.")
     if str(claims.get("workspace_mode") or "").strip().lower() == "independent":
-        return {"status": True, "data": {"schoolId": "", "workspaceMode": "independent", "schedule": []}}
+        return {"status": True, "data": {
+            "schoolId": "", "workspaceMode": "independent", "schedule": [],
+            "days": [], "slots": [], "hours": 0,
+        }}
 
     school_id = str(claims.get("school_id") or "").strip()
     if not school_id or not teacher_has_school_access(db, teacher, school_id):
@@ -4705,6 +4708,7 @@ def get_teacher_schedule(db: Session = Depends(get_db), claims: dict = Depends(r
             "academicYear": published.get("academicYear", "") if isinstance(published, dict) else "",
             "generatedAt": published.get("generatedAt", "") if isinstance(published, dict) else "",
             "schedule": schedule,
+            **published_schedule_table_metadata(published, grid),
         },
     }
 
@@ -4796,6 +4800,54 @@ def is_suivi_results_allowed(db: Session, school_id: str, student: SchoolStudent
     )
 
 
+SCHEDULE_DAY_NAMES = ("Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi")
+
+
+def published_schedule_table_metadata(published: dict, grid: dict | None = None) -> dict:
+    """Fournit les jours et tranches configurés, même lorsqu'une case du tableau est vide."""
+    published = published if isinstance(published, dict) else {}
+    config = published.get("config") if isinstance(published.get("config"), dict) else {}
+    grid = grid if isinstance(grid, dict) else {}
+    slots_raw = published.get("slots") if isinstance(published.get("slots"), list) else []
+    slots = []
+    for item in slots_raw:
+        if not isinstance(item, dict):
+            continue
+        hour = item.get("hour")
+        if str(hour or "").isdigit():
+            slots.append({
+                "hour": int(hour),
+                "start": str(item.get("start") or ""),
+                "end": str(item.get("end") or ""),
+            })
+    slots.sort(key=lambda item: item["hour"])
+
+    used_hours = 0
+    for day_grid in grid.values():
+        if not isinstance(day_grid, dict):
+            continue
+        for hour in day_grid:
+            if str(hour).isdigit():
+                used_hours = max(used_hours, int(hour))
+
+    try:
+        configured_days = int(config.get("jours") or 0)
+    except (TypeError, ValueError):
+        configured_days = 0
+    try:
+        configured_hours = int(config.get("heures") or 0)
+    except (TypeError, ValueError):
+        configured_hours = 0
+    day_count = max(1, min(len(SCHEDULE_DAY_NAMES), configured_days or len(grid) or 6))
+    hour_count = max(1, min(10, configured_hours or len(slots) or used_hours or 6))
+    hour_count = max(hour_count, min(10, len(slots)), min(10, used_hours))
+    return {
+        "days": list(SCHEDULE_DAY_NAMES[:day_count]),
+        "slots": slots,
+        "hours": hour_count,
+    }
+
+
 def build_suivi_schedule_payload(db: Session, school: SchoolInformation, student: SchoolStudentInformation) -> dict:
     """Renvoie l'horaire publié de la classe de l'enfant, jamais celui d'une autre classe."""
     classe = db.query(ClasseInformation).filter(
@@ -4807,21 +4859,23 @@ def build_suivi_schedule_payload(db: Session, school: SchoolInformation, student
     class_rows = (result.get("schedules") or {}).get("classes", []) if isinstance(result, dict) else []
     class_entry = next((row for row in class_rows if classe and str(row.get("class_name") or "") == str(classe.class_name)), None)
     if not class_entry:
-        return {"published": False, "className": classe.class_name if classe else "", "days": []}
+        return {
+            "published": False, "className": classe.class_name if classe else "",
+            "days": [], "slots": [], "hours": 0,
+        }
     grid = class_entry.get("grid") if isinstance(class_entry.get("grid"), dict) else {}
-    slots = published.get("slots", []) if isinstance(published, dict) else []
-    slot_by_hour = {str(item.get("hour")): item for item in slots if isinstance(item, dict)}
-    days = []
-    day_order = {"Lundi": 0, "Mardi": 1, "Mercredi": 2, "Jeudi": 3, "Vendredi": 4, "Samedi": 5, "Dimanche": 6}
+    metadata = published_schedule_table_metadata(published, grid)
+    slots = metadata["slots"]
+    slot_by_hour = {str(item["hour"]): item for item in slots}
+    lessons_by_day = {day: [] for day in metadata["days"]}
     for day, hours in grid.items():
-        if not isinstance(hours, dict):
+        if day not in lessons_by_day or not isinstance(hours, dict):
             continue
-        lessons = []
         for hour, cell in sorted(hours.items(), key=lambda pair: int(pair[0]) if str(pair[0]).isdigit() else 99):
             if not isinstance(cell, dict):
                 continue
             slot = slot_by_hour.get(str(hour), {})
-            lessons.append({
+            lessons_by_day[day].append({
                 "hour": int(hour) if str(hour).isdigit() else str(hour),
                 "start": str(slot.get("start") or ""),
                 "end": str(slot.get("end") or ""),
@@ -4829,14 +4883,13 @@ def build_suivi_schedule_payload(db: Session, school: SchoolInformation, student
                 "teacher": str(cell.get("teacher") or ""),
                 "room": str(cell.get("room") or ""),
             })
-        if lessons:
-            days.append({"day": str(day), "lessons": lessons})
-    days.sort(key=lambda item: day_order.get(item["day"], 7))
+    days = [{"day": day, "lessons": lessons_by_day[day]} for day in metadata["days"]]
     return {
         "published": True,
         "className": classe.class_name if classe else "",
         "academicYear": published.get("academicYear", "") if isinstance(published, dict) else "",
         "generatedAt": published.get("generatedAt", "") if isinstance(published, dict) else "",
+        **metadata,
         "days": days,
     }
 
