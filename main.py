@@ -4156,6 +4156,7 @@ def teacher_matches_catalog_name(teacher, value: str) -> bool:
     candidates = {
         normalize_name(getattr(teacher, "full_name", "") or ""),
         normalize_name(getattr(teacher, "teacher_code", "") or ""),
+        normalize_name(f"prof_{teacher.id}" if getattr(teacher, "id", None) is not None else ""),
         normalize_name(getattr(teacher, "email", "") or ""),
     }
     if normalized in candidates:
