@@ -1942,8 +1942,8 @@ body.theme-dark input::placeholder,body.theme-dark textarea::placeholder{color:v
             <!-- Interface des Résultats (S'affiche ou se masque) -->
             <div id="horResultsArea" class="settings-card hidden" style="margin-bottom: 70px;">
                 <nav class="sub-navbar">
-                    <button class="sub-nav-btn active" id="btnHorResultClasses" onclick="switchHoraireResultSubView('classes')">Classes</button>
-                    <button class="sub-nav-btn" id="btnHorResultEnseignants" onclick="switchHoraireResultSubView('enseignants')">Enseignants</button>
+                    <button type="button" class="sub-nav-btn active" id="btnHorResultClasses" onclick="switchHoraireResultSubView('classes')">Classes</button>
+                    <button type="button" class="sub-nav-btn" id="btnHorResultEnseignants" onclick="switchHoraireResultSubView('enseignants')">Enseignants</button>
                     <div style="display:flex; align-items:center; gap:0.5rem; margin-left:auto;">
                         <span id="horCurrentExemplarLabel">Aucun exemplaire sélectionné</span>
                     </div>
@@ -4058,22 +4058,6 @@ async function bpPushClassBulletin(cls) {
                 });
             });
 
-            /* 2. NAVIGATION SECONDAIRE */
-            const subNavBtns = document.querySelectorAll('.sub-nav-btn');
-            const subViews = document.querySelectorAll('.sub-view-content');
-
-            subNavBtns.forEach(btn => {
-                btn.addEventListener('click', () => {
-                    subNavBtns.forEach(b => b.classList.remove('active'));
-                    subViews.forEach(v => v.classList.remove('active'));
-
-                    btn.classList.add('active');
-                    const targetSubId = btn.getAttribute('data-sub');
-                    const targetSubView = document.getElementById(targetSubId);
-                    if (targetSubView) targetSubView.classList.add('active');
-                });
-            });
-
             /* 3. SIDEBAR RETRACTABLE */
             const toggleBtns = document.querySelectorAll('.toggle-sidebar-btn');
             toggleBtns.forEach(btn => {
@@ -5419,22 +5403,6 @@ async function bpPushClassBulletin(cls) {
 
         // Navigation spécifique pour l'interface Tools
         const toolNavBtns = document.querySelectorAll('.main-navbar .nav-btn[data-target="section-about"]');
-        const subToolBtns = document.querySelectorAll('#section-about .sub-nav-btn');
-        const subToolViews = document.querySelectorAll('#section-about .sub-view-content');
-
-        // Correction de la navigation secondaire Tools et fermeture propre du script
-        subToolBtns.forEach(btn => {
-            btn.addEventListener('click', () => {
-                subToolBtns.forEach(b => b.classList.remove('active'));
-                subToolViews.forEach(v => v.classList.remove('active'));
-                
-                btn.classList.add('active');
-                const targetId = btn.getAttribute('data-tool');
-                const targetView = document.getElementById(targetId);
-                if (targetView) targetView.classList.add('active');
-            });
-        });
-
         /* ==========================================================================
            LOGIQUE NATIVE DE L'INTERFACE TOOLS (STRUCTURE PRIME_NET.HTML)
            ========================================================================== */
@@ -7290,15 +7258,19 @@ if (delibStudentSearch) {
     });
 }
 
-document.querySelectorAll('.sub-nav-btn').forEach(btn => {
+const classDetailSection = document.getElementById('section-class-detail');
+            const classDetailSubNavBtns = classDetailSection
+                ? classDetailSection.querySelectorAll('.sub-nav-btn[data-sub]')
+                : [];
+            classDetailSubNavBtns.forEach(btn => {
                 btn.addEventListener('click', () => {
-                    const parent = btn.closest('.app-section');
-                    parent.querySelectorAll('.sub-nav-btn').forEach(b => b.classList.remove('active'));
-                    parent.querySelectorAll('.sub-view-content').forEach(v => v.classList.remove('active'));
+                    classDetailSubNavBtns.forEach(b => b.classList.remove('active'));
+                    classDetailSection.querySelectorAll('.sub-view-content').forEach(v => v.classList.remove('active'));
                     btn.classList.add('active');
                     const subId = btn.getAttribute('data-sub');
-                    if (subId && document.getElementById(subId)) {
-                        document.getElementById(subId).classList.add('active');
+                    const subView = subId ? document.getElementById(subId) : null;
+                    if (subView && classDetailSection.contains(subView)) {
+                        subView.classList.add('active');
                     }
                 });
             });
@@ -8816,12 +8788,9 @@ function saveDeliberation() {
     alert("✅ Délibération enregistrée avec succès !");
 }
 
-document.querySelectorAll('.sub-nav-btn').forEach(btn => {
+document.querySelectorAll('#section-class-detail .sub-nav-btn[data-sub="view-deliberation"]').forEach(btn => {
     btn.addEventListener('click', () => {
-        const targetSubId = btn.getAttribute('data-sub');
-        
-        // Si l'utilisateur clique sur l'onglet Délibérer
-        if (targetSubId === 'view-deliberation' && typeof renderDeliberationView === 'function') {
+        if (typeof renderDeliberationView === 'function') {
             renderDeliberationStudentList(activeClassId);
             renderDeliberationView(activeStudentId, false);
         }

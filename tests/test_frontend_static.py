@@ -125,6 +125,29 @@ class FrontendStaticTests(unittest.TestCase):
         manager = (ROOT / "manager/index.html").read_text(encoding="utf-8")
         self.assertIn("if(page==='schedule')refreshSchedule();", manager)
 
+    def test_primeink_schedule_result_tabs_are_isolated_from_global_subnavigation(self):
+        source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
+
+        # The schedule's two tabs use their dedicated switch function and cannot submit a form.
+        self.assertIn('type="button" class="sub-nav-btn active" id="btnHorResultClasses"', source)
+        self.assertIn('type="button" class="sub-nav-btn" id="btnHorResultEnseignants"', source)
+        self.assertIn("window.switchHoraireResultSubView = function(view)", source)
+        self.assertIn("classesView.classList.toggle('hidden', !isClasses)", source)
+        self.assertIn("teachersView.classList.toggle('hidden', isClasses)", source)
+
+        # Bulletin navigation is restricted to its own container. No global listener may
+        # clear .active from the timetable or mixage result panes.
+        self.assertIn("const classDetailSection = document.getElementById('section-class-detail');", source)
+        self.assertIn("classDetailSection.querySelectorAll('.sub-nav-btn[data-sub]')", source)
+        self.assertIn("classDetailSection.querySelectorAll('.sub-view-content')", source)
+        self.assertIn(
+            'document.querySelectorAll(\'#section-class-detail .sub-nav-btn[data-sub="view-deliberation"]\')',
+            source,
+        )
+        self.assertNotIn("document.querySelectorAll('.sub-nav-btn')", source)
+        self.assertNotIn("const subNavBtns = document.querySelectorAll('.sub-nav-btn')", source)
+        self.assertNotIn("const subToolBtns = document.querySelectorAll('#section-about .sub-nav-btn')", source)
+
     def test_no_unsupported_abort_signal_timeout_usage(self):
         for relative in ("app/index.html", "prime/index.html"):
             source = (ROOT / relative).read_text(encoding="utf-8")
