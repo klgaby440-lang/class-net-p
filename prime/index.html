@@ -5878,6 +5878,10 @@ async function bpPushClassBulletin(cls) {
                 const result = await response.json();
                 if (!result.success) return alert(result.message || "Le mixage n'a pas pu être généré.");
                 __lastMixage = { result, rooms, targetClasses, session: result.session || null };
+                if (result.session) {
+                    const sessions = Array.isArray(appState.mixageSessions) ? appState.mixageSessions : [];
+                    appState.mixageSessions = sessions.filter(item => String(item.id) !== String(result.session.id)).concat([result.session]).slice(-20);
+                }
                 if (!appState.tools) appState.tools = {};
                 if (!appState.tools.mixage) appState.tools.mixage = {};
                 appState.tools.mixage.generatedSchedules = [result];
@@ -6248,6 +6252,14 @@ const HOR_DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
                 __lastSchedule = { result, jours: collected.jours, heures: collected.heures, slots: collected.slots, names };
                 if (!appState.tools) appState.tools = {};
                 if (!appState.tools.horaire) appState.tools.horaire = {};
+                appState.managerSchedule = {
+                    academicYear: appState.school.schoolYear || bpDefaultSchoolYear(),
+                    generatedAt: result.generated_at || new Date().toISOString(),
+                    config: { jours: collected.jours, heures: collected.heures },
+                    slots: collected.slots,
+                    teachers: collected.teachers,
+                    result
+                };
                 appState.tools.horaire.generatedSchedules = [{
                     ...result,
                     _managerSchedule: { config: { jours: collected.jours, heures: collected.heures }, slots: collected.slots, teachers: collected.teachers }
