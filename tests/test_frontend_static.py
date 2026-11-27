@@ -101,6 +101,17 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn("configuredSlots.find(item => Number(item && item.hour) === hour)", manager)
         self.assertIn("Tranche horaire", manager)
 
+        self.assertIn("horaireState.generatedSchedules", prime)
+        self.assertIn("async function bpLoadPublishedScheduleFromServer()", prime)
+        self.assertIn("API_BASE_URL + '/api/manager/schedule'", prime)
+
+        backend = (ROOT / "main.py").read_text(encoding="utf-8")
+        generation = backend.index('result = engine.generate()')
+        published = backend.index('result["published"] = True', generation)
+        persisted = backend.index('stored = {', generation)
+        self.assertLess(published, persisted)
+        self.assertIn('slot_by_hour = {str(item.get("hour")): item for item in slots if isinstance(item, dict)}', backend)
+
     def test_no_unsupported_abort_signal_timeout_usage(self):
         for relative in ("app/index.html", "prime/index.html"):
             source = (ROOT / relative).read_text(encoding="utf-8")
