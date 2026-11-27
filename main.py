@@ -193,7 +193,9 @@ class ScheduleEngine:
                     room = "Salle N°1"
                     self.teacher_grid[t_id][day][h_str] = {
                         "class": c_name,
-                        "course": task["course_name"]
+                        "classes": [c_name],
+                        "course": task["course_name"],
+                        "room": room
                     }
                     self.class_grid[c_name][day][h_str] = {
                         "course": task["course_name"],
@@ -214,7 +216,9 @@ class ScheduleEngine:
                     classes_label = " + ".join(target_classes)
                     self.teacher_grid[t_id][day][h_str] = {
                         "class": f"TRONC COMMUN ({classes_label})",
-                        "course": task["course_name"]
+                        "classes": list(target_classes),
+                        "course": task["course_name"],
+                        "room": "Auditoire / Salle Principale"
                     }
                     for c_name in target_classes:
                         self.class_grid[c_name][day][h_str] = {
@@ -320,6 +324,7 @@ class ExamMixerEngine:
                         "rangee": r,
                         "banc": b,
                         "student_exam_id": student["exam_id"],
+                        "student_id": student["id"],
                         "student_name": f"{student['name']} {student['postname']}",
                         "original_class": student["classId"]
                     })
@@ -673,6 +678,19 @@ class TeacherMessage(Base):
     school_id = Column(String, ForeignKey("school_information.school_id"), index=True, nullable=False)
     teacher_email = Column(String, ForeignKey("teachers.email"), index=True, nullable=False)
     sender_role = Column(String(16), nullable=False)  # school | teacher
+    sender_name = Column(String(160), nullable=False)
+    message = Column(Text, nullable=False)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+
+
+class TeacherDirectMessage(Base):
+    """Message privé entre deux enseignants d'un même établissement."""
+    __tablename__ = "teacher_direct_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    school_id = Column(String, ForeignKey("school_information.school_id"), index=True, nullable=False)
+    sender_email = Column(String, ForeignKey("teachers.email"), index=True, nullable=False)
+    recipient_email = Column(String, ForeignKey("teachers.email"), index=True, nullable=False)
     sender_name = Column(String(160), nullable=False)
     message = Column(Text, nullable=False)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
@@ -1869,6 +1887,7 @@ def login_school(data: LoginSchema, db: Session = Depends(get_db)):
     for t in school_teachers.values():
         teachers_data.append({
             "uniqueId": t.teacher_code or f"prof_{t.id}",
+            "email": t.email,
             "name": t.full_name,
             "subject": t.subject or "",
             "status": t.status or "Actif",
@@ -1984,6 +2003,49 @@ def manager_login(data: LoginSchema, db: Session = Depends(get_db)):
             school_data.pop(key, None)
         state.pop("signatureBook", None)
     return JSONResponse(content=result, headers=headers)
+
+
+@app.get("/api/manager/attendance")
+def manager_get_attendance(date: str = "", db: Session = Depends(get_db), claims: dict = Depends(require_active_school)):
+    school_id = str(claims.get("school_id") or "")
+    if date and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):
+        raise HTTPException(status_code=422, detail="Date invalide.")
+    query = db.query(StudentAttendance).filter(StudentAttendance.school_id == school_id)
+    if date:
+        query = query.filter(StudentAttendance.date == date)
+    rows = query.order_by(StudentAttendance.date.desc(), StudentAttendance.class_name.asc(), StudentAttendance.student_name.asc()).limit(10000).all()
+    teacher_emails = {row.teacher_email for row in rows}
+    teachers_query = db.query(TeacherAttendance).filter(TeacherAttendance.school_id == school_id)
+    if date:
+        teachers_query = teachers_query.filter(TeacherAttendance.date == date)
+    teacher_rows = teachers_query.order_by(TeacherAttendance.date.desc(), TeacherAttendance.id.asc()).all()
+    teacher_emails.update(row.teacher_email for row in teacher_rows)
+    teacher_by_email = {row.email: row for row in db.query(Teacher).filter(Teacher.email.in_(list(teacher_emails))).all()} if teacher_emails else {}
+    student_rows = [{
+        "id": row.id, "date": row.date, "classId": row.class_id, "className": row.class_name,
+        "courseId": row.course_id, "course": row.course_name, "studentId": row.student_id,
+        "studentName": row.student_name, "status": row.status, "slot": row.slot_key,
+        "teacher": teacher_by_email[row.teacher_email].full_name if row.teacher_email in teacher_by_email else "Enseignant",
+    } for row in rows]
+    return {
+        "status": True,
+        "data": {
+            "date": date or None,
+            "students": student_rows,
+            "teachers": [{"teacherEmail": row.teacher_email, "teacherName": teacher_by_email[row.teacher_email].full_name if row.teacher_email in teacher_by_email else "", "date": row.date, "checkIn": row.check_in or "", "checkOut": row.check_out or ""} for row in teacher_rows],
+            "summary": {"total": len(student_rows), "present": sum(1 for row in student_rows if row["status"] == "P"), "absent": sum(1 for row in student_rows if row["status"] == "A"), "late": sum(1 for row in student_rows if row["status"] == "R"), "teachers": len(teacher_rows)},
+        },
+    }
+
+
+@app.get("/api/manager/mixages")
+def manager_get_mixages(db: Session = Depends(get_db), claims: dict = Depends(require_active_school)):
+    school_id = str(claims.get("school_id") or "")
+    school = db.query(SchoolInformation).filter(SchoolInformation.school_id == school_id).first()
+    if not school:
+        raise HTTPException(status_code=404, detail="Établissement introuvable.")
+    sessions = (school.pn_extra or {}).get("mixageSessions", [])
+    return {"status": True, "data": sessions[-20:] if isinstance(sessions, list) else []}
 
 
 @app.get("/api/manager/schedule")
@@ -3669,6 +3731,14 @@ def clean_pn_extra(extra):
                 out["managerSchedule"] = manager_schedule
         except (TypeError, ValueError):
             pass
+    mixage_sessions = extra.get("mixageSessions")
+    if isinstance(mixage_sessions, list):
+        try:
+            recent = mixage_sessions[-20:]
+            if len(json.dumps(recent, ensure_ascii=False)) <= 3000000:
+                out["mixageSessions"] = recent
+        except (TypeError, ValueError):
+            pass
     return out
 
 
@@ -3719,6 +3789,8 @@ def school_state_extras(db, school):
         out["behaviour"] = behaviour
     if isinstance(extra.get("managerSchedule"), dict):
         out["managerSchedule"] = extra["managerSchedule"]
+    if isinstance(extra.get("mixageSessions"), list):
+        out["mixageSessions"] = extra["mixageSessions"][-20:]
     return out
 
 
@@ -4084,6 +4156,7 @@ def teacher_matches_catalog_name(teacher, value: str) -> bool:
     candidates = {
         normalize_name(getattr(teacher, "full_name", "") or ""),
         normalize_name(getattr(teacher, "teacher_code", "") or ""),
+        normalize_name(f"prof_{teacher.id}" if getattr(teacher, "id", None) is not None else ""),
         normalize_name(getattr(teacher, "email", "") or ""),
     }
     if normalized in candidates:
@@ -4567,9 +4640,7 @@ def get_teacher_schedule(db: Session = Depends(get_db), claims: dict = Depends(r
     if not teacher:
         raise HTTPException(status_code=404, detail="Compte enseignant introuvable.")
     if str(claims.get("workspace_mode") or "").strip().lower() == "independent":
-        row = db.query(ClassInkTeacherIndependentSnapshot).filter_by(teacher_email=teacher.email).first()
-        state = dict(row.payload_data or {}) if row else {}
-        return {"status": True, "data": {"schoolId": "", "workspaceMode": "independent", "schedule": list(state.get("teacherSchedule") or [])}}
+        return {"status": True, "data": {"schoolId": "", "workspaceMode": "independent", "schedule": []}}
 
     school_id = str(claims.get("school_id") or "").strip()
     if not school_id or not teacher_has_school_access(db, teacher, school_id):
@@ -4577,84 +4648,100 @@ def get_teacher_schedule(db: Session = Depends(get_db), claims: dict = Depends(r
     blocked = teacher_school_block(db, teacher, school_id)
     if blocked:
         raise HTTPException(status_code=403, detail=blocked)
-    space = db.query(TeacherSchoolSpace).filter(
-        TeacherSchoolSpace.teacher_email == teacher.email,
-        TeacherSchoolSpace.school_id == school_id,
-        TeacherSchoolSpace.is_verified.is_(True),
-    ).first()
-    return {"status": True, "data": {"schoolId": school_id, "workspaceMode": "school", "schedule": list((space.schedule_data or []) if space else [])}}
+
+    school = db.query(SchoolInformation).filter(SchoolInformation.school_id == school_id).first()
+    published = (school.pn_extra or {}).get("managerSchedule") if school else None
+    result = published.get("result") if isinstance(published, dict) else None
+    schedule_rows = (result.get("schedules") or {}).get("teachers", []) if isinstance(result, dict) else []
+    teacher_ids = {str(teacher.teacher_code or ""), f"prof_{teacher.id}", str(teacher.email)}
+    own_grid = next((row for row in schedule_rows if str(row.get("teacher_id") or "") in teacher_ids), None)
+    grid = own_grid.get("grid") if isinstance(own_grid, dict) else {}
+    slots = published.get("slots", []) if isinstance(published, dict) else []
+    slot_by_hour = {str(item.get("hour")): item for item in slots if isinstance(item, dict)}
+    schedule = []
+    for day, hours in (grid or {}).items():
+        if not isinstance(hours, dict):
+            continue
+        for hour, cell in hours.items():
+            if not isinstance(cell, dict):
+                continue
+            slot = slot_by_hour.get(str(hour), {})
+            schedule.append({
+                "id": f"{school_id}:{teacher.email}:{day}:{hour}",
+                "day": str(day),
+                "hour": int(hour) if str(hour).isdigit() else str(hour),
+                "start": str(slot.get("start") or ""),
+                "end": str(slot.get("end") or ""),
+                "course": str(cell.get("course") or ""),
+                "className": str(cell.get("class") or ""),
+                "classes": cell.get("classes") if isinstance(cell.get("classes"), list) else [],
+                "room": str(cell.get("room") or ""),
+            })
+    day_order = {"Lundi": 0, "Mardi": 1, "Mercredi": 2, "Jeudi": 3, "Vendredi": 4, "Samedi": 5, "Dimanche": 6}
+    schedule.sort(key=lambda item: (day_order.get(item["day"], 7), int(item["hour"]) if str(item["hour"]).isdigit() else 99))
+    return {
+        "status": True,
+        "data": {
+            "schoolId": school_id,
+            "workspaceMode": "school",
+            "academicYear": published.get("academicYear", "") if isinstance(published, dict) else "",
+            "generatedAt": published.get("generatedAt", "") if isinstance(published, dict) else "",
+            "schedule": schedule,
+        },
+    }
 
 
 @app.put("/api/teacher/schedule")
 def save_teacher_schedule(payload: dict, db: Session = Depends(get_db), claims: dict = Depends(require_teacher)):
+    if str(claims.get("workspace_mode") or "").strip().lower() != "independent":
+        raise HTTPException(status_code=403, detail="L'horaire scolaire est publié par PrimeInk. L'enseignant le consulte en lecture seule.")
     teacher = db.query(Teacher).filter(Teacher.email == claims.get("email")).first()
     if not teacher:
         raise HTTPException(status_code=404, detail="Compte enseignant introuvable.")
-    independent_workspace = str(claims.get("workspace_mode") or "").strip().lower() == "independent"
-    school_id = str(claims.get("school_id") or "").strip()
-    if not independent_workspace and (not school_id or not teacher_has_school_access(db, teacher, school_id)):
-        raise HTTPException(status_code=403, detail="Aucun espace scolaire actif n'est autorisé pour cet enseignant.")
-    if not independent_workspace:
-        blocked = teacher_school_block(db, teacher, school_id)
-        if blocked:
-            raise HTTPException(status_code=403, detail=blocked)
     entries = payload.get("schedule")
     if not isinstance(entries, list) or len(entries) > 100:
         raise HTTPException(status_code=422, detail="L'horaire doit être une liste de 0 à 100 créneaux.")
     allowed_days = {"Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"}
     clean_entries = []
-    seen_ids = set()
     for index, entry in enumerate(entries):
         if not isinstance(entry, dict):
             raise HTTPException(status_code=422, detail="Un créneau de l'horaire est invalide.")
-        entry_id = clean_text(entry.get("id"), 80) or f"slot-{index + 1}"
         day = clean_text(entry.get("day"), 20)
         start = clean_text(entry.get("start"), 5)
         end = clean_text(entry.get("end"), 5)
         course = clean_text(entry.get("course"), 120)
-        room = clean_text(entry.get("room"), 80)
-        if entry_id in seen_ids:
-            raise HTTPException(status_code=422, detail="Chaque créneau doit avoir un identifiant unique.")
-        seen_ids.add(entry_id)
         if day not in allowed_days or not re.fullmatch(r"([01][0-9]|2[0-3]):[0-5][0-9]", start) or not re.fullmatch(r"([01][0-9]|2[0-3]):[0-5][0-9]", end) or end <= start or not course:
             raise HTTPException(status_code=422, detail="Chaque créneau doit avoir un jour, un cours et des heures valides.")
-        clean_entries.append({"id": entry_id, "day": day, "start": start, "end": end, "course": course, "room": room, "order": index})
-
-    if independent_workspace:
-        row = db.query(ClassInkTeacherIndependentSnapshot).filter_by(teacher_email=teacher.email).first()
-        if not row:
-            row = ClassInkTeacherIndependentSnapshot(
-                teacher_email=teacher.email,
-                payload_data={
-                    "user": {"id": teacher.teacher_code or f"prof_{teacher.id}", "name": teacher.full_name,
-                             "email": teacher.email, "school": "Espace indépendant", "schoolId": ""},
-                    "classes": [], "courses": {}, "courseMax": {}, "students": {},
-                    "evaluations": {}, "grades": {}, "presences": [], "quizzes": [],
-                    "titulaireClasses": [], "classrooms": [],
-                },
-            )
-            db.add(row)
-        state = dict(row.payload_data or {})
-        state["teacherSchedule"] = clean_entries
-        row.payload_data = state
-        db.commit()
-        return {"status": True, "data": {"schoolId": "", "workspaceMode": "independent", "schedule": clean_entries}}
-
-    space = db.query(TeacherSchoolSpace).filter(
-        TeacherSchoolSpace.teacher_email == teacher.email,
-        TeacherSchoolSpace.school_id == school_id,
-    ).first()
-    if not space:
-        # Compatibilité des enseignants historiques : matérialise leur ancien rattachement vérifié.
-        if str(teacher.school_id or "") != school_id or not teacher.school_access_verified:
-            raise HTTPException(status_code=403, detail="Cet espace n'est pas confirmé.")
-        space = TeacherSchoolSpace(teacher_email=teacher.email, school_id=school_id, is_verified=True)
-        db.add(space)
-    if not space.is_verified:
-        raise HTTPException(status_code=403, detail="L'école n'a pas encore confirmé cet espace.")
-    space.schedule_data = clean_entries
+        clean_entries.append({
+            "id": clean_text(entry.get("id"), 80) or f"slot-{index + 1}",
+            "day": day, "start": start, "end": end, "course": course,
+            "room": clean_text(entry.get("room"), 80), "order": index,
+        })
+    row = db.query(ClassInkTeacherIndependentSnapshot).filter_by(teacher_email=teacher.email).first()
+    if not row:
+        row = ClassInkTeacherIndependentSnapshot(
+            teacher_email=teacher.email,
+            payload_data={"user": {"id": teacher.teacher_code or f"prof_{teacher.id}", "name": teacher.full_name, "email": teacher.email, "school": "Espace indépendant", "schoolId": ""}, "classes": [], "courses": {}, "courseMax": {}, "students": {}, "evaluations": {}, "grades": {}, "presences": [], "quizzes": [], "titulaireClasses": [], "classrooms": []},
+        )
+        db.add(row)
+    state = dict(row.payload_data or {})
+    state["teacherSchedule"] = clean_entries
+    row.payload_data = state
     db.commit()
-    return {"status": True, "data": {"schoolId": school_id, "workspaceMode": "school", "schedule": clean_entries}}
+    return {"status": True, "data": {"schoolId": "", "workspaceMode": "independent", "schedule": clean_entries}}
+
+
+@app.get("/api/teacher/contacts")
+def get_teacher_contacts(db: Session = Depends(get_db), claims: dict = Depends(require_teacher)):
+    teacher = db.query(Teacher).filter(Teacher.email == claims.get("email")).first()
+    school_id = str(claims.get("school_id") or "").strip()
+    if not teacher or not school_id or not teacher_has_school_access(db, teacher, school_id):
+        raise HTTPException(status_code=403, detail="Aucun espace scolaire confirmé.")
+    blocked = teacher_school_block(db, teacher, school_id)
+    if blocked:
+        raise HTTPException(status_code=403, detail=blocked)
+    colleagues = [row for row in _verified_school_teachers(db, school_id) if row.email != teacher.email]
+    return {"status": True, "data": [{"email": row.email, "name": row.full_name, "teacherCode": row.teacher_code or ""} for row in colleagues]}
 
 
 @app.get("/api/teacher/classes")
@@ -4689,6 +4776,81 @@ def is_suivi_results_allowed(db: Session, school_id: str, student: SchoolStudent
         resolve_grade_access(rules, student.class_id, period, "suivi", default=True)
         for period in PERIODS
     )
+
+
+def build_suivi_schedule_payload(db: Session, school: SchoolInformation, student: SchoolStudentInformation) -> dict:
+    """Renvoie l'horaire publié de la classe de l'enfant, jamais celui d'une autre classe."""
+    classe = db.query(ClasseInformation).filter(
+        ClasseInformation.school_id == school.school_id,
+        ClasseInformation.id == student.class_id,
+    ).first()
+    published = (school.pn_extra or {}).get("managerSchedule")
+    result = published.get("result") if isinstance(published, dict) else None
+    class_rows = (result.get("schedules") or {}).get("classes", []) if isinstance(result, dict) else []
+    class_entry = next((row for row in class_rows if classe and str(row.get("class_name") or "") == str(classe.class_name)), None)
+    if not class_entry:
+        return {"published": False, "className": classe.class_name if classe else "", "days": []}
+    grid = class_entry.get("grid") if isinstance(class_entry.get("grid"), dict) else {}
+    slots = published.get("slots", []) if isinstance(published, dict) else []
+    slot_by_hour = {str(item.get("hour")): item for item in slots if isinstance(item, dict)}
+    days = []
+    day_order = {"Lundi": 0, "Mardi": 1, "Mercredi": 2, "Jeudi": 3, "Vendredi": 4, "Samedi": 5, "Dimanche": 6}
+    for day, hours in grid.items():
+        if not isinstance(hours, dict):
+            continue
+        lessons = []
+        for hour, cell in sorted(hours.items(), key=lambda pair: int(pair[0]) if str(pair[0]).isdigit() else 99):
+            if not isinstance(cell, dict):
+                continue
+            slot = slot_by_hour.get(str(hour), {})
+            lessons.append({
+                "hour": int(hour) if str(hour).isdigit() else str(hour),
+                "start": str(slot.get("start") or ""),
+                "end": str(slot.get("end") or ""),
+                "course": str(cell.get("course") or ""),
+                "teacher": str(cell.get("teacher") or ""),
+                "room": str(cell.get("room") or ""),
+            })
+        if lessons:
+            days.append({"day": str(day), "lessons": lessons})
+    days.sort(key=lambda item: day_order.get(item["day"], 7))
+    return {
+        "published": True,
+        "className": classe.class_name if classe else "",
+        "academicYear": published.get("academicYear", "") if isinstance(published, dict) else "",
+        "generatedAt": published.get("generatedAt", "") if isinstance(published, dict) else "",
+        "days": days,
+    }
+
+
+def build_suivi_mixage_payload(school: SchoolInformation, student: SchoolStudentInformation) -> list:
+    """Ne renvoie que les places d'examen de l'élève dans les sessions publiées aux parents."""
+    sessions = (school.pn_extra or {}).get("mixageSessions", [])
+    if not isinstance(sessions, list):
+        return []
+    output = []
+    for session in reversed(sessions[-20:]):
+        if not isinstance(session, dict) or not session.get("published_to_suivi"):
+            continue
+        for room in session.get("seating_plans", []):
+            for bench in room.get("benches", []):
+                seat = bench.get("student_left") or {}
+                if str(seat.get("student_id") or "") != str(student.id):
+                    continue
+                output.append({
+                    "id": session.get("id"),
+                    "examName": session.get("exam_name") or "Examen",
+                    "academicYear": session.get("academic_year") or "",
+                    "date": session.get("created_at") or "",
+                    "room": room.get("room_name") or "",
+                    "supervisor": room.get("supervisor") or "",
+                    "row": bench.get("row"),
+                    "bench": bench.get("bench_number"),
+                    "examCode": seat.get("id") or "",
+                    "variant": seat.get("variant_code") or "",
+                })
+                break
+    return output[:10]
 
 
 def build_suivi_attendance_payload(db: Session, school: SchoolInformation, student: SchoolStudentInformation) -> dict:
@@ -5016,6 +5178,8 @@ def suivi_get_student(payload: dict, request: Request, db: Session = Depends(get
                 "message": access_message,
             },
             "attendance": attendance_payload,
+            "schedule": build_suivi_schedule_payload(db, school, student),
+            "mixages": build_suivi_mixage_payload(school, student),
             "communications": [
                 {
                     "id": row.id,
@@ -5170,7 +5334,12 @@ def primenet_send_teacher_message(payload: dict, db: Session = Depends(get_db), 
 
 
 @app.get("/api/teacher/messages")
-def teacher_get_messages(db: Session = Depends(get_db), claims: dict = Depends(require_teacher)):
+def teacher_get_messages(
+    recipient_type: str = "school",
+    recipient_email: str = "",
+    db: Session = Depends(get_db),
+    claims: dict = Depends(require_teacher),
+):
     teacher = db.query(Teacher).filter(Teacher.email == claims.get("email")).first()
     school_id = str(claims.get("school_id") or "").strip()
     if not teacher or not school_id or not teacher_has_school_access(db, teacher, school_id):
@@ -5178,6 +5347,26 @@ def teacher_get_messages(db: Session = Depends(get_db), claims: dict = Depends(r
     blocked = teacher_school_block(db, teacher, school_id)
     if blocked:
         raise HTTPException(status_code=403, detail=blocked)
+
+    if recipient_type == "teacher":
+        peer_email = str(recipient_email or "").strip().lower()
+        peer = db.query(Teacher).filter(Teacher.email == peer_email).first()
+        if not peer or peer.email == teacher.email or not teacher_has_school_access(db, peer, school_id):
+            raise HTTPException(status_code=404, detail="Enseignant destinataire introuvable dans cet établissement.")
+        rows = db.query(TeacherDirectMessage).filter(
+            TeacherDirectMessage.school_id == school_id,
+            or_(
+                (TeacherDirectMessage.sender_email == teacher.email) & (TeacherDirectMessage.recipient_email == peer.email),
+                (TeacherDirectMessage.sender_email == peer.email) & (TeacherDirectMessage.recipient_email == teacher.email),
+            ),
+        ).order_by(TeacherDirectMessage.created_at.asc(), TeacherDirectMessage.id.asc()).all()
+        return {"status": True, "messages": [
+            {"id": row.id, "senderRole": "teacher" if row.sender_email == teacher.email else "colleague",
+             "senderName": row.sender_name, "message": row.message,
+             "date": row.created_at.isoformat() + "Z" if row.created_at else ""}
+            for row in rows
+        ]}
+
     rows = db.query(TeacherMessage).filter(
         TeacherMessage.school_id == school_id, TeacherMessage.teacher_email == teacher.email,
     ).order_by(TeacherMessage.created_at.asc(), TeacherMessage.id.asc()).all()
@@ -5193,6 +5382,8 @@ def teacher_send_message(payload: dict, db: Session = Depends(get_db), claims: d
     teacher = db.query(Teacher).filter(Teacher.email == claims.get("email")).first()
     school_id = str(claims.get("school_id") or "").strip()
     message = clean_text(payload.get("message"), 5000)
+    recipient_type = str(payload.get("recipient_type") or "school").strip().lower()
+    recipient_email = str(payload.get("recipient_email") or "").strip().lower()
     if not teacher or not school_id or not teacher_has_school_access(db, teacher, school_id):
         raise HTTPException(status_code=403, detail="Aucun espace scolaire confirmé.")
     blocked = teacher_school_block(db, teacher, school_id)
@@ -5200,12 +5391,28 @@ def teacher_send_message(payload: dict, db: Session = Depends(get_db), claims: d
         raise HTTPException(status_code=403, detail=blocked)
     if not message:
         raise HTTPException(status_code=422, detail="Le message est vide.")
+
+    if recipient_type == "teacher":
+        peer = db.query(Teacher).filter(Teacher.email == recipient_email).first()
+        if not peer or peer.email == teacher.email or not teacher_has_school_access(db, peer, school_id):
+            raise HTTPException(status_code=404, detail="Enseignant destinataire introuvable dans cet établissement.")
+        db.add(TeacherDirectMessage(
+            school_id=school_id, sender_email=teacher.email, recipient_email=peer.email,
+            sender_name=teacher.full_name, message=message,
+        ))
+        db.commit()
+        return {"status": True, "message": "Message envoyé à " + peer.full_name + "."}
+    if recipient_type != "school":
+        raise HTTPException(status_code=422, detail="Destinataire invalide.")
     db.add(TeacherMessage(
         school_id=school_id, teacher_email=teacher.email, sender_role="teacher",
         sender_name=teacher.full_name, message=message,
     ))
     db.commit()
     return {"status": True, "message": "Message transmis à la direction."}
+
+
+
 
 
 @app.get("/api/primenet/teacher-attendance")
@@ -6280,86 +6487,230 @@ def get_primenet_data(school_id: str, db: Session = Depends(get_db), claims: dic
 
 
 @app.post("/api/schedule/generate")
-def generate_optimized_schedule(payload: ScheduleGenerationRequest, claims: dict = Depends(require_active_school)):
-    """
-    Endpoint FastAPI pour la génération d'horaires scolaires avec prise en charge
-    des troncs communs, préférences et évitement des dernières heures.
-    """
-    engine = ScheduleEngine(config=payload.config, teachers=payload.teachers)
-    return engine.generate()
+def generate_optimized_schedule(payload: ScheduleGenerationRequest, db: Session = Depends(get_db), claims: dict = Depends(require_active_school)):
+    """Génère puis publie l'unique horaire officiel de l'établissement à partir des affectations vérifiées."""
+    school_id = str(claims.get("school_id") or "")
+    if str(payload.school_id or "") != school_id:
+        raise HTTPException(status_code=403, detail="Accès refusé aux données d'une autre école.")
+    school = db.query(SchoolInformation).filter(SchoolInformation.school_id == school_id).first()
+    if not school:
+        raise HTTPException(status_code=404, detail="Établissement introuvable.")
+    official_classes = db.query(ClasseInformation).filter(ClasseInformation.school_id == school_id).all()
+    class_by_id = {str(row.id): row for row in official_classes}
+    courses = db.query(CourseInformation).filter(CourseInformation.school_id == school_id).all()
+    course_by_id = {str(row.id): row for row in courses}
+    verified_teachers = _verified_school_teachers(db, school_id)
+    teacher_by_id = {}
+    for row in verified_teachers:
+        teacher_by_id[str(row.teacher_code or f"prof_{row.id}")] = row
+        teacher_by_id[str(row.email)] = row
+        teacher_by_id[f"prof_{row.id}"] = row
+
+    config = payload.config if isinstance(payload.config, dict) else {}
+    try:
+        days = max(1, min(6, int(config.get("jours_travail", 6) or 6)))
+        hours_per_day = max(1, min(10, int(config.get("heures_par_jour", 6) or 6)))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=422, detail="Le nombre de jours ou d'heures par jour est invalide.")
+    if not isinstance(payload.time_slots, list) or len(payload.time_slots) != hours_per_day:
+        raise HTTPException(status_code=422, detail="Définissez une tranche horaire valide pour chaque heure de cours.")
+    seen_slots = []
+    clean_slots = []
+    for index, slot in enumerate(payload.time_slots, start=1):
+        if not isinstance(slot, dict):
+            raise HTTPException(status_code=422, detail="Une tranche horaire est invalide.")
+        start = str(slot.get("start") or "").strip()
+        end = str(slot.get("end") or "").strip()
+        if not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", start) or not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", end) or end <= start:
+            raise HTTPException(status_code=422, detail=f"Renseignez correctement le début et la fin de la {index}e heure.")
+        if any(not (end <= previous[0] or start >= previous[1]) for previous in seen_slots):
+            raise HTTPException(status_code=422, detail="Les tranches horaires se chevauchent.")
+        seen_slots.append((start, end))
+        clean_slots.append({"hour": index, "start": start, "end": end})
+
+    if not payload.teachers or len(payload.teachers) > 300:
+        raise HTTPException(status_code=422, detail="Ajoutez au moins un enseignant avec ses affectations.")
+    clean_teachers = []
+    seen_teachers = set()
+    for item in payload.teachers:
+        if not isinstance(item, dict):
+            raise HTTPException(status_code=422, detail="Une configuration d'enseignant est invalide.")
+        supplied_id = str(item.get("teacher_id") or "").strip()
+        teacher = teacher_by_id.get(supplied_id)
+        if not teacher or not teacher_has_school_access(db, teacher, school_id):
+            raise HTTPException(status_code=403, detail="Un enseignant sélectionné n'est pas confirmé dans cette école.")
+        blocked = teacher_school_block(db, teacher, school_id)
+        if blocked:
+            raise HTTPException(status_code=403, detail=f"{teacher.full_name} : {blocked}")
+        canonical_id = str(teacher.teacher_code or f"prof_{teacher.id}")
+        if canonical_id in seen_teachers:
+            raise HTTPException(status_code=422, detail=f"{teacher.full_name} apparaît plusieurs fois. Regroupez ses cours dans une seule fiche.")
+        seen_teachers.add(canonical_id)
+        raw_assignments = item.get("assigned_courses")
+        if not isinstance(raw_assignments, list) or not raw_assignments:
+            raise HTTPException(status_code=422, detail=f"Aucune affectation sélectionnée pour {teacher.full_name}.")
+        assignments = []
+        for assignment in raw_assignments:
+            if not isinstance(assignment, dict):
+                raise HTTPException(status_code=422, detail="Une affectation de cours est invalide.")
+            course_id = str(assignment.get("course_id") or "").strip()
+            class_id = str(assignment.get("class_id") or "").strip()
+            course = course_by_id.get(course_id)
+            classe = class_by_id.get(class_id)
+            if not course or not classe or str(course.class_id) != class_id:
+                raise HTTPException(status_code=422, detail="Le cours ou la classe ne correspond pas au catalogue officiel.")
+            if not teacher_matches_catalog_name(teacher, course.titulaire_name):
+                raise HTTPException(status_code=403, detail=f"{course.course_name} n'est pas affecté à {teacher.full_name}.")
+            raw_hours = assignment.get("hours_per_week")
+            if isinstance(raw_hours, bool) or not isinstance(raw_hours, (int, float)) or int(raw_hours) < 1 or int(raw_hours) > days * hours_per_day:
+                raise HTTPException(status_code=422, detail=f"Nombre d'heures invalide pour {course.course_name}.")
+            assignments.append({
+                "course_id": course_id, "class_id": class_id,
+                "course_name": course.course_name, "class_name": classe.class_name,
+                "hours_per_week": int(raw_hours),
+                "trunk_common": clean_text(assignment.get("trunk_common"), 100) or None,
+            })
+        grouped = {}
+        for assignment in assignments:
+            trunk = assignment.get("trunk_common")
+            if trunk:
+                grouped.setdefault(trunk, []).append(assignment)
+        for trunk, rows in grouped.items():
+            if len({row["class_id"] for row in rows}) != len(rows):
+                raise HTTPException(status_code=422, detail="Une classe apparaît deux fois dans un même tronc commun.")
+            if len({row["hours_per_week"] for row in rows}) != 1 or len({normalize_name(row["course_name"]) for row in rows}) != 1:
+                raise HTTPException(status_code=422, detail="Un tronc commun doit avoir le même cours et le même nombre d'heures dans toutes ses classes.")
+        clean_teachers.append({
+            "teacher_id": canonical_id,
+            "teacher_email": teacher.email,
+            "name": teacher.full_name,
+            "availability": item.get("availability") if isinstance(item.get("availability"), dict) else {},
+            "assigned_courses": assignments,
+        })
+
+    engine = ScheduleEngine(config={"jours_travail": days, "heures_par_jour": hours_per_day}, teachers=clean_teachers)
+    result = engine.generate()
+    if not result.get("success"):
+        return result
+    stored = {
+        "academicYear": str(payload.academic_year or school.school_year or "")[:30],
+        "generatedAt": result.get("generated_at") or datetime.utcnow().isoformat() + "Z",
+        "config": {"jours": days, "heures": hours_per_day},
+        "slots": clean_slots,
+        "teachers": clean_teachers,
+        "result": result,
+    }
+    extra = dict(school.pn_extra or {})
+    extra["managerSchedule"] = stored
+    school.pn_extra = extra
+    db.commit()
+    result["published"] = True
+    return result
+
 
 @app.post("/api/mixage/generate")
 def generate_exam_mixage(payload: dict, db: Session = Depends(get_db), claims: dict = Depends(require_active_school)):
-    """
-    Mixage des examens anti-triche (moteur ExamMixerEngine).
-    Entrée : { school_id?, target_classes: [id de classe], rooms: [{id, nom, places, rangees, bancs}],
-               supervisors: [{name}], exemplaires: n, students?: [{id, name, postname, classId}] }
-    Les élèves sont ceux envoyés par PrimeInk ; à défaut, ceux de la base du serveur.
-    """
-    school_id = payload.get("school_id") or claims.get("school_id")
-    if school_id != claims.get("school_id"):
+    """Génère un plan de salles depuis le registre officiel et conserve une session dans PrimeInk."""
+    school_id = str(claims.get("school_id") or "")
+    if str(payload.get("school_id") or school_id) != school_id:
         raise HTTPException(status_code=403, detail="Accès refusé aux données d'une autre école.")
-    target_classes = [str(c) for c in (payload.get("target_classes") or [])][:100]
-    rooms = [r for r in (payload.get("rooms") or []) if isinstance(r, dict)][:60]
-    if not target_classes or not rooms:
-        return {"success": False, "message": "Choisissez au moins une classe et une salle.", "seating_plans": []}
+    school = db.query(SchoolInformation).filter(SchoolInformation.school_id == school_id).first()
+    if not school:
+        raise HTTPException(status_code=404, detail="Établissement introuvable.")
+    target_classes = list(dict.fromkeys(str(value) for value in (payload.get("target_classes") or []) if str(value).strip()))[:100]
+    if not target_classes:
+        raise HTTPException(status_code=422, detail="Choisissez au moins une classe.")
+    official_classes = db.query(ClasseInformation).filter(
+        ClasseInformation.school_id == school_id, ClasseInformation.id.in_(target_classes)
+    ).all()
+    if len(official_classes) != len(target_classes):
+        raise HTTPException(status_code=403, detail="Une classe sélectionnée n'appartient pas à cet établissement.")
 
-    sent = payload.get("students")
-    if isinstance(sent, list) and sent:
-        students_list = [
-            {"id": str(s.get("id")), "name": str(s.get("name", "")), "postname": str(s.get("postname", "")), "classId": str(s.get("classId"))}
-            for s in sent if isinstance(s, dict) and str(s.get("classId")) in target_classes
-        ][:5000]
-    else:
-        db_students = db.query(SchoolStudentInformation).filter(
-            SchoolStudentInformation.school_id == school_id,
-            SchoolStudentInformation.class_id.in_(target_classes)
-        ).all()
-        students_list = [
-            {"id": s.id, "name": s.student_name, "postname": s.student_post_name or "", "classId": s.class_id}
-            for s in db_students
-        ]
+    raw_rooms = [room for room in (payload.get("rooms") or []) if isinstance(room, dict)][:60]
+    if not raw_rooms:
+        raise HTTPException(status_code=422, detail="Ajoutez au moins une salle.")
+    rooms = []
+    for index, room in enumerate(raw_rooms, start=1):
+        try:
+            places = int(room.get("places"))
+            rows = int(room.get("rangees"))
+            benches = int(room.get("bancs"))
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=422, detail="Les places, rangées et bancs doivent être des nombres entiers.")
+        if min(places, rows, benches) <= 0 or places > rows * benches:
+            raise HTTPException(status_code=422, detail=f"Capacité invalide pour la salle {index}.")
+        rooms.append({"id": index, "nom": clean_text(room.get("nom"), 80) or f"Salle N°{index}", "places": places, "rangees": rows, "bancs": benches})
+
+    students = db.query(SchoolStudentInformation).filter(
+        SchoolStudentInformation.school_id == school_id,
+        SchoolStudentInformation.class_id.in_(target_classes),
+    ).order_by(SchoolStudentInformation.student_name.asc(), SchoolStudentInformation.student_post_name.asc()).all()
+    students_list = [
+        {"id": str(student.id), "name": student.student_name or "", "postname": student.student_post_name or "", "classId": str(student.class_id)}
+        for student in students
+    ]
     if not students_list:
-        return {"success": False, "message": "Aucun élève dans les classes choisies.", "seating_plans": []}
+        raise HTTPException(status_code=422, detail="Aucun élève dans les classes choisies.")
+    capacity = sum(room["places"] for room in rooms)
+    if capacity < len(students_list):
+        raise HTTPException(status_code=422, detail=f"Capacité insuffisante : {capacity} place(s) pour {len(students_list)} élève(s). Ajoutez des salles ou des places.")
 
-    mixer_result = ExamMixerEngine.mix_students_and_assign_seats(students_list, rooms)
-
-    supervisors = [str(s.get("name", "")).strip() for s in (payload.get("supervisors") or []) if isinstance(s, dict) and str(s.get("name", "")).strip()]
+    supervisors = [clean_text(item.get("name"), 160) for item in (payload.get("supervisors") or []) if isinstance(item, dict) and clean_text(item.get("name"), 160)]
     try:
         n_variants = max(1, min(int(payload.get("exemplaires", 1)), 5))
     except (TypeError, ValueError):
         n_variants = 1
-
+    mixer_result = ExamMixerEngine.mix_students_and_assign_seats(students_list, rooms)
     formatted_seating_plans = []
     seat_index = 0
-    for room_index, room_res in enumerate(mixer_result.get("result", [])):
+    for room_res in mixer_result.get("result", []):
         benches_list = []
         for seat in room_res.get("seating_plan", []):
             benches_list.append({
-                "bench_number": seat["banc"],
-                "row": seat["rangee"],
+                "bench_number": seat["banc"], "row": seat["rangee"],
                 "student_left": {
-                    "id": seat["student_exam_id"],
-                    "name": seat["student_name"],
-                    "class": seat["original_class"],
-                    "variant_code": chr(65 + (seat_index % n_variants))   # A, B, C... : deux voisins n'ont pas le même sujet
+                    "id": seat["student_exam_id"], "student_id": seat.get("student_id", ""),
+                    "name": seat["student_name"], "class": seat["original_class"],
+                    "variant_code": chr(65 + (seat_index % n_variants)),
                 },
-                "student_right": None
+                "student_right": None,
             })
             seat_index += 1
+        room_index = len(formatted_seating_plans)
         formatted_seating_plans.append({
             "room_name": room_res["room_name"],
             "supervisor": supervisors[room_index % len(supervisors)] if supervisors else "Surveillant",
-            "benches": benches_list
+            "benches": benches_list,
         })
 
-    return {
-        "success": True,
-        "allocation_id": f"mix_{datetime.utcnow().strftime('%Y_%m_%d_%H%M')}",
+    session_id = "mix_" + uuid.uuid4().hex[:16]
+    class_names = {str(item.id): item.class_name for item in official_classes}
+    session = {
+        "id": session_id,
+        "exam_name": clean_text(payload.get("exam_name"), 160) or "Examen",
+        "academic_year": school.school_year or "",
+        "created_at": datetime.utcnow().isoformat() + "Z",
+        "class_ids": target_classes,
+        "target_classes": [class_names.get(class_id, class_id) for class_id in target_classes],
+        "rooms": rooms,
+        "supervisors": supervisors,
         "seating_plans": formatted_seating_plans,
         "total_mixed": mixer_result.get("total_mixed", 0),
-        "unassigned_students": mixer_result.get("unassigned_students", 0)
+        "unassigned_students": mixer_result.get("unassigned_students", 0),
+        "published_to_suivi": bool(payload.get("publish_to_suivi", False)),
     }
+    extra = dict(school.pn_extra or {})
+    sessions = extra.get("mixageSessions") if isinstance(extra.get("mixageSessions"), list) else []
+    sessions.append(session)
+    extra["mixageSessions"] = sessions[-20:]
+    school.pn_extra = extra
+    db.commit()
+    return {
+        "success": True, "allocation_id": session_id, "session": session,
+        "seating_plans": formatted_seating_plans, "total_mixed": mixer_result.get("total_mixed", 0),
+        "unassigned_students": mixer_result.get("unassigned_students", 0),
+    }
+
 
 # ==============================================================================================================================================================
 from sqlalchemy.orm import Session

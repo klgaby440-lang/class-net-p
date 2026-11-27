@@ -1809,6 +1809,10 @@ body.theme-dark input::placeholder,body.theme-dark textarea::placeholder{color:v
             <div id="mixConfigArea" style="display: flex; flex-direction: column; gap: 1.5rem; padding-bottom: 70px;">
                 <div class="settings-card">
                     <div class="form-group">
+                        <label>Intitulé de l'examen</label>
+                        <input type="text" id="mixExamName" class="form-control" maxlength="160" placeholder="Ex. Examen du premier semestre">
+                    </div>
+                    <div class="form-group" style="margin-top:.8rem">
                         <label>Nombre d'Exemplaires</label>
                         <input type="number" id="mixExemplaires" class="form-control" value="1" min="1" max="5">
                     </div>
@@ -1843,6 +1847,13 @@ body.theme-dark input::placeholder,body.theme-dark textarea::placeholder{color:v
                     <span><strong>>>> Salles d'examen</strong></span>
                     <div id="sallesContainer" style="margin-top: 0.8rem;"></div>
                     <button class="btn-primary" onclick="addSalleCard()">+ Ajouter une salle</button>
+                </div>
+                <div class="settings-card">
+                    <label style="display:flex;gap:.65rem;align-items:center;font-weight:600">
+                        <input type="checkbox" id="mixPublishToSuivi">
+                        Publier les informations individuelles de placement dans Class-Ink Suivi
+                    </label>
+                    <p class="sub" style="margin-top:.45rem">Chaque parent ne verra que la salle et la place attribuées à son enfant.</p>
                 </div>
             </div>
 
@@ -5856,15 +5867,21 @@ async function bpPushClassBulletin(cls) {
             const capacity = rooms.reduce((n, r) => n + r.places, 0);
             if (capacity < students.length && !(await showCustomConfirm("Les salles n'offrent que " + capacity + " places pour " + students.length + " élèves. Continuer quand même ?", "Places insuffisantes"))) return;
             const exemplaires = Math.max(1, Math.min(5, parseInt(document.getElementById('mixExemplaires').value, 10) || 1));
+            const examName = document.getElementById('mixExamName')?.value.trim() || 'Examen';
+            const publishToSuivi = !!document.getElementById('mixPublishToSuivi')?.checked;
             try {
                 const response = await window.primeInkFetchWithTimeout(API_BASE_URL + '/api/mixage/generate', {
                     method: 'POST', headers,
-                    body: JSON.stringify({ school_id: appState.school.id, target_classes: targetClasses, rooms, supervisors, exemplaires, students })
+                    body: JSON.stringify({ school_id: appState.school.id, target_classes: targetClasses, rooms, supervisors, exemplaires, exam_name: examName, publish_to_suivi: publishToSuivi })
                 }, 60000);
                 if (!response.ok) return alert(await bpServerErrorMessage(response));
                 const result = await response.json();
                 if (!result.success) return alert(result.message || "Le mixage n'a pas pu être généré.");
-                __lastMixage = { result, rooms, targetClasses };
+                __lastMixage = { result, rooms, targetClasses, session: result.session || null };
+                if (result.session) {
+                    const sessions = Array.isArray(appState.mixageSessions) ? appState.mixageSessions : [];
+                    appState.mixageSessions = sessions.filter(item => String(item.id) !== String(result.session.id)).concat([result.session]).slice(-20);
+                }
                 if (!appState.tools) appState.tools = {};
                 if (!appState.tools.mixage) appState.tools.mixage = {};
                 appState.tools.mixage.generatedSchedules = [result];
@@ -5922,13 +5939,37 @@ async function bpPushClassBulletin(cls) {
             }).join('');
         }
 
+        function bpRestorePublishedMixage() {
+            if (__lastMixage && __lastMixage.result && Array.isArray(__lastMixage.result.seating_plans)) return true;
+            const sessions = Array.isArray(appState.mixageSessions) ? appState.mixageSessions : [];
+            const session = sessions.length ? sessions[sessions.length - 1] : null;
+            if (!session || !Array.isArray(session.seating_plans)) return false;
+            __lastMixage = {
+                session,
+                rooms: Array.isArray(session.rooms) ? session.rooms : [],
+                targetClasses: Array.isArray(session.class_ids) ? session.class_ids : [],
+                result: {
+                    success: true,
+                    allocation_id: session.id,
+                    seating_plans: session.seating_plans,
+                    total_mixed: session.total_mixed || 0,
+                    unassigned_students: session.unassigned_students || 0
+                }
+            };
+            return true;
+        }
+
         function bpRenderMixage() {
-            if (!__lastMixage) return;
+            if (!bpRestorePublishedMixage()) return;
             document.getElementById('mix-view-classes').innerHTML = bpMixageClassesHTML(__lastMixage.result);
             document.getElementById('mix-view-salles').innerHTML = bpMixageRoomsHTML(__lastMixage.result, __lastMixage.rooms);
         }
 
         window.showMixageResultsView = function() {
+            if (!bpRestorePublishedMixage()) {
+                return showCustomAlert("Aucune session de mixage enregistrée sur le serveur.");
+            }
+            bpRenderMixage();
             document.getElementById('mixConfigArea').classList.add('hidden');
             document.getElementById('mixResultsArea').classList.remove('hidden');
         };
@@ -5947,91 +5988,185 @@ async function bpPushClassBulletin(cls) {
             document.getElementById('mix-view-salles').classList.remove('hidden');
         };
 
-// 1. Correction de la création d'un enseignant (utilisation de la classe unifiée .teacher-pref-grid)
+// Configuration horaire : seuls les enseignants et les affectations officielles sont sélectionnables.
+function primeInkScheduleTeacherMatches(teacher, course) {
+    const values = [course.titulaire, course.teacherId, course.teacher_id, course.teacherEmail]
+        .map(v => String(v || '').trim().toLocaleLowerCase()).filter(Boolean);
+    const identities = [teacher.uniqueId, teacher.name, teacher.email]
+        .map(v => String(v || '').trim().toLocaleLowerCase()).filter(Boolean);
+    return values.some(value => identities.includes(value));
+}
+
+function primeInkScheduleCourseLabel(course) {
+    return [course.name, course.subCategory].filter(Boolean).join(' · ');
+}
+
+function refreshScheduleCourseOptions(row) {
+    if (!row) return;
+    const card = row.closest('.prof-config-card');
+    const teacherSelect = card && card.querySelector('.schedule-teacher-select');
+    const classSelect = row.querySelector('.schedule-class-select');
+    const courseSelect = row.querySelector('.schedule-course-select');
+    const trunkToggle = row.querySelector('.schedule-trunk-toggle');
+    if (!teacherSelect || !classSelect || !courseSelect) return;
+    const teacher = (appState.teachers || []).find(t => String(t.uniqueId) === String(teacherSelect.value));
+    const selectedClasses = Array.from(classSelect.selectedOptions).map(option => String(option.value));
+    const isTrunk = !!(trunkToggle && trunkToggle.checked);
+    const assigned = (appState.courses || []).filter(course =>
+        teacher && primeInkScheduleTeacherMatches(teacher, course) &&
+        selectedClasses.includes(String(course.classId))
+    );
+    let options = [];
+    if (selectedClasses.length) {
+        const grouped = new Map();
+        assigned.forEach(course => {
+            const key = String(course.name || '').trim().toLocaleLowerCase();
+            if (!key) return;
+            if (!grouped.has(key)) grouped.set(key, []);
+            grouped.get(key).push(course);
+        });
+        options = Array.from(grouped.values()).filter(group =>
+            !isTrunk || selectedClasses.every(classId => group.some(course => String(course.classId) === classId))
+        );
+    }
+    const previous = courseSelect.value;
+    courseSelect.innerHTML = '<option value="">Choisissez un cours affecté</option>' + options.map(group => {
+        const representative = group[0];
+        const key = String(representative.name || '');
+        return '<option value="' + safeHTML(key) + '">' + safeHTML(primeInkScheduleCourseLabel(representative)) + '</option>';
+    }).join('');
+    if (options.some(group => String(group[0].name) === previous)) courseSelect.value = previous;
+    if (!options.length) {
+        courseSelect.disabled = true;
+        courseSelect.innerHTML = '<option value="">Aucun cours affecté pour cette sélection</option>';
+    } else {
+        courseSelect.disabled = false;
+    }
+}
+
+function initializeScheduleAssignmentRow(row) {
+    if (!row) return;
+    const classSelect = row.querySelector('.schedule-class-select');
+    const trunkToggle = row.querySelector('.schedule-trunk-toggle');
+    if (classSelect) {
+        classSelect.addEventListener('change', () => refreshScheduleCourseOptions(row));
+    }
+    if (trunkToggle) {
+        trunkToggle.addEventListener('change', () => {
+            if (classSelect) {
+                classSelect.multiple = trunkToggle.checked;
+                classSelect.size = trunkToggle.checked ? Math.min(5, (appState.classes || []).length || 2) : 1;
+                if (!trunkToggle.checked && classSelect.selectedOptions.length > 1) {
+                    const keep = classSelect.selectedOptions[0].value;
+                    Array.from(classSelect.options).forEach(option => { option.selected = option.value === keep; });
+                }
+            }
+            refreshScheduleCourseOptions(row);
+        });
+    }
+    refreshScheduleCourseOptions(row);
+}
+
+function createScheduleAssignmentRow() {
+    const row = document.createElement('div');
+    row.className = 'grid-2col schedule-assignment-row';
+    row.style.marginTop = '.5rem';
+    row.innerHTML = `
+        <div class="form-group">
+            <label>Classe</label>
+            <select class="form-control schedule-class-select">
+                <option value="">Choisissez une classe</option>
+                ${(appState.classes || []).map(cl => '<option value="' + safeHTML(cl.id) + '">' + safeHTML(cl.name) + '</option>').join('')}
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Cours affecté</label>
+            <select class="form-control schedule-course-select" disabled><option value="">Choisissez d'abord la classe</option></select>
+        </div>
+        <div class="form-group">
+            <label>Heures par semaine</label>
+            <input type="number" class="form-control schedule-hours" min="1" max="60" value="2">
+        </div>
+        <label style="display:flex;gap:.5rem;align-items:center">
+            <input type="checkbox" class="schedule-trunk-toggle">
+            Tronc commun (sélectionner plusieurs classes)
+        </label>
+        <button type="button" class="btn-secondary schedule-remove-row" style="grid-column:1/-1">Supprimer cette affectation</button>
+    `;
+    row.querySelector('.schedule-remove-row').addEventListener('click', () => row.remove());
+    initializeScheduleAssignmentRow(row);
+    return row;
+}
+
 window.addTeacherHoraireConfig = function() {
     const container = document.getElementById('horTeachersContainer');
-    if(!container) return;
+    if (!container) return;
     const count = container.children.length + 1;
-    const joursTravail = parseInt(document.getElementById('horJoursSemaine')?.value) || 6;
-    const heuresJour = parseInt(document.getElementById('horHeuresJour')?.value) || 6;
-
+    const joursTravail = parseInt(document.getElementById('horJoursSemaine')?.value, 10) || 6;
+    const heuresJour = parseInt(document.getElementById('horHeuresJour')?.value, 10) || 6;
     const card = document.createElement('div');
     card.className = 'prof-config-card';
     card.style.marginBottom = '1rem';
     card.innerHTML = `
         <div class="form-group">
             <label>Enseignant N°${safeHTML(count)}</label>
-            <select class="form-control">
-                ${appState.teachers.map(t => `<option value="${safeHTML(t.uniqueId)}">${safeHTML(t.name)}</option>`).join('')}
+            <select class="form-control schedule-teacher-select">
+                <option value="">Choisissez un enseignant</option>
+                ${(appState.teachers || []).map(t => '<option value="' + safeHTML(t.uniqueId) + '">' + safeHTML(t.name) + (t.subject ? ' · ' + safeHTML(t.subject) : '') + '</option>').join('')}
             </select>
         </div>
-
         <div class="form-group">
             <label>Préférences d'heures de travail</label>
             <div class="teacher-pref-grid"></div>
         </div>
-
         <div class="form-group">
-            <label>Cours attribué(s)</label>
-            <div class="courses-sub-container" style="display:flex; flex-direction:column; gap:0.5rem;">
-                <div class="grid-2col">
-                    <input type="text" class="form-control" placeholder="Nom du cours (ex: Mathématiques)">
-                    <input type="text" class="form-control" placeholder="Classe (ex: 3ème SCIENTIFIQUE)">
-                    <input type="number" class="form-control" placeholder="Heures / semaine">
-                    <input type="text" class="form-control" placeholder="TC (Tronc Commun ex: 3SCI/2SCI)">
-                </div>
-            </div>
-            <button type="button" class="btn-secondary" style="margin-top:0.6rem; font-size:0.8rem;" onclick="addCourseRowToTeacher(this)">+ Ajouter un cours</button>
+            <label>Affectations officielles de cours</label>
+            <div class="courses-sub-container" style="display:flex;flex-direction:column;gap:.5rem;"></div>
+            <button type="button" class="btn-secondary" style="margin-top:.6rem;font-size:.8rem" onclick="addCourseRowToTeacher(this)">+ Ajouter une affectation</button>
+            <p class="sub" style="margin-top:.4rem">Les classes et les cours sont issus du catalogue PrimeInk. Pour un tronc commun, cochez l'option puis sélectionnez toutes les classes concernées. Vous ne renseignez que le nombre d'heures par semaine.</p>
         </div>
     `;
     container.appendChild(card);
-
-    // Injection de la grille initiale
+    card.querySelector('.schedule-teacher-select').addEventListener('change', () => {
+        card.querySelectorAll('.schedule-assignment-row').forEach(refreshScheduleCourseOptions);
+    });
+    card.querySelector('.courses-sub-container').appendChild(createScheduleAssignmentRow());
     const prefElem = card.querySelector('.teacher-pref-grid');
     if (typeof window.renderTeacherAvailabilityGridCustom === 'function') {
         window.renderTeacherAvailabilityGridCustom(prefElem, joursTravail, heuresJour);
     }
 };
 
-// 2. Mise à jour adaptative propre qui cible directement .teacher-pref-grid
 window.updateHoraireStructure = function() {
-    const joursCount = parseInt(document.getElementById('horJoursSemaine')?.value) || 6;
-    const heuresCount = parseInt(document.getElementById('horHeuresJour')?.value) || 6;
-
-    // Actualiser les tranches horaires
+    const joursCount = parseInt(document.getElementById('horJoursSemaine')?.value, 10) || 6;
+    const heuresCount = parseInt(document.getElementById('horHeuresJour')?.value, 10) || 6;
     renderTimeSlotsDynamic(heuresCount);
-
-    // Sauvegarder l'état actuel des cases cochées
     const savedPreferences = {};
     document.querySelectorAll('.prof-config-card').forEach((card, index) => {
         savedPreferences[index] = {};
         card.querySelectorAll('.pref-hour-check').forEach(cb => {
-            const key = `${cb.dataset.day}_${cb.dataset.hour}`;
-            savedPreferences[index][key] = cb.checked;
+            savedPreferences[index][cb.dataset.day + '_' + cb.dataset.hour] = cb.checked;
         });
     });
-
-    // Mettre à jour chaque grille existante sans en créer de nouvelles en double
     document.querySelectorAll('.prof-config-card').forEach((card, index) => {
         const prefElem = card.querySelector('.teacher-pref-grid');
-        if (prefElem) {
+        if (prefElem && typeof window.renderTeacherAvailabilityGridCustom === 'function') {
             window.renderTeacherAvailabilityGridCustom(prefElem, joursCount, heuresCount, savedPreferences[index] || {});
         }
     });
-
-    // Mettre à jour les en-têtes des tableaux de résultats
     updateScheduleResultTables(joursCount, heuresCount);
 };
-        window.removeTeacherHoraireConfig = function() {
-            const container = document.getElementById('horTeachersContainer');
-            if(container && container.lastElementChild) container.removeChild(container.lastElementChild);
-        };
 
-        // ------------------------------------------------------------------
-        // HORAIRE : appel du serveur (/api/schedule/generate) et affichage du résultat
-        // ------------------------------------------------------------------
-        let __lastSchedule = null;
-        const HOR_DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+window.removeTeacherHoraireConfig = function() {
+    const container = document.getElementById('horTeachersContainer');
+    if (container && container.lastElementChild) container.removeChild(container.lastElementChild);
+};
+
+// ------------------------------------------------------------------
+// Horaire : chaque ligne référence exclusivement une affectation PrimeInk.
+// ------------------------------------------------------------------
+let __lastSchedule = null;
+const HOR_DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
 
         function bpCollectSchedulePayload() {
             const jours = Math.max(1, Math.min(6, parseInt(document.getElementById('horJoursSemaine').value, 10) || 6));
@@ -6039,33 +6174,54 @@ window.updateHoraireStructure = function() {
             const slots = Array.from(document.querySelectorAll('#timeSlotsContainer .time-slot-row')).map((row, i) => ({
                 hour: i + 1, start: row.querySelector('.slot-start').value, end: row.querySelector('.slot-end').value
             }));
+            if (slots.some(slot => !slot.start || !slot.end || slot.end <= slot.start)) {
+                return { error: "Définissez une heure de début et de fin valide pour chaque tranche." };
+            }
             const teachers = [];
             const seen = new Set();
             for (const card of document.querySelectorAll('.prof-config-card')) {
-                const sel = card.querySelector('select');
+                const sel = card.querySelector('.schedule-teacher-select');
                 if (!sel || !sel.value) continue;
                 const teacherName = sel.options[sel.selectedIndex].text;
-                if (seen.has(sel.value)) return { error: "L'enseignant « " + teacherName + " » apparaît deux fois : regroupez ses cours dans une seule carte." };
+                if (seen.has(sel.value)) return { error: "L'enseignant « " + teacherName + " » apparaît deux fois : regroupez ses cours dans une seule fiche." };
                 seen.add(sel.value);
                 const availability = {};
                 card.querySelectorAll('.pref-hour-check').forEach(cb => {
                     (availability[cb.dataset.day] = availability[cb.dataset.day] || {})[cb.dataset.hour] = cb.checked;
                 });
-                const courses = [];
-                for (const row of card.querySelectorAll('.courses-sub-container .grid-2col')) {
-                    const inputs = row.querySelectorAll('input');
-                    if (inputs.length < 4) continue;
-                    const name = inputs[0].value.trim(), className = inputs[1].value.trim(), hoursRaw = inputs[2].value.trim(), tc = inputs[3].value.trim();
-                    if (!name && !className && !hoursRaw && !tc) continue;
-                    const hours = parseInt(hoursRaw, 10);
-                    if (!name || !className || !(hours > 0)) return { error: "Un cours de « " + teacherName + " » est incomplet : nom, classe et heures par semaine sont obligatoires." };
-                    if (hours > jours * heures) return { error: "« " + name + " » (" + teacherName + ") demande plus d'heures que la semaine n'en compte." };
-                    courses.push({ course_name: name, class_name: className, hours_per_week: hours, trunk_common: tc || null });
+                const assignments = [];
+                for (const row of card.querySelectorAll('.schedule-assignment-row')) {
+                    const classSelect = row.querySelector('.schedule-class-select');
+                    const courseSelect = row.querySelector('.schedule-course-select');
+                    const hours = parseInt(row.querySelector('.schedule-hours')?.value, 10);
+                    const classIds = Array.from(classSelect?.selectedOptions || []).map(option => String(option.value)).filter(Boolean);
+                    const courseName = String(courseSelect?.value || '');
+                    const trunk = !!row.querySelector('.schedule-trunk-toggle')?.checked;
+                    if (!classIds.length && !courseName) continue;
+                    if (!classIds.length || !courseName || !(hours > 0)) return { error: "Une affectation de « " + teacherName + " » est incomplète. Choisissez la classe, le cours affecté et le nombre d'heures." };
+                    if (!trunk && classIds.length !== 1) return { error: "Sélectionnez une seule classe ou activez le tronc commun." };
+                    if (hours > jours * heures) return { error: "Le nombre d'heures de « " + courseName + " » dépasse la capacité de la semaine." };
+                    const trunkId = trunk ? "TC-" + sel.value + "-" + courseName.trim().toLocaleLowerCase() : null;
+                    for (const classId of classIds) {
+                        const course = (appState.courses || []).find(item =>
+                            String(item.classId) === classId &&
+                            String(item.name || '').trim() === courseName &&
+                            primeInkScheduleTeacherMatches((appState.teachers || []).find(t => String(t.uniqueId) === String(sel.value)) || {}, item)
+                        );
+                        const classe = (appState.classes || []).find(item => String(item.id) === classId);
+                        if (!course || !classe) return { error: "L'affectation sélectionnée n'existe plus dans le catalogue PrimeInk. Actualisez les données de l'école." };
+                        assignments.push({
+                            course_id: String(course.id),
+                            class_id: String(classe.id),
+                            hours_per_week: hours,
+                            trunk_common: trunkId
+                        });
+                    }
                 }
-                if (!courses.length) continue;
-                teachers.push({ teacher_id: sel.value, name: teacherName, availability, assigned_courses: courses });
+                if (!assignments.length) return { error: "Sélectionnez au moins un cours officiellement affecté à « " + teacherName + " »." };
+                teachers.push({ teacher_id: sel.value, name: teacherName, availability, assigned_courses: assignments });
             }
-            if (!teachers.length) return { error: "Ajoutez au moins un enseignant avec ses cours." };
+            if (!teachers.length) return { error: "Ajoutez au moins un enseignant avec ses affectations officielles." };
             return { jours, heures, slots, teachers };
         }
 
@@ -6087,51 +6243,33 @@ window.updateHoraireStructure = function() {
                 }, 60000);
                 if (!response.ok) return alert(await bpServerErrorMessage(response));
                 const result = await response.json();
-
-                // Publie l'horaire côté serveur afin que ClassInk Manager le consulte
-                // sans dépendre de la sauvegarde locale de PrimeInk.
-                try {
-                    const managerPublish = await window.primeInkFetchWithTimeout(API_BASE_URL + '/api/manager/schedule', {
-                        method: 'PUT',
-                        headers,
-                        body: JSON.stringify({
-                            school_id: appState.school.id,
-                            schedule: {
-                                academicYear: appState.school.schoolYear || bpDefaultSchoolYear(),
-                                generatedAt: result.generated_at || new Date().toISOString(),
-                                config: { jours: collected.jours, heures: collected.heures },
-                                slots: collected.slots,
-                                teachers: collected.teachers,
-                                result
-                            }
-                        })
-                    }, 30000);
-                    if (!managerPublish.ok) {
-                        alert("L'horaire a été généré dans PrimeInk, mais sa publication pour ClassInk Manager a échoué : " + await bpServerErrorMessage(managerPublish));
-                    }
-                } catch (publishError) {
-                    alert("L'horaire est généré dans PrimeInk, mais il n'a pas pu être publié pour ClassInk Manager. Vérifiez la connexion et réessayez.");
+                if (!result.success) {
+                    return alert(result.message || "L'horaire est incomplet. Aucune version officielle n'a été publiée.");
                 }
-
+                if (!result.published) return alert("L'horaire a été généré mais sa publication officielle n'a pas été confirmée.");
                 const names = {};
                 collected.teachers.forEach(t => names[t.teacher_id] = t.name);
                 __lastSchedule = { result, jours: collected.jours, heures: collected.heures, slots: collected.slots, names };
                 if (!appState.tools) appState.tools = {};
                 if (!appState.tools.horaire) appState.tools.horaire = {};
+                appState.managerSchedule = {
+                    academicYear: appState.school.schoolYear || bpDefaultSchoolYear(),
+                    generatedAt: result.generated_at || new Date().toISOString(),
+                    config: { jours: collected.jours, heures: collected.heures },
+                    slots: collected.slots,
+                    teachers: collected.teachers,
+                    result
+                };
                 appState.tools.horaire.generatedSchedules = [{
                     ...result,
-                    _managerSchedule: {
-                        config: { jours: collected.jours, heures: collected.heures },
-                        slots: Array.isArray(collected.slots) ? collected.slots : [],
-                        teachers: Array.isArray(collected.teachers) ? collected.teachers : []
-                    }
+                    _managerSchedule: { config: { jours: collected.jours, heures: collected.heures }, slots: collected.slots, teachers: collected.teachers }
                 }];
                 saveState();
                 bpRenderSchedule();
                 showScheduleResultsView();
-                if (!result.success) alert(result.message || "L'horaire est incomplet : certaines heures n'ont pas pu être placées.");
-            } catch (e) {
-                alert("Le serveur est injoignable. Vérifiez la connexion internet et réessayez.");
+                alert("Horaire publié. Il est disponible dans ClassInk App et ClassInk Manager, ainsi que dans Class-Ink Suivi pour les parents.");
+            } catch (error) {
+                alert(error.message || "Le serveur est injoignable. Vérifiez la connexion internet et réessayez.");
             }
         };
 
@@ -6205,8 +6343,31 @@ window.updateHoraireStructure = function() {
             area.querySelector('table').outerHTML = bpScheduleTableHTML(entry.grid, bpTeacherCell);
         };
 
+        function bpRestorePublishedSchedule() {
+            if (__lastSchedule && __lastSchedule.result && __lastSchedule.result.schedules) return true;
+            const saved = appState.managerSchedule;
+            const result = saved && saved.result;
+            if (!result || !result.schedules || !Array.isArray(result.schedules.classes)) return false;
+            const names = {};
+            (saved.teachers || []).forEach(teacher => {
+                const known = (appState.teachers || []).find(item =>
+                    String(item.uniqueId) === String(teacher.teacher_id) ||
+                    String(item.email || '') === String(teacher.teacher_email || '')
+                );
+                names[teacher.teacher_id] = teacher.name || (known && known.name) || teacher.teacher_id;
+            });
+            __lastSchedule = {
+                result,
+                jours: Number(saved.config && saved.config.jours) || 6,
+                heures: Number(saved.config && saved.config.heures) || 6,
+                slots: Array.isArray(saved.slots) ? saved.slots : [],
+                names
+            };
+            return true;
+        }
+
         function bpRenderSchedule() {
-            if (!__lastSchedule) return;
+            if (!bpRestorePublishedSchedule()) return;
             const s = __lastSchedule;
             const classesBar = document.getElementById('horClassesListSidebar');
             const teachersBar = document.getElementById('horTeachersListSidebar');
@@ -6249,6 +6410,10 @@ window.updateHoraireStructure = function() {
         };
 
         window.showScheduleResultsView = function() {
+            if (!bpRestorePublishedSchedule()) {
+                return showCustomAlert("Aucun horaire officiel n'a encore été publié par cet établissement.");
+            }
+            bpRenderSchedule();
             document.getElementById('horConfigArea').classList.add('hidden');
             document.getElementById('horResultsArea').classList.remove('hidden');
         };
@@ -6278,26 +6443,13 @@ window.updateHoraireStructure = function() {
         // Fonction pour insérer 4 nouveaux champs (Nom cours, Classe, Heures, TC) sous la ligne précédente
         // Fonction corrigée pour ajouter dynamiquement un bloc de cours à un enseignant
 window.addCourseRowToTeacher = function(btn) {
-    // Retrouve la carte de configuration parente de l'enseignant
     const card = btn.closest('.prof-config-card');
-    if (!card) return;
-
-    // Cible directement le conteneur des cours de cette carte spécifique
-    const container = card.querySelector('.courses-sub-container');
+    const container = card && card.querySelector('.courses-sub-container');
     if (!container) return;
-
-    // Crée la nouvelle ligne de champs
-    const newRow = document.createElement('div');
-    newRow.className = 'grid-2col';
-    newRow.style.marginTop = '0.5rem';
-    newRow.innerHTML = `
-        <input type="text" class="form-control" placeholder="Nom du cours (ex: Mathématiques)">
-        <input type="text" class="form-control" placeholder="Classe (ex: 3ème SCIENTIFIQUE)">
-        <input type="number" class="form-control" placeholder="Heures / semaine">
-        <input type="text" class="form-control" placeholder="TC (Tronc Commun ex: 3SCI/2SCI)">
-    `;
-    
-    container.appendChild(newRow);
+    const row = createScheduleAssignmentRow();
+    container.appendChild(row);
+    const teacherSelect = card.querySelector('.schedule-teacher-select');
+    if (teacherSelect && !teacherSelect.value) teacherSelect.focus();
 };
 
 // Générateur dynamique des tranches horaires

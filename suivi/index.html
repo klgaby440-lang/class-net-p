@@ -188,6 +188,8 @@ table.t td:first-child, table.t th:first-child { text-align: left; }
     <button data-go="home"><svg class="i" viewBox="0 0 24 24"><path d="M3 12l9-9 9 9M5 10v10h5v-6h4v6h5V10"/></svg>Accueil</button>
     <button data-go="notes"><svg class="i" viewBox="0 0 24 24"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>Notes</button>
     <button data-go="attendance"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18M8 14l2 2 5-5"/></svg>Présences</button>
+    <button data-go="schedule"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M8 14h3m-3 3h7"/></svg>Horaire</button>
+    <button data-go="mixages"><svg class="i" viewBox="0 0 24 24"><path d="M4 4h16v16H4zM4 9h16M9 4v16m6-16v16"/></svg>Examens</button>
     <button data-go="fees"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="14" rx="3"/><path d="M3 10h18"/><circle cx="16.5" cy="15" r="1.2"/></svg>Frais</button>
     <button data-go="messages"><svg class="i" viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>Messages<i class="badge-dot hidden" id="msgDot"></i></button>
     <button data-go="settings"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>Réglages</button>
@@ -241,7 +243,7 @@ const DEMO_FLAG = 'classink_suivi_demo';
 const PERIODS = ['P1', 'P2', 'EX1', 'P3', 'P4', 'EX2'];
 const LABELS = { P1: '1ère période', P2: '2ème période', EX1: 'Examens S1', S1: 'Semestre 1', P3: '3ème période', P4: '4ème période', EX2: 'Examens S2', S2: 'Semestre 2', TG: 'Année' };
 const SHORT = { P1: 'P1', P2: 'P2', EX1: 'Ex. 1', S1: 'Sem. 1', P3: 'P3', P4: 'P4', EX2: 'Ex. 2', S2: 'Sem. 2', TG: 'Année' };
-const VIEWS = ['home', 'notes', 'attendance', 'fees', 'messages', 'settings'];
+const VIEWS = ['home', 'notes', 'attendance', 'schedule', 'mixages', 'fees', 'messages', 'settings'];
 const IDLE_LOCK_MS = 5 * 60 * 1000;
 
 /* ---------- Outils ---------- */
@@ -721,6 +723,36 @@ function viewAttendance() {
     });
     return out;
 }
+function viewSchedule() {
+    const k = activeKid(), d = curData();
+    if (!k || !d) return demoBanner() + kidBar() + needKid();
+    const schedule = d.schedule || {};
+    const days = Array.isArray(schedule.days) ? schedule.days : [];
+    let out = demoBanner() + offlineBanner() + kidBar();
+    out += '<div class="card"><div class="row sb wrap"><div><h2>Horaire de la classe</h2><p class="sub">' + esc(schedule.className || d.student.className || '') + ' · ' + esc(schedule.academicYear || d.student.year || '') + '</p></div><span class="chip">' + (schedule.published ? 'Publié' : 'Non publié') + '</span></div></div>';
+    if (!schedule.published || !days.length) {
+        return out + '<div class="card empty"><p>Aucun horaire n’a encore été publié pour la classe de votre enfant.</p><p class="sub" style="margin-top:6px">L’établissement doit finaliser et publier l’horaire dans PrimeInk.</p></div>';
+    }
+    days.forEach(day => {
+        const lessons = Array.isArray(day.lessons) ? day.lessons : [];
+        out += '<div class="card"><h3 style="margin-bottom:10px">' + esc(day.day || '') + '</h3><div class="list">' +
+            lessons.map(lesson => '<article class="item" style="display:block"><div class="row sb wrap"><strong class="t">' + esc(lesson.course || 'Cours') + '</strong><span class="chip">' + esc(lesson.start || '—') + (lesson.end ? ' – ' + esc(lesson.end) : '') + '</span></div><div class="m" style="margin-top:5px">Enseignant : ' + esc(lesson.teacher || 'Non renseigné') + '</div>' + (lesson.room ? '<div class="m">Salle : ' + esc(lesson.room) + '</div>' : '') + '</article>').join('') +
+            '</div></div>';
+    });
+    return out;
+}
+function viewMixages() {
+    const k = activeKid(), d = curData();
+    if (!k || !d) return demoBanner() + kidBar() + needKid();
+    const mixages = Array.isArray(d.mixages) ? d.mixages : [];
+    let out = demoBanner() + offlineBanner() + kidBar();
+    out += '<div class="card"><h2>Examens et placement</h2><p class="sub">Informations publiées par l’établissement pour votre enfant uniquement.</p></div>';
+    if (!mixages.length) {
+        return out + '<div class="card empty"><p>Aucune information de placement n’a été publiée pour votre enfant.</p></div>';
+    }
+    out += mixages.map(item => '<div class="card"><div class="row sb wrap"><div><h3>' + esc(item.examName || 'Examen') + '</h3><p class="sub">' + esc(item.academicYear || '') + (item.date ? ' · ' + esc(fdate(item.date)) : '') + '</p></div><span class="chip">Publié</span></div><div class="grid" style="grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:12px"><div class="detail-item"><small>Salle</small><strong>' + esc(item.room || '—') + '</strong></div><div class="detail-item"><small>Surveillant</small><strong>' + esc(item.supervisor || '—') + '</strong></div><div class="detail-item"><small>Rangée</small><strong>' + esc(item.row || '—') + '</strong></div><div class="detail-item"><small>Banc</small><strong>' + esc(item.bench || '—') + '</strong></div><div class="detail-item"><small>Code du sujet</small><strong>' + esc(item.examCode || '—') + '</strong></div><div class="detail-item"><small>Variante</small><strong>' + esc(item.variant || '—') + '</strong></div></div></div>').join('');
+    return out;
+}
 const needKid = () => '<div class="card empty"><div class="big">👨‍👩‍👧</div><p>Liez d’abord un enfant depuis l’Accueil pour voir cette page.</p><p style="margin-top:12px"><button class="btn" data-go="home">Aller à l’Accueil</button></p></div>';
 
 function courseSheet(i) {
@@ -797,7 +829,7 @@ function updateMsgDot() {
 }
 function render() {
     const view = $('#view');
-    const fn = { home: viewHome, notes: viewNotes, attendance: viewAttendance, fees: viewFees, messages: viewMessages, settings: viewSettings }[V.tab] || viewHome;
+    const fn = { home: viewHome, notes: viewNotes, attendance: viewAttendance, schedule: viewSchedule, mixages: viewMixages, fees: viewFees, messages: viewMessages, settings: viewSettings }[V.tab] || viewHome;
     view.innerHTML = fn();
     document.querySelectorAll('#dock button').forEach(b => b.classList.toggle('on', b.dataset.go === V.tab));
     const k = activeKid();
