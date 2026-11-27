@@ -1079,13 +1079,29 @@ body {
 .tp-table th { background: #d9d9d9; }
 .tp-table td.tp-left { text-align: left; }
 .tp-cell small { display: block; font-size: 7pt; color: #333; }
-#horResultsArea .detail-display-area { min-width:0; overflow-x:auto; }
-#horResultsArea .tp-table { min-width:760px; background:var(--bg-card); color:var(--text-primary); }
+#horResultsArea .sub-view-content.active {
+    display:grid;
+    grid-template-columns:minmax(190px,260px) minmax(0,1fr);
+    align-items:start;
+    gap:1rem;
+    width:100%;
+}
+#horResultsArea .retractable-sidebar { width:100%; min-width:0; max-height:70vh; overflow:auto; }
+#horResultsArea .detail-display-area { min-width:0; width:100%; overflow:auto; }
+#horResultsArea .primeink-schedule-table-wrap { width:100%; max-width:100%; overflow-x:auto; overscroll-behavior-x:contain; }
+#horResultsArea .tp-table,
+#horResultsArea .primeink-schedule-table { width:100%; min-width:760px; background:var(--bg-card); color:var(--text-primary); }
 #horResultsArea .tp-table th, #horResultsArea .tp-table td { border:1px solid var(--border-color); padding:.65rem .45rem; font-size:.8rem; }
 #horResultsArea .tp-table th { background:var(--bg-main); color:var(--text-primary); }
 #horResultsArea .tp-table th:first-child { min-width:132px; }
 #horResultsArea .tp-cell strong { display:block; overflow-wrap:anywhere; }
-#horResultsArea .tp-cell small { margin-top:.25rem; font-size:.72rem; color:var(--text-secondary); overflow-wrap:anywhere; }
+#horResultsArea .tp-cell small { display:block; margin-top:.25rem; font-size:.72rem; color:var(--text-secondary); overflow-wrap:anywhere; }
+#horResultsArea .schedule-empty-cell { color:var(--text-secondary); opacity:.7; }
+#horResultsArea .schedule-no-results { padding:1rem; color:var(--text-secondary); border:1px dashed var(--border-color); border-radius:8px; }
+@media (max-width:760px) {
+    #horResultsArea .sub-view-content.active { grid-template-columns:minmax(0,1fr); }
+    #horResultsArea .retractable-sidebar { max-height:230px; }
+}
 
 /* Cases de saisie du bulletin */
 .bp-table td.bp-edit-cell { padding: 0; background: #fffbe6; }
@@ -1827,13 +1843,6 @@ body.theme-dark input::placeholder,body.theme-dark textarea::placeholder{color:v
                         <label>Durée des examens (min)</label>
                         <input type="number" id="mixDureeSession" class="form-control" value="120">
                     </div>
-                    <div class="form-group">
-                        <label>Mode IA</label>
-                        <select id="mixModelSelector" class="form-control">
-                            <option value="deepseek-v3">Réflexion</option>
-                            <option value="gemini-1">Standard</option>
-                        </select>
-                    </div>
                 </div>
 
                 <div class="settings-card">
@@ -1906,14 +1915,7 @@ body.theme-dark input::placeholder,body.theme-dark textarea::placeholder{color:v
                         </div>
                         <div class="form-group">
                             <label>Nombre d'Exemplaires</label>
-                            <input type="number" id="horExemplaires" class="form-control" min="1" max="5" value="1">
-                        </div>
-                        <div class="form-group">
-                            <label>Mode IA</label>
-                            <select id="horModelSelector" class="form-control">
-                                <option value="deepseek-v3">Réflexion (DeepSeek)</option>
-                                <option value="gemini-1.5-flash">Standard (Gemini)</option>
-                            </select>
+                            <input type="number" id="horExemplaires" class="form-control" min="1" max="5" value="3">
                         </div>
                     </div>
                 </div>
@@ -1943,11 +1945,17 @@ body.theme-dark input::placeholder,body.theme-dark textarea::placeholder{color:v
                     <button class="sub-nav-btn active" id="btnHorResultClasses" onclick="switchHoraireResultSubView('classes')">Classes</button>
                     <button class="sub-nav-btn" id="btnHorResultEnseignants" onclick="switchHoraireResultSubView('enseignants')">Enseignants</button>
                     <div style="display:flex; align-items:center; gap:0.5rem; margin-left:auto;">
-                        <span>Exemplaire 1</span>
+                        <span id="horCurrentExemplarLabel">Aucun exemplaire sélectionné</span>
                     </div>
                     <button class="btn-primary" onclick="printToolResult('horaire')" style="margin-left:0.5rem;">Exporter en PDF</button>
                 </nav>
                 <div id="horScheduleGenerationNotice" role="status" aria-live="polite" style="display:none;margin-top:.8rem;padding:.75rem;border-radius:8px;font-size:.85rem;"></div>
+                <div id="horExemplarToolbar" style="display:none;align-items:center;gap:.65rem;flex-wrap:wrap;margin-top:.8rem;padding:.8rem;border:1px solid var(--border-color);border-radius:10px;background:var(--bg-card);">
+                    <label for="horExemplarSelect" style="font-weight:700;">Comparer les exemplaires</label>
+                    <select id="horExemplarSelect" class="form-control" style="width:auto;min-width:190px;" onchange="selectScheduleExemplar(this.value)"></select>
+                    <span id="horExemplarStatus" style="font-size:.82rem;color:var(--text-secondary);"></span>
+                    <button type="button" id="horPublishExemplarButton" class="btn-primary" onclick="publishSelectedScheduleExemplar()">Publier l'exemplaire sélectionné</button>
+                </div>
 
                 <div id="hor-view-enseignants" class="sub-view-content hidden" style="margin-top: 1rem;">
                     <div class="retractable-sidebar" id="horTeachersListSidebar"></div>
@@ -2215,14 +2223,14 @@ window.alert = function(message) { showCustomAlert(message); };
             parentCommunications: [],
             teacherMessages: [],
                 mixage: {
-                    config: { exemplaires: 1, dureeExamen: 120, dureeHorsSession: 90, mode: 'deepseek-v3', instructions: '' },
+                    config: { exemplaires: 1, dureeExamen: 120, dureeHorsSession: 90, instructions: '' },
                     surveillants: [],
                     salles: [{ id: 'sal_1', nom: 'Salle N°1', places: 28, rangees: 3, bancs: 14 }],
                     coursProgrammes: [],
                     generatedSchedules: [] // Reçoit les exemplaires générés par le serveur
                 },
                 horaire: {
-                    config: { exemplaires: 1, mode: 'deepseek-v3', joursTravail: 6, heuresParJour: 6 },
+                    config: { exemplaires: 3, joursTravail: 6, heuresParJour: 6 },
                     profsDispo: [],
                     generatedSchedules: [] // Reçoit la grille horaire générée par le serveur
                 }
@@ -6180,6 +6188,8 @@ window.removeTeacherHoraireConfig = function() {
 // Horaire : chaque ligne référence exclusivement une affectation PrimeInk.
 // ------------------------------------------------------------------
 let __lastSchedule = null;
+let __scheduleCandidates = [];
+let __selectedScheduleExemplar = 0;
 const HOR_DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
 
         function bpScheduleTimeToMinutes(value) {
@@ -6271,51 +6281,152 @@ const HOR_DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
             if (!headers) return;
             const collected = bpCollectSchedulePayload();
             if (collected.error) return alert(collected.error);
+            const exemplarCount = Math.max(1, Math.min(5, parseInt(document.getElementById('horExemplaires')?.value, 10) || 1));
+            const generateButton = document.querySelector('#tab-horaire button[onclick="requestServerScheduleGeneration()"]');
+            if (generateButton) {
+                generateButton.disabled = true;
+                generateButton.textContent = 'Génération des exemplaires…';
+            }
             try {
                 const response = await window.primeInkFetchWithTimeout(API_BASE_URL + '/api/schedule/generate', {
-                    method: 'POST', headers,
+                    method: 'POST',
+                    headers,
                     body: JSON.stringify({
                         school_id: appState.school.id,
                         academic_year: appState.school.schoolYear || bpDefaultSchoolYear(),
                         config: { jours_travail: collected.jours, heures_par_jour: collected.heures },
                         time_slots: collected.slots,
-                        teachers: collected.teachers
-                    })
-                }, 60000);
+                        teachers: collected.teachers,
+                        exemplaires: exemplarCount
+                    }),
+                    cache: 'no-store'
+                }, 90000);
                 if (!response.ok) return alert(await bpServerErrorMessage(response));
-                const result = await response.json();
-                const schedules = result && result.schedules ? result.schedules : {};
-                const hasPreview = Array.isArray(schedules.classes) && Array.isArray(schedules.teachers);
-                const names = {};
-                collected.teachers.forEach(t => names[t.teacher_id] = t.name);
-                if (!result.success) {
-                    if (!hasPreview) return alert(result.message || "L'horaire n'a pas pu être généré.");
-                    __lastSchedule = { result, jours: collected.jours, heures: collected.heures, slots: collected.slots, names };
-                    showScheduleResultsView();
-                    return alert((result.message || "La génération est incomplète.") +
-                        "\n\nUn aperçu des cours placés est affiché par classe et par enseignant. Il n'a pas été publié : corrigez les conflits et relancez la génération.");
+                const responseData = await response.json();
+                const rawCandidates = Array.isArray(responseData.exemplaires) && responseData.exemplaires.length
+                    ? responseData.exemplaires
+                    : (responseData.schedules ? [responseData] : []);
+                if (!rawCandidates.length) {
+                    return alert(responseData.message || "Le serveur n'a retourné aucun exemplaire d'horaire.");
                 }
-                if (!result.published) return alert("L'horaire a été généré mais sa publication officielle n'a pas été confirmée. Aucun horaire n'est présenté comme publié.");
-                __lastSchedule = { result, jours: collected.jours, heures: collected.heures, slots: collected.slots, names };
-                if (!appState.tools) appState.tools = {};
-                if (!appState.tools.horaire) appState.tools.horaire = {};
-                appState.managerSchedule = {
-                    academicYear: appState.school.schoolYear || bpDefaultSchoolYear(),
-                    generatedAt: result.generated_at || new Date().toISOString(),
-                    config: { jours: collected.jours, heures: collected.heures },
+                const names = {};
+                collected.teachers.forEach(teacher => { names[teacher.teacher_id] = teacher.name; });
+                const metadata = {
+                    jours: collected.jours,
+                    heures: collected.heures,
                     slots: collected.slots,
                     teachers: collected.teachers,
-                    result
+                    academicYear: appState.school.schoolYear || bpDefaultSchoolYear()
                 };
-                appState.tools.horaire.generatedSchedules = [{
-                    ...result,
-                    _managerSchedule: { config: { jours: collected.jours, heures: collected.heures }, slots: collected.slots, teachers: collected.teachers }
-                }];
-                saveState();
-                showScheduleResultsView();
-                alert("Horaire publié. Il est disponible dans ClassInk App et ClassInk Manager, ainsi que dans Class-Ink Suivi pour les parents.");
+                __scheduleCandidates = rawCandidates.map((candidate, index) => ({
+                    result: candidate,
+                    jours: collected.jours,
+                    heures: collected.heures,
+                    slots: collected.slots,
+                    names,
+                    teachers: collected.teachers,
+                    academicYear: metadata.academicYear,
+                    config: { jours: collected.jours, heures: collected.heures },
+                    candidateIndex: index
+                }));
+                __selectedScheduleExemplar = 0;
+                __lastSchedule = __scheduleCandidates[0];
+                await showScheduleResultsView();
+                const complete = __scheduleCandidates.filter(item =>
+                    item.result && item.result.success && Number(item.result.unassigned_count || 0) === 0
+                ).length;
+                if (complete === 0) {
+                    alert("Les exemplaires ont été générés, mais aucun n'est complet. Consultez les cours non placés, ajustez les disponibilités ou les affectations, puis relancez la génération. Aucun horaire n'a été publié.");
+                } else if (__scheduleCandidates.length < exemplarCount) {
+                    alert(__scheduleCandidates.length + " exemplaire(s) distinct(s) ont été générés sur " + exemplarCount + " demandés. Vous pouvez comparer ceux qui sont disponibles et publier un exemplaire complet.");
+                }
             } catch (error) {
                 alert(error.message || "Le serveur est injoignable. Vérifiez la connexion internet et réessayez.");
+            } finally {
+                if (generateButton) {
+                    generateButton.disabled = false;
+                    generateButton.textContent = "Générer l'Horaire";
+                }
+            }
+        };
+
+        window.selectScheduleExemplar = function(value) {
+            const index = Number.parseInt(value, 10);
+            if (!Number.isInteger(index) || index < 0 || index >= __scheduleCandidates.length) return;
+            __selectedScheduleExemplar = index;
+            __lastSchedule = __scheduleCandidates[index];
+            bpRenderSchedule();
+        };
+
+        window.publishSelectedScheduleExemplar = async function() {
+            if (!__lastSchedule || !__lastSchedule.result) {
+                return alert("Sélectionnez d'abord un exemplaire.");
+            }
+            const candidate = __lastSchedule;
+            const result = candidate.result;
+            if (!result.success || Number(result.unassigned_count || 0) > 0) {
+                return alert("Cet exemplaire contient encore des cours non placés. Seuls les exemplaires complets peuvent être publiés.");
+            }
+            if (result.published) return alert("Cet exemplaire est déjà publié.");
+            const headers = bpRequireSession();
+            if (!headers) return;
+            const button = document.getElementById('horPublishExemplarButton');
+            if (button) {
+                button.disabled = true;
+                button.textContent = 'Publication…';
+            }
+            const publishedResult = { ...result, published: true };
+            const schedule = {
+                academicYear: candidate.academicYear || appState.school.schoolYear || bpDefaultSchoolYear(),
+                generatedAt: result.generated_at || new Date().toISOString(),
+                config: candidate.config || { jours: candidate.jours, heures: candidate.heures },
+                slots: candidate.slots || [],
+                teachers: candidate.teachers || [],
+                result: publishedResult
+            };
+            try {
+                const response = await window.primeInkFetchWithTimeout(API_BASE_URL + '/api/manager/schedule', {
+                    method: 'PUT',
+                    headers,
+                    body: JSON.stringify({ school_id: appState.school.id, schedule }),
+                    cache: 'no-store'
+                }, 30000);
+                if (!response.ok) throw new Error(await bpServerErrorMessage(response));
+                const confirmation = await response.json().catch(() => ({}));
+                if (!confirmation.status) throw new Error(confirmation.message || "La publication n'a pas été confirmée par le serveur.");
+
+                candidate.result = publishedResult;
+                __lastSchedule = candidate;
+                if (!appState.tools) appState.tools = {};
+                if (!appState.tools.horaire) appState.tools.horaire = {};
+                appState.managerSchedule = schedule;
+                appState.tools.horaire.config = {
+                    ...(appState.tools.horaire.config || {}),
+                    exemplaires: Number(document.getElementById('horExemplaires')?.value) || __scheduleCandidates.length,
+                    joursTravail: candidate.jours,
+                    heuresParJour: candidate.heures
+                };
+                appState.tools.horaire.generatedSchedules = [{
+                    ...publishedResult,
+                    _managerSchedule: {
+                        config: schedule.config,
+                        slots: schedule.slots,
+                        teachers: schedule.teachers,
+                        academicYear: schedule.academicYear
+                    }
+                }];
+                saveState();
+                bpRenderSchedule();
+                alert("L'exemplaire " + (__selectedScheduleExemplar + 1) + " a été publié. Il est maintenant disponible dans ClassInk Manager et dans l'espace enseignant.");
+            } catch (error) {
+                alert("La publication a échoué : " + (error.message || "Erreur serveur."));
+            } finally {
+                if (button) {
+                    button.disabled = !!(candidate.result && candidate.result.published);
+                    button.textContent = candidate.result && candidate.result.published
+                        ? "Exemplaire publié"
+                        : "Publier l'exemplaire sélectionné";
+                }
             }
         };
 
@@ -6362,37 +6473,66 @@ const HOR_DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
         }
 
         function bpScheduleTableHTML(grid, cellFn) {
-            const s = __lastSchedule;
-            const days = HOR_DAYS.slice(0, s.jours);
-            let html = '<div style="overflow-x:auto;"><table class="tp-table"><thead><tr><th>Tranche horaire</th>' + days.map(d => '<th>' + safeHTML(d) + '</th>').join('') + '</tr></thead><tbody>';
-            for (let h = 1; h <= s.heures; h++) {
-                const slot = s.slots[h - 1] || {};
-                const ordinal = h === 1 ? '1re heure' : h + 'e heure';
-                const when = slot.start && slot.end ? '<small>' + safeHTML(slot.start) + ' – ' + safeHTML(slot.end) + '</small>' : '<small>Heure non définie</small>';
-                const cells = days.map(d => {
-                    const cell = (((grid || {})[d] || {})[String(h)]);
-                    const content = cellFn(cell);
-                    return '<td class="tp-cell">' + (content || '<span style="color:var(--text-secondary)">—</span>') + '</td>';
+            const schedule = __lastSchedule || {};
+            const dayCount = Math.max(1, Math.min(HOR_DAYS.length, Number(schedule.jours) || 6));
+            const days = HOR_DAYS.slice(0, dayCount);
+            const slots = Array.isArray(schedule.slots) ? schedule.slots : [];
+            const hourCount = Math.max(
+                1,
+                Math.min(10, Number(schedule.heures) || slots.length || 6)
+            );
+            const safeGrid = grid && typeof grid === 'object' ? grid : {};
+            let html = '<div class="primeink-schedule-table-wrap"><table class="tp-table primeink-schedule-table"><thead><tr><th>Tranche horaire</th>' +
+                days.map(day => '<th>' + safeHTML(day) + '</th>').join('') +
+                '</tr></thead><tbody>';
+            for (let hour = 1; hour <= hourCount; hour++) {
+                const slot = slots.find(item => Number(item && item.hour) === hour) || slots[hour - 1] || {};
+                const start = String(slot.start || '');
+                const end = String(slot.end || '');
+                const timeLabel = start && end ? start + ' – ' + end : (start || end);
+                const ordinal = hour === 1 ? '1re heure' : hour + 'e heure';
+                const when = timeLabel
+                    ? '<small>' + safeHTML(timeLabel) + '</small>'
+                    : '<small>Horaire non défini</small>';
+                const cells = days.map(day => {
+                    const dayGrid = safeGrid[day] && typeof safeGrid[day] === 'object' ? safeGrid[day] : {};
+                    const cell = dayGrid[String(hour)] || dayGrid[hour] || null;
+                    const content = cell ? cellFn(cell) : '';
+                    return '<td class="tp-cell">' + (content || '<span class="schedule-empty-cell">—</span>') + '</td>';
                 }).join('');
                 html += '<tr><th>' + ordinal + when + '</th>' + cells + '</tr>';
             }
             return html + '</tbody></table></div>';
         }
-        const bpClassCell = c => c ? '<strong>' + safeHTML(c.course || 'Cours') + '</strong><small>' + safeHTML(c.teacher || 'Enseignant non renseigné') + (c.room ? ' · ' + safeHTML(c.room) : '') + '</small>' : '';
-        const bpTeacherCell = c => c ? '<strong>' + safeHTML(c.course || 'Cours') + '</strong><small>' + safeHTML(c['class'] || (Array.isArray(c.classes) ? c.classes.join(' + ') : 'Classe non renseignée')) + (c.room ? ' · ' + safeHTML(c.room) : '') + '</small>' : '';
+        const bpClassCell = cell => cell
+            ? '<strong>' + safeHTML(cell.course || 'Cours') + '</strong><small>' +
+                safeHTML(cell.teacher || 'Enseignant non renseigné') +
+                (cell.room ? ' · ' + safeHTML(cell.room) : '') + '</small>'
+            : '';
+        const bpTeacherCell = cell => cell
+            ? '<strong>' + safeHTML(cell.course || 'Cours') + '</strong><small>' +
+                safeHTML(cell['class'] || (Array.isArray(cell.classes) ? cell.classes.join(' + ') : 'Classe non renseignée')) +
+                (cell.room ? ' · ' + safeHTML(cell.room) : '') + '</small>'
+            : '';
 
         window.bpSelectScheduleClass = function(index) {
-            const entry = __lastSchedule && __lastSchedule.result.schedules.classes[index];
+            const entries = __lastSchedule && __lastSchedule.result && __lastSchedule.result.schedules
+                ? __lastSchedule.result.schedules.classes || [] : [];
+            const entry = entries[index];
             if (!entry) return;
-            document.getElementById('horSelectedClassName').textContent = entry.class_name || 'Classe';
+            const title = document.getElementById('horSelectedClassName');
             const mount = document.getElementById('horClassGridMount');
+            if (title) title.textContent = entry.class_name || 'Classe';
             if (mount) mount.innerHTML = bpScheduleTableHTML(entry.grid, bpClassCell);
         };
         window.bpSelectScheduleTeacher = function(index) {
-            const entry = __lastSchedule && __lastSchedule.result.schedules.teachers[index];
+            const entries = __lastSchedule && __lastSchedule.result && __lastSchedule.result.schedules
+                ? __lastSchedule.result.schedules.teachers || [] : [];
+            const entry = entries[index];
             if (!entry) return;
-            document.getElementById('horSelectedTeacherName').textContent = __lastSchedule.names[entry.teacher_id] || entry.teacher_id || 'Enseignant';
+            const title = document.getElementById('horSelectedTeacherName');
             const mount = document.getElementById('horTeacherGridMount');
+            if (title) title.textContent = entry.teacher_name || __lastSchedule.names[entry.teacher_id] || entry.name || entry.teacher_id || 'Enseignant';
             if (mount) mount.innerHTML = bpScheduleTableHTML(entry.grid, bpTeacherCell);
         };
 
@@ -6479,47 +6619,97 @@ const HOR_DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
 
         function bpRenderSchedule() {
             if (!bpRestorePublishedSchedule()) return;
-            const s = __lastSchedule;
-            const schedules = s.result && s.result.schedules ? s.result.schedules : {};
+            const schedule = __lastSchedule;
+            const schedules = schedule.result && schedule.result.schedules ? schedule.result.schedules : {};
             const classes = Array.isArray(schedules.classes) ? schedules.classes : [];
             const teachers = Array.isArray(schedules.teachers) ? schedules.teachers : [];
+
+            if (!Array.isArray(__scheduleCandidates) || !__scheduleCandidates.length) {
+                __scheduleCandidates = [schedule];
+                __selectedScheduleExemplar = 0;
+            }
+            const activeIndex = Math.max(0, Math.min(__scheduleCandidates.length - 1, __selectedScheduleExemplar));
+            __selectedScheduleExemplar = activeIndex;
+            const toolbar = document.getElementById('horExemplarToolbar');
+            const select = document.getElementById('horExemplarSelect');
+            const label = document.getElementById('horCurrentExemplarLabel');
+            const exemplarStatus = document.getElementById('horExemplarStatus');
+            const publishButton = document.getElementById('horPublishExemplarButton');
+            if (toolbar) toolbar.style.display = 'flex';
+            if (select) {
+                select.innerHTML = __scheduleCandidates.map((item, index) => {
+                    const itemResult = item.result || {};
+                    const complete = itemResult.success && Number(itemResult.unassigned_count || 0) === 0;
+                    const state = itemResult.published ? ' · Publié' : (complete ? ' · Complet' : ' · Incomplet');
+                    return '<option value="' + index + '">Exemplaire ' + (index + 1) + state + '</option>';
+                }).join('');
+                select.value = String(activeIndex);
+            }
+            if (label) label.textContent = 'Exemplaire ' + (activeIndex + 1) + ' / ' + __scheduleCandidates.length;
+            const unassigned = Number(schedule.result.unassigned_count || 0);
+            const isComplete = !!schedule.result.success && unassigned === 0;
+            const isPublished = !!schedule.result.published;
+            if (exemplarStatus) {
+                exemplarStatus.textContent = isPublished
+                    ? 'Publié officiellement'
+                    : (isComplete ? 'Complet · prêt à publier' : unassigned + ' cours non placé(s)');
+            }
+            if (publishButton) {
+                publishButton.disabled = !isComplete || isPublished;
+                publishButton.textContent = isPublished ? 'Exemplaire publié' : 'Publier l’exemplaire sélectionné';
+            }
+
             const classesBar = document.getElementById('horClassesListSidebar');
             const teachersBar = document.getElementById('horTeachersListSidebar');
             if (classesBar) classesBar.innerHTML = classes.length
-                ? classes.map((c, i) => '<button type="button" class="btn-secondary" style="display:block;width:100%;margin-bottom:.4rem;text-align:left;" onclick="bpSelectScheduleClass(' + i + ')">' + safeHTML(c.class_name || 'Classe') + '</button>').join('')
-                : '<p style="font-size:.82rem;color:var(--text-secondary)">Aucune classe n’a reçu de cours dans cette génération.</p>';
+                ? classes.map((entry, index) => '<button type="button" class="btn-secondary" style="display:block;width:100%;margin-bottom:.4rem;text-align:left;" onclick="bpSelectScheduleClass(' + index + ')">' + safeHTML(entry.class_name || 'Classe') + '</button>').join('')
+                : '<p style="font-size:.82rem;color:var(--text-secondary)">Aucune classe n’a reçu de cours dans cet exemplaire.</p>';
             if (teachersBar) teachersBar.innerHTML = teachers.length
-                ? teachers.map((t, i) => '<button type="button" class="btn-secondary" style="display:block;width:100%;margin-bottom:.4rem;text-align:left;" onclick="bpSelectScheduleTeacher(' + i + ')">' + safeHTML(s.names[t.teacher_id] || t.teacher_id || 'Enseignant') + '</button>').join('')
-                : '<p style="font-size:.82rem;color:var(--text-secondary)">Aucun enseignant disponible dans cette génération.</p>';
-            updateScheduleResultTables(s.jours, s.heures);
+                ? teachers.map((entry, index) => '<button type="button" class="btn-secondary" style="display:block;width:100%;margin-bottom:.4rem;text-align:left;" onclick="bpSelectScheduleTeacher(' + index + ')">' + safeHTML(entry.teacher_name || schedule.names[entry.teacher_id] || entry.name || entry.teacher_id || 'Enseignant') + '</button>').join('')
+                : '<p style="font-size:.82rem;color:var(--text-secondary)">Aucun enseignant n’est disponible dans cet exemplaire.</p>';
+
+            updateScheduleResultTables(schedule.jours, schedule.heures);
             const notice = document.getElementById('horScheduleGenerationNotice');
             if (notice) {
                 notice.style.display = 'block';
-                if (s.result.success && s.result.published) {
+                if (isPublished) {
                     notice.style.background = 'rgba(22,163,74,.10)';
                     notice.style.color = 'var(--success-color)';
-                    notice.textContent = 'Horaire complet publié officiellement. Les vues ci-dessous affichent les cours par classe et par enseignant.';
+                    notice.textContent = 'Cet exemplaire complet est publié officiellement. Les vues Classe et Enseignant ci-dessous affichent le planning retenu.';
+                } else if (isComplete) {
+                    notice.style.background = 'rgba(37,99,235,.10)';
+                    notice.style.color = 'var(--text-primary)';
+                    notice.textContent = __scheduleCandidates.length + ' exemplaire(s) généré(s). Comparez les horaires dans les vues Classe et Enseignant, puis publiez uniquement celui que vous retenez.';
                 } else {
                     notice.style.background = 'rgba(217,119,6,.12)';
                     notice.style.color = 'var(--text-primary)';
-                    notice.textContent = 'Aperçu incomplet : ' + Number(s.result.unassigned_count || 0) + ' créneau(x) de cours n’ont pas été placés. Cet aperçu n’a pas été publié. Ajustez les disponibilités ou les affectations avant de générer à nouveau.';
+                    notice.textContent = 'Cet exemplaire est incomplet : ' + unassigned + ' cours n’ont pas été placés. Il reste consultable, mais ne peut pas être publié.';
                 }
             }
+
             if (classes.length) bpSelectScheduleClass(0);
             else {
                 const title = document.getElementById('horSelectedClassName');
                 const mount = document.getElementById('horClassGridMount');
                 if (title) title.textContent = 'Aucune classe';
-                if (mount) mount.innerHTML = '<p style="color:var(--text-secondary)">Aucun cours à afficher.</p>';
+                if (mount) mount.innerHTML = '<p class="schedule-no-results">Aucun cours à afficher pour les classes. Vérifiez les affectations officielles envoyées au générateur.</p>';
             }
             if (teachers.length) bpSelectScheduleTeacher(0);
             else {
                 const title = document.getElementById('horSelectedTeacherName');
                 const mount = document.getElementById('horTeacherGridMount');
                 if (title) title.textContent = 'Aucun enseignant';
-                if (mount) mount.innerHTML = '<p style="color:var(--text-secondary)">Aucun cours à afficher.</p>';
+                if (mount) mount.innerHTML = '<p class="schedule-no-results">Aucun cours à afficher pour les enseignants. Vérifiez les affectations officielles envoyées au générateur.</p>';
             }
         }
+
+        window.selectScheduleExemplar = function(value) {
+            const index = Number.parseInt(value, 10);
+            if (!Number.isInteger(index) || index < 0 || index >= __scheduleCandidates.length) return;
+            __selectedScheduleExemplar = index;
+            __lastSchedule = __scheduleCandidates[index];
+            bpRenderSchedule();
+        };
 
         function bpScheduleSheetsHTML() {
             const s = __lastSchedule;

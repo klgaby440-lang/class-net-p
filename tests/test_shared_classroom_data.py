@@ -12,6 +12,7 @@ from main import (
     SessionLocal,
     StudentGrade,
     StudentLink,
+    ScheduleEngine,
     Teacher,
     TeacherEvaluation,
     TeacherSchoolSpace,
@@ -31,6 +32,50 @@ from main import (
     teacher_matches_school_roster,
     validate_school_class_catalog,
 )
+
+
+
+def test_schedule_engine_can_generate_distinct_complete_timetable_exemplars():
+    teachers = [
+        {
+            "teacher_id": "teacher-1",
+            "name": "Aline Mukendi",
+            "availability": {},
+            "assigned_courses": [
+                {
+                    "course_name": "Mathématiques",
+                    "class_name": "1ère Scientifique",
+                    "hours_per_week": 3,
+                    "trunk_common": None,
+                }
+            ],
+        }
+    ]
+    config = {"jours_travail": 5, "heures_par_jour": 4}
+    results = [
+        ScheduleEngine(config=config, teachers=teachers, seed=seed).generate()
+        for seed in (101, 202, 303)
+    ]
+
+    assert all(result["success"] for result in results)
+    assert all(result["unassigned_count"] == 0 for result in results)
+    fingerprints = {repr(result["schedules"]) for result in results}
+    assert len(fingerprints) == 3
+
+    for result in results:
+        class_grid = result["schedules"]["classes"][0]["grid"]
+        teacher_grid = result["schedules"]["teachers"][0]["grid"]
+        class_slots = {
+            (day, str(hour))
+            for day, hours in class_grid.items()
+            for hour in hours
+        }
+        teacher_slots = {
+            (day, str(hour))
+            for day, hours in teacher_grid.items()
+            for hour in hours
+        }
+        assert class_slots == teacher_slots
 
 
 def sample_catalog():
