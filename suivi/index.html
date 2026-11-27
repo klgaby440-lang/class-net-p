@@ -119,6 +119,14 @@ table.t { width: 100%; border-collapse: collapse; font-size: .88rem; }
 table.t th, table.t td { padding: 8px 6px; text-align: center; border-bottom: 1px solid var(--border); }
 table.t th { color: var(--muted); font-weight: 600; font-size: .75rem; }
 table.t td:first-child, table.t th:first-child { text-align: left; }
+.schedule-grid-wrap { width:100%; max-width:100%; overflow-x:auto; overscroll-behavior-x:contain; }
+table.t.schedule-grid { min-width:760px; table-layout:fixed; background:var(--surface); }
+.schedule-grid th, .schedule-grid td { border:1px solid var(--border); padding:9px 7px; vertical-align:top; white-space:normal; overflow-wrap:anywhere; }
+.schedule-grid th:first-child { width:142px; }
+.schedule-grid .schedule-time { display:block; margin-top:3px; color:var(--muted); font-size:.72rem; font-weight:500; }
+.schedule-grid td strong { display:block; color:var(--text); }
+.schedule-grid td small { display:block; margin-top:4px; color:var(--muted); }
+.schedule-grid .schedule-empty-cell { color:var(--muted); opacity:.75; }
 .num { font-variant-numeric: tabular-nums; }
 .chart { width: 100%; height: auto; display: block; }
 
@@ -733,12 +741,44 @@ function viewSchedule() {
     if (!schedule.published || !days.length) {
         return out + '<div class="card empty"><p>Aucun horaire n’a encore été publié pour la classe de votre enfant.</p><p class="sub" style="margin-top:6px">L’établissement doit finaliser et publier l’horaire dans PrimeInk.</p></div>';
     }
+
+    const slots = Array.isArray(schedule.slots) ? schedule.slots : [];
+    const slotByHour = new Map(slots.map(slot => [String(slot.hour), slot]));
+    const lessonByDayHour = new Map();
+    let usedHours = 0;
     days.forEach(day => {
-        const lessons = Array.isArray(day.lessons) ? day.lessons : [];
-        out += '<div class="card"><h3 style="margin-bottom:10px">' + esc(day.day || '') + '</h3><div class="list">' +
-            lessons.map(lesson => '<article class="item" style="display:block"><div class="row sb wrap"><strong class="t">' + esc(lesson.course || 'Cours') + '</strong><span class="chip">' + esc(lesson.start || '—') + (lesson.end ? ' – ' + esc(lesson.end) : '') + '</span></div><div class="m" style="margin-top:5px">Enseignant : ' + esc(lesson.teacher || 'Non renseigné') + '</div>' + (lesson.room ? '<div class="m">Salle : ' + esc(lesson.room) + '</div>' : '') + '</article>').join('') +
-            '</div></div>';
+        (Array.isArray(day.lessons) ? day.lessons : []).forEach(lesson => {
+            const hour = Number(lesson.hour);
+            if (!Number.isInteger(hour) || hour < 1) return;
+            usedHours = Math.max(usedHours, hour);
+            lessonByDayHour.set(String(day.day) + '|' + String(hour), lesson);
+        });
     });
+    const hourCount = Math.max(1, Math.min(10,
+        Number(schedule.hours) || slots.length || usedHours || 6
+    ));
+    const header = '<tr><th>Tranche horaire</th>' + days.map(day =>
+        '<th>' + esc(day.day || '') + '</th>'
+    ).join('') + '</tr>';
+    let rows = '';
+    for (let hour = 1; hour <= hourCount; hour++) {
+        const slot = slotByHour.get(String(hour)) || days.reduce((found, day) =>
+            found || (day.lessons || []).find(lesson => Number(lesson.hour) === hour), null
+        ) || {};
+        const start = String(slot.start || '');
+        const end = String(slot.end || '');
+        const time = start && end ? start + ' – ' + end : (start || end);
+        rows += '<tr><th>' + (hour === 1 ? '1re heure' : hour + 'e heure') +
+            '<small class="schedule-time">' + esc(time || 'Horaire non défini') + '</small></th>';
+        rows += days.map(day => {
+            const lesson = lessonByDayHour.get(String(day.day) + '|' + String(hour));
+            if (!lesson) return '<td><span class="schedule-empty-cell">—</span></td>';
+            const details = [lesson.teacher || 'Enseignant non renseigné', lesson.room].filter(Boolean).join(' · ');
+            return '<td><strong>' + esc(lesson.course || 'Cours') + '</strong><small>' + esc(details) + '</small></td>';
+        }).join('') + '</tr>';
+    }
+    out += '<div class="card"><div class="schedule-grid-wrap"><table class="t schedule-grid"><thead>' +
+        header + '</thead><tbody>' + rows + '</tbody></table></div></div>';
     return out;
 }
 function viewMixages() {

@@ -133,6 +133,14 @@
         table { width: 100%; border-collapse: collapse; margin-top: 8px; }
         td, th { padding: 8px; text-align: left; border-bottom: 1px solid var(--border-color); font-size: 0.85rem; }
         tr:nth-child(even) { background-color: rgba(0,0,0,0.02); }
+        .teacher-schedule-table-wrap { width:100%; max-width:100%; overflow-x:auto; overscroll-behavior-x:contain; }
+        table.teacher-schedule-table { width:100%; min-width:760px; table-layout:fixed; background:var(--card-bg); color:var(--text-main); }
+        .teacher-schedule-table th, .teacher-schedule-table td { border:1px solid var(--border-color); padding:9px 7px; text-align:center; vertical-align:top; white-space:normal; overflow-wrap:anywhere; }
+        .teacher-schedule-table th:first-child { width:142px; text-align:left; }
+        .teacher-schedule-table .teacher-schedule-time { display:block; margin-top:3px; color:var(--text-muted); font-size:.72rem; font-weight:500; }
+        .teacher-schedule-table td strong { display:block; }
+        .teacher-schedule-table td small { display:block; margin-top:4px; color:var(--text-muted); }
+        .teacher-schedule-empty-cell { color:var(--text-muted); opacity:.75; }
         [data-theme="dark"] tr:nth-child(even) { background-color: rgba(255,255,255,0.035); }
         [data-theme="dark"] input[readonly], [data-theme="dark"] input:disabled, [data-theme="dark"] select:disabled {
             background-color: #273449 !important; color: #dbe5f4 !important; border-color: #46556d !important;
@@ -1200,7 +1208,10 @@ const defaultDB = {
     llinkPrefs: "Donne des explications précises adaptées au programme de RDC.",
     pendingCommits: 0,
     teacherSpaces: [],
-    teacherSchedule: []
+    teacherSchedule: [],
+    teacherScheduleDays: [],
+    teacherScheduleSlots: [],
+    teacherScheduleHours: 0
 };
 
 /* ==========================================================================
@@ -1433,6 +1444,9 @@ function mergeServerDataIntoLocal(local, server) {
         isolated.llinkPrefs = local.llinkPrefs || server.llinkPrefs;
         isolated.teacherSpaces = Array.isArray(server.teacherSpaces) ? server.teacherSpaces : [];
         isolated.teacherSchedule = Array.isArray(server.teacherSchedule) ? server.teacherSchedule : [];
+        isolated.teacherScheduleDays = Array.isArray(server.teacherScheduleDays) ? server.teacherScheduleDays : [];
+        isolated.teacherScheduleSlots = Array.isArray(server.teacherScheduleSlots) ? server.teacherScheduleSlots : [];
+        isolated.teacherScheduleHours = Number(server.teacherScheduleHours) || 0;
         isolated.schoolId = serverSpace;
         isolated.pendingCommits = 0;
         return isolated;
@@ -4337,28 +4351,54 @@ function renderTeacherScheduleEditor() {
     const editor = document.getElementById('teacher-schedule-editor');
     if (!editor) return;
     const entries = Array.isArray(db.teacherSchedule) ? db.teacherSchedule : [];
-    const dayOrder = TEACHER_SCHEDULE_DAYS;
-    const sorted = entries.slice().sort((a, b) =>
-        dayOrder.indexOf(a.day) - dayOrder.indexOf(b.day) ||
-        String(a.start || '').localeCompare(String(b.start || ''))
-    );
-    if (!sorted.length) {
+    if (!entries.length) {
         editor.innerHTML = '<div class="empty-state">Aucun horaire officiel n’a encore été publié pour votre compte. Demandez à la direction de finaliser l’horaire dans PrimeInk.</div>';
         return;
     }
-    editor.innerHTML = sorted.map(entry => {
-        const group = entry.classes && entry.classes.length
-            ? entry.classes.join(' / ')
-            : (entry.className || '');
-        return '<article style="display:grid;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:7px;padding:10px;border:1px solid var(--border-color);border-radius:10px;background:var(--card-bg)">' +
-            '<div><small style="display:block;color:var(--text-muted)">Jour / heure</small><strong>' + safeHTML(entry.day || '') + ' · ' + safeHTML(entry.hour || '') + '</strong></div>' +
-            '<div><small style="display:block;color:var(--text-muted)">Début</small><strong>' + safeHTML(entry.start || '—') + '</strong></div>' +
-            '<div><small style="display:block;color:var(--text-muted)">Fin</small><strong>' + safeHTML(entry.end || '—') + '</strong></div>' +
-            '<div><small style="display:block;color:var(--text-muted)">Cours</small><strong>' + safeHTML(entry.course || '—') + '</strong></div>' +
-            '<div><small style="display:block;color:var(--text-muted)">Classe(s)</small><strong>' + safeHTML(group || '—') + '</strong></div>' +
-            '<div><small style="display:block;color:var(--text-muted)">Salle</small><strong>' + safeHTML(entry.room || '—') + '</strong></div>' +
-        '</article>';
-    }).join('');
+
+    const dayOrder = TEACHER_SCHEDULE_DAYS;
+    const configuredDays = Array.isArray(db.teacherScheduleDays) ? db.teacherScheduleDays : [];
+    const days = (configuredDays.length ? configuredDays : [...new Set(entries.map(item => item.day).filter(Boolean))])
+        .slice().sort((a, b) => dayOrder.indexOf(a) - dayOrder.indexOf(b));
+    const slots = Array.isArray(db.teacherScheduleSlots) ? db.teacherScheduleSlots : [];
+    const byHour = new Map(slots.map(slot => [String(slot.hour), slot]));
+    const lessons = new Map();
+    let usedHours = 0;
+    entries.forEach(entry => {
+        const hour = Number(entry.hour);
+        if (!Number.isInteger(hour) || hour < 1) return;
+        usedHours = Math.max(usedHours, hour);
+        lessons.set(String(entry.day) + '|' + String(hour), entry);
+    });
+    const hourCount = Math.max(1, Math.min(10,
+        Number(db.teacherScheduleHours) || slots.length || usedHours || 6
+    ));
+
+    const header = '<tr><th>Tranche horaire</th>' + days.map(day =>
+        '<th>' + safeHTML(day) + '</th>'
+    ).join('') + '</tr>';
+    let rows = '';
+    for (let hour = 1; hour <= hourCount; hour++) {
+        const slot = byHour.get(String(hour)) || entries.find(item => Number(item.hour) === hour) || {};
+        const start = String(slot.start || '');
+        const end = String(slot.end || '');
+        const time = start && end ? start + ' – ' + end : (start || end);
+        const ordinal = hour === 1 ? '1re heure' : hour + 'e heure';
+        rows += '<tr><th>' + ordinal + '<small class="teacher-schedule-time">' +
+            safeHTML(time || 'Horaire non défini') + '</small></th>';
+        rows += days.map(day => {
+            const entry = lessons.get(String(day) + '|' + String(hour));
+            if (!entry) return '<td><span class="teacher-schedule-empty-cell">—</span></td>';
+            const group = Array.isArray(entry.classes) && entry.classes.length
+                ? entry.classes.join(' / ')
+                : (entry.className || '');
+            const details = [group, entry.room].filter(Boolean).join(' · ');
+            return '<td><strong>' + safeHTML(entry.course || 'Cours') + '</strong>' +
+                '<small>' + safeHTML(details || '—') + '</small></td>';
+        }).join('') + '</tr>';
+    }
+    editor.innerHTML = '<div class="teacher-schedule-table-wrap"><table class="teacher-schedule-table"><thead>' +
+        header + '</thead><tbody>' + rows + '</tbody></table></div>';
 }
 
 async function loadTeacherScheduleFromServer(silent = false) {
@@ -4382,6 +4422,9 @@ async function loadTeacherScheduleFromServer(silent = false) {
             throw new Error("L'horaire reçu ne correspond pas à l'espace actif.");
         }
         db.teacherSchedule = Array.isArray(result.data.schedule) ? result.data.schedule : [];
+        db.teacherScheduleDays = Array.isArray(result.data.days) ? result.data.days : [];
+        db.teacherScheduleSlots = Array.isArray(result.data.slots) ? result.data.slots : [];
+        db.teacherScheduleHours = Number(result.data.hours) || 0;
         saveDB();
         renderTeacherScheduleEditor();
         return true;
