@@ -1079,13 +1079,29 @@ body {
 .tp-table th { background: #d9d9d9; }
 .tp-table td.tp-left { text-align: left; }
 .tp-cell small { display: block; font-size: 7pt; color: #333; }
-#horResultsArea .detail-display-area { min-width:0; overflow-x:auto; }
-#horResultsArea .tp-table { min-width:760px; background:var(--bg-card); color:var(--text-primary); }
+#horResultsArea .sub-view-content.active {
+    display:grid;
+    grid-template-columns:minmax(190px,260px) minmax(0,1fr);
+    align-items:start;
+    gap:1rem;
+    width:100%;
+}
+#horResultsArea .retractable-sidebar { width:100%; min-width:0; max-height:70vh; overflow:auto; }
+#horResultsArea .detail-display-area { min-width:0; width:100%; overflow:auto; }
+#horResultsArea .primeink-schedule-table-wrap { width:100%; max-width:100%; overflow-x:auto; overscroll-behavior-x:contain; }
+#horResultsArea .tp-table,
+#horResultsArea .primeink-schedule-table { width:100%; min-width:760px; background:var(--bg-card); color:var(--text-primary); }
 #horResultsArea .tp-table th, #horResultsArea .tp-table td { border:1px solid var(--border-color); padding:.65rem .45rem; font-size:.8rem; }
 #horResultsArea .tp-table th { background:var(--bg-main); color:var(--text-primary); }
 #horResultsArea .tp-table th:first-child { min-width:132px; }
 #horResultsArea .tp-cell strong { display:block; overflow-wrap:anywhere; }
-#horResultsArea .tp-cell small { margin-top:.25rem; font-size:.72rem; color:var(--text-secondary); overflow-wrap:anywhere; }
+#horResultsArea .tp-cell small { display:block; margin-top:.25rem; font-size:.72rem; color:var(--text-secondary); overflow-wrap:anywhere; }
+#horResultsArea .schedule-empty-cell { color:var(--text-secondary); opacity:.7; }
+#horResultsArea .schedule-no-results { padding:1rem; color:var(--text-secondary); border:1px dashed var(--border-color); border-radius:8px; }
+@media (max-width:760px) {
+    #horResultsArea .sub-view-content.active { grid-template-columns:minmax(0,1fr); }
+    #horResultsArea .retractable-sidebar { max-height:230px; }
+}
 
 /* Cases de saisie du bulletin */
 .bp-table td.bp-edit-cell { padding: 0; background: #fffbe6; }
