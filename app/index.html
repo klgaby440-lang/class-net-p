@@ -4416,6 +4416,7 @@ document.addEventListener('keydown', unlockTeacherBellAudio, { once: true });
 
 function playTeacherBell() {
     try {
+        if (navigator.vibrate) navigator.vibrate([180, 90, 180, 90, 320]);
         unlockTeacherBellAudio();
         if (!teacherBellAudioContext) return false;
         const audioCtx = teacherBellAudioContext;
@@ -4458,7 +4459,7 @@ function teacherScheduleTick() {
             teacherScheduleBellFired.add(key);
             playTeacherBell();
             if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
-                try { new Notification('Fin du cours', { body: entry.course + (entry.className ? ' · ' + entry.className : '') }); } catch (_) {}
+                try { new Notification('Fin du cours', { body: entry.course + (entry.className ? ' · ' + entry.className : ''), vibrate: [180, 90, 180, 90, 320] }); } catch (_) {}
             }
             if (display) display.textContent = 'Fin du cours : ' + entry.course;
         }
