@@ -104,6 +104,7 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn("horaireState.generatedSchedules", prime)
         self.assertIn("async function bpLoadPublishedScheduleFromServer()", prime)
         self.assertIn("API_BASE_URL + '/api/manager/schedule'", prime)
+        self.assertIn("appState.managerSchedule.result.published = true", prime)
 
         backend = (ROOT / "main.py").read_text(encoding="utf-8")
         generation = backend.index('result = engine.generate()')
