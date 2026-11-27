@@ -6182,6 +6182,16 @@ window.removeTeacherHoraireConfig = function() {
 let __lastSchedule = null;
 const HOR_DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
 
+        function bpScheduleTimeToMinutes(value) {
+            const parts = String(value || '').trim().split(':');
+            if (parts.length !== 2 || parts[0].length !== 2 || parts[1].length !== 2) return null;
+            if (!parts.every(part => part[0] >= '0' && part[0] <= '9' && part[1] >= '0' && part[1] <= '9')) return null;
+            const hours = Number(parts[0]);
+            const minutes = Number(parts[1]);
+            if (!Number.isInteger(hours) || hours > 23 || !Number.isInteger(minutes) || minutes > 59) return null;
+            return hours * 60 + minutes;
+        }
+
         function bpCollectSchedulePayload() {
             const jours = Math.max(1, Math.min(6, parseInt(document.getElementById('horJoursSemaine').value, 10) || 6));
             const heures = Math.max(1, Math.min(10, parseInt(document.getElementById('horHeuresJour').value, 10) || 6));
@@ -6194,17 +6204,17 @@ const HOR_DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
                 start: String(row.querySelector('.slot-start')?.value || '').trim(),
                 end: String(row.querySelector('.slot-end')?.value || '').trim()
             }));
-            let previousEnd = '';
+            let previousEndMinutes = null;
             for (const slot of slots) {
-                if (!/^([01]\\d|2[0-3]):[0-5]\\d$/.test(slot.start) ||
-                    !/^([01]\\d|2[0-3]):[0-5]\\d$/.test(slot.end) ||
-                    slot.end <= slot.start) {
+                const startMinutes = bpScheduleTimeToMinutes(slot.start);
+                const endMinutes = bpScheduleTimeToMinutes(slot.end);
+                if (startMinutes === null || endMinutes === null || endMinutes <= startMinutes) {
                     return { error: "Définissez une heure de début et de fin valide pour chaque tranche." };
                 }
-                if (previousEnd && slot.start < previousEnd) {
+                if (previousEndMinutes !== null && startMinutes < previousEndMinutes) {
                     return { error: "Les tranches doivent suivre l'ordre des heures de cours. La tranche " + slot.hour + " commence avant la fin de la précédente." };
                 }
-                previousEnd = slot.end;
+                previousEndMinutes = endMinutes;
             }
             const slotsStatus = document.getElementById('horTimeSlotsStatus');
             if (slotsStatus) slotsStatus.textContent = slots.length + " tranche(s) valide(s), dans l'ordre chronologique.";
