@@ -942,31 +942,30 @@
             <!-- SECTION 1 : HORAIRE & MINUTEUR SONNERIE -->
             <div id="drawer-tab-schedule">
                 <div class="card" style="background: rgba(109, 40, 217, 0.05); border: 1px dashed var(--primary);">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div>
-                            <strong style="font-size: 0.85rem; color: var(--primary);">🔔 Minuteur de Cours</strong>
-                            <div id="live-timer-display" style="font-size: 1.1rem; font-weight: bold; margin-top: 2px;">00:00:00 (Hors période)</div>
-                        </div>
-                        <button class="btn-primary" style="padding: 6px 10px; font-size: 0.75rem;" onclick="testSchoolBell()">Test Sonnerie 🔊</button>
+                    <div style="display:flex;align-items:center;gap:10px">
+                        <strong style="font-size:.85rem;color:var(--primary)">Minuteur de cours</strong>
+                        <span id="bell-notification-status" style="font-size:.7rem;color:var(--text-muted)">Sonnerie selon l'horaire officiel</span>
                     </div>
+                    <div id="live-timer-display" style="font-size:1.1rem;font-weight:bold;margin-top:6px;">Chargement de l'horaire officiel…</div>
                 </div>
 
-                <h4 style="margin: 10px 0; font-size: 0.95rem;">🗓️ Mon emploi du temps</h4>
-                <p style="font-size:.75rem;color:var(--text-muted);margin-bottom:10px;">Ajoutez les heures de début et de fin de chaque cours. La sonnerie se déclenche à la fin de l'heure indiquée, selon le jour.</p>
+                <h4 style="margin:10px 0;font-size:.95rem;">Mon horaire personnel</h4>
+                <p style="font-size:.75rem;color:var(--text-muted);margin-bottom:10px;">Cet horaire est publié par l'établissement depuis PrimeInk. Il est consultable ici et ne peut pas être modifié depuis l'espace enseignant.</p>
                 <div id="teacher-schedule-editor" style="display:grid;gap:8px;overflow-x:auto;"></div>
-                <div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 15px;">
-                    <button type="button" class="btn-action" onclick="addTeacherScheduleRow()">＋ Ajouter une heure</button>
-                    <button type="button" class="btn-secondary" onclick="testSchoolBell()">Tester la sonnerie</button>
-                    <button type="button" class="btn-primary" onclick="saveTeacherSchedule()">Enregistrer l'horaire</button>
-                </div>
+
             </div>
 
             <!-- SECTION 2 : WHATSAPP STYLE ADMIN CHAT -->
             <div id="drawer-tab-chat" style="display: none; flex-direction: column; height: calc(100% - 120px);">
-                <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid var(--success); padding: 8px 12px; border-radius: 8px; margin-bottom: 10px; font-size: 0.75rem; color: var(--success); font-weight: bold;">
-                    📢 Canal Officiel de la Direction (Sécurisé)
+                <div style="display:grid;gap:6px;margin-bottom:10px">
+                    <label for="admin-chat-recipient" style="font-size:.75rem;color:var(--text-muted)">Destinataire</label>
+                    <select id="admin-chat-recipient" class="form-control" onchange="loadAdminMessages()">
+                        <option value="school">Établissement / Direction</option>
+                    </select>
+                    <div style="font-size:.72rem;color:var(--text-muted)">Choisissez la direction ou un enseignant de votre établissement.</div>
                 </div>
                 
+                <div class="chat-recipient-label" style="font-size:.72rem;color:var(--text-muted);margin-bottom:6px">Canal de communication avec la direction</div>
                 <div id="admin-chat-messages" style="flex-grow: 1; overflow-y: auto; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px;">
                     <div style="background: var(--card-bg); padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border-color); font-size: 0.8rem;">
                         <span style="color: var(--text-muted);">Chargement des messages de la direction…</span>
@@ -4334,48 +4333,32 @@ const TEACHER_SCHEDULE_DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi'
 const teacherScheduleBellFired = new Set();
 let teacherScheduleLastTick = Date.now();
 
-function teacherScheduleReadEditor() {
-    const editor = document.getElementById('teacher-schedule-editor');
-    if (!editor) return [];
-    return Array.from(editor.querySelectorAll('[data-schedule-row]')).map((row, index) => ({
-        id: row.dataset.scheduleId || generateUniqueId('SCH'),
-        day: row.querySelector('[data-field="day"]').value,
-        start: row.querySelector('[data-field="start"]').value,
-        end: row.querySelector('[data-field="end"]').value,
-        course: row.querySelector('[data-field="course"]').value.trim(),
-        room: row.querySelector('[data-field="room"]').value.trim(),
-        order: index
-    }));
-}
-
 function renderTeacherScheduleEditor() {
     const editor = document.getElementById('teacher-schedule-editor');
     if (!editor) return;
     const entries = Array.isArray(db.teacherSchedule) ? db.teacherSchedule : [];
-    editor.innerHTML = entries.map(entry => {
-        const id = String(entry.id || generateUniqueId('SCH'));
-        const dayOptions = TEACHER_SCHEDULE_DAYS.map(day => '<option value="' + day + '"' + (day === entry.day ? ' selected' : '') + '>' + day + '</option>').join('');
-        return '<div data-schedule-row data-schedule-id="' + safeHTML(id) + '" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:7px;padding:9px;border:1px solid var(--border-color);border-radius:10px;">' +
-            '<label>Jour<select data-field="day">' + dayOptions + '</select></label>' +
-            '<label>Début<input type="time" data-field="start" value="' + safeHTML(entry.start || '') + '"></label>' +
-            '<label>Fin<input type="time" data-field="end" value="' + safeHTML(entry.end || '') + '"></label>' +
-            '<label>Cours<input type="text" data-field="course" value="' + safeHTML(entry.course || '') + '" placeholder="Nom du cours"></label>' +
-            '<label>Salle<input type="text" data-field="room" value="' + safeHTML(entry.room || '') + '" placeholder="Facultatif"></label>' +
-            '<button type="button" class="btn-action" onclick="removeTeacherScheduleRow(' + JSON.stringify(id) + ')">Supprimer</button></div>';
-    }).join('') || '<div class="empty-state">Aucune heure configurée. Ajoutez les créneaux de votre horaire.</div>';
-}
-
-function addTeacherScheduleRow() {
-    const entries = teacherScheduleReadEditor();
-    entries.push({ id: generateUniqueId('SCH'), day: 'Lundi', start: '07:30', end: '08:30', course: '', room: '' });
-    db.teacherSchedule = entries;
-    renderTeacherScheduleEditor();
-}
-
-function removeTeacherScheduleRow(id) {
-    db.teacherSchedule = teacherScheduleReadEditor().filter(entry => String(entry.id) !== String(id));
-    saveDB();
-    renderTeacherScheduleEditor();
+    const dayOrder = TEACHER_SCHEDULE_DAYS;
+    const sorted = entries.slice().sort((a, b) =>
+        dayOrder.indexOf(a.day) - dayOrder.indexOf(b.day) ||
+        String(a.start || '').localeCompare(String(b.start || ''))
+    );
+    if (!sorted.length) {
+        editor.innerHTML = '<div class="empty-state">Aucun horaire officiel n’a encore été publié pour votre compte. Demandez à la direction de finaliser l’horaire dans PrimeInk.</div>';
+        return;
+    }
+    editor.innerHTML = sorted.map(entry => {
+        const group = entry.classes && entry.classes.length
+            ? entry.classes.join(' / ')
+            : (entry.className || '');
+        return '<article style="display:grid;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:7px;padding:10px;border:1px solid var(--border-color);border-radius:10px;background:var(--card-bg)">' +
+            '<div><small style="display:block;color:var(--text-muted)">Jour / heure</small><strong>' + safeHTML(entry.day || '') + ' · ' + safeHTML(entry.hour || '') + '</strong></div>' +
+            '<div><small style="display:block;color:var(--text-muted)">Début</small><strong>' + safeHTML(entry.start || '—') + '</strong></div>' +
+            '<div><small style="display:block;color:var(--text-muted)">Fin</small><strong>' + safeHTML(entry.end || '—') + '</strong></div>' +
+            '<div><small style="display:block;color:var(--text-muted)">Cours</small><strong>' + safeHTML(entry.course || '—') + '</strong></div>' +
+            '<div><small style="display:block;color:var(--text-muted)">Classe(s)</small><strong>' + safeHTML(group || '—') + '</strong></div>' +
+            '<div><small style="display:block;color:var(--text-muted)">Salle</small><strong>' + safeHTML(entry.room || '—') + '</strong></div>' +
+        '</article>';
+    }).join('');
 }
 
 async function loadTeacherScheduleFromServer(silent = false) {
@@ -4408,78 +4391,52 @@ async function loadTeacherScheduleFromServer(silent = false) {
     }
 }
 
-async function saveTeacherSchedule() {
-    const entries = teacherScheduleReadEditor();
-    if (entries.some(entry => !entry.start || !entry.end || !entry.course || entry.end <= entry.start)) {
-        await showCustomAlert('Chaque ligne doit contenir un cours, un début et une fin postérieure au début.');
-        return;
-    }
-    const sorted = entries.sort((a,b) => TEACHER_SCHEDULE_DAYS.indexOf(a.day) - TEACHER_SCHEDULE_DAYS.indexOf(b.day) || a.start.localeCompare(b.start));
-    const schoolId = String(db.user && db.user.schoolId || db.schoolId || '').trim();
-    const independent = String(db.workspaceMode || '').toLowerCase() === 'independent';
-    let token = '';
-    try { token = localStorage.getItem('classink_cloud_token') || ''; } catch (_) {}
-    if ((schoolId || independent) && token) {
-        try {
-            const response = await fetch(CLOUD_AUTH_URL + '/api/teacher/schedule', {
-                method: 'PUT',
-                headers: cloudAuthHeaders(),
-                body: JSON.stringify({ schedule: sorted }),
-                cache: 'no-store',
-                credentials: 'omit'
-            });
-            const result = await response.json().catch(() => ({}));
-            const returnedSchoolId = String(result.data && result.data.schoolId || '');
-            const returnedIndependent = String(result.data && result.data.workspaceMode || '') === 'independent';
-            if (!response.ok || !result.status || (independent
-                ? !returnedIndependent
-                : (returnedIndependent || returnedSchoolId !== schoolId))) {
-                throw new Error(result.detail || result.message || "L'horaire n'a pas été enregistré dans cet espace.");
-            }
-            db.teacherSchedule = Array.isArray(result.data.schedule) ? result.data.schedule : sorted;
-            saveDB();
-            renderTeacherScheduleEditor();
-            await showCustomAlert(independent
-                ? "Emploi du temps enregistré dans votre espace indépendant."
-                : "Emploi du temps enregistré sur le serveur pour cet établissement.");
-            return;
-        } catch (error) {
-            await showCustomAlert((error.message || "Échec de la sauvegarde serveur.") + " Les données locales n'ont pas été remplacées.");
-            return;
-        }
-    }
-    db.teacherSchedule = sorted;
-    saveDB();
-    renderTeacherScheduleEditor();
-    await showCustomAlert("Horaire enregistré localement. Connectez un espace scolaire pour le sauvegarder sur le serveur.");
-}
-
 let teacherBellAudioContext = null;
+let teacherBellNotificationRequested = false;
 function unlockTeacherBellAudio() {
     try {
         const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-        if (!AudioContextClass) return;
-        if (!teacherBellAudioContext) teacherBellAudioContext = new AudioContextClass();
-        if (teacherBellAudioContext.state === 'suspended') teacherBellAudioContext.resume().catch(() => {});
-    } catch (_) { /* Le navigateur peut ne pas prendre en charge Web Audio. */ }
+        if (AudioContextClass) {
+            if (!teacherBellAudioContext) teacherBellAudioContext = new AudioContextClass();
+            if (teacherBellAudioContext.state === 'suspended') teacherBellAudioContext.resume().catch(() => {});
+        }
+        if (!teacherBellNotificationRequested && 'Notification' in window && Notification.permission === 'default') {
+            teacherBellNotificationRequested = true;
+            Notification.requestPermission().then(permission => {
+                const status = document.getElementById('bell-notification-status');
+                if (status) status.textContent = permission === 'granted'
+                    ? 'Notifications de fin de cours autorisées'
+                    : 'Gardez l’application ouverte pour entendre la sonnerie';
+            }).catch(() => {});
+        }
+    } catch (_) { /* Les API audio et notifications dépendent du navigateur. */ }
 }
 document.addEventListener('pointerdown', unlockTeacherBellAudio, { once: true, passive: true });
 document.addEventListener('keydown', unlockTeacherBellAudio, { once: true });
 
-function testSchoolBell() {
+function playTeacherBell() {
     try {
         unlockTeacherBellAudio();
-        if (!teacherBellAudioContext) throw new Error('Web Audio indisponible');
+        if (!teacherBellAudioContext) return false;
         const audioCtx = teacherBellAudioContext;
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(880, audioCtx.currentTime);
-        gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 1.5);
-        osc.connect(gain); gain.connect(audioCtx.destination);
-        osc.start(); osc.stop(audioCtx.currentTime + 1.5);
-    } catch(error) { console.warn('[ClassInk] Sonnerie indisponible:', error); }
+        [0, 0.45, 0.9].forEach(offset => {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(880, audioCtx.currentTime + offset);
+            gain.gain.setValueAtTime(0.0001, audioCtx.currentTime + offset);
+            gain.gain.exponentialRampToValueAtTime(0.22, audioCtx.currentTime + offset + 0.03);
+            gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + offset + 0.32);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start(audioCtx.currentTime + offset);
+            osc.stop(audioCtx.currentTime + offset + 0.34);
+        });
+        return true;
+    } catch (error) {
+        console.warn('[ClassInk] Sonnerie indisponible:', error);
+        return false;
+    }
 }
 
 function teacherScheduleTick() {
@@ -4488,22 +4445,50 @@ function teacherScheduleTick() {
     const nowTime = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
     const display = document.getElementById('live-timer-display');
     const entries = Array.isArray(db.teacherSchedule) ? db.teacherSchedule : [];
-    const current = entries.find(entry => entry.day === day && entry.start <= nowTime && nowTime < entry.end);
-    if (display) display.textContent = current ? '📚 ' + current.course + (current.room ? ' · ' + current.room : '') + ' · fin à ' + current.end : '🕒 ' + nowTime + ' · Aucun cours en cours';
+    const current = entries.find(entry => entry.day === day && entry.start && entry.end && entry.start <= nowTime && nowTime < entry.end);
+    if (display) display.textContent = current
+        ? current.course + (current.className ? ' · ' + current.className : '') + ' · fin à ' + current.end
+        : nowTime + ' · Aucun cours en cours';
     const nowStamp = now.getTime();
     entries.filter(entry => entry.day === day && entry.end).forEach(entry => {
-        const parts = entry.end.split(':').map(Number);
+        const parts = String(entry.end).split(':').map(Number);
         const end = new Date(now); end.setHours(parts[0] || 0, parts[1] || 0, 0, 0);
-        const key = now.toISOString().slice(0,10) + '|' + entry.id;
+        const key = now.toLocaleDateString('en-CA') + '|' + entry.id;
         if (end.getTime() > teacherScheduleLastTick && end.getTime() <= nowStamp && !teacherScheduleBellFired.has(key)) {
-            teacherScheduleBellFired.add(key); testSchoolBell();
-            if (display) display.textContent = '🔔 Fin du cours : ' + entry.course;
+            teacherScheduleBellFired.add(key);
+            playTeacherBell();
+            if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+                try { new Notification('Fin du cours', { body: entry.course + (entry.className ? ' · ' + entry.className : '') }); } catch (_) {}
+            }
+            if (display) display.textContent = 'Fin du cours : ' + entry.course;
         }
     });
     teacherScheduleLastTick = nowStamp;
 }
 setInterval(teacherScheduleTick, 1000);
 // Messagerie persistante entre l'enseignant connecté et la direction de son école.
+let teacherMessageContacts = [];
+async function loadAdminContacts() {
+    const select = document.getElementById('admin-chat-recipient');
+    if (!select) return;
+    const current = select.value || 'school';
+    const headers = cloudAuthHeaders();
+    if (!headers.Authorization) return;
+    try {
+        const response = await fetch(CLOUD_AUTH_URL + '/api/teacher/contacts', { headers, cache: 'no-store', credentials: 'omit' });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.status) throw new Error(result.detail || result.message || 'Liste des enseignants indisponible.');
+        teacherMessageContacts = Array.isArray(result.data) ? result.data : [];
+        select.innerHTML = '<option value="school">Établissement / Direction</option>' +
+            teacherMessageContacts.map(person => '<option value="teacher:' + safeHTML(person.email) + '">' + safeHTML(person.name) + '</option>').join('');
+        if (Array.from(select.options).some(option => option.value === current)) select.value = current;
+        else select.value = 'school';
+    } catch (error) {
+        const chatWindow = document.getElementById('admin-chat-messages');
+        if (chatWindow) chatWindow.textContent = error.message || 'Impossible de charger les destinataires.';
+    }
+}
+
 async function loadAdminMessages() {
     const chatWindow = document.getElementById('admin-chat-messages');
     if (!chatWindow) return;
@@ -4512,22 +4497,31 @@ async function loadAdminMessages() {
         chatWindow.textContent = "Connectez-vous à votre compte enseignant pour consulter les messages.";
         return;
     }
+    await loadAdminContacts();
+    const select = document.getElementById('admin-chat-recipient');
+    const target = select ? select.value : 'school';
+    const isTeacher = target.startsWith('teacher:');
+    const recipientEmail = isTeacher ? target.slice(8) : '';
+    const label = document.querySelector('#drawer-tab-chat .chat-recipient-label');
+    if (label) label.textContent = isTeacher ? 'Conversation privée entre enseignants' : 'Canal de communication avec la direction';
     chatWindow.textContent = "Chargement des messages…";
     try {
-        const response = await fetch('https://class-net-p.onrender.com/api/teacher/messages', {
-            method: 'GET', headers, cache: 'no-store'
+        const query = '?recipient_type=' + (isTeacher ? 'teacher' : 'school') +
+            (recipientEmail ? '&recipient_email=' + encodeURIComponent(recipientEmail) : '');
+        const response = await fetch(CLOUD_AUTH_URL + '/api/teacher/messages' + query, {
+            method: 'GET', headers, cache: 'no-store', credentials: 'omit'
         });
         const result = await response.json().catch(() => ({}));
         if (!response.ok || !result.status) throw new Error(result.detail || result.message || "Impossible de charger les messages.");
         const rows = Array.isArray(result.messages) ? result.messages : [];
         if (!rows.length) {
-            chatWindow.innerHTML = '<p style="color:var(--text-muted);font-size:.82rem;text-align:center;padding:14px">Aucun message. Vous pouvez écrire à la direction ci-dessous.</p>';
+            chatWindow.innerHTML = '<p style="color:var(--text-muted);font-size:.82rem;text-align:center;padding:14px">Aucun message dans cette conversation.</p>';
             return;
         }
         chatWindow.innerHTML = rows.map(row => {
             const mine = row.senderRole === 'teacher';
             const date = row.date ? new Date(row.date).toLocaleString('fr-FR') : '';
-            return '<article style="align-self:' + (mine ? 'flex-end' : 'flex-start') + ';background:' + (mine ? 'rgba(109,40,217,.1)' : 'var(--card-bg)') + ';padding:8px 10px;border-radius:8px;border:1px solid ' + (mine ? 'var(--primary)' : 'var(--border-color)') + ';font-size:.8rem;max-width:88%;white-space:pre-wrap;overflow-wrap:anywhere"><strong style="color:var(--primary)">' + safeHTML(row.senderName || (mine ? 'Moi' : 'Direction')) + ' :</strong> ' + safeHTML(row.message || '') + '<div style="font-size:.65rem;color:var(--text-muted);text-align:right;margin-top:4px">' + safeHTML(date) + '</div></article>';
+            return '<article style="align-self:' + (mine ? 'flex-end' : 'flex-start') + ';background:' + (mine ? 'rgba(109,40,217,.1)' : 'var(--card-bg)') + ';padding:8px 10px;border-radius:8px;border:1px solid ' + (mine ? 'var(--primary)' : 'var(--border-color)') + ';font-size:.8rem;max-width:88%;white-space:pre-wrap;overflow-wrap:anywhere"><strong style="color:var(--primary)">' + safeHTML(row.senderName || (mine ? 'Moi' : 'Correspondant')) + ' :</strong> ' + safeHTML(row.message || '') + '<div style="font-size:.65rem;color:var(--text-muted);text-align:right;margin-top:4px">' + safeHTML(date) + '</div></article>';
         }).join('');
         chatWindow.scrollTop = chatWindow.scrollHeight;
     } catch (error) {
@@ -4537,19 +4531,25 @@ async function loadAdminMessages() {
 
 async function sendAdminMessage() {
     const input = document.getElementById('admin-chat-input');
-    const text = input ? input.value.trim() : '';
-    if (!text) return;
+    const message = input ? input.value.trim() : '';
+    if (!message) return;
     const chatWindow = document.getElementById('admin-chat-messages');
     const headers = cloudAuthHeaders();
     if (!headers.Authorization) {
-        await showCustomAlert("Connectez-vous à votre compte enseignant avant d'écrire à la direction.");
+        await showCustomAlert("Connectez-vous à votre compte enseignant avant d'envoyer un message.");
         return;
     }
+    const select = document.getElementById('admin-chat-recipient');
+    const target = select ? select.value : 'school';
+    const isTeacher = target.startsWith('teacher:');
+    const recipientEmail = isTeacher ? target.slice(8) : '';
     const button = document.querySelector('#drawer-tab-chat button[onclick="sendAdminMessage()"]');
     if (button) { button.disabled = true; button.textContent = '…'; }
     try {
-        const response = await fetch('https://class-net-p.onrender.com/api/teacher/messages', {
-            method: 'POST', headers, body: JSON.stringify({ message: text }), cache: 'no-store'
+        const response = await fetch(CLOUD_AUTH_URL + '/api/teacher/messages', {
+            method: 'POST', headers,
+            body: JSON.stringify({ message, recipient_type: isTeacher ? 'teacher' : 'school', recipient_email: recipientEmail }),
+            cache: 'no-store', credentials: 'omit'
         });
         const result = await response.json().catch(() => ({}));
         if (!response.ok || !result.status) throw new Error(result.detail || result.message || "Message non envoyé.");
@@ -4558,7 +4558,7 @@ async function sendAdminMessage() {
     } catch (error) {
         await showCustomAlert(error.message || "Impossible d'envoyer le message.");
     } finally {
-        if (button) { button.disabled = false; button.textContent = '➤'; }
+        if (button) { button.disabled = false; button.textContent = 'Envoyer'; }
         if (chatWindow) chatWindow.scrollTop = chatWindow.scrollHeight;
     }
 }
