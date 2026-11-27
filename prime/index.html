@@ -1914,7 +1914,9 @@ body.theme-dark input::placeholder,body.theme-dark textarea::placeholder{color:v
                 <!-- Tranches horaires -->
                 <div class="settings-card">
                     <h2>Configuration des Tranches Horaires</h2>
+                    <p style="font-size:.82rem;color:var(--text-secondary);margin-bottom:.7rem;">Définissez les heures exactes de chaque cours dans l'ordre chronologique. Vous pouvez laisser une pause entre deux tranches.</p>
                     <div id="timeSlotsContainer" style="display: flex; flex-direction: column; gap: 0.6rem;"></div>
+                    <p id="horTimeSlotsStatus" role="status" aria-live="polite" style="font-size:.78rem;color:var(--text-secondary);margin-top:.6rem;">Les tranches horaires seront vérifiées avant la génération.</p>
                 </div>
 
                 <!-- Préférences Enseignants -->
@@ -1938,6 +1940,7 @@ body.theme-dark input::placeholder,body.theme-dark textarea::placeholder{color:v
                     </div>
                     <button class="btn-primary" onclick="printToolResult('horaire')" style="margin-left:0.5rem;">Exporter en PDF</button>
                 </nav>
+                <div id="horScheduleGenerationNotice" role="status" aria-live="polite" style="display:none;margin-top:.8rem;padding:.75rem;border-radius:8px;font-size:.85rem;"></div>
 
                 <div id="hor-view-enseignants" class="sub-view-content hidden" style="margin-top: 1rem;">
                     <div class="retractable-sidebar" id="horTeachersListSidebar"></div>
@@ -6171,12 +6174,29 @@ const HOR_DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
         function bpCollectSchedulePayload() {
             const jours = Math.max(1, Math.min(6, parseInt(document.getElementById('horJoursSemaine').value, 10) || 6));
             const heures = Math.max(1, Math.min(10, parseInt(document.getElementById('horHeuresJour').value, 10) || 6));
-            const slots = Array.from(document.querySelectorAll('#timeSlotsContainer .time-slot-row')).map((row, i) => ({
-                hour: i + 1, start: row.querySelector('.slot-start').value, end: row.querySelector('.slot-end').value
-            }));
-            if (slots.some(slot => !slot.start || !slot.end || slot.end <= slot.start)) {
-                return { error: "Définissez une heure de début et de fin valide pour chaque tranche." };
+            const slotRows = Array.from(document.querySelectorAll('#timeSlotsContainer .time-slot-row'));
+            if (slotRows.length !== heures) {
+                return { error: "Le nombre de tranches affichées ne correspond pas au nombre d'heures par jour. Modifiez puis validez le nombre d'heures." };
             }
+            const slots = slotRows.map((row, i) => ({
+                hour: i + 1,
+                start: String(row.querySelector('.slot-start')?.value || '').trim(),
+                end: String(row.querySelector('.slot-end')?.value || '').trim()
+            }));
+            let previousEnd = '';
+            for (const slot of slots) {
+                if (!/^([01]\\d|2[0-3]):[0-5]\\d$/.test(slot.start) ||
+                    !/^([01]\\d|2[0-3]):[0-5]\\d$/.test(slot.end) ||
+                    slot.end <= slot.start) {
+                    return { error: "Définissez une heure de début et de fin valide pour chaque tranche." };
+                }
+                if (previousEnd && slot.start < previousEnd) {
+                    return { error: "Les tranches doivent suivre l'ordre des heures de cours. La tranche " + slot.hour + " commence avant la fin de la précédente." };
+                }
+                previousEnd = slot.end;
+            }
+            const slotsStatus = document.getElementById('horTimeSlotsStatus');
+            if (slotsStatus) slotsStatus.textContent = slots.length + " tranche(s) valide(s), dans l'ordre chronologique.";
             const teachers = [];
             const seen = new Set();
             for (const card of document.querySelectorAll('.prof-config-card')) {
@@ -6243,12 +6263,18 @@ const HOR_DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
                 }, 60000);
                 if (!response.ok) return alert(await bpServerErrorMessage(response));
                 const result = await response.json();
-                if (!result.success) {
-                    return alert(result.message || "L'horaire est incomplet. Aucune version officielle n'a été publiée.");
-                }
-                if (!result.published) return alert("L'horaire a été généré mais sa publication officielle n'a pas été confirmée.");
+                const schedules = result && result.schedules ? result.schedules : {};
+                const hasPreview = Array.isArray(schedules.classes) && Array.isArray(schedules.teachers);
                 const names = {};
                 collected.teachers.forEach(t => names[t.teacher_id] = t.name);
+                if (!result.success) {
+                    if (!hasPreview) return alert(result.message || "L'horaire n'a pas pu être généré.");
+                    __lastSchedule = { result, jours: collected.jours, heures: collected.heures, slots: collected.slots, names };
+                    showScheduleResultsView();
+                    return alert((result.message || "La génération est incomplète.") +
+                        "\n\nUn aperçu des cours placés est affiché par classe et par enseignant. Il n'a pas été publié : corrigez les conflits et relancez la génération.");
+                }
+                if (!result.published) return alert("L'horaire a été généré mais sa publication officielle n'a pas été confirmée. Aucun horaire n'est présenté comme publié.");
                 __lastSchedule = { result, jours: collected.jours, heures: collected.heures, slots: collected.slots, names };
                 if (!appState.tools) appState.tools = {};
                 if (!appState.tools.horaire) appState.tools.horaire = {};
@@ -6265,7 +6291,6 @@ const HOR_DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
                     _managerSchedule: { config: { jours: collected.jours, heures: collected.heures }, slots: collected.slots, teachers: collected.teachers }
                 }];
                 saveState();
-                bpRenderSchedule();
                 showScheduleResultsView();
                 alert("Horaire publié. Il est disponible dans ClassInk App et ClassInk Manager, ainsi que dans Class-Ink Suivi pour les parents.");
             } catch (error) {
@@ -6318,16 +6343,22 @@ const HOR_DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
         function bpScheduleTableHTML(grid, cellFn) {
             const s = __lastSchedule;
             const days = HOR_DAYS.slice(0, s.jours);
-            let html = '<table class="tp-table"><thead><tr><th>Heure</th>' + days.map(d => '<th>' + d + '</th>').join('') + '</tr></thead><tbody>';
+            let html = '<div style="overflow-x:auto;"><table class="tp-table"><thead><tr><th>Tranche horaire</th>' + days.map(d => '<th>' + safeHTML(d) + '</th>').join('') + '</tr></thead><tbody>';
             for (let h = 1; h <= s.heures; h++) {
                 const slot = s.slots[h - 1] || {};
-                const when = slot.start && slot.end ? '<small>' + safeHTML(slot.start) + ' – ' + safeHTML(slot.end) + '</small>' : '';
-                html += '<tr><th>' + h + '<sup>ème</sup> H' + when + '</th>' + days.map(d => '<td class="tp-cell">' + cellFn(((grid || {})[d] || {})[String(h)]) + '</td>').join('') + '</tr>';
+                const ordinal = h === 1 ? '1re heure' : h + 'e heure';
+                const when = slot.start && slot.end ? '<small>' + safeHTML(slot.start) + ' – ' + safeHTML(slot.end) + '</small>' : '<small>Heure non définie</small>';
+                const cells = days.map(d => {
+                    const cell = (((grid || {})[d] || {})[String(h)]);
+                    const content = cellFn(cell);
+                    return '<td class="tp-cell">' + (content || '<span style="color:var(--text-secondary)">—</span>') + '</td>';
+                }).join('');
+                html += '<tr><th>' + ordinal + when + '</th>' + cells + '</tr>';
             }
-            return html + '</tbody></table>';
+            return html + '</tbody></table></div>';
         }
-        const bpClassCell = c => c ? '<strong>' + safeHTML(c.course) + '</strong><small>' + safeHTML(c.teacher) + ' — ' + safeHTML(c.room) + '</small>' : '';
-        const bpTeacherCell = c => c ? '<strong>' + safeHTML(c.course) + '</strong><small>' + safeHTML(c['class']) + '</small>' : '';
+        const bpClassCell = c => c ? '<strong>' + safeHTML(c.course || 'Cours') + '</strong><small>' + safeHTML(c.teacher || 'Enseignant non renseigné') + (c.room ? ' · ' + safeHTML(c.room) : '') + '</small>' : '';
+        const bpTeacherCell = c => c ? '<strong>' + safeHTML(c.course || 'Cours') + '</strong><small>' + safeHTML(c['class'] || (Array.isArray(c.classes) ? c.classes.join(' + ') : 'Classe non renseignée')) + (c.room ? ' · ' + safeHTML(c.room) : '') + '</small>' : '';
 
         window.bpSelectScheduleClass = function(index) {
             const entry = __lastSchedule && __lastSchedule.result.schedules.classes[index];
@@ -6369,12 +6400,45 @@ const HOR_DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
         function bpRenderSchedule() {
             if (!bpRestorePublishedSchedule()) return;
             const s = __lastSchedule;
+            const schedules = s.result && s.result.schedules ? s.result.schedules : {};
+            const classes = Array.isArray(schedules.classes) ? schedules.classes : [];
+            const teachers = Array.isArray(schedules.teachers) ? schedules.teachers : [];
             const classesBar = document.getElementById('horClassesListSidebar');
             const teachersBar = document.getElementById('horTeachersListSidebar');
-            classesBar.innerHTML = s.result.schedules.classes.map((c, i) => '<button type="button" class="btn-secondary" style="display:block; width:100%; margin-bottom:0.4rem; text-align:left;" onclick="bpSelectScheduleClass(' + i + ')">' + safeHTML(c.class_name) + '</button>').join('');
-            teachersBar.innerHTML = s.result.schedules.teachers.map((t, i) => '<button type="button" class="btn-secondary" style="display:block; width:100%; margin-bottom:0.4rem; text-align:left;" onclick="bpSelectScheduleTeacher(' + i + ')">' + safeHTML(s.names[t.teacher_id] || t.teacher_id) + '</button>').join('');
-            if (s.result.schedules.classes.length) bpSelectScheduleClass(0);
-            if (s.result.schedules.teachers.length) bpSelectScheduleTeacher(0);
+            if (classesBar) classesBar.innerHTML = classes.length
+                ? classes.map((c, i) => '<button type="button" class="btn-secondary" style="display:block;width:100%;margin-bottom:.4rem;text-align:left;" onclick="bpSelectScheduleClass(' + i + ')">' + safeHTML(c.class_name || 'Classe') + '</button>').join('')
+                : '<p style="font-size:.82rem;color:var(--text-secondary)">Aucune classe n’a reçu de cours dans cette génération.</p>';
+            if (teachersBar) teachersBar.innerHTML = teachers.length
+                ? teachers.map((t, i) => '<button type="button" class="btn-secondary" style="display:block;width:100%;margin-bottom:.4rem;text-align:left;" onclick="bpSelectScheduleTeacher(' + i + ')">' + safeHTML(s.names[t.teacher_id] || t.teacher_id || 'Enseignant') + '</button>').join('')
+                : '<p style="font-size:.82rem;color:var(--text-secondary)">Aucun enseignant disponible dans cette génération.</p>';
+            updateScheduleResultTables(s.jours, s.heures);
+            const notice = document.getElementById('horScheduleGenerationNotice');
+            if (notice) {
+                notice.style.display = 'block';
+                if (s.result.success && s.result.published) {
+                    notice.style.background = 'rgba(22,163,74,.10)';
+                    notice.style.color = 'var(--success-color)';
+                    notice.textContent = 'Horaire complet publié officiellement. Les vues ci-dessous affichent les cours par classe et par enseignant.';
+                } else {
+                    notice.style.background = 'rgba(217,119,6,.12)';
+                    notice.style.color = 'var(--text-primary)';
+                    notice.textContent = 'Aperçu incomplet : ' + Number(s.result.unassigned_count || 0) + ' créneau(x) de cours n’ont pas été placés. Cet aperçu n’a pas été publié. Ajustez les disponibilités ou les affectations avant de générer à nouveau.';
+                }
+            }
+            if (classes.length) bpSelectScheduleClass(0);
+            else {
+                const title = document.getElementById('horSelectedClassName');
+                const area = document.getElementById('horClassesDetailArea');
+                if (title) title.textContent = 'Aucune classe';
+                if (area) area.querySelector('table').outerHTML = '<p style="color:var(--text-secondary)">Aucun cours à afficher.</p>';
+            }
+            if (teachers.length) bpSelectScheduleTeacher(0);
+            else {
+                const title = document.getElementById('horSelectedTeacherName');
+                const area = document.getElementById('horTeachersDetailArea');
+                if (title) title.textContent = 'Aucun enseignant';
+                if (area) area.querySelector('table').outerHTML = '<p style="color:var(--text-secondary)">Aucun cours à afficher.</p>';
+            }
         }
 
         function bpScheduleSheetsHTML() {
@@ -6411,9 +6475,10 @@ const HOR_DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
 
         window.showScheduleResultsView = function() {
             if (!bpRestorePublishedSchedule()) {
-                return showCustomAlert("Aucun horaire officiel n'a encore été publié par cet établissement.");
+                return showCustomAlert("Aucun horaire généré n'est disponible. Configurez les tranches et les affectations, puis lancez la génération.");
             }
             bpRenderSchedule();
+            switchHoraireResultSubView('classes');
             document.getElementById('horConfigArea').classList.add('hidden');
             document.getElementById('horResultsArea').classList.remove('hidden');
         };
@@ -6424,12 +6489,15 @@ const HOR_DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
         };
 
         window.switchHoraireResultSubView = function(view) {
-            const isClasses = view === 'classes';
+            const isClasses = view !== 'enseignants';
             document.getElementById('btnHorResultClasses').classList.toggle('active', isClasses);
             document.getElementById('btnHorResultEnseignants').classList.toggle('active', !isClasses);
-            document.getElementById('hor-view-classes').classList.toggle('active', isClasses);
-            document.getElementById('hor-view-enseignants').classList.toggle('active', !isClasses);
-            document.getElementById('hor-view-enseignants').classList.remove('hidden');
+            const classesView = document.getElementById('hor-view-classes');
+            const teachersView = document.getElementById('hor-view-enseignants');
+            classesView.classList.toggle('active', isClasses);
+            teachersView.classList.toggle('active', !isClasses);
+            classesView.classList.toggle('hidden', !isClasses);
+            teachersView.classList.toggle('hidden', isClasses);
         };
 
         // INITIALISATION DES MODULES
@@ -6437,6 +6505,8 @@ const HOR_DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
             initPresenceModule();
             populateMixageTeacherSelect();
             addSalleCard();
+            // Les créneaux doivent exister dès l'ouverture, sans attendre une modification des paramètres.
+            updateHoraireStructure();
             addTeacherHoraireConfig();
         }); 
 
@@ -6452,29 +6522,30 @@ window.addCourseRowToTeacher = function(btn) {
     if (teacherSelect && !teacherSelect.value) teacherSelect.focus();
 };
 
-// Générateur dynamique des tranches horaires
+// Générateur dynamique des tranches horaires : chaque rangée reste liée à son numéro d'heure.
 function renderTimeSlotsDynamic(heuresCount) {
     const container = document.getElementById('timeSlotsContainer');
     if (!container) return;
-    
-    const existingSlots = [];
-    container.querySelectorAll('.time-slot-row').forEach(row => {
-        const start = row.querySelector('.slot-start')?.value || '';
-        const end = row.querySelector('.slot-end')?.value || '';
-        existingSlots.push({ start, end });
-    });
-
+    const count = Math.max(1, Math.min(10, Number(heuresCount) || 6));
+    const existingSlots = Array.from(container.querySelectorAll('.time-slot-row')).map(row => ({
+        start: row.querySelector('.slot-start')?.value || '',
+        end: row.querySelector('.slot-end')?.value || ''
+    }));
     container.innerHTML = '';
-    for (let i = 1; i <= heuresCount; i++) {
+    for (let i = 1; i <= count; i++) {
         const slot = existingSlots[i - 1] || { start: '', end: '' };
         const row = document.createElement('div');
         row.className = 'grid-2col time-slot-row';
+        row.dataset.hour = String(i);
         row.innerHTML = `
-            <span><strong>${safeHTML(i)}ème Heure</strong></span>
-            <div style="display:flex; gap:0.5rem; align-items:center;">
-                <input type="time" class="form-control slot-start" value="${safeHTML(slot.start)}">
+            <div style="display:flex;flex-direction:column;gap:.2rem">
+                <strong>${i === 1 ? '1re heure' : safeHTML(i) + 'e heure'}</strong>
+                <small style="color:var(--text-secondary)">Tranche ${safeHTML(i)}</small>
+            </div>
+            <div style="display:flex;gap:.5rem;align-items:center;min-width:0">
+                <label style="flex:1;min-width:0"><small>Début</small><input type="time" aria-label="Début de la tranche ${safeHTML(i)}" class="form-control slot-start" value="${safeHTML(slot.start)}"></label>
                 <span>à</span>
-                <input type="time" class="form-control slot-end" value="${safeHTML(slot.end)}">
+                <label style="flex:1;min-width:0"><small>Fin</small><input type="time" aria-label="Fin de la tranche ${safeHTML(i)}" class="form-control slot-end" value="${safeHTML(slot.end)}"></label>
             </div>
         `;
         container.appendChild(row);
