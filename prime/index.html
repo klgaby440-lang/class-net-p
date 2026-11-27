@@ -6532,7 +6532,7 @@ const HOR_DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
             if (!entry) return;
             const title = document.getElementById('horSelectedTeacherName');
             const mount = document.getElementById('horTeacherGridMount');
-            if (title) title.textContent = __lastSchedule.names[entry.teacher_id] || entry.name || entry.teacher_id || 'Enseignant';
+            if (title) title.textContent = entry.teacher_name || __lastSchedule.names[entry.teacher_id] || entry.name || entry.teacher_id || 'Enseignant';
             if (mount) mount.innerHTML = bpScheduleTableHTML(entry.grid, bpTeacherCell);
         };
 
@@ -6665,7 +6665,7 @@ const HOR_DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
                 ? classes.map((entry, index) => '<button type="button" class="btn-secondary" style="display:block;width:100%;margin-bottom:.4rem;text-align:left;" onclick="bpSelectScheduleClass(' + index + ')">' + safeHTML(entry.class_name || 'Classe') + '</button>').join('')
                 : '<p style="font-size:.82rem;color:var(--text-secondary)">Aucune classe n’a reçu de cours dans cet exemplaire.</p>';
             if (teachersBar) teachersBar.innerHTML = teachers.length
-                ? teachers.map((entry, index) => '<button type="button" class="btn-secondary" style="display:block;width:100%;margin-bottom:.4rem;text-align:left;" onclick="bpSelectScheduleTeacher(' + index + ')">' + safeHTML(schedule.names[entry.teacher_id] || entry.name || entry.teacher_id || 'Enseignant') + '</button>').join('')
+                ? teachers.map((entry, index) => '<button type="button" class="btn-secondary" style="display:block;width:100%;margin-bottom:.4rem;text-align:left;" onclick="bpSelectScheduleTeacher(' + index + ')">' + safeHTML(entry.teacher_name || schedule.names[entry.teacher_id] || entry.name || entry.teacher_id || 'Enseignant') + '</button>').join('')
                 : '<p style="font-size:.82rem;color:var(--text-secondary)">Aucun enseignant n’est disponible dans cet exemplaire.</p>';
 
             updateScheduleResultTables(schedule.jours, schedule.heures);
