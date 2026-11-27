@@ -5935,13 +5935,37 @@ async function bpPushClassBulletin(cls) {
             }).join('');
         }
 
+        function bpRestorePublishedMixage() {
+            if (__lastMixage && __lastMixage.result && Array.isArray(__lastMixage.result.seating_plans)) return true;
+            const sessions = Array.isArray(appState.mixageSessions) ? appState.mixageSessions : [];
+            const session = sessions.length ? sessions[sessions.length - 1] : null;
+            if (!session || !Array.isArray(session.seating_plans)) return false;
+            __lastMixage = {
+                session,
+                rooms: Array.isArray(session.rooms) ? session.rooms : [],
+                targetClasses: Array.isArray(session.class_ids) ? session.class_ids : [],
+                result: {
+                    success: true,
+                    allocation_id: session.id,
+                    seating_plans: session.seating_plans,
+                    total_mixed: session.total_mixed || 0,
+                    unassigned_students: session.unassigned_students || 0
+                }
+            };
+            return true;
+        }
+
         function bpRenderMixage() {
-            if (!__lastMixage) return;
+            if (!bpRestorePublishedMixage()) return;
             document.getElementById('mix-view-classes').innerHTML = bpMixageClassesHTML(__lastMixage.result);
             document.getElementById('mix-view-salles').innerHTML = bpMixageRoomsHTML(__lastMixage.result, __lastMixage.rooms);
         }
 
         window.showMixageResultsView = function() {
+            if (!bpRestorePublishedMixage()) {
+                return showCustomAlert("Aucune session de mixage enregistrée sur le serveur.");
+            }
+            bpRenderMixage();
             document.getElementById('mixConfigArea').classList.add('hidden');
             document.getElementById('mixResultsArea').classList.remove('hidden');
         };
@@ -6307,8 +6331,31 @@ const HOR_DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
             area.querySelector('table').outerHTML = bpScheduleTableHTML(entry.grid, bpTeacherCell);
         };
 
+        function bpRestorePublishedSchedule() {
+            if (__lastSchedule && __lastSchedule.result && __lastSchedule.result.schedules) return true;
+            const saved = appState.managerSchedule;
+            const result = saved && saved.result;
+            if (!result || !result.schedules || !Array.isArray(result.schedules.classes)) return false;
+            const names = {};
+            (saved.teachers || []).forEach(teacher => {
+                const known = (appState.teachers || []).find(item =>
+                    String(item.uniqueId) === String(teacher.teacher_id) ||
+                    String(item.email || '') === String(teacher.teacher_email || '')
+                );
+                names[teacher.teacher_id] = teacher.name || (known && known.name) || teacher.teacher_id;
+            });
+            __lastSchedule = {
+                result,
+                jours: Number(saved.config && saved.config.jours) || 6,
+                heures: Number(saved.config && saved.config.heures) || 6,
+                slots: Array.isArray(saved.slots) ? saved.slots : [],
+                names
+            };
+            return true;
+        }
+
         function bpRenderSchedule() {
-            if (!__lastSchedule) return;
+            if (!bpRestorePublishedSchedule()) return;
             const s = __lastSchedule;
             const classesBar = document.getElementById('horClassesListSidebar');
             const teachersBar = document.getElementById('horTeachersListSidebar');
@@ -6351,6 +6398,10 @@ const HOR_DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
         };
 
         window.showScheduleResultsView = function() {
+            if (!bpRestorePublishedSchedule()) {
+                return showCustomAlert("Aucun horaire officiel n'a encore été publié par cet établissement.");
+            }
+            bpRenderSchedule();
             document.getElementById('horConfigArea').classList.add('hidden');
             document.getElementById('horResultsArea').classList.remove('hidden');
         };
