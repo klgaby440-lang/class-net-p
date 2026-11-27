@@ -327,7 +327,7 @@ function renderSchedule() {
   }, 0);
   return Math.max(max, maximum);
  }, 0);
- const maxHours = Math.max(configuredHours, configuredSlots.length, usedHours);
+ const maxHours = Math.max(1, Math.min(10, Math.max(configuredHours, configuredSlots.length, usedHours) || 6));
 
  const teacher = view === 'teacher'
   ? (teachers.find(item => String(item.uniqueId) === String(entry.teacher_id))?.name || entry.teacher_name || entry.teacher_id || 'Enseignant')
