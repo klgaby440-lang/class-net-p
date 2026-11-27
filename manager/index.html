@@ -280,7 +280,82 @@ async function refreshManagerMixages(){
  }catch(error){$('#mixageList').innerHTML='<div class="card empty-state">'+safe(error.message||'Sessions de mixage indisponibles.')+'</div>';}
  finally{if(button){button.disabled=false;button.textContent='Actualiser les sessions';}}
 }
-function renderSchedule(){const view=$('#scheduleView').value,select=$('#scheduleClass');const entries=view==='class'?(managerSchedule?.result?.schedules?.classes||[]):(managerSchedule?.result?.schedules?.teachers||[]);const old=select.value;select.innerHTML=entries.map((x,i)=>`<option value="${i}">${safe(view==='class'?x.class_name:(teachers.find(t=>String(t.uniqueId)===String(x.teacher_id))?.name||x.teacher_id))}</option>`).join('');if(!entries.length){$('#scheduleTitle').textContent='Aucun horaire disponible';$('#scheduleSubtitle').textContent='Aucun horaire n’a été publié depuis PrimeInk.';$('#scheduleStatus').textContent='Non publié';$('#scheduleHead').innerHTML='';$('#scheduleBody').innerHTML='';$('#scheduleEmpty').hidden=false;$('#scheduleEmpty').innerHTML='<strong>Aucun horaire enregistré sur le serveur.</strong>Générez un horaire dans PrimeInk puis publiez-le pour le rendre visible ici.';select.disabled=true;return;}select.disabled=false;if(old&&Number(old)<entries.length)select.value=old;const entry=entries[Number(select.value)||0],grid=entry.grid||{},days=Object.keys(grid);const maxHours=Math.max(0,...days.map(d=>Object.keys(grid[d]||{}).map(Number).filter(Number.isFinite).reduce((a,b)=>Math.max(a,b),0)));const slots=managerSchedule.slots||[];$('#scheduleTitle').textContent=view==='class'?(entry.class_name||'Horaire de classe'):(teachers.find(t=>String(t.uniqueId)===String(entry.teacher_id))?.name||'Horaire enseignant');$('#scheduleSubtitle').textContent=`Année ${managerSchedule.academicYear||managerData?.school?.schoolYear||'non précisée'} · Généré le ${managerSchedule.generatedAt?new Date(managerSchedule.generatedAt).toLocaleString('fr-FR'):'date inconnue'}`;$('#scheduleStatus').textContent='Publié';$('#scheduleEmpty').hidden=true;$('#scheduleHead').innerHTML='<tr><th>Heure</th>'+days.map(d=>`<th>${safe(d)}</th>`).join('')+'</tr>';let rows='';for(let h=1;h<=maxHours;h++){const slot=slots[h-1]||{},time=[slot.start,slot.end].filter(Boolean).join(' – ');rows+=`<tr><th>${h}e heure${time?`<small style="display:block;color:var(--muted)">${safe(time)}</small>`:''}</th>`+days.map(d=>{const cell=(grid[d]||{})[String(h)];if(!cell)return '<td></td>';const main=view==='class'?cell.course:cell.course;const sub=view==='class'?`${cell.teacher||''} · ${cell.room||''}`:cell.class||'';return `<td><strong>${safe(main||'')}</strong><small style="display:block;color:var(--muted)">${safe(sub)}</small></td>`}).join('')+'</tr>';}$('#scheduleBody').innerHTML=rows||'<tr><td colspan="7" class="empty-state">La grille ne contient aucun créneau.</td></tr>';}
+function renderSchedule() {
+ const view = $('#scheduleView').value;
+ const select = $('#scheduleClass');
+ const schedules = managerSchedule && managerSchedule.result && managerSchedule.result.schedules
+  ? managerSchedule.result.schedules : {};
+ const entries = view === 'class'
+  ? (Array.isArray(schedules.classes) ? schedules.classes : [])
+  : (Array.isArray(schedules.teachers) ? schedules.teachers : []);
+ const previousSelection = select.value;
+ select.innerHTML = entries.map((entry, index) => {
+  const label = view === 'class'
+   ? (entry.class_name || 'Classe')
+   : (teachers.find(item => String(item.uniqueId) === String(entry.teacher_id))?.name || entry.teacher_name || entry.teacher_id || 'Enseignant');
+  return '<option value="' + index + '">' + safe(label) + '</option>';
+ }).join('');
+
+ if (!entries.length) {
+  $('#scheduleTitle').textContent = 'Aucun horaire disponible';
+  $('#scheduleSubtitle').textContent = 'Aucun horaire n’a été publié depuis PrimeInk.';
+  $('#scheduleStatus').textContent = 'Non publié';
+  $('#scheduleHead').innerHTML = '';
+  $('#scheduleBody').innerHTML = '';
+  $('#scheduleEmpty').hidden = false;
+  $('#scheduleEmpty').innerHTML = '<strong>Aucun horaire enregistré sur le serveur.</strong>Générez un horaire dans PrimeInk puis publiez-le pour le rendre visible ici.';
+  select.disabled = true;
+  return;
+ }
+
+ select.disabled = false;
+ if (previousSelection !== '' && Number(previousSelection) < entries.length) select.value = previousSelection;
+
+ const entry = entries[Number(select.value) || 0];
+ const grid = entry && entry.grid && typeof entry.grid === 'object' ? entry.grid : {};
+ const days = Object.keys(grid);
+ const configuredSlots = Array.isArray(managerSchedule.slots) ? managerSchedule.slots : [];
+ const configuredHours = Number(managerSchedule.config && managerSchedule.config.heures) || 0;
+ const usedHours = days.reduce((max, day) => {
+  const dayGrid = grid[day] && typeof grid[day] === 'object' ? grid[day] : {};
+  const maximum = Object.keys(dayGrid).reduce((dayMax, hour) => {
+   const number = Number(hour);
+   return Number.isInteger(number) && number > dayMax ? number : dayMax;
+  }, 0);
+  return Math.max(max, maximum);
+ }, 0);
+ const maxHours = Math.max(configuredHours, configuredSlots.length, usedHours);
+
+ const teacher = view === 'teacher'
+  ? (teachers.find(item => String(item.uniqueId) === String(entry.teacher_id))?.name || entry.teacher_name || entry.teacher_id || 'Enseignant')
+  : '';
+ $('#scheduleTitle').textContent = view === 'class' ? (entry.class_name || 'Horaire de classe') : teacher;
+ $('#scheduleSubtitle').textContent = 'Année ' + (managerSchedule.academicYear || (managerData && managerData.school && managerData.school.schoolYear) || 'non précisée') +
+  ' · Généré le ' + (managerSchedule.generatedAt ? new Date(managerSchedule.generatedAt).toLocaleString('fr-FR') : 'date inconnue');
+ $('#scheduleStatus').textContent = 'Publié';
+ $('#scheduleEmpty').hidden = true;
+ $('#scheduleHead').innerHTML = '<tr><th>Tranche horaire</th>' + days.map(day => '<th>' + safe(day) + '</th>').join('') + '</tr>';
+
+ let rows = '';
+ for (let hour = 1; hour <= maxHours; hour++) {
+  const slot = configuredSlots.find(item => Number(item && item.hour) === hour) || configuredSlots[hour - 1] || {};
+  const start = String(slot.start || '');
+  const end = String(slot.end || '');
+  const time = start && end ? start + ' – ' + end : (start || end);
+  const ordinal = hour === 1 ? '1re heure' : hour + 'e heure';
+  rows += '<tr><th>' + ordinal + (time ? '<small style="display:block;color:var(--muted)">' + safe(time) + '</small>' : '<small style="display:block;color:var(--muted)">Horaire non défini</small>') + '</th>';
+  rows += days.map(day => {
+   const cell = (grid[day] || {})[String(hour)];
+   if (!cell) return '<td><span style="color:var(--muted)">—</span></td>';
+   const course = cell.course || 'Cours non renseigné';
+   const detail = view === 'class'
+    ? [cell.teacher || 'Enseignant non renseigné', cell.room].filter(Boolean).join(' · ')
+    : (cell['class'] || (Array.isArray(cell.classes) ? cell.classes.join(' + ') : '') || 'Classe non renseignée');
+   return '<td><strong>' + safe(course) + '</strong><small style="display:block;color:var(--muted)">' + safe(detail) + '</small></td>';
+  }).join('') + '</tr>';
+ }
+ $('#scheduleBody').innerHTML = rows || '<tr><td colspan="' + (days.length + 1) + '" class="empty-state">Aucun créneau configuré pour cet horaire.</td></tr>';
+}
 function renderBlocked(){const term=$('#blockedSearch').value.trim().toLowerCase(),reason=$('#blockedReason').value;const list=students.filter(s=>!s.suiviResultsAllowed&&(reason==='Tous'||deriveBlockedReason(s)===reason)&&(fullName(s)+' '+className(s.classId)+' '+(s.suiviCode||'')).toLowerCase().includes(term));$('#blockedHeaderCount').textContent=`${students.filter(s=>!s.suiviResultsAllowed).length} accès bloqué(s)`;$('#blockedList').innerHTML=list.map(s=>{const why=deriveBlockedReason(s),label=why==='individual'?'Autorisation individuelle fermée':'Une règle scolaire bloque encore l’accès';return `<article class="card blocked-card" data-student="${safe(s.id)}"><div class="blocked-icon">⌑</div><div class="blocked-info"><strong>${safe(fullName(s))}</strong><small>${safe(className(s.classId))} · ${safe(s.suiviCode||'Code Suivi absent')}</small><div style="margin-top:5px"><span class="status bad">${safe(label)}</span></div></div><div class="blocked-side"><small>Consultation uniquement</small><button class="text-link" type="button">Détails</button></div></article>`}).join('')||'<div class="card empty-state"><strong>Aucun accès bloqué</strong>Tous les élèves autorisés sont visibles dans Class-Ink Suivi.</div>';$('#blockedList').querySelectorAll('[data-student]').forEach(el=>el.addEventListener('click',()=>studentDetails(el.dataset.student)));}
 function renderTeachers(){const term=$('#teacherSearch').value.trim().toLowerCase(),status=$('#teacherStatus').value;const list=teachers.filter(t=>(status==='Tous'||String(t.status||'Non renseigné')===status)&&(`${t.name} ${t.subject} ${t.uniqueId}`).toLowerCase().includes(term));$('#teacherCount').textContent=`${list.length} enseignant(s)`;$('#teacherGrid').innerHTML=list.map(t=>{const assignments=classes.filter(c=>(c.titulaire||'').trim().toLowerCase()===(t.name||'').trim().toLowerCase()).map(c=>c.name);const subjects=[...new Set(courses.filter(c=>(c.titulaire||'').trim().toLowerCase()===(t.name||'').trim().toLowerCase()).map(c=>c.name))];const detail=[...assignments,...subjects].join(' · ')||'Affectation non renseignée';return `<article class="card teacher-card" data-teacher="${safe(t.uniqueId)}"><div class="teacher-avatar">${safe(initials(t.name))}</div><div><strong>${safe(t.name||'Nom non renseigné')}</strong><small>${safe(t.subject||'Matière non renseignée')}</small><small>${safe(detail)}</small></div><span class="status ${String(t.status).toLowerCase()==='actif'?'ok':'neutral'}" style="margin-left:auto">${safe(t.status||'Non renseigné')}</span></article>`}).join('')||'<div class="card empty-state">Aucun enseignant ne correspond au filtre.</div>';$('#teacherGrid').querySelectorAll('[data-teacher]').forEach(el=>el.addEventListener('click',()=>{const t=teachers.find(x=>String(x.uniqueId)===el.dataset.teacher);if(!t)return;const as=classes.filter(c=>(c.titulaire||'').toLowerCase()===(t.name||'').toLowerCase());const cs=courses.filter(c=>(c.titulaire||'').toLowerCase()===(t.name||'').toLowerCase());openModal(t.name||'Enseignant','Fiche enseignant',`<div class="detail-grid"><div class="detail-item"><small>Identifiant</small><strong>${safe(t.uniqueId||'—')}</strong></div><div class="detail-item"><small>Statut</small><strong>${safe(t.status||'Non renseigné')}</strong></div><div class="detail-item"><small>Matière</small><strong>${safe(t.subject||'Non renseignée')}</strong></div><div class="detail-item"><small>Classes titulaires</small><strong>${as.length?safe(as.map(x=>x.name).join(', ')):'Non renseigné'}</strong></div><div class="detail-item" style="grid-column:1/-1"><small>Cours explicitement associés</small><strong>${cs.length?safe(cs.map(x=>x.name).join(', ')):'Non renseigné'}</strong></div></div><div class="modal-note">Consultation uniquement. Les affectations qui ne figurent pas dans la base ne sont pas déduites.</div>`)}));}
 function renderSchool(){const s=managerData.school||{},rows=[['Nom officiel',s.name],['Identifiant',s.id],['Code établissement',s.code],['Année scolaire',s.schoolYear],['Province',s.province],['Ville',s.city],['Commune',s.commune],['Responsable',s.responsable],['Téléphone',s.phone],['E-mail',s.email],['Adresse physique',s.address],['Chef d’établissement',s.headName],['Classes enregistrées',classes.length],['Élèves enregistrés',students.length],['Enseignants enregistrés',teachers.length]];const halves=[rows.slice(0,8),rows.slice(8)];$('#schoolInfoGrid').innerHTML=halves.map((group,i)=>`<article class="card info-card"><h3>${i===0?'Identité & localisation':'Contacts & effectifs'}</h3>${group.map(([k,v])=>`<div class="info-row"><span>${safe(k)}</span><strong>${safe(v||'Non renseigné')}</strong></div>`).join('')}</article>`).join('');}
