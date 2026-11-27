@@ -4803,7 +4803,7 @@ def is_suivi_results_allowed(db: Session, school_id: str, student: SchoolStudent
 SCHEDULE_DAY_NAMES = ("Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi")
 
 
-def published_schedule_table_metadata(published: dict, grid: dict | None = None) -> dict:
+def published_schedule_table_metadata(published: dict, grid: Optional[dict] = None) -> dict:
     """Fournit les jours et tranches configurés, même lorsqu'une case du tableau est vide."""
     published = published if isinstance(published, dict) else {}
     config = published.get("config") if isinstance(published.get("config"), dict) else {}
