@@ -6506,8 +6506,11 @@ def generate_optimized_schedule(payload: ScheduleGenerationRequest, db: Session 
         teacher_by_id[f"prof_{row.id}"] = row
 
     config = payload.config if isinstance(payload.config, dict) else {}
-    days = max(1, min(6, int(config.get("jours_travail", 6) or 6)))
-    hours_per_day = max(1, min(10, int(config.get("heures_par_jour", 6) or 6)))
+    try:
+        days = max(1, min(6, int(config.get("jours_travail", 6) or 6)))
+        hours_per_day = max(1, min(10, int(config.get("heures_par_jour", 6) or 6)))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=422, detail="Le nombre de jours ou d'heures par jour est invalide.")
     if not isinstance(payload.time_slots, list) or len(payload.time_slots) != hours_per_day:
         raise HTTPException(status_code=422, detail="Définissez une tranche horaire valide pour chaque heure de cours.")
     seen_slots = []
