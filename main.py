@@ -6514,8 +6514,8 @@ def generate_optimized_schedule(payload: ScheduleGenerationRequest, db: Session 
         raise HTTPException(status_code=422, detail="Le nombre de jours ou d'heures par jour est invalide.")
     if not isinstance(payload.time_slots, list) or len(payload.time_slots) != hours_per_day:
         raise HTTPException(status_code=422, detail="Définissez une tranche horaire valide pour chaque heure de cours.")
-    seen_slots = []
     clean_slots = []
+    previous_end = None
     for index, slot in enumerate(payload.time_slots, start=1):
         if not isinstance(slot, dict):
             raise HTTPException(status_code=422, detail="Une tranche horaire est invalide.")
@@ -6523,10 +6523,10 @@ def generate_optimized_schedule(payload: ScheduleGenerationRequest, db: Session 
         end = str(slot.get("end") or "").strip()
         if not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", start) or not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", end) or end <= start:
             raise HTTPException(status_code=422, detail=f"Renseignez correctement le début et la fin de la {index}e heure.")
-        if any(not (end <= previous[0] or start >= previous[1]) for previous in seen_slots):
-            raise HTTPException(status_code=422, detail="Les tranches horaires se chevauchent.")
-        seen_slots.append((start, end))
+        if previous_end is not None and start < previous_end:
+            raise HTTPException(status_code=422, detail="Les tranches horaires doivent être classées dans l'ordre chronologique et ne peuvent pas se chevaucher.")
         clean_slots.append({"hour": index, "start": start, "end": end})
+        previous_end = end
 
     if not payload.teachers or len(payload.teachers) > 300:
         raise HTTPException(status_code=422, detail="Ajoutez au moins un enseignant avec ses affectations.")

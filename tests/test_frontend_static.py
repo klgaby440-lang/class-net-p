@@ -494,6 +494,25 @@ class FrontendStaticTests(unittest.TestCase):
 
 
 class TestNewFeatureStatic(unittest.TestCase):
+    def test_primeink_timetable_slots_initialize_validate_and_render_for_classes_and_teachers(self):
+        source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
+        self.assertIn("updateHoraireStructure();", source)
+        self.assertIn('id="timeSlotsContainer"', source)
+        self.assertIn('id="horTimeSlotsStatus"', source)
+        self.assertIn("slot.start < previousEnd", source)
+        self.assertIn("updateScheduleResultTables(s.jours, s.heures)", source)
+        self.assertIn('id="horClassGridMount"', source)
+        self.assertIn('id="horTeacherGridMount"', source)
+        self.assertIn("bpClassCell", source)
+        self.assertIn("bpTeacherCell", source)
+        self.assertIn("horScheduleGenerationNotice", source)
+        self.assertIn("Aperçu incomplet", source)
+
+        backend = (ROOT / "main.py").read_text(encoding="utf-8")
+        self.assertIn('previous_end = None', backend)
+        self.assertIn('start < previous_end', backend)
+        self.assertIn("Les tranches horaires doivent être classées dans l'ordre chronologique", backend)
+
     def test_primeink_palmares_uses_all_periods_school_scope_and_complete_grade_calculations(self):
         source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
         for marker in (
@@ -535,17 +554,20 @@ class TestNewFeatureStatic(unittest.TestCase):
         self.assertIn("localSpace !== serverSpace", source)
     
     
-    def test_teacher_schedule_is_saved_per_verified_school_space(self):
+    def test_teacher_schedule_is_published_per_verified_school_space(self):
         source = (ROOT / "main.py").read_text(encoding="utf-8")
-        self.assertIn('schedule_data = Column(JSON, nullable=False, default=list)', source)
         self.assertIn('@app.get("/api/teacher/schedule")', source)
         self.assertIn('@app.put("/api/teacher/schedule")', source)
-        self.assertIn('space.schedule_data = clean_entries', source)
-        self.assertIn('ALTER TABLE teacher_school_spaces ADD COLUMN IF NOT EXISTS schedule_data JSON', source)
+        self.assertIn('published = (school.pn_extra or {}).get("managerSchedule")', source)
+        self.assertIn('teacher_ids = {str(teacher.teacher_code or ""), f"prof_{teacher.id}", str(teacher.email)}', source)
+        self.assertIn('state["teacherSchedule"] = clean_entries', source)
+        self.assertIn('L\'horaire scolaire est publié par PrimeInk. L\'enseignant le consulte en lecture seule.', source)
         app = (ROOT / "app/index.html").read_text(encoding="utf-8")
         self.assertIn("/api/teacher/schedule", app)
         self.assertIn("loadTeacherScheduleFromServer", app)
-        self.assertIn("method: 'PUT'", app)
+        self.assertIn("method: 'GET'", app)
+        self.assertIn("renderTeacherScheduleEditor", app)
+        self.assertNotIn("function saveTeacherSchedule()", app)
 
     def test_quiz_data_and_schema_migrations_are_scoped_safely_by_school(self):
         source = (ROOT / "main.py").read_text(encoding="utf-8")
@@ -558,13 +580,17 @@ class TestNewFeatureStatic(unittest.TestCase):
         self.assertLess(add_grade_column, migrate_grades)
         self.assertLess(add_quiz_column, migrate_quizzes)
 
-    def test_classink_teacher_schedule_is_editable_and_drives_bell_timing(self):
+    def test_classink_teacher_schedule_is_read_only_and_drives_bell_timing(self):
         source = (ROOT / "app/index.html").read_text(encoding="utf-8")
-        self.assertIn('type="time" data-field="start"', source)
-        self.assertIn('type="time" data-field="end"', source)
-        self.assertIn("function saveTeacherSchedule()", source)
+        self.assertIn("Cet horaire est publié par l'établissement depuis PrimeInk", source)
+        self.assertIn("ne peut pas être modifié depuis l'espace enseignant", source)
+        self.assertIn("function loadTeacherScheduleFromServer", source)
+        self.assertIn("function renderTeacherScheduleEditor", source)
         self.assertIn("function teacherScheduleTick()", source)
         self.assertIn("entry.end", source)
+        self.assertNotIn('type="time" data-field="start"', source)
+        self.assertNotIn('type="time" data-field="end"', source)
+        self.assertNotIn("function saveTeacherSchedule()", source)
         self.assertNotIn("hours === '08' && minutes === '30'", source)
     
     
@@ -858,7 +884,8 @@ class TestAccountProfileThemeAndRelease(unittest.TestCase):
         privacy = (ROOT / "confidentialite/index.html").read_text(encoding="utf-8")
         for marker in (
             'id="updates"',
-            'Nouveautés — Mise à jour du 22 novembre 2026',
+            '<h2>Nouveautés</h2>',
+            '<time datetime="2026-11-22">22 novembre 2026</time>',
             "Présences synchronisées",
             "Communiqués destinés aux parents",
             "Llink connecté au contexte autorisé",
