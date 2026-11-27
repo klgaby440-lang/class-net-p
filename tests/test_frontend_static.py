@@ -659,7 +659,7 @@ class TestNewFeatureStatic(unittest.TestCase):
         self.assertIn("Tranche horaire", manager)
 
         backend = (ROOT / "main.py").read_text(encoding="utf-8")
-        self.assertIn("def published_schedule_table_metadata(published: dict, grid: dict | None = None)", backend)
+        self.assertIn("def published_schedule_table_metadata(published: dict, grid: Optional[dict] = None)", backend)
         self.assertIn('"days": list(SCHEDULE_DAY_NAMES[:day_count])', backend)
         self.assertIn('"slots": slots', backend)
         self.assertIn('"hours": hour_count', backend)
