@@ -2086,8 +2086,12 @@ def manager_publish_schedule(
         raise HTTPException(status_code=422, detail="Horaire manquant ou invalide.")
     result = schedule.get("result")
     schedules = result.get("schedules") if isinstance(result, dict) else None
-    if not isinstance(schedules, dict) or not isinstance(schedules.get("classes"), list):
+    if not isinstance(schedules, dict) or not isinstance(schedules.get("classes"), list) or not isinstance(schedules.get("teachers"), list):
         raise HTTPException(status_code=422, detail="Le résultat de l'horaire est incomplet.")
+    if result.get("success") is not True or int(result.get("unassigned_count") or 0) > 0:
+        raise HTTPException(status_code=422, detail="Seul un exemplaire complet, sans cours non placé, peut être publié.")
+    result = dict(result)
+    result["published"] = True
     try:
         serialized_size = len(json.dumps(schedule, ensure_ascii=False))
     except (TypeError, ValueError):
