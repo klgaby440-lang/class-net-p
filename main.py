@@ -6592,6 +6592,9 @@ def generate_optimized_schedule(payload: ScheduleGenerationRequest, db: Session 
     result = engine.generate()
     if not result.get("success"):
         return result
+    # Le statut de publication doit être conservé avec l'horaire serveur,
+    # pas seulement ajouté à la réponse HTTP après l'enregistrement.
+    result["published"] = True
     stored = {
         "academicYear": str(payload.academic_year or school.school_year or "")[:30],
         "generatedAt": result.get("generated_at") or datetime.utcnow().isoformat() + "Z",
@@ -6604,7 +6607,6 @@ def generate_optimized_schedule(payload: ScheduleGenerationRequest, db: Session 
     extra["managerSchedule"] = stored
     school.pn_extra = extra
     db.commit()
-    result["published"] = True
     return result
 
 
