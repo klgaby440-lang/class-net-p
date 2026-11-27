@@ -71,8 +71,9 @@ class ScheduleEngine:
     - Évite en priorité la dernière heure de chaque journée (heures de fatigue).
     - Garantit l'absence totale de conflits (double-booking prof ou classe).
     """
-    def __init__(self, config: Dict[str, Any], teachers: List[Dict[str, Any]]):
+    def __init__(self, config: Dict[str, Any], teachers: List[Dict[str, Any]], seed: Optional[int] = None):
         self.config = config
+        self.rng = random.Random(seed)
         self.jours_travail = config.get("jours_travail", 5)
         self.heures_par_jour = config.get("heures_par_jour", 6)
         self.heures_utilisables_max = max(1, self.heures_par_jour - 1)
@@ -148,7 +149,7 @@ class ScheduleEngine:
 
         # Tri MRV (Priorité absolue aux troncs communs impliquant le plus de classes)
         sorted_trunk = sorted(trunk_tasks, key=lambda x: len(x["classes"]), reverse=True)
-        random.shuffle(individual_tasks)
+        self.rng.shuffle(individual_tasks)
 
         return sorted_trunk + individual_tasks
 
@@ -167,6 +168,10 @@ class ScheduleEngine:
                 else:
                     fallback_slots.append((d, h_str))
 
+        # Chaque génération explore un ordre différent à l'intérieur des créneaux
+        # prioritaires, puis utilise les dernières heures en secours.
+        self.rng.shuffle(primary_slots)
+        self.rng.shuffle(fallback_slots)
         ordered_slots = primary_slots + fallback_slots
         unassigned_tasks = []
 
@@ -933,6 +938,7 @@ class ScheduleGenerationRequest(BaseModel):
     config: Dict[str, Any]
     time_slots: List[Dict[str, Any]]
     teachers: List[Dict[str, Any]]
+    exemplaires: int = 1
 
 # ---------------------------------------------------------
 # 4. SERVICES AUXILIAIRES
@@ -6488,7 +6494,7 @@ def get_primenet_data(school_id: str, db: Session = Depends(get_db), claims: dic
 
 @app.post("/api/schedule/generate")
 def generate_optimized_schedule(payload: ScheduleGenerationRequest, db: Session = Depends(get_db), claims: dict = Depends(require_active_school)):
-    """Génère puis publie l'unique horaire officiel de l'établissement à partir des affectations vérifiées."""
+    """Génère plusieurs propositions d'horaires ; aucune n'est publiée avant le choix de PrimeInk."""
     school_id = str(claims.get("school_id") or "")
     if str(payload.school_id or "") != school_id:
         raise HTTPException(status_code=403, detail="Accès refusé aux données d'une autre école.")
@@ -6588,26 +6594,55 @@ def generate_optimized_schedule(payload: ScheduleGenerationRequest, db: Session 
             "assigned_courses": assignments,
         })
 
-    engine = ScheduleEngine(config={"jours_travail": days, "heures_par_jour": hours_per_day}, teachers=clean_teachers)
-    result = engine.generate()
-    if not result.get("success"):
-        return result
-    # Le statut de publication doit être conservé avec l'horaire serveur,
-    # pas seulement ajouté à la réponse HTTP après l'enregistrement.
-    result["published"] = True
-    stored = {
-        "academicYear": str(payload.academic_year or school.school_year or "")[:30],
-        "generatedAt": result.get("generated_at") or datetime.utcnow().isoformat() + "Z",
-        "config": {"jours": days, "heures": hours_per_day},
-        "slots": clean_slots,
-        "teachers": clean_teachers,
-        "result": result,
+    try:
+        exemplaires = int(payload.exemplaires or 1)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=422, detail="Le nombre d'exemplaires doit être compris entre 1 et 5.")
+    if exemplaires < 1 or exemplaires > 5:
+        raise HTTPException(status_code=422, detail="Le nombre d'exemplaires doit être compris entre 1 et 5.")
+
+    engine_config = {"jours_travail": days, "heures_par_jour": hours_per_day}
+    candidates = []
+    fingerprints = set()
+    maximum_attempts = exemplaires * 12
+    for attempt in range(maximum_attempts):
+        engine = ScheduleEngine(
+            config=engine_config,
+            teachers=clean_teachers,
+            seed=random.SystemRandom().randrange(0, 2 ** 32),
+        )
+        candidate = engine.generate()
+        fingerprint = json.dumps(candidate.get("schedules") or {}, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        if fingerprint in fingerprints:
+            continue
+        fingerprints.add(fingerprint)
+        candidate["candidate_id"] = f"EX-{len(candidates) + 1}"
+        candidate["exemplaire"] = len(candidates) + 1
+        candidate["published"] = False
+        candidates.append(candidate)
+        if len(candidates) >= exemplaires:
+            break
+
+    if not candidates:
+        raise HTTPException(status_code=422, detail="Aucun exemplaire d'horaire n'a pu être généré.")
+
+    complete_count = sum(1 for item in candidates if item.get("success"))
+    first = candidates[0]
+    return {
+        "success": complete_count > 0,
+        "published": False,
+        "requested_exemplaires": exemplaires,
+        "generated_exemplaires": len(candidates),
+        "complete_exemplaires": complete_count,
+        "exemplaires": candidates,
+        # Compatibilité avec les anciens clients qui lisaient directement schedules.
+        "schedules": first.get("schedules", {"classes": [], "teachers": []}),
+        "unassigned_count": first.get("unassigned_count", 0),
+        "message": (
+            f"{len(candidates)} exemplaire(s) généré(s), dont {complete_count} complet(s). "
+            "Choisissez un exemplaire dans PrimeInk pour le publier."
+        ),
     }
-    extra = dict(school.pn_extra or {})
-    extra["managerSchedule"] = stored
-    school.pn_extra = extra
-    db.commit()
-    return result
 
 
 @app.post("/api/mixage/generate")
