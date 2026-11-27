@@ -242,8 +242,16 @@ class ScheduleEngine:
             {"class_name": c_name, "grid": c_grid}
             for c_name, c_grid in self.class_grid.items()
         ]
+        teacher_names = {
+            str(teacher.get("teacher_id") or ""): str(teacher.get("name") or "")
+            for teacher in self.teachers
+        }
         formatted_teachers = [
-            {"teacher_id": t_id, "grid": t_grid}
+            {
+                "teacher_id": t_id,
+                "teacher_name": teacher_names.get(str(t_id), ""),
+                "grid": t_grid,
+            }
             for t_id, t_grid in self.teacher_grid.items()
         ]
 
