@@ -5268,7 +5268,7 @@ def build_suivi_attendance_payload(db: Session, school: SchoolInformation, stude
             "status": row.status,
             "statusLabel": {"P": "Présent", "A": "Absent", "R": "En retard"}.get(row.status, "Non renseigné"),
             "teacherName": teacher.full_name if teacher else "Enseignant",
-            "teacherCode": (teacher.teacher_code or f"prof_{teacher.id}") if teacher else "",
+            "teacherPhone": (teacher.phone_number or "") if teacher else "",
             "slot": row.slot_key or "",
         }
         records.append(entry)
@@ -5384,7 +5384,7 @@ def build_suivi_results_payload(db: Session, school: SchoolInformation, student:
             "obtained": float(row.score),
             "course": course.course_name,
             "teacherName": teacher.full_name or "Enseignant",
-            "teacherCode": teacher_number,
+            "teacherPhone": teacher.phone_number or "",
             "content": "",
         })
 
