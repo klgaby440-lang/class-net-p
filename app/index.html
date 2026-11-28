@@ -4821,9 +4821,13 @@ window.CLASSINK_LLINK_CONFIG = {
     headers: () => typeof cloudAuthHeaders === 'function' ? cloudAuthHeaders() : {},
     owner: () => {
         try {
-            if (typeof db !== 'undefined' && db && db.user) return db.user.email || db.user.id || 'teacher';
+            if (typeof db !== 'undefined' && db && db.user) {
+                const teacher = db.user.email || db.user.id || 'teacher';
+                const school = db.schoolId || db.user.schoolId || 'independent';
+                return String(teacher) + ':' + String(school);
+            }
         } catch (_) {}
-        return 'teacher';
+        return 'teacher:independent';
     }
 };
 </script>
