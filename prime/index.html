@@ -1495,7 +1495,7 @@ body.theme-dark input::placeholder,body.theme-dark textarea::placeholder{color:v
         <div id="view-fiches" class="sub-view-content">
             <nav class="retractable-sidebar">
                 <div class="sidebar-header">
-                    <span class="sidebar-title">FICHES DES NOTES</span>
+                    <span class="sidebar-title">FICHES DES COURS ENSEIGNÉS</span>
                     <button class="toggle-sidebar-btn">◀</button>
                 </div>
                 <input type="text" placeholder="Rechercher un cours..." class="search-input">
@@ -1541,7 +1541,7 @@ body.theme-dark input::placeholder,body.theme-dark textarea::placeholder{color:v
         <div id="view-stats" class="sub-view-content">
             <nav class="retractable-sidebar">
                 <div class="sidebar-header">
-                    <span class="sidebar-title">STATISTIQUES PAR COURS</span>
+                    <span class="sidebar-title">STATISTIQUES DES COURS ENSEIGNÉS</span>
                     <button class="toggle-sidebar-btn">◀</button>
                 </div>
                 <div class="item-list" id="statsCourseSidebar"></div>
@@ -2822,9 +2822,54 @@ window.alert = function(message) { showCustomAlert(message); };
                 }
                 const BP_TOTAL_KEYS = ['p1', 'p2', 'ex1', 's1', 'p3', 'p4', 'ex2', 's2', 'tg'];
 
+                function bpBulletinCoursesForClass(cls) {
+                    const taughtCourses = (Array.isArray(appState.courses) ? appState.courses : [])
+                        .filter(course => String(course.classId ?? '') === String(cls && cls.id || ''));
+                    if (!cls || !Array.isArray(cls.bulletinCourses)) {
+                        return taughtCourses.map(course => ({
+                            ...course,
+                            sourceCourseIds: [String(course.id)]
+                        }));
+                    }
+                    return cls.bulletinCourses.map(item => {
+                        const sourceIds = Array.isArray(item.sourceCourseIds) ? item.sourceCourseIds.map(String) : [];
+                        const sources = taughtCourses.filter(course => sourceIds.includes(String(course.id)));
+                        if (!sources.length) return null;
+                        const teachers = [...new Set(sources.map(course => String(course.titulaire || '').trim()).filter(name => name && name !== 'Non assigné'))];
+                        return {
+                            ...item,
+                            classId: cls.id,
+                            sourceCourseIds: sources.map(course => String(course.id)),
+                            titulaire: teachers.length === 1 ? teachers[0] : (cls.titulaire || teachers[0] || 'Non assigné')
+                        };
+                    }).filter(Boolean);
+                }
+
                 function bpCourseValues(studentId, crs) {
-                    const g = appState.grades[studentId + '_' + crs.id] || {};
-                    const v = { p1: bpNum(g.p1), p2: bpNum(g.p2), ex1: bpNum(g.ex1), p3: bpNum(g.p3), p4: bpNum(g.p4), ex2: bpNum(g.ex2) };
+                    const sourceIds = Array.isArray(crs.sourceCourseIds) && crs.sourceCourseIds.length
+                        ? crs.sourceCourseIds.map(String)
+                        : [String(crs.id)];
+                    const taughtCourses = (Array.isArray(appState.courses) ? appState.courses : [])
+                        .filter(course => sourceIds.includes(String(course.id)) &&
+                            String(course.classId ?? '') === String(crs.classId ?? ''));
+                    const maxBulletin = bpNum(crs.maxPer) || 0;
+                    const averageFor = field => {
+                        const isExam = field === 'ex1' || field === 'ex2';
+                        const factor = isExam ? 2 : 1;
+                        if (!taughtCourses.length || maxBulletin <= 0) return null;
+                        const ratios = taughtCourses.map(course => {
+                            const grade = (appState.grades && appState.grades[studentId + '_' + course.id]) || {};
+                            const score = bpNum(grade[field]);
+                            const courseMax = (bpNum(course.maxPer) || 0) * factor;
+                            return score === null || courseMax <= 0 ? null : score / courseMax;
+                        });
+                        if (ratios.some(value => value === null)) return null;
+                        return (ratios.reduce((sum, value) => sum + value, 0) / ratios.length) * maxBulletin * factor;
+                    };
+                    const v = {
+                        p1: averageFor('p1'), p2: averageFor('p2'), ex1: averageFor('ex1'),
+                        p3: averageFor('p3'), p4: averageFor('p4'), ex2: averageFor('ex2')
+                    };
                     v.s1 = bpSum([v.p1, v.p2, v.ex1]);
                     v.s2 = bpSum([v.p3, v.p4, v.ex2]);
                     v.tg = bpSum([v.s1, v.s2]);
@@ -2904,8 +2949,7 @@ window.alert = function(message) { showCustomAlert(message); };
                     const isRep = M.repechage;
                     const classStudents = (Array.isArray(appState.students) ? appState.students : [])
                         .filter(s => String(s.classId ?? '') === studentClassId);
-                    const classCourses = (Array.isArray(appState.courses) ? appState.courses : [])
-                        .filter(c => String(c.classId ?? '') === studentClassId);
+                    const classCourses = bpBulletinCoursesForClass(cls);
                     const allTotals = {};
                     classStudents.forEach(s => allTotals[s.id] = bpStudentTotals(s.id, classCourses));
                     if (!allTotals[student.id]) allTotals[student.id] = bpStudentTotals(student.id, classCourses);
@@ -3784,6 +3828,9 @@ window.alert = function(message) { showCustomAlert(message); };
                     address: result.data.adresse_physique, email: result.data.email
                 });
                 saveState();
+                if (window.primeInkRememberLocalPassword) {
+                    await window.primeInkRememberLocalPassword(newPassword || currentPassword, result.data.school_id || appState.school.id);
+                }
                 document.getElementById('primeSchoolProfileCurrentPassword').value = '';
                 document.getElementById('primeSchoolProfileNewPassword').value = '';
                 document.getElementById('primeSchoolProfileConfirmPassword').value = '';
@@ -7858,12 +7905,19 @@ function refreshPrimeInkTeacherAssignmentSelects() {
                     <div class="modal-box" style="max-width:950px;width:96%;max-height:92vh;overflow:auto;">
                         <button type="button" class="modal-close-btn" data-close-manage-courses>×</button>
                         <h3 style="margin-bottom:0.4rem;color:var(--primary-color);">Modifier les cours</h3>
-                        <p id="manageCoursesClassLabel" style="margin-bottom:1rem;color:var(--text-secondary);"></p>
+                        <p id="manageCoursesClassLabel" style="margin-bottom:.5rem;color:var(--text-secondary);"></p>
+                        <p style="margin:0 0 .9rem;color:var(--text-secondary);font-size:.86rem;"><strong>Cours enseignés</strong> — matières réellement attribuées aux enseignants. Elles restent utilisées dans les statistiques et les fiches de saisie.</p>
                         <div id="manageCoursesList" style="display:flex;flex-direction:column;gap:0.8rem;"></div>
+                        <div style="display:flex;justify-content:flex-end;margin-top:.9rem;">
+                            <button type="button" class="btn-primary" data-open-bulletin-courses>Configurer les cours du bulletin</button>
+                        </div>
                         <div class="action-toolbar"><button type="button" class="btn-secondary" data-close-manage-courses>Fermer</button></div>
                     </div>`;
                 document.body.appendChild(overlay);
                 overlay.querySelectorAll('[data-close-manage-courses]').forEach(btn => btn.addEventListener('click', () => overlay.classList.add('hidden')));
+                overlay.querySelector('[data-open-bulletin-courses]')?.addEventListener('click', () => {
+                    window.openManageBulletinCoursesModal(overlay.dataset.classId || classId);
+                });
             }
             overlay.dataset.classId = classId;
             overlay.querySelector('#manageCoursesClassLabel').textContent = `Classe : ${cls.name}`;
@@ -7922,7 +7976,202 @@ function refreshPrimeInkTeacherAssignmentSelects() {
             }));
         }
 
-        // Suppression avec confirmation et nettoyage des notes/présences dépendantes.
+        window.openManageBulletinCoursesModal = function(classId) {
+            const cls = appState.classes.find(item => String(item.id) === String(classId));
+            if (!cls) return alert("Sélectionnez d'abord une classe.");
+            let overlay = document.getElementById('manageBulletinCoursesModal');
+            if (!overlay) {
+                overlay = document.createElement('div');
+                overlay.id = 'manageBulletinCoursesModal';
+                overlay.className = 'lock-overlay hidden';
+                overlay.style.zIndex = '1001';
+                overlay.innerHTML = `
+                    <div class="modal-box" style="max-width:1000px;width:96%;max-height:92vh;overflow:auto;">
+                        <button type="button" class="modal-close-btn" data-close-bulletin-courses>×</button>
+                        <h3 style="margin-bottom:.35rem;color:var(--primary-color);">Cours du bulletin</h3>
+                        <p id="bulletinCoursesClassLabel" style="margin-bottom:.6rem;color:var(--text-secondary);"></p>
+                        <p style="margin:0 0 1rem;padding:.7rem;border:1px solid var(--border-color);border-radius:8px;color:var(--text-secondary);font-size:.86rem;">
+                            Les cours enseignés restent séparés. Chaque cours-bulletin calcule la moyenne des cours enseignés sélectionnés, après normalisation selon leur maximum. Avec des maxima identiques, il s'agit de leur moyenne directe.
+                        </p>
+                        <div id="managedBulletinCoursesList" style="display:flex;flex-direction:column;gap:.8rem;"></div>
+                        <div style="display:flex;gap:.6rem;flex-wrap:wrap;justify-content:space-between;margin-top:1rem;">
+                            <button type="button" class="btn-secondary" data-add-bulletin-course>+ Ajouter un cours-bulletin</button>
+                            <div style="display:flex;gap:.6rem;flex-wrap:wrap;">
+                                <button type="button" class="btn-secondary" data-close-bulletin-courses>Annuler</button>
+                                <button type="button" class="btn-primary" data-save-bulletin-courses>Enregistrer la configuration</button>
+                            </div>
+                        </div>
+                        <p id="managedBulletinCoursesStatus" role="status" aria-live="polite" style="margin-top:.8rem;color:var(--text-secondary);font-size:.86rem;"></p>
+                    </div>`;
+                document.body.appendChild(overlay);
+                overlay.querySelectorAll('[data-close-bulletin-courses]').forEach(btn =>
+                    btn.addEventListener('click', () => overlay.classList.add('hidden'))
+                );
+                overlay.querySelector('[data-add-bulletin-course]')?.addEventListener('click', () =>
+                    window.addPrimeInkBulletinCourseRow()
+                );
+                overlay.querySelector('[data-save-bulletin-courses]')?.addEventListener('click', () =>
+                    window.savePrimeInkBulletinCourses()
+                );
+            }
+            overlay.dataset.classId = String(classId);
+            overlay.querySelector('#bulletinCoursesClassLabel').textContent = 'Classe : ' + cls.name;
+            overlay.classList.remove('hidden');
+            renderManagedBulletinCourses(classId);
+        };
+
+        function primeInkBulletinSourceOptions(classId, selectedIds) {
+            const selected = new Set((Array.isArray(selectedIds) ? selectedIds : []).map(String));
+            const taught = appState.courses.filter(course => String(course.classId) === String(classId));
+            if (!taught.length) return '<p style="color:var(--danger-color);font-size:.85rem;">Aucun cours enseigné n’est disponible dans cette classe.</p>';
+            return '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:.35rem;">' +
+                taught.map(course =>
+                    '<label style="display:flex;gap:.45rem;align-items:center;padding:.35rem;border:1px solid var(--border-color);border-radius:6px;font-weight:500;text-transform:none;">' +
+                    '<input type="checkbox" data-source-course-id="' + safeHTML(course.id) + '"' +
+                    (selected.has(String(course.id)) ? ' checked' : '') + '> ' + safeHTML(course.name) +
+                    '<small style="margin-left:auto;color:var(--text-secondary);">/' + safeHTML(course.maxPer ?? '') + '</small></label>'
+                ).join('') + '</div>';
+        }
+
+        function renderManagedBulletinCourses(classId) {
+            const overlay = document.getElementById('manageBulletinCoursesModal');
+            const list = overlay?.querySelector('#managedBulletinCoursesList');
+            const cls = appState.classes.find(item => String(item.id) === String(classId));
+            if (!list || !cls) return;
+            const taught = appState.courses.filter(course => String(course.classId) === String(classId));
+            const defaults = taught.map(course => ({
+                id: 'bc_' + String(course.id),
+                name: course.name,
+                maxPer: course.maxPer,
+                category: course.category || 'Général',
+                subCategory: course.subCategory || '',
+                sourceCourseIds: [String(course.id)]
+            }));
+            const configs = Array.isArray(cls.bulletinCourses) ? cls.bulletinCourses : defaults;
+            list.innerHTML = configs.map((course, index) => `
+                <div class="settings-card" data-bulletin-course-row data-course-id="${safeHTML(course.id || ('bc_' + index))}" style="padding:.9rem;box-shadow:none;">
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.6rem;">
+                        <label>Nom sur le bulletin<input class="form-control" data-field="name" maxlength="160" value="${safeHTML(course.name || '')}"></label>
+                        <label>Maximum par période<input class="form-control" type="number" min="1" max="1000" step=".5" data-field="maxPer" value="${safeHTML(course.maxPer ?? 40)}"></label>
+                        <label>Domaine<input class="form-control" data-field="category" maxlength="100" value="${safeHTML(course.category || 'Général')}"></label>
+                        <label>Sous-domaine<input class="form-control" data-field="subCategory" maxlength="160" value="${safeHTML(course.subCategory || '')}"></label>
+                    </div>
+                    <div style="margin-top:.7rem;">
+                        <strong style="font-size:.86rem;">Cours enseignés pris en compte</strong>
+                        ${primeInkBulletinSourceOptions(classId, course.sourceCourseIds)}
+                    </div>
+                    <div style="display:flex;justify-content:flex-end;margin-top:.6rem;">
+                        <button type="button" class="btn-secondary" data-remove-bulletin-course style="background:#dc2626;">Supprimer ce cours-bulletin</button>
+                    </div>
+                </div>`).join('');
+            if (!configs.length) {
+                list.innerHTML = '<p style="padding:.8rem;color:var(--text-secondary);">Aucun cours-bulletin. Ajoutez-en un pour le faire apparaître sur les bulletins.</p>';
+            }
+            list.querySelectorAll('[data-remove-bulletin-course]').forEach(button =>
+                button.addEventListener('click', () => button.closest('[data-bulletin-course-row]')?.remove())
+            );
+            const status = overlay.querySelector('#managedBulletinCoursesStatus');
+            if (status) status.textContent = taught.length
+                ? taught.length + ' cours enseigné(s) disponible(s) pour cette classe.'
+                : 'Ajoutez d’abord les cours enseignés dans la gestion de la classe.';
+        }
+
+        window.addPrimeInkBulletinCourseRow = function() {
+            const overlay = document.getElementById('manageBulletinCoursesModal');
+            const list = overlay?.querySelector('#managedBulletinCoursesList');
+            if (!overlay || !list) return;
+            const classId = overlay.dataset.classId || '';
+            const rowId = 'bc_new_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
+            if (list.querySelector('p')) list.innerHTML = '';
+            const row = document.createElement('div');
+            row.className = 'settings-card';
+            row.dataset.bulletinCourseRow = '';
+            row.dataset.courseId = rowId;
+            row.style.cssText = 'padding:.9rem;box-shadow:none;';
+            row.innerHTML = `
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.6rem;">
+                    <label>Nom sur le bulletin<input class="form-control" data-field="name" maxlength="160" placeholder="Ex. Géologie / Écologie"></label>
+                    <label>Maximum par période<input class="form-control" type="number" min="1" max="1000" step=".5" data-field="maxPer" value="20"></label>
+                    <label>Domaine<input class="form-control" data-field="category" maxlength="100" value="Général"></label>
+                    <label>Sous-domaine<input class="form-control" data-field="subCategory" maxlength="160"></label>
+                </div>
+                <div style="margin-top:.7rem;"><strong style="font-size:.86rem;">Cours enseignés pris en compte</strong>${primeInkBulletinSourceOptions(classId, [])}</div>
+                <div style="display:flex;justify-content:flex-end;margin-top:.6rem;">
+                    <button type="button" class="btn-secondary" data-remove-bulletin-course style="background:#dc2626;">Supprimer ce cours-bulletin</button>
+                </div>`;
+            row.querySelector('[data-remove-bulletin-course]')?.addEventListener('click', () => row.remove());
+            list.appendChild(row);
+        };
+
+        window.savePrimeInkBulletinCourses = async function() {
+            const overlay = document.getElementById('manageBulletinCoursesModal');
+            const classId = String(overlay?.dataset.classId || '');
+            const cls = appState.classes.find(item => String(item.id) === classId);
+            const status = overlay?.querySelector('#managedBulletinCoursesStatus');
+            if (!overlay || !cls) return;
+            const courses = [];
+            const seen = new Set();
+            for (const row of overlay.querySelectorAll('[data-bulletin-course-row]')) {
+                const value = field => row.querySelector('[data-field="' + field + '"]')?.value.trim() || '';
+                const name = value('name');
+                const maxPer = Number(value('maxPer'));
+                const sourceCourseIds = Array.from(row.querySelectorAll('[data-source-course-id]:checked'))
+                    .map(input => String(input.dataset.sourceCourseId || ''));
+                if (!name) { if (status) status.textContent = 'Chaque cours-bulletin doit avoir un nom.'; return; }
+                if (!Number.isFinite(maxPer) || maxPer <= 0 || maxPer > 1000) {
+                    if (status) status.textContent = 'Le maximum doit être supérieur à zéro et ne pas dépasser 1000.';
+                    return;
+                }
+                if (!sourceCourseIds.length) {
+                    if (status) status.textContent = 'Choisissez au moins un cours enseigné pour « ' + name + ' ».';
+                    return;
+                }
+                if (seen.has(name.toLocaleLowerCase())) {
+                    if (status) status.textContent = 'Deux cours-bulletins ne peuvent pas porter le même nom.';
+                    return;
+                }
+                seen.add(name.toLocaleLowerCase());
+                courses.push({
+                    id: String(row.dataset.courseId || ('bc_' + Date.now().toString(36))),
+                    name, maxPer,
+                    category: value('category') || 'Général',
+                    subCategory: value('subCategory'),
+                    sourceCourseIds
+                });
+            }
+
+            cls.bulletinCourses = courses;
+            saveState();
+            const headers = primeInkAuthHeaders();
+            if (headers.Authorization) {
+                if (status) status.textContent = 'Synchronisation de la configuration…';
+                try {
+                    const response = await fetch(API_BASE_URL + '/api/primenet/classes/' +
+                        encodeURIComponent(classId) + '/bulletin-courses', {
+                            method: 'PUT', headers, cache: 'no-store',
+                            body: JSON.stringify({ bulletinCourses: courses })
+                        });
+                    const result = await response.json().catch(() => ({}));
+                    if (!response.ok || !result.status || !result.data) {
+                        throw new Error(result.detail || result.message || 'Configuration non synchronisée.');
+                    }
+                    cls.bulletinCourses = result.data.bulletinCourses || [];
+                    saveState();
+                    if (status) status.textContent = 'Configuration enregistrée sur le serveur et sur cet appareil.';
+                } catch (error) {
+                    if (status) status.textContent = 'Configuration enregistrée localement. Synchronisation à refaire : ' +
+                        (error.message || 'erreur réseau');
+                    return;
+                }
+            } else if (status) {
+                status.textContent = 'Configuration enregistrée sur cet appareil. Elle sera envoyée lors de la prochaine synchronisation PrimeInk.';
+            }
+            if (activeStudentId && String(appState.students.find(student => String(student.id) === String(activeStudentId))?.classId) === classId) {
+                if (typeof bpRefreshBulletin === 'function') bpRefreshBulletin();
+            }
+        };
+
+                // Suppression avec confirmation et nettoyage des notes/présences dépendantes.
         window.deleteCourse = async function(courseId) {
             const course = appState.courses.find(crs => crs.id === courseId);
             if (!course) return alert("Ce cours n'existe plus.");
@@ -7930,6 +8179,12 @@ function refreshPrimeInkTeacherAssignmentSelects() {
             if (!confirmed) return;
             appState.students.filter(st => st.classId === course.classId).forEach(st => delete appState.grades[`${st.id}_${course.id}`]);
             appState.courses = appState.courses.filter(crs => crs.id !== courseId);
+            const owningClass = appState.classes.find(item => String(item.id) === String(course.classId));
+            if (owningClass && Array.isArray(owningClass.bulletinCourses)) {
+                owningClass.bulletinCourses = owningClass.bulletinCourses
+                    .map(item => ({ ...item, sourceCourseIds: (item.sourceCourseIds || []).filter(id => String(id) !== String(courseId)) }))
+                    .filter(item => item.sourceCourseIds.length > 0);
+            }
             if (appState.tools?.presences?.students) appState.tools.presences.students = appState.tools.presences.students.filter(p => p.courseId !== courseId);
             if (appState.tools?.mixage?.coursProgrammes) appState.tools.mixage.coursProgrammes = appState.tools.mixage.coursProgrammes.filter(p => p.courseId !== courseId && p.id !== courseId);
             saveState();
@@ -7996,20 +8251,99 @@ const classDetailSection = document.getElementById('section-class-detail');
                 });
             });
 
+            // Le verrouillage de l'interface est vérifié localement. Le jeton cloud reste
+            // séparé et continue de protéger les opérations sur les données de l'école.
+            window.primeInkRememberLocalPassword = async function(password, schoolId) {
+                const id = String(schoolId || '').trim();
+                if (!id || typeof password !== 'string' || !password || !window.crypto?.subtle) return false;
+                try {
+                    const iterations = 260000;
+                    const salt = window.crypto.getRandomValues(new Uint8Array(16));
+                    const encoder = new TextEncoder();
+                    const material = await window.crypto.subtle.importKey(
+                        'raw', encoder.encode(password), 'PBKDF2', false, ['deriveBits']
+                    );
+                    const bits = await window.crypto.subtle.deriveBits({
+                        name: 'PBKDF2', salt, iterations, hash: 'SHA-256'
+                    }, material, 256);
+                    const bytes = new Uint8Array(bits);
+                    const toBase64 = value => {
+                        let binary = '';
+                        value.forEach(byte => { binary += String.fromCharCode(byte); });
+                        return btoa(binary);
+                    };
+                    const record = {
+                        version: 1,
+                        algorithm: 'PBKDF2-SHA-256',
+                        iterations,
+                        salt: toBase64(salt),
+                        verifier: toBase64(bytes)
+                    };
+                    localStorage.setItem('primeink_local_unlock_v1:' + encodeURIComponent(id), JSON.stringify(record));
+                    return true;
+                } catch (error) {
+                    console.warn('[PrimeInk] Impossible de stocker le vérificateur local.', error);
+                    return false;
+                }
+            };
+
+            window.primeInkVerifyLocalPassword = async function(password, schoolId) {
+                const id = String(schoolId || '').trim();
+                if (!id || typeof password !== 'string' || !password || !window.crypto?.subtle) return false;
+                try {
+                    const raw = localStorage.getItem('primeink_local_unlock_v1:' + encodeURIComponent(id));
+                    if (!raw) return null; // Ancienne installation : une authentification de migration sera nécessaire.
+                    const record = JSON.parse(raw);
+                    if (!record || record.version !== 1 || record.algorithm !== 'PBKDF2-SHA-256' ||
+                        !Number.isInteger(record.iterations) || record.iterations < 100000 || record.iterations > 1000000) {
+                        return false;
+                    }
+                    const fromBase64 = value => Uint8Array.from(atob(String(value || '')), char => char.charCodeAt(0));
+                    const salt = fromBase64(record.salt);
+                    const expected = fromBase64(record.verifier);
+                    if (salt.length !== 16 || expected.length !== 32) return false;
+                    const material = await window.crypto.subtle.importKey(
+                        'raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']
+                    );
+                    const bits = await window.crypto.subtle.deriveBits({
+                        name: 'PBKDF2', salt, iterations: record.iterations, hash: 'SHA-256'
+                    }, material, 256);
+                    const actual = new Uint8Array(bits);
+                    let difference = actual.length ^ expected.length;
+                    for (let index = 0; index < actual.length; index++) difference |= actual[index] ^ expected[index];
+                    return difference === 0;
+                } catch (error) {
+                    console.warn('[PrimeInk] Vérification locale impossible.', error);
+                    return false;
+                }
+            };
+
             // 7. Déverrouillage Écran
             document.getElementById('unlockBtn').addEventListener('click', async () => {
                 const pass = document.getElementById('lockPasswordInput').value;
                 const schoolId = String(appState.school?.id || '').trim();
                 const button = document.getElementById('unlockBtn');
+                const overlay = document.getElementById('lock-screen-overlay');
                 if (!pass) return alert("Saisissez le mot de passe de l'établissement.");
                 if (!schoolId) {
-                    // Une installation locale qui n'a pas encore chargé de compte scolaire
-                    // ne dispose pas d'un mot de passe cloud à vérifier.
-                    document.getElementById('lock-screen-overlay').classList.add('hidden');
+                    overlay.classList.add('hidden');
                     return;
                 }
-                if (button) { button.disabled = true; button.textContent = "Vérification…"; }
+                if (button) { button.disabled = true; button.textContent = "Vérification locale…"; }
                 try {
+                    const localResult = await window.primeInkVerifyLocalPassword(pass, schoolId);
+                    if (localResult === true) {
+                        document.getElementById('lockPasswordInput').value = '';
+                        overlay.classList.add('hidden');
+                        return;
+                    }
+                    if (localResult === false) {
+                        throw new Error("Mot de passe incorrect sur cet appareil.");
+                    }
+
+                    // Migration des installations plus anciennes, une seule fois :
+                    // l'authentification initiale crée ensuite le vérificateur local.
+                    if (button) button.textContent = "Initialisation du verrou local…";
                     const response = await fetch(API_BASE_URL + '/api/auth/school/login', {
                         method: 'POST', headers: { 'Content-Type': 'application/json' },
                         cache: 'no-store', body: JSON.stringify({ identifier: schoolId, password: pass })
@@ -8019,10 +8353,14 @@ const classDetailSection = document.getElementById('section-class-detail');
                         throw new Error(result.message || result.detail || "Mot de passe incorrect ou compte indisponible.");
                     }
                     try { localStorage.setItem('primeink_cloud_token', result.token); } catch (_) {}
+                    const remembered = await window.primeInkRememberLocalPassword(pass, schoolId);
+                    if (!remembered) {
+                        throw new Error("Connexion validée, mais le navigateur ne permet pas de créer le verrou local sécurisé. Utilisez Chrome, Edge ou Firefox à jour.");
+                    }
                     document.getElementById('lockPasswordInput').value = '';
-                    document.getElementById('lock-screen-overlay').classList.add('hidden');
+                    overlay.classList.add('hidden');
                 } catch (error) {
-                    alert(error.message || "Vérification du mot de passe impossible.");
+                    alert(error.message || "Vérification locale impossible.");
                 } finally {
                     if (button) { button.disabled = false; button.textContent = "Déverrouiller"; }
                 }
@@ -8813,6 +9151,9 @@ const classDetailSection = document.getElementById('section-class-detail');
                     if (result.token) {
                         try { localStorage.setItem('primeink_cloud_token', result.token); } catch (e) { /* stockage indisponible */ }
                     }
+                    if (window.primeInkRememberLocalPassword) {
+                        await window.primeInkRememberLocalPassword(password, schoolId);
+                    }
                     const previousState = appState;
                     const bpLocalOnly = bpSnapshotLocalOnly();
                     appState = result.data;
@@ -8972,6 +9313,9 @@ const classDetailSection = document.getElementById('section-class-detail');
                     return;
                 }
 
+                if (window.primeInkRememberLocalPassword) {
+                    await window.primeInkRememberLocalPassword(password, newSchoolId);
+                }
                 cancelPrimeInkSchoolIdUpdate();
                 alert("✅ PrimeInk est maintenant connecté à l'établissement " + newSchoolId + ". Ses données ont été chargées depuis le serveur.");
                 location.reload();
