@@ -1182,5 +1182,119 @@ class TestAccountProfileThemeAndRelease(unittest.TestCase):
             self.assertIn(heading, privacy)
 
 
+class TestCourseSeparationAndDeviceUnlock(unittest.TestCase):
+    def test_primeink_local_unlock_and_bulletin_course_composition(self):
+        prime = (ROOT / "prime/index.html").read_text(encoding="utf-8")
+        backend = (ROOT / "main.py").read_text(encoding="utf-8")
+
+        for marker in (
+            "window.primeInkRememberLocalPassword = async function(password, schoolId)",
+            "window.primeInkVerifyLocalPassword = async function(password, schoolId)",
+            "PBKDF2-SHA-256",
+            "primeink_local_unlock_v1:",
+            "const localResult = await window.primeInkVerifyLocalPassword(pass, schoolId)",
+            "if (localResult === true)",
+            "if (localResult === false)",
+            "await window.primeInkRememberLocalPassword(password, schoolId)",
+        ):
+            self.assertIn(marker, prime)
+
+        unlock_start = prime.index("// 7. Déverrouillage Écran")
+        unlock_end = prime.index("// Chargement initial des vues", unlock_start)
+        unlock_handler = prime[unlock_start:unlock_end]
+        self.assertIn("window.primeInkVerifyLocalPassword", unlock_handler)
+        self.assertIn("Migration des installations plus anciennes", unlock_handler)
+
+        for marker in (
+            'bulletin_courses = Column(JSON, nullable=True)',
+            'ADD COLUMN IF NOT EXISTS bulletin_courses JSON',
+            '"bulletinCourses": c.bulletin_courses if isinstance(c.bulletin_courses, list) else None',
+            '@app.put("/api/primenet/classes/{class_id}/bulletin-courses")',
+            "clean_bulletin_course_mappings",
+            "sourceCourseIds",
+        ):
+            self.assertIn(marker, backend)
+
+        self.assertIn("function bpBulletinCoursesForClass(cls)", prime)
+        self.assertIn("function bpCourseValues(studentId, crs)", prime)
+        self.assertIn("courseMax = (bpNum(course.maxPer) || 0) * factor", prime)
+        self.assertIn("ratios.reduce((sum, value) => sum + value, 0) / ratios.length", prime)
+        builder = prime[prime.index("function bpBuildPage(student, opts)"):prime.index("function bpFitScreen", prime.index("function bpBuildPage(student, opts)"))]
+        self.assertIn("const classCourses = bpBulletinCoursesForClass(cls);", builder)
+
+        fiche = prime[prime.index("function renderCoursesSidebar"):prime.index("let currentFicheCourseId")]
+        stats = prime[prime.index("function renderStatsSidebar"):prime.index("function renderCourseStats")]
+        self.assertIn("appState.courses.filter", fiche)
+        self.assertIn("appState.courses.filter", stats)
+        self.assertIn("FICHES DES COURS ENSEIGNÉS", prime)
+        self.assertIn("STATISTIQUES DES COURS ENSEIGNÉS", prime)
+
+    def test_bulletin_course_average_uses_normalized_taught_course_scores(self):
+        if not self.node:
+            self.skipTest("Node.js absent : calcul de moyenne des cours-bulletins ignoré.")
+        prime = (ROOT / "prime/index.html").read_text(encoding="utf-8")
+        num_start = prime.index("function bpNum(v)")
+        num_end = prime.index("function bpAcc()", num_start)
+        values_start = prime.index("function bpBulletinCoursesForClass(cls)")
+        values_end = prime.index("function bpStudentTotals", values_start)
+        helper = prime[num_start:num_end] + """
+function bpSum(values) {
+    if (!Array.isArray(values) || !values.length || values.some(value => value === null || value === undefined)) return null;
+    return values.reduce((sum, value) => sum + value, 0);
+}
+""" + prime[values_start:values_end]
+        script = helper + """
+const appState = {
+  courses: [
+    {id:"geo", classId:"c1", maxPer:20, titulaire:"Prof. A"},
+    {id:"eco", classId:"c1", maxPer:10, titulaire:"Prof. B"}
+  ],
+  grades: {
+    "s1_geo": {p1:15, p2:16, ex1:30, p3:14, p4:15, ex2:32},
+    "s1_eco": {p1:5, p2:8, ex1:15, p3:7, p4:8, ex2:16}
+  }
+};
+const cls = {id:"c1", titulaire:"Direction", bulletinCourses:[{
+  id:"bc1", name:"Géologie / Écologie", maxPer:20,
+  sourceCourseIds:["geo","eco"]
+}]};
+const mapped = bpBulletinCoursesForClass(cls);
+const values = bpCourseValues("s1", mapped[0]);
+const missing = bpCourseValues("s2", mapped[0]);
+process.stdout.write(JSON.stringify({
+  count:mapped.length,
+  sourceCount:mapped[0].sourceCourseIds.length,
+  p1:values.p1, ex1:values.ex1, s1:values.s1, tg:values.tg,
+  missingP1:missing.p1
+}));
+"""
+        result = subprocess.run(
+            [self.node, "-e", script], capture_output=True, text=True, check=False
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        import json
+        self.assertEqual(
+            json.loads(result.stdout),
+            {"count":1,"sourceCount":2,"p1":12.5,"ex1":30.0,"s1":72.5,"tg":None,"missingP1":None},
+        )
+
+    def test_classink_app_can_print_complete_taught_course_sheets(self):
+        app = (ROOT / "app/index.html").read_text(encoding="utf-8")
+        self.assertIn("<div>ClassInk APP ⚡</div>", app)
+        self.assertNotIn("CLASS-INK SUITE", app)
+        self.assertIn('onclick="printActiveCourseSheet()"', app)
+        self.assertIn("function printActiveCourseSheet()", app)
+        for marker in (
+            "FICHE DE NOTES",
+            "<strong>Classe :</strong>",
+            "<strong>Cours :</strong>",
+            "<strong>Enseignant :</strong>",
+            "<strong>E-mail :</strong>",
+            "<strong>Barème :</strong>",
+            "window.print()",
+        ):
+            self.assertIn(marker, app)
+
+
 if __name__ == "__main__":
     unittest.main()
