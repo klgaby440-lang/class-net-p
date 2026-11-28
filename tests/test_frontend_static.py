@@ -424,6 +424,58 @@ process.stdout.write(JSON.stringify(cases.map(item => ({code:item.code,label:ite
             ],
         )
 
+    def test_primeink_mixage_layout_has_two_places_per_bench_and_database_publication(self):
+        source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
+        self.assertIn("function bpMixageCreateSeatPlan(seats, config = {}, overrides = {})", source)
+        self.assertIn("function bpMixageSeatingPlanHTML(title, supervisor, seats, config = {}, overrides = {})", source)
+        self.assertIn("bpMixageSeatHTML(bench.left) + bpMixageSeatHTML(bench.right)", source)
+        self.assertIn("Coord. serveur : R", source)
+        self.assertIn("function bpMixageClassesHTML(result, rooms)", source)
+        self.assertIn("function bpMixageRoomsHTML(result, rooms)", source)
+        self.assertIn('id="mixPublishToSuivi" checked', source)
+        self.assertIn("/api/mixage/generate", source)
+        self.assertIn("publish_to_suivi: publishToSuivi", source)
+        self.assertIn("function bpLoadMixagesFromDatabase()", source)
+        self.assertIn("/api/manager/mixages", source)
+        self.assertIn("Le mixage a été enregistré dans la base de données", source)
+        self.assertIn("Chaque parent ne verra que les informations de son enfant", source)
+
+    def test_primeink_mixage_seat_plan_distributes_eight_benches_over_three_rows(self):
+        if not self.node:
+            self.skipTest("Node.js absent : test du plan de bancs ignoré.")
+        source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
+        helper_start = source.index("function bpMixageCreateSeatPlan(seats, config = {}, overrides = {})")
+        helper_end = source.index("function bpMixageSeatHTML(seat)", helper_start)
+        helper = source[helper_start:helper_end]
+        script = helper + """
+const seats = Array.from({length:16}, (_, index) => ({id: "S" + (index + 1)}));
+const plan = bpMixageCreateSeatPlan(seats, {places:16, bancs:8, rangees:3});
+process.stdout.write(JSON.stringify({
+  benches: plan.benchCount,
+  places: plan.availablePlaces,
+  rows: plan.rowCount,
+  assigned: plan.assignedSeats,
+  free: plan.freePlaces,
+  benchesPerRow: plan.rows.map(row => row.benches.length),
+  firstBench: [plan.rows[0].benches[0].left.id, plan.rows[0].benches[0].right.id],
+  lastBench: [plan.rows[2].benches[1].left.id, plan.rows[2].benches[1].right.id]
+}));
+"""
+        result = subprocess.run([self.node, "-e", script], capture_output=True, text=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        import json
+        self.assertEqual(json.loads(result.stdout), {
+            "benches": 8,
+            "places": 16,
+            "rows": 3,
+            "assigned": 16,
+            "free": 0,
+            "benchesPerRow": [3, 3, 2],
+            "firstBench": ["S1", "S2"],
+            "lastBench": ["S15", "S16"],
+        })
+
+
     def test_suivi_parent_html_ids_and_inline_javascript(self):
         source = (ROOT / "suivi/index.html").read_text(encoding="utf-8")
         self.inspect_file("suivi/index.html")
