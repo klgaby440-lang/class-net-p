@@ -2924,6 +2924,97 @@ def crypt_telemetry_complaint(payload: dict, request: Request, db: Session = Dep
     return {"status": True, "ticket_id": ticket.id, "message": "Réclamation transmise à CRYPT."}
 
 
+def serialize_llink_application_context(context: dict, max_chars: int = 30_000) -> str:
+    """Sérialise un contexte JSON valide et réduit des enregistrements entiers si nécessaire."""
+    try:
+        data = json.loads(json.dumps(context or {}, ensure_ascii=False, separators=(",", ":"), default=str))
+    except (TypeError, ValueError):
+        data = {}
+
+    if not isinstance(data, dict):
+        data = {"data": data}
+
+    def encode(value: dict) -> str:
+        return json.dumps(value, ensure_ascii=False, separators=(",", ":"), default=str)
+
+    serialized = encode(data)
+    if len(serialized) <= max_chars:
+        return serialized
+
+    data["contextTruncated"] = True
+    truncated_sections = {}
+    data["truncatedSections"] = truncated_sections
+
+    def collect_lists(node, path=()):
+        found = []
+        if isinstance(node, dict):
+            for key, value in node.items():
+                found.extend(collect_lists(value, path + (str(key),)))
+        elif isinstance(node, list):
+            if node:
+                found.append((len(encode({"items": node})), node, path))
+            for index, value in enumerate(node):
+                found.extend(collect_lists(value, path + (str(index),)))
+        return found
+
+    # Retire d'abord les enregistrements les plus anciens des listes les plus volumineuses.
+    # Les listes construites plus haut sont triées du plus récent au plus ancien.
+    while len(serialized) > max_chars:
+        candidates = collect_lists(data)
+        if not candidates:
+            break
+        _, target, path = max(candidates, key=lambda item: item[0])
+        target.pop()
+        section = ".".join(path) or "data"
+        truncated_sections[section] = truncated_sections.get(section, 0) + 1
+        serialized = encode(data)
+
+    if len(serialized) > max_chars:
+        def trim_strings(value, limit, counters):
+            if isinstance(value, dict):
+                return {key: trim_strings(item, limit, counters) for key, item in value.items()}
+            if isinstance(value, list):
+                return [trim_strings(item, limit, counters) for item in value]
+            if isinstance(value, str) and len(value) > limit:
+                counters[0] += 1
+                return value[: max(0, limit - 1)] + "…"
+            return value
+
+        for string_limit in (2_000, 1_000, 500, 200):
+            counters = [0]
+            data = trim_strings(data, string_limit, counters)
+            if counters[0]:
+                truncated_sections["longTextFields"] = (
+                    truncated_sections.get("longTextFields", 0) + counters[0]
+                )
+            serialized = encode(data)
+            if len(serialized) <= max_chars:
+                return serialized
+
+    if len(serialized) > max_chars:
+        # Dernier recours : conserver les identifiants du dossier et les compteurs,
+        # jamais un fragment JSON invalide.
+        identity_keys = (
+            "role", "school", "student", "class", "schoolYear", "teacher",
+            "workspace", "studentCount", "counts", "resultsAccess",
+        )
+        compact = {key: data[key] for key in identity_keys if key in data}
+        compact["contextTruncated"] = True
+        serialized = encode(compact)
+        if len(serialized) > max_chars:
+            compact = {
+                key: (str(value)[:160] if not isinstance(value, (dict, list)) else value)
+                for key, value in compact.items()
+                if key in {"role", "school", "student", "class", "schoolYear", "teacher", "workspace"}
+            }
+            compact["contextTruncated"] = True
+            serialized = encode(compact)
+
+    if len(serialized) > max_chars:
+        return "{}"
+    return serialized
+
+
 @app.post("/api/llink/assist")
 async def classink_llink_assist(payload: dict, request: Request, db: Session = Depends(get_db)):
     """Relais Llink : le contexte scolaire est construit côté serveur et filtré par rôle."""
@@ -3124,11 +3215,7 @@ async def classink_llink_assist(payload: dict, request: Request, db: Session = D
             "Aucun dossier scolaire détaillé n'est chargé dans cette interface."
         )
 
-    try:
-        context_text = json.dumps(context, ensure_ascii=False, separators=(",", ":"), default=str)
-    except (TypeError, ValueError):
-        context_text = "{}"
-    context_text = context_text[:30000]
+    context_text = serialize_llink_application_context(context, max_chars=30_000)
     request_payload = {
         "message": message,
         "history": history,
@@ -3137,8 +3224,8 @@ async def classink_llink_assist(payload: dict, request: Request, db: Session = D
         "effort": "normal",
         "mode": "chat",
         "source": "classink_" + app_name,
-        "preferences": system_instruction + "\nCONTEXTE AUTORISÉ DE LA BASE :\n" + context_text
-            + "\nLes données ci-dessus sont des données vérifiées côté serveur. Ne prétends pas accéder à d'autres tables.",
+        "application_instructions": system_instruction,
+        "context": context_text,
         "data_collection_consent": False,
     }
     CRYPT_LLINK_LIMITER.record(limiter_key)
