@@ -1044,6 +1044,20 @@ def create_token(claims: dict, ttl_seconds: int) -> str:
     return f"{payload}.{signature}"
 
 
+def create_intranet_token(claims: dict, ttl_seconds: int):
+    """Émet un jeton local limité au relais, signé avec une clé distincte du secret cloud."""
+    relay_secret = os.getenv("INTRANET_AUTH_SECRET", "").strip()
+    if not relay_secret:
+        return None
+    body = dict(claims)
+    body["iss"] = "classink"
+    body["aud"] = "classink-intranet-relay"
+    body["exp"] = int(time.time()) + int(ttl_seconds)
+    payload = _b64url(json.dumps(body, separators=(",", ":")).encode("utf-8"))
+    signature = _b64url(hmac.new(relay_secret.encode("utf-8"), payload.encode("ascii"), hashlib.sha256).digest())
+    return f"{payload}.{signature}"
+
+
 def verify_token(token: str):
     """Renvoie les revendications si le jeton est authentique et non expiré, sinon None."""
     try:
@@ -1829,7 +1843,8 @@ def login_teacher(data: LoginSchema, db: Session = Depends(get_db)):
     if active_school_id:
         token_claims["school_id"] = active_school_id
     return {"status": True, "data": classnet_app_db,
-            "token": create_token(token_claims, TEACHER_TOKEN_TTL)}
+            "token": create_token(token_claims, TEACHER_TOKEN_TTL),
+            "intranet_token": create_intranet_token(token_claims, TEACHER_TOKEN_TTL)}
 
 @app.post("/api/auth/school/login")
 def login_school(data: LoginSchema, db: Session = Depends(get_db)):
@@ -1981,8 +1996,10 @@ def login_school(data: LoginSchema, db: Session = Depends(get_db)):
             primenet_state["school"][key] = value
     primenet_state.update(school_state_extras(db, school))
 
+    school_claims = {"role": "school", "school_id": school.school_id}
     return {"status": True, "data": primenet_state,
-            "token": create_token({"role": "school", "school_id": school.school_id}, SCHOOL_TOKEN_TTL)}
+            "token": create_token(school_claims, SCHOOL_TOKEN_TTL),
+            "intranet_token": create_intranet_token(school_claims, SCHOOL_TOKEN_TTL)}
 
 # ---------------------------------------------------------
 # Alias utilisé par PrimeInk : chargement de l'état complet de l'école
@@ -4688,6 +4705,7 @@ def get_teacher_session_status(db: Session = Depends(get_db), claims: dict = Dep
         "teacherSpaces": verified_spaces,
         "pendingSpaces": pending_spaces,
         "token": create_token(token_claims, TEACHER_TOKEN_TTL),
+        "intranet_token": create_intranet_token(token_claims, TEACHER_TOKEN_TTL),
     }
 
 
@@ -4767,6 +4785,7 @@ def activate_independent_teacher_workspace(
         "workspaceMode": "independent",
         "data": state,
         "token": create_token(token_claims, TEACHER_TOKEN_TTL),
+        "intranet_token": None,
     }
 
 
