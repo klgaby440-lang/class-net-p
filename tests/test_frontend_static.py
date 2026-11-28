@@ -966,7 +966,8 @@ class TestNewFeatureStatic(unittest.TestCase):
         self.assertIn("cloudAuthHeaders()", sync)
         self.assertNotIn("showCustomPrompt", sync)
         self.assertIn("courseCatalog: data.courseCatalog || {}", app)
-        self.assertIn("button.style.cssText = 'position:fixed;right:18px;bottom:84px", app)
+        self.assertIn('id="support-settings-card"', app)
+        self.assertNotIn("button.style.cssText = ", app)
         self.assertIn("bottom: 16px;", app)
         self.assertIn("left: 12px;", app)
 
