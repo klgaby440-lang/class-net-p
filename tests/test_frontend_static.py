@@ -350,7 +350,7 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn("if (type === 'eleve') {", source)
         self.assertIn("select.disabled = classes.length === 0;", source)
         self.assertIn("window.renderPresencesEleveTable = function()", source)
-        self.assertIn("Status(s)", source)
+        self.assertIn("Statut(s)", source)
         self.assertIn("studentRows.map(record =>", source)
         self.assertIn("const summary = primeInkDailyAttendanceSummary(studentRecords, courses);", source)
         self.assertIn("safeHTML(details)", source)
@@ -377,7 +377,7 @@ class FrontendStaticTests(unittest.TestCase):
             self.skipTest("Node.js absent : test du résumé quotidien ignoré.")
         source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
         helper_start = source.index("function primeInkDailyAttendanceSummary(studentRecords, courses)")
-        helper_end = source.index("function primeInkAuthHeaders()", helper_start)
+        helper_end = source.index("window.renderPresencesEleveTable = function()", helper_start)
         helper = source[helper_start:helper_end]
         script = helper + """
 const courses = [{id: "c1"}, {id: "c2"}];
