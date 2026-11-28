@@ -1369,6 +1369,9 @@ class TestLlinkSessionsKeepaliveAndClassDomains(unittest.TestCase):
             self.assertIn(marker, client)
 
         self.assertIn('@app.get("/api/keepalive")', backend)
+        self.assertIn("LLINK_UPSTREAM_SEMAPHORE = asyncio.Semaphore(3)", backend)
+        self.assertIn("for attempt in range(2)", backend)
+        self.assertIn("await asyncio.sleep(max(0.5, retry_delay))", backend)
         self.assertIn('@app.get("/api/llink/conversations")', backend)
         self.assertIn('@app.put("/api/llink/conversations/{conversation_id}")', backend)
         self.assertIn('@app.delete("/api/llink/conversations/{conversation_id}")', backend)
