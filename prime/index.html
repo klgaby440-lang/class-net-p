@@ -1124,6 +1124,30 @@ body {
 .primeink-mixage-empty { padding:1rem; border:1px dashed var(--border-color); color:var(--text-secondary); border-radius:8px; }
 .primeink-mixage-class-group { margin-bottom:1.2rem; }
 .primeink-mixage-class-group > h2 { color:var(--primary-color); font-size:1.15rem; margin:0 0 .7rem; }
+.primeink-mixage-filterbar { display:flex; align-items:center; flex-wrap:wrap; gap:.7rem; padding:.75rem; border:1px solid var(--border-color); border-radius:10px; background:var(--bg-main); }
+.primeink-mixage-filterbar label { font-weight:700; font-size:.85rem; }
+.primeink-mixage-filterbar select { min-width:220px; max-width:100%; }
+.primeink-mixage-class-sheet { background:#fff; color:#111; padding:0; border:0; }
+.primeink-mixage-class-sheet h2 { color:#111!important; margin:0 0 2mm; font-size:15pt; }
+.primeink-mixage-class-sheet p { margin:0 0 3mm; font-size:9pt; }
+.primeink-mixage-class-table { width:100%; border-collapse:collapse; table-layout:fixed; background:#fff; color:#111; }
+.primeink-mixage-class-table th,.primeink-mixage-class-table td { border:1px solid #555; padding:1.4mm 1.6mm; font-size:8pt; text-align:left; vertical-align:middle; overflow-wrap:anywhere; }
+.primeink-mixage-class-table th { background:#e8e8e8; font-weight:700; }
+.primeink-mixage-class-table td:nth-child(n+2),.primeink-mixage-class-table th:nth-child(n+2) { text-align:center; }
+.primeink-mixage-class-empty { padding:1rem; border:1px dashed var(--border-color); border-radius:8px; color:var(--text-secondary); }
+.primeink-stats-divider { display:block; width:100%; border:0; border-top:1px solid var(--border-color); margin:1.25rem 0; opacity:.95; }
+.primeink-stats-section-title { margin:0 0 .7rem; font-size:1rem; font-weight:750; color:var(--text-primary); }
+.primeink-stats-period-control { display:flex; align-items:center; flex-wrap:wrap; gap:.55rem; margin-left:auto; }
+.primeink-stats-period-control label { font-size:.8rem; font-weight:700; color:var(--text-secondary); }
+.primeink-stats-period-control select { min-width:160px; width:auto; }
+@media print {
+    .primeink-mixage-class-sheet { break-inside:avoid; page-break-after:always; break-after:page; }
+    .primeink-mixage-class-sheet:last-child { page-break-after:auto; break-after:auto; }
+    .primeink-mixage-class-table th,.primeink-mixage-class-table td { font-size:7.5pt; padding:1mm 1.2mm; }
+    .primeink-mixage-plan { page-break-after:always; break-after:page; }
+    .primeink-mixage-plan:last-child { page-break-after:auto; break-after:auto; }
+    .primeink-mixage-filterbar { display:none!important; }
+}
 @media (max-width:900px) {
     .primeink-mixage-benches { grid-template-columns:repeat(2,minmax(0,1fr)); }
 }
@@ -1522,25 +1546,47 @@ body.theme-dark input::placeholder,body.theme-dark textarea::placeholder{color:v
             </nav>
 
             <div class="detail-display-area">
-                <div class="stats-summary-card">
-                    <div class="stat-badge success" id="statsSuccess">Réussite : --%</div>
-                    <div class="stat-badge danger" id="statsDanger">Échec : --%</div>
-                    <div class="stat-badge" id="statsMoyenne" style="background: rgba(37, 99, 235, 0.15); color: var(--primary-color);">Moyenne Classe : --</div>
-                </div>
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>NOM DE L'ÉLÈVE</th>
-                            <th>TOT S1</th>
-                            <th>TOT S2</th>
-                            <th>TOTAL OBTENU</th>
-                            <th>POURCENTAGE</th>
-                            <th>DÉCISION</th>
-                        </tr>
-                    </thead>
-                    <tbody id="statsTableBody"></tbody>
-                </table>
-
+                <section class="primeink-stats-block">
+                    <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:.8rem;">
+                        <h3 class="primeink-stats-section-title" style="margin:0;">Statistiques du cours</h3>
+                        <div class="primeink-stats-period-control">
+                            <label for="statsPeriod">Période / examen</label>
+                            <select id="statsPeriod" class="form-control">
+                                <option value="P1">Période 1</option>
+                                <option value="P2">Période 2</option>
+                                <option value="EX1">Examen 1</option>
+                                <option value="S1">1er semestre</option>
+                                <option value="P3">Période 3</option>
+                                <option value="P4">Période 4</option>
+                                <option value="EX2">Examen 2</option>
+                                <option value="S2">2e semestre</option>
+                                <option value="TG" selected>Année entière</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="stats-summary-card">
+                        <div class="stat-badge success" id="statsSuccess">Réussite : --%</div>
+                        <div class="stat-badge danger" id="statsDanger">Échec : --%</div>
+                        <div class="stat-badge" id="statsMoyenne" style="background: rgba(37, 99, 235, 0.15); color: var(--primary-color);">Moyenne Classe : --</div>
+                    </div>
+                </section>
+                <hr class="primeink-stats-divider">
+                <section class="primeink-stats-block">
+                    <h3 class="primeink-stats-section-title">Résultats des élèves pour le cours sélectionné</h3>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>NOM DE L'ÉLÈVE</th>
+                                <th>NOTE OBTENUE</th>
+                                <th>MAXIMUM</th>
+                                <th>POURCENTAGE</th>
+                                <th>DÉCISION</th>
+                            </tr>
+                        </thead>
+                        <tbody id="statsTableBody"></tbody>
+                    </table>
+                </section>
+                <hr class="primeink-stats-divider">
                 <section id="classPalmaresPanel" style="margin-top:1.5rem;padding:1rem;border:1px solid var(--border-color);border-radius:14px;background:var(--card-bg);">
                     <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:1rem;">
                         <div><h3 style="margin:0;">🏆 Palmarès de la classe</h3><small style="color:var(--text-secondary);">Calculé à partir des notes enregistrées pour tous les cours de la classe.</small></div>
@@ -1550,15 +1596,25 @@ body.theme-dark input::placeholder,body.theme-dark textarea::placeholder{color:v
                             <option value="EX2">Examen 2</option><option value="S2">2e semestre</option><option value="TG" selected>Année entière</option>
                         </select>
                     </div>
+                    <hr class="primeink-stats-divider">
+                    <h4 class="primeink-stats-section-title">Synthèse de la classe</h4>
                     <div id="classPalmaresSummary" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.7rem;margin-bottom:1rem;"></div>
+                    <hr class="primeink-stats-divider">
+                    <h4 class="primeink-stats-section-title">Comparaison des périodes</h4>
                     <div id="classPalmaresPeriodBreakdown" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:.6rem;margin-bottom:1rem;"></div>
+                    <hr class="primeink-stats-divider">
+                    <h4 class="primeink-stats-section-title">Évolution de la classe</h4>
                     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1rem;margin-bottom:1rem;">
                         <article class="card" style="padding:1rem;"><h4>Évolution du pourcentage</h4><div id="classPalmaresPercentChart"></div></article>
                         <article class="card" style="padding:1rem;"><h4>Évolution des places</h4><div id="classPalmaresRankChart"></div></article>
                     </div>
+                    <hr class="primeink-stats-divider">
+                    <h4 class="primeink-stats-section-title">Détail de l'élève sélectionné</h4>
                     <div id="classPalmaresStudentDetail" class="card" style="padding:1rem;margin-bottom:1rem;">
                         <strong>Sélectionnez un élève dans le classement pour voir ses cours à surveiller et l'évolution de ses notes.</strong>
                     </div>
+                    <hr class="primeink-stats-divider">
+                    <h4 class="primeink-stats-section-title">Classement de la classe</h4>
                     <div style="overflow-x:auto;">
                         <table class="data-table">
                             <thead><tr><th>PLACE</th><th>ÉLÈVE</th><th>POURCENTAGE</th><th>POINTS</th><th>COURS À SURVEILLER</th><th>ÉTAT</th></tr></thead>
@@ -1918,13 +1974,21 @@ body.theme-dark input::placeholder,body.theme-dark textarea::placeholder{color:v
                 <nav class="sub-navbar">
                     <button class="sub-nav-btn active" id="btnMixResultClasses" onclick="switchMixResultSubView('classes')">Classes</button>
                     <button class="sub-nav-btn" id="btnMixResultSalles" onclick="switchMixResultSubView('salles')">Salles</button>
-                    <button class="btn-primary" onclick="printToolResult('mixage')" style="margin-left:auto;">Exporter en PDF</button>
+                    <button class="btn-primary" id="mixagePrintButton" onclick="printToolResult('mixage')" style="margin-left:auto;">Exporter les classes en PDF</button>
                 </nav>
+                <div id="mixClassFilterBar" class="primeink-mixage-filterbar" style="margin-top:1rem;">
+                    <label for="mixClassSelect">Classe à consulter</label>
+                    <select id="mixClassSelect" class="form-control"></select>
+                </div>
+                <div id="mixRoomFilterBar" class="primeink-mixage-filterbar hidden" style="margin-top:1rem;">
+                    <label for="mixRoomSelect">Salle à consulter</label>
+                    <select id="mixRoomSelect" class="form-control"></select>
+                </div>
                 <div id="mix-view-classes" class="sub-view-content active" style="margin-top: 1rem;">
-                    <p>Affichage des répartitions par classe...</p>
+                    <p>Les affectations des élèves apparaîtront ici.</p>
                 </div>
                 <div id="mix-view-salles" class="sub-view-content hidden" style="margin-top: 1rem;">
-                    <p>Affichage des plans de salles et bancs anti-triche...</p>
+                    <p>Sélectionnez une salle pour afficher son plan.</p>
                 </div>
             </div>
 
@@ -4783,71 +4847,115 @@ async function bpPushClassBulletin(cls) {
                 }
             };
 
+            const COURSE_STATS_PERIOD_FIELDS = {
+                P1: ['p1'], P2: ['p2'], EX1: ['ex1'],
+                S1: ['p1', 'p2', 'ex1'], P3: ['p3'], P4: ['p4'], EX2: ['ex2'],
+                S2: ['p3', 'p4', 'ex2'], TG: ['p1', 'p2', 'ex1', 'p3', 'p4', 'ex2']
+            };
+            const COURSE_STATS_PERIOD_LABELS = {
+                P1: 'Période 1', P2: 'Période 2', EX1: 'Examen 1', S1: '1er semestre',
+                P3: 'Période 3', P4: 'Période 4', EX2: 'Examen 2', S2: '2e semestre', TG: 'Année entière'
+            };
+            let statsActiveClassId = '';
+            let statsActiveCourseId = '';
+
             function renderStatsSidebar(classId) {
                 const statsSidebar = document.getElementById('statsCourseSidebar');
                 if (!statsSidebar) return;
+                statsActiveClassId = String(classId || '');
                 statsSidebar.innerHTML = '';
-                const courses = appState.courses.filter(c => c.classId === classId);
+                const courses = appState.courses.filter(c => String(c.classId) === statsActiveClassId);
 
                 courses.forEach((crs, idx) => {
                     const btn = document.createElement('button');
-                    btn.className = `list-item ${idx === 0 ? 'active' : ''}`;
+                    btn.className = 'list-item' + (idx === 0 ? ' active' : '');
                     btn.textContent = crs.name;
                     btn.addEventListener('click', () => {
                         document.querySelectorAll('#statsCourseSidebar .list-item').forEach(b => b.classList.remove('active'));
                         btn.classList.add('active');
-                        renderCourseStats(classId, crs.id);
+                        statsActiveCourseId = String(crs.id);
+                        renderCourseStats(statsActiveClassId, statsActiveCourseId);
                     });
                     statsSidebar.appendChild(btn);
                 });
 
-                if (courses.length > 0) renderCourseStats(classId, courses[0].id);
+                const periodSelector = document.getElementById('statsPeriod');
+                if (periodSelector && !periodSelector.dataset.listenerBound) {
+                    periodSelector.addEventListener('change', () => {
+                        if (statsActiveClassId && statsActiveCourseId) {
+                            renderCourseStats(statsActiveClassId, statsActiveCourseId);
+                        }
+                    });
+                    periodSelector.dataset.listenerBound = 'true';
+                }
+
+                statsActiveCourseId = courses.length ? String(courses[0].id) : '';
+                if (courses.length > 0) renderCourseStats(statsActiveClassId, statsActiveCourseId);
+                else {
+                    const tbody = document.getElementById('statsTableBody');
+                    if (tbody) tbody.innerHTML = '<tr><td colspan="5">Aucun cours n’est attribué à cette classe.</td></tr>';
+                    document.getElementById('statsSuccess').textContent = 'Réussite : —';
+                    document.getElementById('statsDanger').textContent = 'Échec : —';
+                    document.getElementById('statsMoyenne').textContent = 'Moyenne Classe : —';
+                }
                 renderClassPalmares(classId);
             }
 
             function renderCourseStats(classId, courseId) {
-                const course = appState.courses.find(c => c.id === courseId);
+                const course = appState.courses.find(c =>
+                    String(c.id) === String(courseId) && String(c.classId) === String(classId)
+                );
                 if (!course) return;
+                statsActiveClassId = String(classId);
+                statsActiveCourseId = String(courseId);
 
-                const students = getSortedStudentsByClass(classId);
+                const period = document.getElementById('statsPeriod')?.value || 'TG';
+                const fields = COURSE_STATS_PERIOD_FIELDS[period] || COURSE_STATS_PERIOD_FIELDS.TG;
+                const periodLabel = COURSE_STATS_PERIOD_LABELS[period] || COURSE_STATS_PERIOD_LABELS.TG;
+                const maxPer = Number(course.maxPer) || 0;
+                const maxSelected = fields.reduce((sum, field) =>
+                    sum + maxPer * ((field === 'ex1' || field === 'ex2') ? 2 : 1), 0
+                );
                 const tbody = document.getElementById('statsTableBody');
+                if (!tbody) return;
                 tbody.innerHTML = '';
 
                 let totalPassed = 0;
                 let totalClassPoints = 0;
                 let completedCount = 0;
-                const maxTG = (Number(course.maxPer) || 0) * 8;
 
-                students.forEach(st => {
+                studentsLoop: for (const st of getSortedStudentsByClass(classId)) {
                     const { v } = ficheCourseValues(st.id, course);
-                    const complete = v.tg !== null;
-                    const pct = complete && maxTG > 0 ? (v.tg / maxTG) * 100 : null;
+                    const score = ficheSumRequired(fields.map(field => v[field]));
+                    const complete = score !== null && maxSelected > 0;
+                    const pct = complete ? (score / maxSelected) * 100 : null;
                     const isSuccess = complete && pct >= 50;
                     if (complete) {
                         completedCount++;
-                        totalClassPoints += v.tg;
+                        totalClassPoints += score;
                         if (isSuccess) totalPassed++;
                     }
 
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
-                        <td>${safeHTML(st.name)} ${safeHTML(st.postname)} ${safeHTML(st.prename)}</td>
-                        <td>${safeHTML(ficheFmt(v.s1) || '—')}</td>
-                        <td>${safeHTML(ficheFmt(v.s2) || '—')}</td>
-                        <td>${complete ? `${safeHTML(ficheFmt(v.tg))} / ${safeHTML(ficheFmt(maxTG))}` : `— / ${safeHTML(ficheFmt(maxTG))}`}</td>
+                        <td>${safeHTML([st.name, st.postname, st.prename].filter(Boolean).join(' '))}</td>
+                        <td>${complete ? safeHTML(ficheFmt(score)) : '—'}</td>
+                        <td>${safeHTML(ficheFmt(maxSelected))}</td>
                         <td>${pct === null ? '—' : `${safeHTML((Math.round(pct * 10) / 10).toFixed(1))}%`}</td>
                         <td><span class="${!complete ? 'badge-info' : isSuccess ? 'badge-success' : 'badge-danger'}">${!complete ? 'À compléter' : isSuccess ? 'Réussite' : 'Échec'}</span></td>
                     `;
                     tbody.appendChild(tr);
-                });
+                }
 
-                const successPct = completedCount > 0 ? ((totalPassed / completedCount) * 100).toFixed(0) : '—';
-                const failurePct = completedCount > 0 ? String(100 - Number(successPct)) : '—';
+                const successPct = completedCount > 0 ? ((totalPassed / completedCount) * 100).toFixed(1) : '—';
+                const failurePct = completedCount > 0 ? (100 - Number(successPct)).toFixed(1) : '—';
                 const avgPoints = completedCount > 0 ? (totalClassPoints / completedCount).toFixed(1) : '—';
-
-                document.getElementById('statsSuccess').textContent = `Réussite (${course.name}) : ${successPct}${successPct === '—' ? '' : '%'}`;
-                document.getElementById('statsDanger').textContent = `Échec : ${failurePct}${failurePct === '—' ? '' : '%'}`;
-                document.getElementById('statsMoyenne').textContent = `Moyenne Classe : ${avgPoints} / ${ficheFmt(maxTG)}`;
+                document.getElementById('statsSuccess').textContent =
+                    `Réussite (${course.name} · ${periodLabel}) : ${successPct}${successPct === '—' ? '' : '%'}`;
+                document.getElementById('statsDanger').textContent =
+                    `Échec : ${failurePct}${failurePct === '—' ? '' : '%'}`;
+                document.getElementById('statsMoyenne').textContent =
+                    `Moyenne Classe : ${avgPoints} / ${ficheFmt(maxSelected)}`;
             }
 
             const PALMARES_PERIOD_FIELDS = {
@@ -5936,6 +6044,9 @@ async function bpPushClassBulletin(cls) {
         // MIXAGE : appel du serveur (/api/mixage/generate) et affichage du résultat
         // ------------------------------------------------------------------
         let __lastMixage = null;
+        let __selectedMixageClassId = '';
+        let __selectedMixageRoomKey = '';
+        let __activeMixageResultView = 'classes';
 
         window.renderMixClassChoices = function() {
             const box = document.getElementById('mixClassesContainer');
@@ -6035,6 +6146,7 @@ async function bpPushClassBulletin(cls) {
                         sourceBench: Number(bench.bench_number) || 0,
                         sourceSide: side,
                         id: student.id || '',
+                        studentId: student.student_id || '',
                         name: student.name || '',
                         classId: String(student.class || ''),
                         variant: student.variant_code || ''
@@ -6163,66 +6275,98 @@ async function bpPushClassBulletin(cls) {
                 '</div>';
         }
 
-        function bpMixageClassesHTML(result, rooms) {
-            const allSeats = bpMixageSeats(result);
-            const byClass = new Map();
-            allSeats.forEach(seat => {
-                const key = String(seat.classId || '');
-                if (!byClass.has(key)) byClass.set(key, []);
-                byClass.get(key).push(seat);
-            });
-            const selectedClasses = Array.isArray(__lastMixage && __lastMixage.targetClasses)
+        function bpMixageClassIds(result) {
+            const ids = Array.isArray(__lastMixage && __lastMixage.targetClasses)
                 ? __lastMixage.targetClasses.map(value => String(value))
                 : [];
-            const classIds = Array.from(new Set(selectedClasses.concat(Array.from(byClass.keys()))))
-                .filter(Boolean);
-            if (!classIds.length) return '<div class="primeink-mixage-empty">Aucun élève affecté.</div>';
-            const seatingRooms = result && Array.isArray(result.seating_plans) ? result.seating_plans : [];
-            return classIds
-                .sort((a, b) => bpClassLabel(a).localeCompare(bpClassLabel(b), 'fr'))
-                .map(classId => {
-                    const roomHTML = seatingRooms.map(room => {
-                        const roomSeats = bpMixageRoomSeats(room);
-                        const classSeats = roomSeats.filter(seat => String(seat.classId) === classId);
-                        const config = (rooms || []).find(item =>
-                            String(item.nom || '') === String(room.room_name || '') ||
-                            (item.id != null && String(item.id) === String(room.room_id || ''))
-                        ) || room;
-                        const previousSeatContext = __mixageSeatDisplayContext;
-                        __mixageSeatDisplayContext = { classId, hideOtherClasses: true };
-                        try {
-                            return bpMixageSeatingPlanHTML(
-                                bpClassLabel(classId) + ' · ' + (room.room_name || 'Salle'),
-                                room.supervisor,
-                                roomSeats,
-                                config,
-                                {
-                                    classId,
-                                    classAssignedSeats: classSeats.length,
-                                    hideOtherClasses: true
-                                }
-                            );
-                        } finally {
-                            __mixageSeatDisplayContext = previousSeatContext;
-                        }
-                    }).join('');
-                    return '<div class="primeink-mixage-class-group"><h2>' + safeHTML(bpClassLabel(classId)) + '</h2>' +
-                        (roomHTML || '<div class="primeink-mixage-empty">Aucune salle ou place attribuée à cette classe.</div>') +
-                        '</div>';
-                }).join('');
+            const seatIds = bpMixageSeats(result).map(seat => String(seat.classId || ''));
+            return Array.from(new Set(ids.concat(seatIds).filter(Boolean)))
+                .sort((a, b) => bpClassLabel(a).localeCompare(bpClassLabel(b), 'fr'));
         }
 
-        function bpMixageRoomsHTML(result, rooms) {
-            return (result && Array.isArray(result.seating_plans) ? result.seating_plans : []).map(room => {
-                const config = (rooms || []).find(item => item.nom === room.room_name) || {};
-                const seats = bpMixageRoomSeats(room);
+        function bpMixageClassPlacementHTML(classId, result, printMode = false) {
+            const seats = bpMixageSeats(result)
+                .filter(seat => String(seat.classId) === String(classId))
+                .sort((a, b) =>
+                    String(a.room || '').localeCompare(String(b.room || ''), 'fr', { numeric: true }) ||
+                    a.sourceRow - b.sourceRow ||
+                    a.sourceBench - b.sourceBench ||
+                    (a.sourceSide === b.sourceSide ? 0 : (a.sourceSide === 'left' ? -1 : 1))
+                );
+            const session = __lastMixage && __lastMixage.session ? __lastMixage.session : {};
+            const rows = seats.map(seat =>
+                '<tr>' +
+                '<td>' + safeHTML(seat.name || 'Élève') + '</td>' +
+                '<td><strong>' + safeHTML(seat.id || '—') + '</strong></td>' +
+                '<td>' + safeHTML(seat.room || '—') + '</td>' +
+                '<td>' + safeHTML(seat.sourceRow || '—') + '</td>' +
+                '<td>' + safeHTML(seat.sourceBench || '—') + '</td>' +
+                '<td>' + safeHTML(seat.variant || '—') + '</td>' +
+                '</tr>'
+            ).join('');
+            const empty = '<div class="primeink-mixage-class-empty">Aucun élève placé pour cette classe dans cette session.</div>';
+            return '<div class="' + (printMode ? 'tp-page primeink-mixage-class-sheet' : 'primeink-mixage-class-group') + '">' +
+                '<h2>' + (printMode ? 'Affectations — ' : '') + safeHTML(bpClassLabel(classId)) + '</h2>' +
+                (printMode
+                    ? '<p>' + safeHTML(appState.school.name || '') + ' · ' + safeHTML(session.exam_name || 'Examen') + ' · ' + safeHTML(session.academic_year || appState.school.schoolYear || '') + '</p>'
+                    : '<p class="primeink-mixage-meta">' + seats.length + ' élève(s) placé(s) · Identifiant d’examen, salle et coordonnées de placement</p>') +
+                (seats.length
+                    ? '<table class="primeink-mixage-class-table"><thead><tr><th>ÉLÈVE</th><th>IDENTIFIANT D’EXAMEN</th><th>SALLE</th><th>RANGÉE</th><th>BANC</th><th>VARIANTE</th></tr></thead><tbody>' + rows + '</tbody></table>'
+                    : empty) +
+                '</div>';
+        }
+
+        function bpMixageClassesHTML(result, rooms) {
+            const classIds = bpMixageClassIds(result);
+            if (!classIds.length) return '<div class="primeink-mixage-empty">Aucune classe affectée à cette session.</div>';
+            if (!classIds.includes(String(__selectedMixageClassId))) __selectedMixageClassId = classIds[0];
+            return bpMixageClassPlacementHTML(__selectedMixageClassId, result, false);
+        }
+
+        function bpMixageClassSheetsHTML(result) {
+            const classIds = bpMixageClassIds(result);
+            return classIds.map(classId => bpMixageClassPlacementHTML(classId, result, true)).join('');
+        }
+
+        function bpMixageRoomKey(room, index) {
+            if (room && room.room_id !== undefined && room.room_id !== null) return String(room.room_id);
+            return String((room && room.room_name) || ('Salle ' + (index + 1)));
+        }
+
+        function bpMixageRoomSheetsHTML(result, rooms) {
+            const seatingPlans = result && Array.isArray(result.seating_plans) ? result.seating_plans : [];
+            return seatingPlans.map((room, index) => {
+                const config = (rooms || []).find(item =>
+                    String(item.nom || '') === String(room.room_name || '') ||
+                    (item.id !== undefined && String(item.id) === String(room.room_id || ''))
+                ) || room;
                 return bpMixageSeatingPlanHTML(
-                    room.room_name || 'Salle',
+                    room.room_name || ('Salle ' + (index + 1)),
                     room.supervisor,
-                    seats,
+                    bpMixageRoomSeats(room),
                     config
                 );
             }).join('');
+        }
+
+        function bpMixageRoomsHTML(result, rooms) {
+            const seatingPlans = result && Array.isArray(result.seating_plans) ? result.seating_plans : [];
+            if (!seatingPlans.length) return '<div class="primeink-mixage-empty">Aucun plan de salle disponible.</div>';
+            let roomIndex = seatingPlans.findIndex((room, index) =>
+                bpMixageRoomKey(room, index) === String(__selectedMixageRoomKey)
+            );
+            if (roomIndex < 0) roomIndex = 0;
+            const room = seatingPlans[roomIndex];
+            const config = (rooms || []).find(item =>
+                String(item.nom || '') === String(room.room_name || '') ||
+                (item.id !== undefined && String(item.id) === String(room.room_id || ''))
+            ) || room;
+            return bpMixageSeatingPlanHTML(
+                room.room_name || ('Salle ' + (roomIndex + 1)),
+                room.supervisor,
+                bpMixageRoomSeats(room),
+                config
+            );
         }
 
         function bpRestorePublishedMixage() {
@@ -6270,8 +6414,55 @@ async function bpPushClassBulletin(cls) {
 
         function bpRenderMixage() {
             if (!bpRestorePublishedMixage()) return;
-            document.getElementById('mix-view-classes').innerHTML = bpMixageClassesHTML(__lastMixage.result, __lastMixage.rooms);
-            document.getElementById('mix-view-salles').innerHTML = bpMixageRoomsHTML(__lastMixage.result, __lastMixage.rooms);
+            const result = __lastMixage.result;
+            const rooms = __lastMixage.rooms;
+            const classIds = bpMixageClassIds(result);
+            const seatingPlans = Array.isArray(result.seating_plans) ? result.seating_plans : [];
+            const classSelect = document.getElementById('mixClassSelect');
+            const roomSelect = document.getElementById('mixRoomSelect');
+
+            if (classSelect) {
+                classSelect.innerHTML = classIds.map(id =>
+                    '<option value="' + safeHTML(id) + '">' + safeHTML(bpClassLabel(id)) + '</option>'
+                ).join('');
+                if (!classIds.includes(String(__selectedMixageClassId))) __selectedMixageClassId = classIds[0] || '';
+                classSelect.value = __selectedMixageClassId;
+                if (!classSelect.dataset.listenerBound) {
+                    classSelect.addEventListener('change', () => {
+                        __selectedMixageClassId = classSelect.value;
+                        if (__lastMixage) {
+                            document.getElementById('mix-view-classes').innerHTML =
+                                bpMixageClassesHTML(__lastMixage.result, __lastMixage.rooms);
+                        }
+                    });
+                    classSelect.dataset.listenerBound = 'true';
+                }
+            }
+
+            if (roomSelect) {
+                roomSelect.innerHTML = seatingPlans.map((room, index) =>
+                    '<option value="' + safeHTML(bpMixageRoomKey(room, index)) + '">' +
+                    safeHTML(room.room_name || ('Salle ' + (index + 1))) + '</option>'
+                ).join('');
+                const roomKeys = seatingPlans.map((room, index) => bpMixageRoomKey(room, index));
+                if (!roomKeys.includes(String(__selectedMixageRoomKey))) __selectedMixageRoomKey = roomKeys[0] || '';
+                roomSelect.value = __selectedMixageRoomKey;
+                if (!roomSelect.dataset.listenerBound) {
+                    roomSelect.addEventListener('change', () => {
+                        __selectedMixageRoomKey = roomSelect.value;
+                        if (__lastMixage) {
+                            document.getElementById('mix-view-salles').innerHTML =
+                                bpMixageRoomsHTML(__lastMixage.result, __lastMixage.rooms);
+                        }
+                    });
+                    roomSelect.dataset.listenerBound = 'true';
+                }
+            }
+
+            document.getElementById('mixClassFilterBar')?.classList.toggle('hidden', __activeMixageResultView !== 'classes');
+            document.getElementById('mixRoomFilterBar')?.classList.toggle('hidden', __activeMixageResultView !== 'salles');
+            document.getElementById('mix-view-classes').innerHTML = bpMixageClassesHTML(result, rooms);
+            document.getElementById('mix-view-salles').innerHTML = bpMixageRoomsHTML(result, rooms);
         }
 
         window.showMixageResultsView = async function() {
@@ -6292,11 +6483,17 @@ async function bpPushClassBulletin(cls) {
 
         window.switchMixResultSubView = function(view) {
             const isClasses = view === 'classes';
+            __activeMixageResultView = isClasses ? 'classes' : 'salles';
             document.getElementById('btnMixResultClasses').classList.toggle('active', isClasses);
             document.getElementById('btnMixResultSalles').classList.toggle('active', !isClasses);
             document.getElementById('mix-view-classes').classList.toggle('active', isClasses);
             document.getElementById('mix-view-salles').classList.toggle('active', !isClasses);
-            document.getElementById('mix-view-salles').classList.remove('hidden');
+            document.getElementById('mix-view-classes').classList.toggle('hidden', !isClasses);
+            document.getElementById('mix-view-salles').classList.toggle('hidden', isClasses);
+            document.getElementById('mixClassFilterBar').classList.toggle('hidden', !isClasses);
+            document.getElementById('mixRoomFilterBar').classList.toggle('hidden', isClasses);
+            const printButton = document.getElementById('mixagePrintButton');
+            if (printButton) printButton.textContent = isClasses ? 'Exporter les classes en PDF' : 'Exporter les salles en PDF';
         };
 
 // Configuration horaire : seuls les enseignants et les affectations officielles sont sélectionnables.
@@ -7008,7 +7205,8 @@ const HOR_DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
             return classes.concat(teachers).join('');
         }
 
-        // Impression / PDF des résultats Horaire ou Mixage (une section par page)
+        // Impression / PDF : les classes ont chacune une page portrait,
+        // tandis que chaque salle dispose d'une page paysage dédiée.
         window.printToolResult = function(kind) {
             let html = '', orientation = 'portrait';
             if (kind === 'horaire') {
@@ -7016,7 +7214,14 @@ const HOR_DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
                 html = bpScheduleSheetsHTML(); orientation = 'landscape';
             } else {
                 if (!__lastMixage) return alert("Générez d'abord le mixage.");
-                html = bpMixageRoomsHTML(__lastMixage.result, __lastMixage.rooms) + bpMixageClassesHTML(__lastMixage.result, __lastMixage.rooms);
+                if (__activeMixageResultView === 'classes') {
+                    html = bpMixageClassSheetsHTML(__lastMixage.result);
+                    orientation = 'portrait';
+                } else {
+                    html = bpMixageRoomSheetsHTML(__lastMixage.result, __lastMixage.rooms);
+                    orientation = 'landscape';
+                }
+                if (!html) return alert("Aucune affectation à exporter pour cette vue.");
             }
             const old = document.getElementById('pdfExportContainer');
             if (old) old.remove();
@@ -7025,7 +7230,11 @@ const HOR_DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
             st.textContent = '@page { size: ' + bpPaper() + ' ' + orientation + '; margin: 10mm; }';
             const container = document.createElement('div');
             container.id = 'pdfExportContainer';
-            container.style.cssText = 'position:fixed;left:-20000px;top:0;width:277mm;';
+            const paper = bpPaper();
+            const pageWidth = orientation === 'landscape'
+                ? (paper === 'A3' ? '400mm' : '277mm')
+                : (paper === 'A3' ? '277mm' : '190mm');
+            container.style.cssText = 'position:fixed;left:-20000px;top:0;width:' + pageWidth + ';';
             container.innerHTML = html;
             document.body.appendChild(container);
             bpPrintInIframe(container, orientation, '10mm');
