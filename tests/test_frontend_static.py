@@ -388,6 +388,14 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn("const teachers = Array.isArray(__primeInkTeacherAttendanceRoster)", source)
         self.assertIn("saveState();", source[source.index("window.savePrimeInkTeacherAttendance = async function"):source.index("function renderPresencesProfTable()")])
         self.assertIn("await loadPrimeInkTeacherAttendance();", source[source.index("window.savePrimeInkTeacherAttendance = async function"):source.index("function renderPresencesProfTable()")])
+        self.assertIn('id="saveAllTeacherAttendanceButton"', source)
+        self.assertIn('onclick="saveAllPrimeInkTeacherAttendance()"', source)
+        bulk_save = source[source.index("window.saveAllPrimeInkTeacherAttendance = async function"):source.index("function renderPresencesProfTable()")]
+        self.assertIn("for (let index = 0; index < entries.length; index++)", bulk_save)
+        self.assertIn("teacher_email: entry.email", bulk_save)
+        self.assertIn("if (!checkIn && !checkOut && !hasExistingRecord) { skipped++; return; }", bulk_save)
+        self.assertIn("failures.slice(0, 3)", bulk_save)
+        self.assertIn("saveState();", bulk_save)
 
     def test_primeink_daily_attendance_summary_truth_table(self):
         if not self.node:
