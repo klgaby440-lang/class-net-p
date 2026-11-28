@@ -548,7 +548,7 @@
                 </div>
                 <div style="display: flex; gap: 10px; margin-top: 20px;">
                     <button class="btn-action" style="flex:1;" onclick="switchAuthSubView('login')">Retour</button>
-                    <button class="btn-primary" style="flex:1;" id="btn-send-otp" onclick="handleRegisterInit()">Recevoir le code OTP </button>
+                    <button class="btn-primary" style="flex:1;" id="btn-send-otp" onclick="handleRegisterInit()">Recevoir le code OTP</button>
                 </div>
             </div>
 
@@ -622,7 +622,7 @@
         <!-- FILTRE DE COURS EN SÉPARÉ POUR LES NOTES -->
         <div class="card" style="margin-bottom: 12px;">
             <div class="form-group" style="margin-bottom: 0;">
-                <label><svg class="ci-icon ci-inline" viewBox="0 0 24 24" aria-hidden="true"><use href="#ci-icon-book"></use></svg> SÉLECTIONNER LE COURS ÀA FICHIER / Saisir</label>
+                <label><svg class="ci-icon ci-inline" viewBox="0 0 24 24" aria-hidden="true"><use href="#ci-icon-book"></use></svg> SÉLECTIONNER LE COURS</label>
                 <select id="grades-filter-course" onchange="changeGradeCourseFilter(this.value)"></select>
             </div>
         </div>
@@ -1762,7 +1762,7 @@ async function handleRegisterInit() {
         alert(" Erreur de réseau lors de la demande du code OTP.");
     } finally {
         btn.disabled = false;
-        btn.textContent = "Recevoir le code OTP ";
+        btn.textContent = "Recevoir le code OTP";
     }
 }
 
