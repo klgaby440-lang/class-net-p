@@ -173,7 +173,8 @@ class FrontendStaticTests(unittest.TestCase):
 
     def test_primeink_bulletin_handles_class_ids_and_print_scale(self):
         source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
-        self.assertIn("String(c.classId ?? '') === studentClassId", source)
+        self.assertIn("function bpBulletinCoursesForClass(cls)", source)
+        self.assertIn("String(course.classId ?? '') === String(cls && cls.id || '')", source)
         self.assertIn("String(s.classId ?? '') === studentClassId", source)
         self.assertIn("bp-empty-courses", source)
         self.assertIn("page.style.transform = 'none';", source)
