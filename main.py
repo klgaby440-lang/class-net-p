@@ -1,4 +1,5 @@
 import os
+import asyncio
 import logging
 import secrets
 import string
@@ -1101,6 +1102,8 @@ CRYPT_CONSOLE_LOGIN_LIMITER = AttemptLimiter(max_attempts=5, window_seconds=900)
 CRYPT_TELEMETRY_LIMITER = AttemptLimiter(max_attempts=180, window_seconds=60)
 CRYPT_TICKET_LIMITER = AttemptLimiter(max_attempts=5, window_seconds=3600)
 CRYPT_LLINK_LIMITER = AttemptLimiter(max_attempts=60, window_seconds=300)
+# Évite les rafales simultanées vers le moteur distant partagé par les quatre applications.
+LLINK_UPSTREAM_SEMAPHORE = asyncio.Semaphore(3)
 PROFILE_UPDATE_LIMITER = AttemptLimiter(max_attempts=5, window_seconds=900)  # 5 mots de passe erronés / 15 min
 
 
@@ -3460,17 +3463,40 @@ async def classink_llink_assist(payload: dict, request: Request, db: Session = D
 
     client = httpx.AsyncClient(timeout=httpx.Timeout(connect=30.0, read=90.0, write=20.0, pool=12.0))
     url = os.getenv("LLINK_API_BASE_URL", "https://llink-usz9.onrender.com").rstrip("/") + "/api/chat"
+    await LLINK_UPSTREAM_SEMAPHORE.acquire()
+    semaphore_held = True
     try:
-        upstream = await client.send(
-            client.build_request(
-                "POST", url, json=request_payload,
-                headers={"Accept": "text/event-stream", "Cache-Control": "no-cache"},
-            ),
-            stream=True,
-        )
-    except httpx.HTTPError as exc:
+        upstream = None
+        for attempt in range(2):
+            upstream = await client.send(
+                client.build_request(
+                    "POST", url, json=request_payload,
+                    headers={"Accept": "text/event-stream", "Cache-Control": "no-cache"},
+                ),
+                stream=True,
+            )
+            if upstream.status_code != 429 or attempt == 1:
+                break
+
+            # Une seule relance, uniquement après un court délai, pour ne pas
+            # transformer une limite du moteur en boucle de requêtes.
+            retry_after = str(upstream.headers.get("retry-after") or "").strip()
+            try:
+                retry_delay = float(retry_after) if retry_after else 1.5
+            except ValueError:
+                retry_delay = 1.5
+            await upstream.aread()
+            await upstream.aclose()
+            if retry_delay <= 0 or retry_delay > 5:
+                break
+            await asyncio.sleep(max(0.5, retry_delay))
+    except BaseException as exc:
+        if semaphore_held:
+            LLINK_UPSTREAM_SEMAPHORE.release()
         await client.aclose()
-        raise HTTPException(status_code=503, detail="Le serveur Llink est injoignable. Réessayez.") from exc
+        if isinstance(exc, httpx.HTTPError):
+            raise HTTPException(status_code=503, detail="Le serveur Llink est injoignable. Réessayez.") from exc
+        raise
 
     if upstream.status_code >= 400:
         upstream_status = upstream.status_code
@@ -3478,6 +3504,9 @@ async def classink_llink_assist(payload: dict, request: Request, db: Session = D
         raw_error = (await upstream.aread()).decode("utf-8", "replace")[:500]
         await upstream.aclose()
         await client.aclose()
+        if semaphore_held:
+            LLINK_UPSTREAM_SEMAPHORE.release()
+            semaphore_held = False
         if upstream_status == 429:
             wait_hint = (" Réessayez dans " + retry_after + " seconde(s)." if retry_after.isdigit() else " Réessayez dans quelques instants.")
             raise HTTPException(
@@ -3496,6 +3525,8 @@ async def classink_llink_assist(payload: dict, request: Request, db: Session = D
         finally:
             await upstream.aclose()
             await client.aclose()
+            if semaphore_held:
+                LLINK_UPSTREAM_SEMAPHORE.release()
 
     return StreamingResponse(
         relay_llink_stream(),
