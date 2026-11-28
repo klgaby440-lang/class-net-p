@@ -693,11 +693,11 @@ function viewNotes() {
     } else {
         out += '<div class="list" style="margin-top:10px">' + allEvaluations.map(e => {
             const teacher = e.teacherName || 'Enseignant non renseigné';
-            const teacherCode = e.teacherCode || 'Non renseigné';
+            const teacherPhone = e.teacherPhone || 'Non renseigné';
             return '<article class="item" style="display:block"><div class="row sb wrap"><strong class="t">' + esc(e.title || 'Interrogation') + '</strong><span class="m">' + esc(fdate(e.date)) + '</span></div>' +
                 '<div class="m" style="margin-top:5px">Cours : <strong>' + esc(e.courseName) + '</strong>' + (e.courseCategory ? ' · ' + esc(e.courseCategory) : '') + '</div>' +
                 '<div class="m" style="margin-top:4px">Professeur : <strong>' + esc(teacher) + '</strong></div>' +
-                '<div class="m">N° du professeur : <strong>' + esc(teacherCode) + '</strong></div>' +
+                '<div class="m">Téléphone du professeur : <strong>' + esc(teacherPhone) + '</strong></div>' +
                 '<div class="row sb" style="margin-top:8px"><span class="m">' + esc(LABELS[e.period] || e.period || '') + '</span><strong class="num">' + fmt(e.obtained) + ' / ' + fmt(e.max) + '</strong></div>' +
                 (e.content ? '<p class="m" style="margin-top:6px">' + esc(e.content) + '</p>' : '') + '</article>';
         }).join('') + '</div>';
@@ -724,7 +724,7 @@ function viewAttendance() {
             out += '<div class="list" style="margin-top:10px">' + records.map(record => {
                 const recordStatus = String(record.status || '?').toUpperCase();
                 const recordLabel = record.statusLabel || ({P:'Présent',A:'Absent',R:'En retard'}[recordStatus] || 'Non renseigné');
-                return '<article class="item" style="display:block"><div class="row sb wrap"><strong class="t">' + esc(record.course || 'Cours') + '</strong><span class="chip">' + esc(recordLabel) + '</span></div><div class="m" style="margin-top:5px">Enseignant : <strong>' + esc(record.teacherName || 'Non renseigné') + '</strong></div><div class="m">N° du professeur : <strong>' + esc(record.teacherCode || 'Non renseigné') + '</strong></div>' + (record.slot ? '<div class="m">Séance : ' + esc(record.slot) + '</div>' : '') + '</article>';
+                return '<article class="item" style="display:block"><div class="row sb wrap"><strong class="t">' + esc(record.course || 'Cours') + '</strong><span class="chip">' + esc(recordLabel) + '</span></div><div class="m" style="margin-top:5px">Enseignant : <strong>' + esc(record.teacherName || 'Non renseigné') + '</strong></div><div class="m">Téléphone du professeur : <strong>' + esc(record.teacherPhone || 'Non renseigné') + '</strong></div>' + (record.slot ? '<div class="m">Séance : ' + esc(record.slot) + '</div>' : '') + '</article>';
             }).join('') + '</div>';
         }
         out += '</div>';
@@ -802,7 +802,7 @@ function courseSheet(i) {
     const evs = (c.evaluations || []).slice().sort((a, b) => String(b.date).localeCompare(String(a.date)));
     const html = '<table class="t"><thead><tr><th>Période</th><th>Points</th><th>Maximum</th></tr></thead><tbody>' + row + '</tbody></table>' +
         '<p class="sub" style="margin:12px 0"><strong>Pour réussir.</strong> ' + esc(passAdvice(c)) + '</p>' +
-        (evs.length ? '<h4 style="margin:14px 0 4px">Évaluations</h4><div class="list">' + evs.map(e => '<div class="item" style="display:block"><div class="row sb"><span class="t">' + esc(e.title) + '</span><strong class="num">' + (num(e.obtained) === null ? '—' : fmt(e.obtained)) + ' / ' + fmt(e.max) + '</strong></div><div class="m">' + esc(fdate(e.date)) + (e.period ? ' · ' + esc(LABELS[e.period] || e.period) : '') + '</div><div class="m">Professeur : <strong>' + esc(e.teacherName || 'Non renseigné') + '</strong></div><div class="m">N° du professeur : <strong>' + esc(e.teacherCode || 'Non renseigné') + '</strong></div>' + (e.content ? '<div class="m" style="margin-top:4px;color:var(--text)">' + esc(e.content) + '</div>' : '') + '</div>').join('') + '</div>' : '');
+        (evs.length ? '<h4 style="margin:14px 0 4px">Évaluations</h4><div class="list">' + evs.map(e => '<div class="item" style="display:block"><div class="row sb"><span class="t">' + esc(e.title) + '</span><strong class="num">' + (num(e.obtained) === null ? '—' : fmt(e.obtained)) + ' / ' + fmt(e.max) + '</strong></div><div class="m">' + esc(fdate(e.date)) + (e.period ? ' · ' + esc(LABELS[e.period] || e.period) : '') + '</div><div class="m">Professeur : <strong>' + esc(e.teacherName || 'Non renseigné') + '</strong></div><div class="m">Téléphone du professeur : <strong>' + esc(e.teacherPhone || 'Non renseigné') + '</strong></div>' + (e.content ? '<div class="m" style="margin-top:4px;color:var(--text)">' + esc(e.content) + '</div>' : '') + '</div>').join('') + '</div>' : '');
     ui.sheet(c.subCategory ? c.name + ' — ' + c.subCategory : c.name, html);
 }
 
