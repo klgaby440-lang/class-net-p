@@ -2251,41 +2251,59 @@ function jsArg(value) {
 // Les appels alert("...") existants passent aussi par cette fenêtre.
 // ---------------------------------------------------------------------------
 let __dialogQueue = Promise.resolve();
-function __showDialog(kind, message, title, defaultValue) {
+function __showDialog(kind, message, title, defaultValue, options = {}) {
     const run = () => new Promise(resolve => {
         const overlay = document.createElement('div');
-        overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(15,23,42,0.55);display:flex;align-items:center;justify-content:center;padding:1rem;';
-        const box = document.createElement('div');
+        overlay.className = 'primeink-system-console-overlay';
+        overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(15,23,42,.62);backdrop-filter:blur(5px);display:flex;align-items:center;justify-content:center;padding:16px;';
+        const box = document.createElement('section');
         box.setAttribute('role', 'dialog');
-        box.style.cssText = 'background:var(--bg-card,#fff);color:var(--text-primary,#0f172a);border:1px solid var(--border-color,#cbd5e1);border-radius:12px;max-width:440px;width:100%;padding:1.2rem;box-shadow:0 20px 50px rgba(0,0,0,0.35);';
+        box.setAttribute('aria-modal', 'true');
+        box.style.cssText = 'background:var(--bg-card,#fff);color:var(--text-primary,#0f172a);border:1px solid var(--border-color,#cbd5e1);border-radius:18px;max-width:460px;width:100%;padding:22px;box-shadow:0 24px 70px rgba(0,0,0,.35);';
+        const eyebrow = document.createElement('div');
+        eyebrow.textContent = 'CLASSINK · CONSOLE SYSTÈME';
+        eyebrow.style.cssText = 'font-size:10px;letter-spacing:1.2px;font-weight:800;color:var(--primary,#5b4be8);margin-bottom:8px;';
         const h = document.createElement('h3');
         h.textContent = title;
-        h.style.cssText = 'margin:0 0 0.6rem;font-size:1rem;';
+        h.style.cssText = 'margin:0 0 9px;font-size:1.08rem;font-weight:800;';
         const p = document.createElement('p');
         p.textContent = message;
-        p.style.cssText = 'margin:0 0 1rem;font-size:0.9rem;white-space:pre-wrap;line-height:1.45;';
-        box.append(h, p);
+        p.style.cssText = 'margin:0 0 16px;font-size:.9rem;white-space:pre-wrap;line-height:1.55;color:inherit;opacity:.88;';
+        box.append(eyebrow,h,p);
         let input = null;
         if (kind === 'prompt') {
-            input = document.createElement('input');
-            input.type = 'text';
+            input = options.multiline ? document.createElement('textarea') : document.createElement('input');
+            if (input.tagName === 'INPUT') input.type = options.type || 'text';
+            else { input.rows = options.rows || 4; input.style.resize = 'vertical'; }
             input.value = defaultValue || '';
-            input.style.cssText = 'width:100%;padding:0.5rem;margin-bottom:1rem;border-radius:6px;border:1px solid var(--border-color,#cbd5e1);background:var(--bg-card,#fff);color:inherit;box-sizing:border-box;';
+            if (options.inputMode) input.setAttribute('inputmode', options.inputMode);
+            if (options.maxLength) input.maxLength = options.maxLength;
+            input.placeholder = options.placeholder || '';
+            input.autocomplete = options.autocomplete || 'off';
+            input.required = !!options.required;
+            input.style.cssText += ';width:100%;min-height:' + (options.multiline ? '104px' : '44px') + ';padding:11px 12px;margin:0 0 16px;border-radius:10px;border:1px solid var(--border-color,#cbd5e1);background:var(--bg-card,#fff);color:inherit;box-sizing:border-box;font:inherit;outline:none;';
             box.appendChild(input);
         }
         const row = document.createElement('div');
-        row.style.cssText = 'display:flex;gap:0.6rem;justify-content:flex-end;';
+        row.style.cssText = 'display:flex;gap:9px;justify-content:flex-end;flex-wrap:wrap;';
         const mkBtn = (label, primary) => {
             const b = document.createElement('button');
             b.type = 'button';
             b.textContent = label;
             b.className = primary ? 'btn-primary' : 'btn-secondary';
-            b.style.cssText = 'padding:0.45rem 1rem;';
+            b.style.cssText = 'min-height:40px;padding:9px 16px;border-radius:10px;font-weight:700;';
             return b;
         };
         const close = value => { overlay.remove(); document.removeEventListener('keydown', onKey, true); resolve(value); };
-        const okBtn = mkBtn(kind === 'confirm' ? 'Confirmer' : (kind === 'prompt' ? 'Valider' : 'Ok'), true);
-        const accept = () => close(kind === 'prompt' ? input.value.trim() : (kind === 'confirm' ? true : undefined));
+        const okBtn = mkBtn(kind === 'confirm' ? 'Confirmer' : (kind === 'prompt' ? 'Valider' : 'Compris'), true);
+        const accept = () => {
+            if (kind === 'prompt' && options.required && !String(input.value || '').trim()) {
+                input.setCustomValidity('Ce champ est obligatoire.');
+                input.reportValidity();
+                return;
+            }
+            close(kind === 'prompt' ? input.value.trim() : (kind === 'confirm' ? true : undefined));
+        };
         const cancel = () => close(kind === 'prompt' ? null : (kind === 'confirm' ? false : undefined));
         okBtn.onclick = accept;
         if (kind !== 'alert') { const c = mkBtn('Annuler', false); c.onclick = cancel; row.appendChild(c); }
@@ -2294,7 +2312,8 @@ function __showDialog(kind, message, title, defaultValue) {
         overlay.appendChild(box);
         const onKey = e => {
             if (e.key === 'Escape') { e.preventDefault(); cancel(); }
-            else if (e.key === 'Enter') { e.preventDefault(); accept(); }
+            else if (e.key === 'Enter' && !(input && input.tagName === 'TEXTAREA' && !e.ctrlKey)) { e.preventDefault(); accept(); }
+            else if (e.key === 'Enter' && input && input.tagName === 'TEXTAREA' && e.ctrlKey) { e.preventDefault(); accept(); }
         };
         document.addEventListener('keydown', onKey, true);
         document.body.appendChild(overlay);
@@ -2305,9 +2324,9 @@ function __showDialog(kind, message, title, defaultValue) {
     return result;
 }
 function showCustomAlert(message, title = 'PrimeInk') { return __showDialog('alert', String(message), title); }
-function showCustomPrompt(message, defaultValue = '', title = 'Saisie requise') { return __showDialog('prompt', String(message), title, defaultValue); }
+function showCustomPrompt(message, defaultValue = '', title = 'Saisie requise', options = {}) { return __showDialog('prompt', String(message), title, defaultValue, options); }
 function showCustomConfirm(message, title = 'Confirmation') { return __showDialog('confirm', String(message), title); }
-window.alert = function(message) { showCustomAlert(message); };
+window.alert = function(message) { return showCustomAlert(message); };
 
 
 
@@ -4097,6 +4116,7 @@ async function bpPushClassBulletin(cls) {
                         courses: s.courses.filter(c => c.subCategory).map(c => ({ id: c.id, name: c.name, className: classNameById[c.classId], subCategory: c.subCategory })),
                         signatures: (s.teachers || []).filter(t => t.signature).map(t => ({ uniqueId: t.uniqueId, signature: t.signature })),
                         printSettings: s.printSettings,
+                        mixageSessions: Array.isArray(s.mixageSessions) ? s.mixageSessions : []
                         // Les horaires générés avant la connexion restent disponibles pour une publication manuelle dans Manager.
                         horaire: {
                             config: horaire.config || {},
@@ -4135,6 +4155,10 @@ async function bpPushClassBulletin(cls) {
                         if (old && !t.signature) t.signature = old.signature;
                     });
                     if (!ns.printSettings && snap.printSettings) ns.printSettings = snap.printSettings;
+                    ns.mixageSessions = bpMergeMixageSessionLists(
+                        Array.isArray(ns.mixageSessions) ? ns.mixageSessions : [],
+                        Array.isArray(snap.mixageSessions) ? snap.mixageSessions : []
+                    );
                     if (!ns.tools) ns.tools = {};
                     ['horaire', 'mixage'].forEach(toolName => {
                         const saved = snap[toolName];
@@ -6352,17 +6376,43 @@ async function bpPushClassBulletin(cls) {
                 const result = await response.json();
                 if (!result.success || !result.session) return alert(result.message || "Le serveur n'a pas confirmé l'enregistrement du nouveau mixage.");
 
-                __lastMixage = { result, rooms, targetClasses, session: result.session };
-                __selectedMixageClassId = targetClasses[0] || '';
-                __selectedMixageRoomKey = '';
-                if (!Array.isArray(appState.mixageSessions)) appState.mixageSessions = [];
-                appState.mixageSessions = appState.mixageSessions
-                    .filter(item => String(item && item.id) !== String(result.session.id))
-                    .concat([result.session]).slice(-20);
+                const generatedAt = new Date().toISOString();
+                const localSession = {
+                    ...result.session,
+                    id: String(result.session.id),
+                    class_ids: Array.isArray(result.session.class_ids) && result.session.class_ids.length
+                        ? result.session.class_ids.map(String) : targetClasses.slice(),
+                    rooms: Array.isArray(result.session.rooms) && result.session.rooms.length
+                        ? result.session.rooms : rooms.map(room => ({ ...room })),
+                    created_at: result.session.created_at || generatedAt,
+                    local_generated_at: generatedAt
+                };
+                const previousSessions = Array.isArray(appState.mixageSessions) ? appState.mixageSessions.slice() : [];
+                const previousArchives = appState.tools && appState.tools.mixage && Array.isArray(appState.tools.mixage.generatedSchedules)
+                    ? appState.tools.mixage.generatedSchedules.slice() : [];
                 if (!appState.tools) appState.tools = {};
                 if (!appState.tools.mixage) appState.tools.mixage = {};
-                appState.tools.mixage.generatedSchedules = [result];
-                saveState();
+                appState.mixageSessions = bpMergeMixageSessionLists(previousSessions, [localSession]);
+                const archive = {
+                    ...result,
+                    session: localSession,
+                    id: String(localSession.id),
+                    generated_at: generatedAt,
+                    local_rooms: rooms.map(room => ({ ...room })),
+                    local_target_classes: targetClasses.slice()
+                };
+                appState.tools.mixage.generatedSchedules = [
+                    ...previousArchives.filter(item => String(item && (item.id || item.session && item.session.id) || '') !== String(localSession.id)),
+                    archive
+                ].slice(-50);
+                if (!saveState()) {
+                    appState.mixageSessions = previousSessions;
+                    appState.tools.mixage.generatedSchedules = previousArchives;
+                    throw new Error("Le mixage a été généré, mais la sauvegarde locale a échoué. Vérifiez l’espace disponible et les autorisations de stockage du navigateur.");
+                }
+                __lastMixage = { result, rooms, targetClasses, session: localSession };
+                __selectedMixageClassId = targetClasses[0] || '';
+                __selectedMixageRoomKey = '';
                 await showMixageResultsView({ skipReload: true });
 
                 const publishedToParents = !!result.session.published_to_suivi;
@@ -6621,8 +6671,40 @@ async function bpPushClassBulletin(cls) {
             );
         }
 
+        function bpMergeMixageSessionLists(primary, secondary) {
+            const byId = new Map();
+            [...(Array.isArray(primary) ? primary : []), ...(Array.isArray(secondary) ? secondary : [])].forEach(item => {
+                if (!item || typeof item !== 'object') return;
+                const id = String(item.id || item.session_id || '').trim();
+                if (!id) return;
+                byId.set(id, { ...(byId.get(id) || {}), ...item });
+            });
+            return Array.from(byId.values())
+                .sort((a, b) => String(a.created_at || a.local_generated_at || '').localeCompare(String(b.created_at || b.local_generated_at || '')))
+                .slice(-50);
+        }
+
         function bpRestorePublishedMixage() {
             if (__lastMixage && __lastMixage.result && Array.isArray(__lastMixage.result.seating_plans)) return true;
+            const archives = appState.tools && appState.tools.mixage && Array.isArray(appState.tools.mixage.generatedSchedules)
+                ? appState.tools.mixage.generatedSchedules : [];
+            const latestArchive = archives.slice().sort((a, b) =>
+                String(a && (a.generated_at || a.session && a.session.created_at) || '')
+                    .localeCompare(String(b && (b.generated_at || b.session && b.session.created_at) || ''))
+            ).pop();
+            if (latestArchive && latestArchive.result && Array.isArray(latestArchive.result.seating_plans)) {
+                const session = latestArchive.session || (Array.isArray(appState.mixageSessions)
+                    ? appState.mixageSessions.find(item => String(item.id) === String(latestArchive.id)) : null);
+                __lastMixage = {
+                    session: session || {},
+                    rooms: Array.isArray(latestArchive.local_rooms) ? latestArchive.local_rooms
+                        : Array.isArray(session && session.rooms) ? session.rooms : [],
+                    targetClasses: Array.isArray(latestArchive.local_target_classes) ? latestArchive.local_target_classes
+                        : Array.isArray(session && session.class_ids) ? session.class_ids : [],
+                    result: latestArchive.result
+                };
+                return true;
+            }
             const sessions = Array.isArray(appState.mixageSessions) ? appState.mixageSessions : [];
             const orderedSessions = sessions.slice().sort((a, b) =>
                 String(a && a.created_at || '').localeCompare(String(b && b.created_at || ''))
@@ -6657,8 +6739,8 @@ async function bpPushClassBulletin(cls) {
                 if (!response.ok) return false;
                 const payload = await response.json().catch(() => ({}));
                 if (!payload || payload.status !== true || !Array.isArray(payload.data)) return false;
-                appState.mixageSessions = payload.data;
-                saveState();
+                appState.mixageSessions = bpMergeMixageSessionLists(payload.data, appState.mixageSessions);
+                if (!saveState()) return false;
                 __lastMixage = null;
                 return true;
             } catch (error) {
@@ -9239,7 +9321,7 @@ const classDetailSection = document.getElementById('section-class-detail');
                 schoolId = (await showCustomPrompt("Saisissez l'identifiant de l'école (communiqué par ClassInk) :", "", "Connexion à l'école")) || "";
                 if (!schoolId) return;
             }
-            const password = window.prompt("Saisissez le mot de passe actuel de l'établissement pour charger sa base :") || "";
+            const password = (await showCustomPrompt("Saisissez le mot de passe actuel de l'établissement pour charger sa base :", "", "Authentification de l'établissement", { type: "password", placeholder: "Mot de passe actuel", autocomplete: "current-password", required: true })) || "";
             if (!password) return;
             
             try {
@@ -9361,7 +9443,7 @@ const classDetailSection = document.getElementById('section-class-detail');
                 if (passwordInput) passwordInput.focus();
                 return;
             }
-            if (!window.confirm("PrimeInk va remplacer la base actuellement ouverte par les données de l'établissement correspondant au nouvel identifiant. Continuer ?")) {
+            if (!(await showCustomConfirm("PrimeInk va remplacer la base actuellement ouverte par les données de l'établissement correspondant au nouvel identifiant. Continuer ?", "Changer d'établissement"))) {
                 return;
             }
 
@@ -10537,11 +10619,11 @@ window.primeInkFetchWithTimeout = async function(url, options = {}, timeoutMs = 
     button.setAttribute('aria-label','Envoyer une réclamation à CRYPT');
     button.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:99990;border:0;border-radius:24px;padding:10px 15px;background:#244d83;color:white;font:600 12px system-ui;box-shadow:0 6px 24px #0004;cursor:pointer';
     button.addEventListener('click', async () => {
-      const subject = window.prompt('Sujet de votre réclamation ou demande :');
+      const subject = await showCustomPrompt('Quel est le sujet de votre demande ?', '', 'Aide / Réclamation', { placeholder: 'Ex. : erreur de génération du mixage', maxLength: 180, required: true });
       if (!subject || !subject.trim()) return;
-      const message = window.prompt('Décrivez le problème rencontré (10 caractères minimum) :');
+      const message = await showCustomPrompt('Décrivez votre demande (10 caractères minimum).', '', 'Description de la demande', { multiline: true, rows: 5, maxLength: 5000, placeholder: 'Expliquez ce qui s’est passé et les étapes concernées…', required: true });
       if (!message || message.trim().length < 10) return window.alert('Le message est trop court.');
-      const contact = window.prompt('Téléphone ou e-mail pour vous recontacter (facultatif) :') || '';
+      const contact = (await showCustomPrompt('Indiquez un moyen de contact (facultatif).', '', 'Coordonnées', { placeholder: 'Téléphone ou adresse e-mail', maxLength: 180 })) || '';
       try {
         const headers = new Headers({'Content-Type':'application/json','X-CRYPT-App':APP,'X-CRYPT-Device':SESSION});
         if (window.__CRYPT_SCHOOL__) headers.set('X-CRYPT-School',String(window.__CRYPT_SCHOOL__));
