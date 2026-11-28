@@ -1355,6 +1355,8 @@ class TestLlinkSessionsKeepaliveAndClassDomains(unittest.TestCase):
 
         self.assertIn('data-llink-app="classink"', app)
         self.assertIn("String(teacher) + ':' + String(school)", app)
+        self.assertIn("window.ClassInkLlink.mount(document.querySelector('#view-llink [data-llink-app=\"classink\"]'))", app)
+        self.assertIn("window.ClassInkLlink.mount(document.querySelector('[data-llink-app=\"primeink\"]'))", prime)
         for marker in (
             "classink:llink:sessions:v1:",
             "window.localStorage.setItem(key, JSON.stringify(value))",
