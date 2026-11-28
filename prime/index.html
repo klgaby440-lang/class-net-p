@@ -6737,6 +6737,7 @@ function refreshScheduleCourseOptions(row) {
     const courseSelect = row.querySelector('.schedule-course-select');
     const trunkToggle = row.querySelector('.schedule-trunk-toggle');
     if (!teacherSelect || !classSelect || !courseSelect) return;
+
     const teacher = (appState.teachers || []).find(t => String(t.uniqueId) === String(teacherSelect.value));
     const selectedClasses = Array.from(classSelect.selectedOptions).map(option => String(option.value));
     const isTrunk = !!(trunkToggle && trunkToggle.checked);
@@ -6744,26 +6745,46 @@ function refreshScheduleCourseOptions(row) {
         teacher && primeInkScheduleTeacherMatches(teacher, course) &&
         selectedClasses.includes(String(course.classId))
     );
-    let options = [];
+
+    // Un choix de cours transporte désormais les références exactes du catalogue,
+    // plutôt qu'un simple nom qui devait être résolu une seconde fois plus tard.
+    const grouped = new Map();
+    assigned.forEach(course => {
+        const nameKey = String(course.name || '').trim().toLocaleLowerCase();
+        const subKey = String(course.subCategory || '').trim().toLocaleLowerCase();
+        if (!nameKey) return;
+        const key = nameKey + '\u0000' + subKey;
+        if (!grouped.has(key)) grouped.set(key, []);
+        grouped.get(key).push(course);
+    });
+
+    const options = [];
     if (selectedClasses.length) {
-        const grouped = new Map();
-        assigned.forEach(course => {
-            const key = String(course.name || '').trim().toLocaleLowerCase();
-            if (!key) return;
-            if (!grouped.has(key)) grouped.set(key, []);
-            grouped.get(key).push(course);
-        });
-        options = Array.from(grouped.values()).filter(group =>
-            !isTrunk || selectedClasses.every(classId => group.some(course => String(course.classId) === classId))
-        );
+        for (const group of grouped.values()) {
+            const courseRefs = selectedClasses.map(classId => {
+                const match = group.find(course => String(course.classId) === classId);
+                return match ? { course_id: String(match.id), class_id: String(match.classId) } : null;
+            });
+            if (!isTrunk && selectedClasses.length !== 1) continue;
+            if (courseRefs.some(ref => !ref)) continue;
+            options.push({
+                refs: courseRefs,
+                representative: group[0]
+            });
+        }
     }
+
     const previous = courseSelect.value;
-    courseSelect.innerHTML = '<option value="">Choisissez un cours affecté</option>' + options.map(group => {
-        const representative = group[0];
-        const key = String(representative.name || '');
-        return '<option value="' + safeHTML(key) + '">' + safeHTML(primeInkScheduleCourseLabel(representative)) + '</option>';
+    const nextOptions = options.map(option => {
+        const value = JSON.stringify(option.refs);
+        return '<option value="' + safeHTML(value) + '">' +
+            safeHTML(primeInkScheduleCourseLabel(option.representative)) + '</option>';
     }).join('');
-    if (options.some(group => String(group[0].name) === previous)) courseSelect.value = previous;
+    courseSelect.innerHTML = '<option value="">Choisissez un cours affecté</option>' + nextOptions;
+    if (options.some(option => JSON.stringify(option.refs) === previous)) {
+        courseSelect.value = previous;
+    }
+
     if (!options.length) {
         courseSelect.disabled = true;
         courseSelect.innerHTML = '<option value="">Aucun cours affecté pour cette sélection</option>';
@@ -6952,21 +6973,36 @@ const HOR_DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
                     const courseSelect = row.querySelector('.schedule-course-select');
                     const hours = parseInt(row.querySelector('.schedule-hours')?.value, 10);
                     const classIds = Array.from(classSelect?.selectedOptions || []).map(option => String(option.value)).filter(Boolean);
-                    const courseName = String(courseSelect?.value || '');
+                    const selectedCourseValue = String(courseSelect?.value || '');
+                    const courseLabel = courseSelect?.selectedOptions?.[0]?.textContent || 'Cours sélectionné';
                     const trunk = !!row.querySelector('.schedule-trunk-toggle')?.checked;
-                    if (!classIds.length && !courseName) continue;
-                    if (!classIds.length || !courseName || !(hours > 0)) return { error: "Une affectation de « " + teacherName + " » est incomplète. Choisissez la classe, le cours affecté et le nombre d'heures." };
+                    if (!classIds.length && !selectedCourseValue) continue;
+                    if (!classIds.length || !selectedCourseValue || !(hours > 0)) return { error: "Une affectation de « " + teacherName + " » est incomplète. Choisissez la classe, le cours affecté et le nombre d'heures." };
                     if (!trunk && classIds.length !== 1) return { error: "Sélectionnez une seule classe ou activez le tronc commun." };
-                    if (hours > jours * heures) return { error: "Le nombre d'heures de « " + courseName + " » dépasse la capacité de la semaine." };
-                    const trunkId = trunk ? "TC-" + sel.value + "-" + courseName.trim().toLocaleLowerCase() : null;
+                    if (hours > jours * heures) return { error: "Le nombre d'heures de « " + courseLabel + " » dépasse la capacité de la semaine." };
+
+                    let selectedCourseRefs = [];
+                    try {
+                        selectedCourseRefs = JSON.parse(selectedCourseValue);
+                    } catch (error) {
+                        return { error: "La référence du cours sélectionné est invalide. Actualisez les affectations de l'enseignant." };
+                    }
+                    if (!Array.isArray(selectedCourseRefs) || selectedCourseRefs.length !== classIds.length) {
+                        return { error: "Les cours sélectionnés ne correspondent pas aux classes choisies. Actualisez cette affectation." };
+                    }
+
+                    const trunkId = trunk ? "TC-" + sel.value + "-" + courseLabel.trim().toLocaleLowerCase() : null;
                     for (const classId of classIds) {
-                        const course = (appState.courses || []).find(item =>
+                        const reference = selectedCourseRefs.find(item => item && String(item.class_id) === classId);
+                        const course = reference && (appState.courses || []).find(item =>
+                            String(item.id) === String(reference.course_id) &&
                             String(item.classId) === classId &&
-                            String(item.name || '').trim() === courseName &&
                             primeInkScheduleTeacherMatches((appState.teachers || []).find(t => String(t.uniqueId) === String(sel.value)) || {}, item)
                         );
                         const classe = (appState.classes || []).find(item => String(item.id) === classId);
-                        if (!course || !classe) return { error: "L'affectation sélectionnée n'existe plus dans le catalogue PrimeInk. Actualisez les données de l'école." };
+                        if (!course || !classe) {
+                            return { error: "Le cours ou la classe sélectionné(e) n'existe plus dans le catalogue local. Actualisez les données de l'école." };
+                        }
                         assignments.push({
                             course_id: String(course.id),
                             class_id: String(classe.id),
@@ -6994,6 +7030,26 @@ const HOR_DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
                 generateButton.textContent = 'Génération des exemplaires…';
             }
             try {
+                // Évite qu'un catalogue PrimeInk modifié localement diffère du catalogue
+                // officiel consulté par le générateur. La préparation est idempotente.
+                if (!saveState()) {
+                    return alert("La base locale n'a pas pu être sauvegardée. La génération a été annulée.");
+                }
+                if (generateButton) generateButton.textContent = 'Synchronisation du catalogue…';
+                const catalogPayload = bpBuildPrimeInkCatalogPayload(appState.school.id);
+                const catalogResponse = await window.primeInkFetchWithTimeout(
+                    API_BASE_URL + '/api/primenet/prepare-classes',
+                    { method: 'POST', headers, body: JSON.stringify(catalogPayload), cache: 'no-store' },
+                    30000
+                );
+                let catalogResult = {};
+                try { catalogResult = await catalogResponse.json(); } catch (error) { /* réponse invalide */ }
+                if (!catalogResponse.ok || catalogResult.status !== true) {
+                    throw new Error(catalogResult.detail || catalogResult.message ||
+                        ("Impossible de synchroniser le catalogue de l'école (HTTP " + catalogResponse.status + ")."));
+                }
+
+                if (generateButton) generateButton.textContent = 'Génération des exemplaires…';
                 const response = await window.primeInkFetchWithTimeout(API_BASE_URL + '/api/schedule/generate', {
                     method: 'POST',
                     headers,
@@ -8581,35 +8637,12 @@ const classDetailSection = document.getElementById('section-class-detail');
             }
         }
 
-        // Publie uniquement le catalogue scolaire nécessaire au démarrage des comptes ClassInk.
-        // Les notes et les réglages locaux ne sont ni envoyés ni remplacés par cette action.
-        async function prepareClassInformation() {
-            const btn = document.getElementById('prepareClassInformationBtn');
-            const status = document.getElementById('prepareClassInformationStatus');
-            const headers = cloudAuthHeaders();
-            if (!headers.Authorization) {
-                const message = "Connectez d'abord PrimeInk au compte de l'école avec « Charger les données de l'école ».";
-                if (status) status.textContent = message;
-                await showCustomAlert(message, "Connexion requise");
-                return;
-            }
-            const schoolId = String((appState.school && appState.school.id) || '').trim();
-            if (!schoolId) {
-                await showCustomAlert("L'identifiant de l'école manque. Chargez d'abord les données de l'école.", "École non configurée");
-                return;
-            }
-            if (!Array.isArray(appState.classes) || !appState.classes.length) {
-                await showCustomAlert("Aucune classe à publier. Créez ou chargez d'abord les classes de l'école.");
-                return;
-            }
-            if (!saveState()) {
-                await showCustomAlert("La base locale n'a pas pu être sauvegardée. Aucune donnée n'a été envoyée.");
-                return;
-            }
-
-            const payload = {
+        // Construit un instantané unique du catalogue transmis au serveur.
+        // Les listes déroulantes et la synchronisation utilisent les mêmes identifiants.
+        function bpBuildPrimeInkCatalogPayload(schoolId) {
+            return {
                 school: {
-                    id: schoolId,
+                    id: String(schoolId || ''),
                     name: appState.school.name || '',
                     code: appState.school.code || '',
                     city: appState.school.city || '',
@@ -8651,6 +8684,35 @@ const classDetailSection = document.getElementById('section-class-detail');
                     status: teacher.status || 'Actif'
                 }))
             };
+        }
+
+        // Publie uniquement le catalogue scolaire nécessaire au démarrage des comptes ClassInk.
+        // Les notes et les réglages locaux ne sont ni envoyés ni remplacés par cette action.
+        async function prepareClassInformation() {
+            const btn = document.getElementById('prepareClassInformationBtn');
+            const status = document.getElementById('prepareClassInformationStatus');
+            const headers = cloudAuthHeaders();
+            if (!headers.Authorization) {
+                const message = "Connectez d'abord PrimeInk au compte de l'école avec « Charger les données de l'école ».";
+                if (status) status.textContent = message;
+                await showCustomAlert(message, "Connexion requise");
+                return;
+            }
+            const schoolId = String((appState.school && appState.school.id) || '').trim();
+            if (!schoolId) {
+                await showCustomAlert("L'identifiant de l'école manque. Chargez d'abord les données de l'école.", "École non configurée");
+                return;
+            }
+            if (!Array.isArray(appState.classes) || !appState.classes.length) {
+                await showCustomAlert("Aucune classe à publier. Créez ou chargez d'abord les classes de l'école.");
+                return;
+            }
+            if (!saveState()) {
+                await showCustomAlert("La base locale n'a pas pu être sauvegardée. Aucune donnée n'a été envoyée.");
+                return;
+            }
+
+            const payload = bpBuildPrimeInkCatalogPayload(schoolId);
 
             if (btn) { btn.disabled = true; btn.textContent = "Publication en cours…"; }
             if (status) status.textContent = "Envoi des informations scolaires sécurisées…";
