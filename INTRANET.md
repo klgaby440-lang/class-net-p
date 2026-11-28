@@ -43,8 +43,10 @@ Configurer cette valeur sous le nom INTRANET_AUTH_SECRET dans les variables d'en
 
 Les applications devront ensuite se reconnecter une fois pour recevoir les jetons intranet dédiés. Le relais refuse les anciens jetons cloud et ne connaît pas la clé qui signe les sessions cloud.
 
-Lancer le relais :
+Lancer le relais directement avec Python :
     py intranet_server.py
+
+Après compilation Windows, extraire le paquet ZIP puis lancer start_intranet.ps1. Le script demande la clé dédiée de manière masquée et démarre ClassInkIntranet.exe. Gardez la fenêtre ouverte pendant l'utilisation.
 
 Le relais écoute par défaut sur 0.0.0.0:5001. Réservez une adresse IP locale fixe à cet ordinateur, par exemple 192.168.1.200, ou configurez le nom DNS local serveur-class-net-prime.local.
 
