@@ -477,6 +477,8 @@ class ClasseInformation(Base):
     bulletin_model = Column(String(20), nullable=True)      # classink | ige010 | repechage
     bulletin_title = Column(String, nullable=True)
     signature_source = Column(String(20), nullable=True)    # titulaire | responsable | default | none
+    # Cours de bulletin distincts des cours réellement enseignés, composés d'une ou plusieurs sources.
+    bulletin_courses = Column(JSON, nullable=True)
     school = relationship("SchoolInformation", back_populates="classes")
     students = relationship("SchoolStudentInformation", back_populates="classe")
     courses = relationship("CourseInformation", back_populates="classe")
@@ -1319,6 +1321,10 @@ with engine.connect() as conn:
         ALTER TABLE classe_informations
         ADD COLUMN IF NOT EXISTS signature_source VARCHAR(20);
     """))
+    conn.execute(text("""
+        ALTER TABLE classe_informations
+        ADD COLUMN IF NOT EXISTS bulletin_courses JSON;
+    """))
     
     # S'assurer que la colonne identifier existe dans otp_codes
     conn.execute(text("ALTER TABLE otp_codes ADD COLUMN IF NOT EXISTS identifier VARCHAR;"))
@@ -1848,7 +1854,8 @@ def login_school(data: LoginSchema, db: Session = Depends(get_db)):
             "categories": c.domaines if isinstance(c.domaines, list) else [],
             "bulletinModel": c.bulletin_model or "classink",
             "bulletinTitle": c.bulletin_title or "",
-            "signatureSource": c.signature_source or "titulaire"
+            "signatureSource": c.signature_source or "titulaire",
+            "bulletinCourses": c.bulletin_courses if isinstance(c.bulletin_courses, list) else None
         })
 
     # 2. Chargement des élèves
@@ -5943,6 +5950,85 @@ def update_school_settings(payload: dict, db: Session = Depends(get_db), claims:
     return {"status": True, "message": "Réglages de l'école enregistrés."}
 
 
+def clean_bulletin_course_mappings(db: Session, school_id: str, class_id: str, raw_courses):
+    """Valide les cours-bulletins et leurs sources enseignées dans une même classe."""
+    if not isinstance(raw_courses, list) or len(raw_courses) > 100:
+        raise HTTPException(status_code=422, detail="La configuration des cours-bulletins est invalide.")
+
+    source_courses = db.query(CourseInformation).filter(
+        CourseInformation.school_id == school_id,
+        CourseInformation.class_id == class_id,
+    ).all()
+    allowed_ids = {str(course.id) for course in source_courses}
+    if not allowed_ids and raw_courses:
+        raise HTTPException(status_code=422, detail="Cette classe ne possède aucun cours enseigné.")
+
+    cleaned = []
+    seen_ids = set()
+    seen_names = set()
+    for index, item in enumerate(raw_courses):
+        if not isinstance(item, dict):
+            raise HTTPException(status_code=422, detail="Une ligne de cours-bulletin est illisible.")
+        course_id = clean_text(item.get("id"), 100) or ("bc_" + secrets.token_hex(8))
+        name = clean_text(item.get("name"), 160)
+        max_raw = item.get("maxPer")
+        try:
+            max_per = float(max_raw)
+        except (TypeError, ValueError):
+            max_per = 0
+        if not course_id or course_id in seen_ids:
+            raise HTTPException(status_code=422, detail="Chaque cours-bulletin doit avoir un identifiant unique.")
+        if not name or name.casefold() in seen_names:
+            raise HTTPException(status_code=422, detail="Les noms des cours-bulletins doivent être renseignés et uniques.")
+        if isinstance(max_raw, bool) or not math.isfinite(max_per) or max_per <= 0 or max_per > 1000:
+            raise HTTPException(status_code=422, detail="Le maximum d'un cours-bulletin doit être compris entre 0 et 1000.")
+        source_ids_raw = item.get("sourceCourseIds")
+        if not isinstance(source_ids_raw, list):
+            raise HTTPException(status_code=422, detail="Choisissez au moins un cours enseigné pour chaque cours-bulletin.")
+        source_ids = list(dict.fromkeys(
+            str(value).strip() for value in source_ids_raw if str(value).strip()
+        ))
+        if not source_ids or any(source_id not in allowed_ids for source_id in source_ids):
+            raise HTTPException(status_code=422, detail="Un cours-bulletin référence un cours enseigné absent de cette classe.")
+        cleaned.append({
+            "id": course_id,
+            "name": name,
+            "maxPer": max_per,
+            "category": clean_text(item.get("category"), 100) or "Général",
+            "subCategory": clean_text(item.get("subCategory"), 160),
+            "sourceCourseIds": source_ids,
+        })
+        seen_ids.add(course_id)
+        seen_names.add(name.casefold())
+    return cleaned
+
+
+@app.put("/api/primenet/classes/{class_id}/bulletin-courses")
+def update_primeink_bulletin_courses(
+    class_id: str,
+    payload: dict,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(require_active_school),
+):
+    """Enregistre les cours-bulletins distincts des cours enseignés pour une classe."""
+    school_id = str(claims.get("school_id") or "")
+    classe = db.query(ClasseInformation).filter(
+        ClasseInformation.id == class_id,
+        ClasseInformation.school_id == school_id,
+    ).first()
+    if not classe:
+        raise HTTPException(status_code=404, detail="Classe introuvable.")
+    cleaned = clean_bulletin_course_mappings(
+        db, school_id, class_id, payload.get("bulletinCourses")
+    )
+    classe.bulletin_courses = cleaned
+    db.commit()
+    return {"status": True, "message": "Configuration des cours-bulletins enregistrée.", "data": {
+        "classId": class_id,
+        "bulletinCourses": cleaned,
+    }}
+
+
 @app.put("/api/classes/{class_id}/bulletin")
 def update_class_bulletin(class_id: str, payload: dict, db: Session = Depends(get_db), claims: dict = Depends(require_active_school)):
     """Type de bulletin d'une classe, intitulé et choix de la signature."""
@@ -6151,6 +6237,21 @@ def sync_primenet(payload: dict, db: Session = Depends(get_db), claims: dict = D
         course_obj.titulaire_name = crs.get("titulaire", "")
         course_obj.class_id = crs.get("classId")
         course_obj.sub_category = clean_text(crs.get("subCategory"), 160)
+
+    # La composition des cours-bulletins n'affecte pas le catalogue des cours enseignés.
+    db.flush()
+    for class_payload in classes_payload:
+        if not isinstance(class_payload, dict) or "bulletinCourses" not in class_payload:
+            continue
+        class_id = str(class_payload.get("id") or "")
+        classe_obj = db.query(ClasseInformation).filter(
+            ClasseInformation.id == class_id,
+            ClasseInformation.school_id == school_id,
+        ).first()
+        if classe_obj:
+            classe_obj.bulletin_courses = clean_bulletin_course_mappings(
+                db, school_id, class_id, class_payload.get("bulletinCourses")
+            )
 
     # 4. Synchronisation des élèves
 # 4. Synchronisation des élèves (sécurisée contre les doublons de numéros permanents)
