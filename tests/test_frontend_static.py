@@ -439,6 +439,23 @@ process.stdout.write(JSON.stringify(cases.map(item => ({code:item.code,label:ite
         self.assertIn("/api/manager/mixages", source)
         self.assertIn("Le mixage a été enregistré dans la base de données", source)
         self.assertIn("Chaque parent ne verra que les informations de son enfant", source)
+        self.assertIn('id="mixRoomSelect"', source)
+        self.assertIn('id="mixClassSelect"', source)
+        self.assertIn("function bpMixageClassPlacementHTML(classId, result, printMode = false)", source)
+        self.assertIn("function bpMixageClassSheetsHTML(result)", source)
+        self.assertIn("function bpMixageRoomSheetsHTML(result, rooms)", source)
+        self.assertIn("bpMixageRoomKey(room, index) === String(__selectedMixageRoomKey)", source)
+
+    def test_primeink_course_statistics_follow_selected_period_or_exam(self):
+        source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
+        self.assertIn('id="statsPeriod"', source)
+        self.assertIn("const COURSE_STATS_PERIOD_FIELDS = {", source)
+        self.assertIn("const fields = COURSE_STATS_PERIOD_FIELDS[period] || COURSE_STATS_PERIOD_FIELDS.TG;", source)
+        self.assertIn("const score = ficheSumRequired(fields.map(field => v[field]));", source)
+        self.assertIn("const maxSelected = fields.reduce", source)
+        self.assertIn("primeink-stats-divider", source)
+        self.assertIn("NOTE OBTENUE", source)
+        self.assertIn("MAXIMUM", source)
 
     def test_primeink_mixage_seat_plan_distributes_eight_benches_over_three_rows(self):
         if not self.node:
