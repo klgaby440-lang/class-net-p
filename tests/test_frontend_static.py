@@ -1205,6 +1205,23 @@ class TestCourseSeparationAndDeviceUnlock(unittest.TestCase):
         unlock_handler = prime[unlock_start:unlock_end]
         self.assertIn("window.primeInkVerifyLocalPassword", unlock_handler)
         self.assertIn("Migration des installations plus anciennes", unlock_handler)
+        self.assertIn("if (!schoolId)", unlock_handler)
+        self.assertIn("Impossible de vérifier le mot de passe", unlock_handler)
+        self.assertNotIn("overlay.classList.add('hidden');\\n                    return;", unlock_handler)
+
+        save_start = prime.index("window.savePrimeInkBulletinCourses = async function")
+        save_end = prime.index("window.deleteCourse = async function", save_start)
+        save_handler = prime[save_start:save_end]
+        self.assertIn("if (typeof bpRefreshBulletin === 'function') bpRefreshBulletin();", save_handler)
+        self.assertLess(save_handler.index("bpRefreshBulletin"), save_handler.index("const headers = primeInkAuthHeaders()"))
+
+        delete_start = prime.index("window.deleteCourse = async function(courseId)")
+        delete_end = prime.index("// INITIALISATION ET ÉCOUTEURS D'ÉVÉNEMENTS", delete_start)
+        delete_handler = prime[delete_start:delete_end]
+        self.assertIn("'/api/primenet/classes/'", delete_handler)
+        self.assertIn("'/bulletin-courses'", delete_handler)
+        self.assertIn("method: 'PUT'", delete_handler)
+        self.assertIn("bpRefreshBulletin", delete_handler)
 
         for marker in (
             'bulletin_courses = Column(JSON, nullable=True)',
