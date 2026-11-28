@@ -2445,6 +2445,11 @@ window.alert = function(message) { showCustomAlert(message); };
             try {
                 window.localStorage.setItem('classnet_p_db', JSON.stringify(appState));
                 primeInkStorageAvailable = true;
+                const mixageTab = document.getElementById('tab-mixage');
+                if (mixageTab && mixageTab.classList.contains('active') &&
+                    typeof window.renderMixClassChoices === 'function') {
+                    window.renderMixClassChoices();
+                }
                 return true;
             } catch (error) {
                 primeInkStorageAvailable = false;
@@ -5310,6 +5315,8 @@ async function bpPushClassBulletin(cls) {
                 activeStudentId = newStudent.id;
                 saveState();
                 loadClassData(activeClassId);
+                renderClassesTable();
+                if (typeof window.renderMixClassChoices === 'function') window.renderMixClassChoices();
 
                 ['name-student', 'post-name-student', 'pre-name-student', 'sexe-student',
                     'born-date-student', 'born-where-student', 'number-permi-student'].forEach(fieldId => {
@@ -6271,9 +6278,22 @@ async function bpPushClassBulletin(cls) {
         window.renderMixClassChoices = function() {
             const box = document.getElementById('mixClassesContainer');
             if (!box) return;
-            const checked = new Set(Array.from(box.querySelectorAll('input:checked')).map(i => i.value));
-            box.innerHTML = appState.classes.length
-                ? appState.classes.map(c => '<label style="display:flex; align-items:center; gap:0.3rem; font-size:0.85rem;"><input type="checkbox" class="mix-class-check" value="' + safeHTML(c.id) + '"' + (checked.has(c.id) ? ' checked' : '') + '> ' + safeHTML(c.name) + '</label>').join('')
+            const checked = new Set(Array.from(box.querySelectorAll('input:checked')).map(input => String(input.value)));
+            const classes = Array.isArray(appState.classes) ? appState.classes : [];
+            const students = Array.isArray(appState.students) ? appState.students : [];
+            box.innerHTML = classes.length
+                ? classes.map(classe => {
+                    const classId = String(classe.id ?? '');
+                    const count = students.filter(student =>
+                        String(student.classId ?? '') === classId
+                    ).length;
+                    return '<label style="display:flex;align-items:center;gap:.45rem;flex-wrap:wrap;font-size:.85rem;padding:.35rem .5rem;border:1px solid var(--border-color);border-radius:8px;">' +
+                        '<input type="checkbox" class="mix-class-check" value="' + safeHTML(classId) + '"' +
+                        (checked.has(classId) ? ' checked' : '') + '> ' +
+                        '<strong>' + safeHTML(classe.name) + '</strong>' +
+                        '<small style="color:var(--text-secondary);white-space:nowrap;">' + count + ' élève(s)</small>' +
+                        '</label>';
+                }).join('')
                 : '<small>Aucune classe pour le moment.</small>';
         };
 
@@ -6298,59 +6318,70 @@ async function bpPushClassBulletin(cls) {
         window.requestServerMixageGeneration = async function() {
             const headers = bpRequireSession();
             if (!headers) return;
-            const targetClasses = Array.from(document.querySelectorAll('.mix-class-check:checked')).map(i => i.value);
+            const targetClasses = Array.from(document.querySelectorAll('.mix-class-check:checked'))
+                .map(input => String(input.value || '').trim()).filter(Boolean);
             if (!targetClasses.length) return alert("Cochez au moins une classe concernée par l'examen.");
+            const targetClassSet = new Set(targetClasses);
             const rooms = [];
             let invalidRoom = false;
             document.querySelectorAll('#sallesContainer .salle-card').forEach((card, index) => {
-                const v = Array.from(card.querySelectorAll('input')).map(i => parseInt(i.value, 10));
-                if (v.length < 3 || v.some(x => !(x > 0))) { invalidRoom = true; return; }
+                const v = Array.from(card.querySelectorAll('input')).map(input => parseInt(input.value, 10));
+                if (v.length < 3 || v.some(value => !(value > 0))) { invalidRoom = true; return; }
                 rooms.push({ id: index + 1, nom: 'Salle N°' + (index + 1), places: v[0], rangees: v[1], bancs: v[2] });
             });
             if (invalidRoom || !rooms.length) return alert("Renseignez, pour chaque salle, le nombre de places, de rangées et de bancs (nombres positifs).");
-            const supervisors = Array.from(document.querySelectorAll('#mixSurveillantsList li')).map(li => ({ name: (li.dataset.name || li.textContent).trim() }));
-            const students = appState.students.filter(s => targetClasses.includes(s.classId))
-                .map(s => ({ id: s.id, name: s.name, postname: s.postname || '', classId: s.classId }));
-            if (!students.length) return alert("Les classes choisies n'ont aucun élève.");
-            const capacity = rooms.reduce((n, r) => n + r.places, 0);
-            if (capacity < students.length && !(await showCustomConfirm("Les salles n'offrent que " + capacity + " places pour " + students.length + " élèves. Continuer quand même ?", "Places insuffisantes"))) return;
-            const exemplaires = Math.max(1, Math.min(5, parseInt(document.getElementById('mixExemplaires').value, 10) || 1));
+            const supervisors = Array.from(document.querySelectorAll('#mixSurveillantsList li'))
+                .map(li => ({ name: (li.dataset.name || li.textContent).trim() }));
+            const localStudents = (Array.isArray(appState.students) ? appState.students : [])
+                .filter(student => targetClassSet.has(String(student.classId ?? '')));
+            const capacity = rooms.reduce((total, room) => total + room.places, 0);
+            if (localStudents.length && capacity < localStudents.length &&
+                !(await showCustomConfirm("Les salles n'offrent que " + capacity + " places pour " + localStudents.length + " élèves selon les données locales. Le serveur vérifiera l'effectif officiel. Continuer quand même ?", "Places insuffisantes"))) return;
+            const exemplaires = Math.max(1, Math.min(5, parseInt(document.getElementById('mixExemplaires')?.value, 10) || 1));
             const examName = document.getElementById('mixExamName')?.value.trim() || 'Examen';
             const publishToSuivi = document.getElementById('mixPublishToSuivi')?.checked !== false;
+            const generateButton = document.querySelector('#tab-mixage button[onclick="requestServerMixageGeneration()"]');
+            if (generateButton) { generateButton.disabled = true; generateButton.textContent = 'Génération du mixage…'; }
             try {
                 const response = await window.primeInkFetchWithTimeout(API_BASE_URL + '/api/mixage/generate', {
                     method: 'POST', headers,
+                    cache: 'no-store',
                     body: JSON.stringify({ school_id: appState.school.id, target_classes: targetClasses, rooms, supervisors, exemplaires, exam_name: examName, publish_to_suivi: publishToSuivi })
                 }, 60000);
                 if (!response.ok) return alert(await bpServerErrorMessage(response));
                 const result = await response.json();
-                if (!result.success) return alert(result.message || "Le mixage n'a pas pu être généré.");
-                __lastMixage = { result, rooms, targetClasses, session: result.session || null };
-                if (result.session) {
-                    const sessions = Array.isArray(appState.mixageSessions) ? appState.mixageSessions : [];
-                    appState.mixageSessions = sessions.filter(item => String(item.id) !== String(result.session.id)).concat([result.session]).slice(-20);
-                }
+                if (!result.success || !result.session) return alert(result.message || "Le serveur n'a pas confirmé l'enregistrement du nouveau mixage.");
+
+                __lastMixage = { result, rooms, targetClasses, session: result.session };
+                __selectedMixageClassId = targetClasses[0] || '';
+                __selectedMixageRoomKey = '';
+                if (!Array.isArray(appState.mixageSessions)) appState.mixageSessions = [];
+                appState.mixageSessions = appState.mixageSessions
+                    .filter(item => String(item && item.id) !== String(result.session.id))
+                    .concat([result.session]).slice(-20);
                 if (!appState.tools) appState.tools = {};
                 if (!appState.tools.mixage) appState.tools.mixage = {};
                 appState.tools.mixage.generatedSchedules = [result];
                 saveState();
-                bpRenderMixage();
-                await showMixageResultsView();
-                const savedToDatabase = !!result.session;
-                const publishedToParents = !!(result.session && result.session.published_to_suivi);
-                const confirmation = (savedToDatabase
-                    ? "Le mixage a été enregistré dans la base de données de l'établissement."
-                    : "Le mixage a été généré, mais la confirmation de sauvegarde serveur est absente.") +
+                await showMixageResultsView({ skipReload: true });
+
+                const publishedToParents = !!result.session.published_to_suivi;
+                const confirmation = "Le nouveau mixage « " + (result.session.exam_name || examName) +
+                    " » a été enregistré. Référence : " + result.session.id + "." +
                     (publishedToParents
                         ? " Les places individuelles sont publiées dans Class-Ink Suivi ; chaque parent ne verra que les informations de son enfant."
                         : " La publication aux parents est désactivée pour cette session.");
-                if (result.unassigned_students > 0) {
+                if (Number(result.unassigned_students || 0) > 0) {
                     alert(result.unassigned_students + " élève(s) n'ont pas de place. " + confirmation);
                 } else {
-                    await showCustomAlert(confirmation, "Mixage enregistré");
+                    await showCustomAlert(confirmation, "Nouveau mixage enregistré");
                 }
-            } catch (e) {
-                alert("Le serveur est injoignable. Vérifiez la connexion internet et réessayez.");
+            } catch (error) {
+                alert(error && error.message
+                    ? "La génération du mixage a échoué : " + error.message
+                    : "Le serveur est injoignable. Vérifiez la connexion internet et réessayez.");
+            } finally {
+                if (generateButton) { generateButton.disabled = false; generateButton.textContent = "Générer le mixage"; }
             }
         };
 
@@ -6592,7 +6623,10 @@ async function bpPushClassBulletin(cls) {
         function bpRestorePublishedMixage() {
             if (__lastMixage && __lastMixage.result && Array.isArray(__lastMixage.result.seating_plans)) return true;
             const sessions = Array.isArray(appState.mixageSessions) ? appState.mixageSessions : [];
-            const session = sessions.length ? sessions[sessions.length - 1] : null;
+            const orderedSessions = sessions.slice().sort((a, b) =>
+                String(a && a.created_at || '').localeCompare(String(b && b.created_at || ''))
+            );
+            const session = orderedSessions.length ? orderedSessions[orderedSessions.length - 1] : null;
             if (!session || !Array.isArray(session.seating_plans)) return false;
             __lastMixage = {
                 session,
@@ -6615,7 +6649,7 @@ async function bpPushClassBulletin(cls) {
             try {
                 const response = await window.primeInkFetchWithTimeout(API_BASE_URL + '/api/manager/mixages', {
                     method: 'GET',
-                    headers,
+                    headers: { ...headers, 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' },
                     cache: 'no-store',
                     credentials: 'omit'
                 }, 20000);
@@ -6642,9 +6676,12 @@ async function bpPushClassBulletin(cls) {
             const roomSelect = document.getElementById('mixRoomSelect');
 
             if (classSelect) {
-                classSelect.innerHTML = classIds.map(id =>
-                    '<option value="' + safeHTML(id) + '">' + safeHTML(bpClassLabel(id)) + '</option>'
-                ).join('');
+                const classCounts = (__lastMixage.session && __lastMixage.session.class_student_counts) || {};
+                classSelect.innerHTML = classIds.map(id => {
+                    const count = Number(classCounts[id]);
+                    const suffix = Number.isFinite(count) ? ' · ' + count + ' élève(s)' : '';
+                    return '<option value="' + safeHTML(id) + '">' + safeHTML(bpClassLabel(id) + suffix) + '</option>';
+                }).join('');
                 if (!classIds.includes(String(__selectedMixageClassId))) __selectedMixageClassId = classIds[0] || '';
                 classSelect.value = __selectedMixageClassId;
                 if (!classSelect.dataset.listenerBound) {
@@ -6685,9 +6722,10 @@ async function bpPushClassBulletin(cls) {
             document.getElementById('mix-view-salles').innerHTML = bpMixageRoomsHTML(result, rooms);
         }
 
-        window.showMixageResultsView = async function() {
-            // La liste serveur est prioritaire pour retrouver les sessions depuis un autre appareil.
-            await bpLoadMixagesFromDatabase();
+        window.showMixageResultsView = async function(options = {}) {
+            // Après une génération, le POST vient de renvoyer la session la plus récente :
+            // ne pas la remplacer par un GET de l'historique potentiellement périmé.
+            if (!options.skipReload) await bpLoadMixagesFromDatabase();
             if (!bpRestorePublishedMixage()) {
                 return showCustomAlert("Aucune session de mixage enregistrée dans la base de l'établissement.");
             }
@@ -8434,7 +8472,7 @@ const classDetailSection = document.getElementById('section-class-detail');
             tbody.innerHTML = '';
 
             appState.classes.forEach(cls => {
-                const count = appState.students.filter(s => s.classId === cls.id).length;
+                const count = appState.students.filter(s => String(s.classId ?? '') === String(cls.id ?? '')).length;
                 const tr = document.createElement('tr');
                 tr.className = 'clickable-row';
                 tr.innerHTML = `
@@ -8596,8 +8634,10 @@ const classDetailSection = document.getElementById('section-class-detail');
                 
                 applyMergedPrimenetData(mergedData);
                 
-                // Sauvegarde locale et actualisation de l'interface
+                // Sauvegarde locale et actualisation immédiate des effectifs et du panneau de mixage.
                 saveState();
+                if (typeof renderClassesTable === 'function') renderClassesTable();
+                if (typeof window.renderMixClassChoices === 'function') window.renderMixClassChoices();
                 if (typeof renderOfficialBulletin === "function" && activeStudentId) {
                     renderOfficialBulletin(activeStudentId);
                 }
