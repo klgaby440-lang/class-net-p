@@ -1130,9 +1130,9 @@ body {
 .primeink-mixage-class-sheet { background:#fff; color:#111; padding:0; border:0; }
 .primeink-mixage-class-sheet h2 { color:#111!important; margin:0 0 2mm; font-size:15pt; }
 .primeink-mixage-class-sheet p { margin:0 0 3mm; font-size:9pt; }
-.primeink-mixage-class-table { width:100%; border-collapse:collapse; table-layout:fixed; background:#fff; color:#111; }
-.primeink-mixage-class-table th,.primeink-mixage-class-table td { border:1px solid #555; padding:1.4mm 1.6mm; font-size:8pt; text-align:left; vertical-align:middle; overflow-wrap:anywhere; }
-.primeink-mixage-class-table th { background:#e8e8e8; font-weight:700; }
+.primeink-mixage-class-table { width:100%; border-collapse:collapse; table-layout:fixed; background:var(--bg-card); color:var(--text-primary); }
+.primeink-mixage-class-table th,.primeink-mixage-class-table td { border:1px solid var(--border-color); padding:1.4mm 1.6mm; font-size:8pt; text-align:left; vertical-align:middle; overflow-wrap:anywhere; }
+.primeink-mixage-class-table th { background:var(--bg-main); font-weight:700; }
 .primeink-mixage-class-table td:nth-child(n+2),.primeink-mixage-class-table th:nth-child(n+2) { text-align:center; }
 .primeink-mixage-class-empty { padding:1rem; border:1px dashed var(--border-color); border-radius:8px; color:var(--text-secondary); }
 .primeink-stats-divider { display:block; width:100%; border:0; border-top:1px solid var(--border-color); margin:1.25rem 0; opacity:.95; }
@@ -1143,7 +1143,9 @@ body {
 @media print {
     .primeink-mixage-class-sheet { break-inside:avoid; page-break-after:always; break-after:page; }
     .primeink-mixage-class-sheet:last-child { page-break-after:auto; break-after:auto; }
-    .primeink-mixage-class-table th,.primeink-mixage-class-table td { font-size:7.5pt; padding:1mm 1.2mm; }
+    .primeink-mixage-class-table { background:#fff!important; color:#111!important; }
+    .primeink-mixage-class-table th { background:#e8e8e8!important; }
+    .primeink-mixage-class-table th,.primeink-mixage-class-table td { border-color:#555!important; font-size:7.5pt; padding:1mm 1.2mm; }
     .primeink-mixage-plan { page-break-after:always; break-after:page; }
     .primeink-mixage-plan:last-child { page-break-after:auto; break-after:auto; }
     .primeink-mixage-filterbar { display:none!important; }
@@ -4924,7 +4926,7 @@ async function bpPushClassBulletin(cls) {
                 let totalClassPoints = 0;
                 let completedCount = 0;
 
-                studentsLoop: for (const st of getSortedStudentsByClass(classId)) {
+                for (const st of getSortedStudentsByClass(classId)) {
                     const { v } = ficheCourseValues(st.id, course);
                     const score = ficheSumRequired(fields.map(field => v[field]));
                     const complete = score !== null && maxSelected > 0;
