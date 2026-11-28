@@ -1903,7 +1903,7 @@ body.theme-dark input::placeholder,body.theme-dark textarea::placeholder{color:v
             <div id="pres-sub-prof" class="hidden">
                 <div class="form-group" style="max-width: 300px; margin-bottom: 1rem;">
                     <label>Date</label>
-                    <input type="date" id="presProfDate" class="form-control" onchange="renderPresencesProfTable()">
+                    <input type="date" id="presProfDate" class="form-control" onchange="loadPrimeInkTeacherAttendance()">
                 </div>
 
                 <div class="settings-card">
@@ -5901,16 +5901,52 @@ async function bpPushClassBulletin(cls) {
             }
         };
 
+        // Répertoire officiel des enseignants confirmé côté serveur.
+        // La copie locale PrimeInk peut ne pas conserver l'e-mail après une restauration.
+        let __primeInkTeacherAttendanceRoster = null;
+
         async function loadPrimeInkTeacherAttendance() {
             const dateValue = document.getElementById('presProfDate')?.value || '';
-            if (!dateValue || !cloudAuthHeaders().Authorization) return;
+            const headers = primeInkAuthHeaders();
+            if (!dateValue || !headers.Authorization) {
+                renderPresencesProfTable();
+                return;
+            }
             try {
                 const response = await fetch(API_BASE_URL + '/api/primenet/teacher-attendance?date=' + encodeURIComponent(dateValue), {
-                    headers: primeInkAuthHeaders(), cache: 'no-store'
+                    headers, cache: 'no-store'
                 });
                 const result = await response.json().catch(() => ({}));
                 if (!response.ok || !result.status) throw new Error(result.detail || result.message || "Présences du personnel indisponibles.");
-                appState.tools.presences.teachers = (appState.tools.presences.teachers || []).filter(row => row.date !== dateValue)
+
+                if (Array.isArray(result.teachers)) {
+                    __primeInkTeacherAttendanceRoster = result.teachers.map(row => ({
+                        email: String(row.email || '').trim(),
+                        uniqueId: String(row.teacherCode || row.email || '').trim(),
+                        name: row.name || 'Enseignant',
+                        subject: row.subject || '',
+                        status: row.status || 'Actif'
+                    })).filter(row => row.email);
+
+                    // Enrichit l'état local sans remplacer les identifiants ni les autres réglages PrimeInk.
+                    __primeInkTeacherAttendanceRoster.forEach(official => {
+                        const local = (appState.teachers || []).find(teacher =>
+                            String(teacher.email || '').toLowerCase() === official.email.toLowerCase() ||
+                            String(teacher.uniqueId || '') === official.uniqueId ||
+                            String(teacher.name || '').trim().toLowerCase() === String(official.name || '').trim().toLowerCase()
+                        );
+                        if (local) {
+                            local.email = official.email;
+                            if (!local.name) local.name = official.name;
+                            if (!local.uniqueId) local.uniqueId = official.uniqueId;
+                        }
+                    });
+                }
+
+                if (!appState.tools) appState.tools = JSON.parse(JSON.stringify(defaultState.tools));
+                if (!appState.tools.presences) appState.tools.presences = { students: [], teachers: [] };
+                appState.tools.presences.teachers = (appState.tools.presences.teachers || [])
+                    .filter(row => row.date !== dateValue)
                     .concat(Array.isArray(result.data) ? result.data : []);
                 renderPresencesProfTable();
             } catch (error) {
@@ -5920,21 +5956,42 @@ async function bpPushClassBulletin(cls) {
         }
 
         window.savePrimeInkTeacherAttendance = async function(teacherEmail) {
+            const email = String(teacherEmail || '').trim().toLowerCase();
             const dateValue = document.getElementById('presProfDate')?.value || '';
-            const checkIn = document.getElementById('pres-prof-in-' + teacherEmail)?.value || '';
-            const checkOut = document.getElementById('pres-prof-out-' + teacherEmail)?.value || '';
+            const checkInInput = document.getElementById('pres-prof-in-' + teacherEmail);
+            const checkOutInput = document.getElementById('pres-prof-out-' + teacherEmail);
+            const checkIn = checkInInput?.value || '';
+            const checkOut = checkOutInput?.value || '';
             const headers = primeInkAuthHeaders();
             if (!headers.Authorization) { alert("Connectez PrimeInk au compte de l'école."); return; }
+            if (!email || !dateValue) { alert("Sélectionnez un enseignant confirmé et une date valide."); return; }
+
+            const button = document.querySelector('#presProfTableBody button[onclick*="' + CSS.escape(email) + '"]');
+            if (button) { button.disabled = true; button.textContent = "Enregistrement…"; }
             try {
                 const response = await fetch(API_BASE_URL + '/api/primenet/teacher-attendance', {
                     method: 'POST', headers,
-                    body: JSON.stringify({ teacher_email: teacherEmail, date: dateValue, check_in: checkIn, check_out: checkOut })
+                    body: JSON.stringify({ teacher_email: email, date: dateValue, check_in: checkIn, check_out: checkOut })
                 });
                 const result = await response.json().catch(() => ({}));
                 if (!response.ok || !result.status) throw new Error(result.detail || result.message || "Enregistrement refusé.");
+
+                const saved = result.data || {
+                    teacherEmail: email, date: dateValue, checkIn, checkOut
+                };
+                if (!appState.tools) appState.tools = JSON.parse(JSON.stringify(defaultState.tools));
+                if (!appState.tools.presences) appState.tools.presences = { students: [], teachers: [] };
+                appState.tools.presences.teachers = (appState.tools.presences.teachers || [])
+                    .filter(row => !(row.date === dateValue && String(row.teacherEmail || '').toLowerCase() === email))
+                    .concat([saved]);
+                saveState();
                 await loadPrimeInkTeacherAttendance();
                 alert(result.message || "Présence du personnel enregistrée.");
-            } catch (error) { alert(error.message || "Impossible d'enregistrer la présence."); }
+            } catch (error) {
+                alert(error.message || "Impossible d'enregistrer la présence.");
+            } finally {
+                if (button) { button.disabled = false; button.textContent = "Sauvegarder"; }
+            }
         };
 
         function renderPresencesProfTable() {
@@ -5942,19 +5999,26 @@ async function bpPushClassBulletin(cls) {
             if (!tbody) return;
             const dateValue = document.getElementById('presProfDate')?.value || '';
             const records = appState.tools?.presences?.teachers || [];
+            const teachers = Array.isArray(__primeInkTeacherAttendanceRoster)
+                ? __primeInkTeacherAttendanceRoster
+                : (appState.teachers || []);
             tbody.innerHTML = '';
-            (appState.teachers || []).forEach(teacher => {
+
+            teachers.forEach(teacher => {
                 const email = String(teacher.email || (String(teacher.uniqueId || '').includes('@') ? teacher.uniqueId : '')).trim();
-                const record = records.find(row => row.date === dateValue && row.teacherEmail === email) || {};
+                const record = records.find(row =>
+                    row.date === dateValue &&
+                    String(row.teacherEmail || '').toLowerCase() === email.toLowerCase()
+                ) || {};
                 const tr = document.createElement('tr');
-                tr.innerHTML = '<td><strong>' + safeHTML(teacher.name) + '</strong></td>' +
+                tr.innerHTML = '<td><strong>' + safeHTML(teacher.name || 'Enseignant') + '</strong></td>' +
                     '<td><input id="pres-prof-in-' + safeHTML(email) + '" type="time" class="form-control" value="' + safeHTML(record.checkIn || '') + '" style="width:120px"></td>' +
                     '<td><input id="pres-prof-out-' + safeHTML(email) + '" type="time" class="form-control" value="' + safeHTML(record.checkOut || '') + '" style="width:120px"></td>' +
                     '<td><button class="btn-primary" ' + (!email ? 'disabled title="E-mail enseignant indisponible"' : '') +
                     ' style="padding:.3rem .6rem;font-size:.8rem" onclick="savePrimeInkTeacherAttendance(' + jsArg(email) + ')">Sauvegarder</button></td>';
                 tbody.appendChild(tr);
             });
-            if (!appState.teachers.length) tbody.innerHTML = '<tr><td colspan="4">Aucun enseignant enregistré.</td></tr>';
+            if (!teachers.length) tbody.innerHTML = '<tr><td colspan="4">Aucun enseignant confirmé pour cet établissement.</td></tr>';
         }
 
 
