@@ -5550,7 +5550,7 @@ async function bpPushClassBulletin(cls) {
         let intranetPollInProgress = false;
         async function fetchIntranetAverages() {
             if (intranetPollInProgress) return;
-            const headers = cloudAuthHeaders();
+            const headers = primeInkIntranetHeaders();
             if (!headers.Authorization) return;
             intranetPollInProgress = true;
             try {
@@ -8572,7 +8572,11 @@ const classDetailSection = document.getElementById('section-class-detail');
                     if (!response.ok || !result.status || !result.token) {
                         throw new Error(result.message || result.detail || "Mot de passe incorrect ou compte indisponible.");
                     }
-                    try { localStorage.setItem('primeink_cloud_token', result.token); } catch (_) {}
+                    try {
+                        localStorage.setItem('primeink_cloud_token', result.token);
+                        if (result.intranet_token) localStorage.setItem('primeink_intranet_token', result.intranet_token);
+                        else localStorage.removeItem('primeink_intranet_token');
+                    } catch (_) {}
                     const remembered = await window.primeInkRememberLocalPassword(pass, schoolId);
                     if (!remembered) {
                         throw new Error("Connexion validée, mais le navigateur ne permet pas de créer le verrou local sécurisé. Utilisez Chrome, Edge ou Firefox à jour.");
@@ -8807,6 +8811,16 @@ const classDetailSection = document.getElementById('section-class-detail');
             const headers = { 'Content-Type': 'application/json' };
             try {
                 const token = localStorage.getItem('primeink_cloud_token');
+                if (token) headers['Authorization'] = 'Bearer ' + token;
+            } catch (e) { /* stockage indisponible */ }
+            return headers;
+        }
+
+        // Jeton dédié à la passerelle locale : il ne permet pas d'appeler l'API Cloud.
+        function primeInkIntranetHeaders() {
+            const headers = { 'Content-Type': 'application/json' };
+            try {
+                const token = localStorage.getItem('primeink_intranet_token');
                 if (token) headers['Authorization'] = 'Bearer ' + token;
             } catch (e) { /* stockage indisponible */ }
             return headers;
@@ -9445,7 +9459,11 @@ const classDetailSection = document.getElementById('section-class-detail');
                 const result = await response.json();
                 if (result.status && result.data) {
                     if (result.token) {
-                        try { localStorage.setItem('primeink_cloud_token', result.token); } catch (e) { /* stockage indisponible */ }
+                        try {
+                            localStorage.setItem('primeink_cloud_token', result.token);
+                            if (result.intranet_token) localStorage.setItem('primeink_intranet_token', result.intranet_token);
+                            else localStorage.removeItem('primeink_intranet_token');
+                        } catch (e) { /* stockage indisponible */ }
                     }
                     if (window.primeInkRememberLocalPassword) {
                         await window.primeInkRememberLocalPassword(password, schoolId);
