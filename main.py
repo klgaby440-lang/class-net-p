@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field, EmailStr
 from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, Text, JSON, Float, text, func, UniqueConstraint, CheckConstraint, or_
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session, relationship
+from sqlalchemy.exc import IntegrityError
 import random
 import re
 from classnet_common import (
@@ -5587,15 +5588,38 @@ def primenet_get_teacher_attendance(date: str, db: Session = Depends(get_db), cl
     school_id = str(claims.get("school_id") or "")
     if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(date or "")):
         raise HTTPException(status_code=422, detail="Date invalide.")
+
+    # Le registre officiel doit venir des comptes confirmés en base, pas uniquement
+    # de la copie locale PrimeInk (qui peut ne plus contenir l'e-mail du professeur).
+    verified_teachers = _verified_school_teachers(db, school_id)
+    teachers = {row.email: row for row in verified_teachers}
     records = db.query(TeacherAttendance).filter(
-        TeacherAttendance.school_id == school_id, TeacherAttendance.date == date
+        TeacherAttendance.school_id == school_id,
+        TeacherAttendance.date == date,
     ).all()
-    teachers = {row.email: row for row in _verified_school_teachers(db, school_id)}
-    return {"status": True, "data": [
-        {"teacherEmail": row.teacher_email, "teacherName": teachers[row.teacher_email].full_name if row.teacher_email in teachers else "",
-         "date": row.date, "checkIn": row.check_in or "", "checkOut": row.check_out or ""}
-        for row in records
-    ]}
+    return {
+        "status": True,
+        "teachers": [
+            {
+                "email": row.email,
+                "teacherCode": row.teacher_code or f"prof_{row.id}",
+                "name": row.full_name,
+                "subject": row.subject or "",
+                "status": row.status or "Actif",
+            }
+            for row in verified_teachers
+        ],
+        "data": [
+            {
+                "teacherEmail": row.teacher_email,
+                "teacherName": teachers[row.teacher_email].full_name if row.teacher_email in teachers else "",
+                "date": row.date,
+                "checkIn": row.check_in or "",
+                "checkOut": row.check_out or "",
+            }
+            for row in records
+        ],
+    }
 
 
 @app.post("/api/primenet/teacher-attendance")
@@ -5605,26 +5629,63 @@ def primenet_save_teacher_attendance(payload: dict, db: Session = Depends(get_db
     date_value = str(payload.get("date") or "").strip()
     check_in = str(payload.get("check_in") or "").strip()
     check_out = str(payload.get("check_out") or "").strip()
+    if not teacher_email:
+        raise HTTPException(status_code=422, detail="Sélectionnez un enseignant.")
     if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date_value):
         raise HTTPException(status_code=422, detail="Date invalide.")
+    try:
+        datetime.strptime(date_value, "%Y-%m-%d")
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="Date invalide.") from exc
     if any(value and not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", value) for value in (check_in, check_out)):
         raise HTTPException(status_code=422, detail="Heure invalide.")
-    teacher = db.query(Teacher).filter(Teacher.email == teacher_email).first()
+    teacher = db.query(Teacher).filter(func.lower(Teacher.email) == teacher_email).first()
     if not teacher or not teacher_has_school_access(db, teacher, school_id):
         raise HTTPException(status_code=404, detail="Enseignant non associé à cet établissement.")
-    row = db.query(TeacherAttendance).filter(
+
+    canonical_email = teacher.email
+    query = db.query(TeacherAttendance).filter(
         TeacherAttendance.school_id == school_id,
-        TeacherAttendance.teacher_email == teacher_email,
+        TeacherAttendance.teacher_email == canonical_email,
         TeacherAttendance.date == date_value,
-    ).first()
-    if not row:
-        row = TeacherAttendance(school_id=school_id, teacher_email=teacher_email, date=date_value)
+    )
+    row = query.first()
+    if row is None:
+        row = TeacherAttendance(
+            school_id=school_id,
+            teacher_email=canonical_email,
+            date=date_value,
+        )
         db.add(row)
     row.check_in = check_in or None
     row.check_out = check_out or None
     row.updated_at = datetime.utcnow()
-    db.commit()
-    return {"status": True, "message": "Présence du personnel enregistrée."}
+    try:
+        db.commit()
+    except IntegrityError:
+        # Deux sauvegardes simultanées de la même fiche/date ne doivent pas
+        # transformer une modification valide en échec de sauvegarde.
+        db.rollback()
+        row = query.with_for_update().first()
+        if row is None:
+            raise HTTPException(status_code=409, detail="La présence a été modifiée simultanément. Rechargez puis réessayez.")
+        row.check_in = check_in or None
+        row.check_out = check_out or None
+        row.updated_at = datetime.utcnow()
+        db.commit()
+
+    db.refresh(row)
+    return {
+        "status": True,
+        "message": "Présence du personnel enregistrée.",
+        "data": {
+            "teacherEmail": canonical_email,
+            "teacherName": teacher.full_name,
+            "date": row.date,
+            "checkIn": row.check_in or "",
+            "checkOut": row.check_out or "",
+        },
+    }
 
 
 @app.put("/api/suivi/school/students/{student_id}/access")
