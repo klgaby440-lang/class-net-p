@@ -1,0 +1,61 @@
+name: Build ClassInk Intranet for Windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "intranet_server.py"
+      - "requirements-intranet.txt"
+      - "start_intranet.ps1"
+      - ".github/workflows/build-intranet-windows.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install relay and packaging dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-intranet.txt pyinstaller
+
+      - name: Build standalone executable
+        shell: pwsh
+        run: |
+          pyinstaller --clean --noconfirm --onefile --console --name ClassInkIntranet --collect-all fastapi --collect-all starlette --collect-all uvicorn --collect-all pydantic --collect-all anyio intranet_server.py
+          Copy-Item start_intranet.ps1 dist/start_intranet.ps1
+
+      - name: Package build information
+        shell: pwsh
+        run: |
+          @"
+          ClassInk Intranet - Windows x64
+          Exécutable : ClassInkIntranet.exe
+          Démarrage : clic droit sur start_intranet.ps1 > Exécuter avec PowerShell
+          Le script demande la clé INTRANET_AUTH_SECRET sans l'écrire dans un fichier.
+          Le serveur écoute sur le port TCP 5001.
+          Voir INTRANET.md dans le dépôt pour le réseau local et le certificat HTTPS.
+          "@ | Set-Content -Encoding UTF8 dist/LISEZ-MOI.txt
+
+      - name: Upload Windows executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: ClassInk-Intranet-Windows-x64
+          path: |
+            dist/ClassInkIntranet.exe
+            dist/start_intranet.ps1
+            dist/LISEZ-MOI.txt
+          if-no-files-found: error
+          retention-days: 30
