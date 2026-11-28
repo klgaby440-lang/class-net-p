@@ -1353,6 +1353,8 @@ class TestLlinkSessionsKeepaliveAndClassDomains(unittest.TestCase):
         ):
             self.assertIn('data-llink-app="' + app_name + '"', source)
 
+        self.assertIn('data-llink-app="classink"', app)
+        self.assertIn("String(teacher) + ':' + String(school)", app)
         for marker in (
             "classink:llink:sessions:v1:",
             "window.localStorage.setItem(key, JSON.stringify(value))",
@@ -1415,6 +1417,7 @@ class TestLlinkSessionsKeepaliveAndClassDomains(unittest.TestCase):
         self.assertIn("function bpTeacherDisplayName(value)", prime)
         self.assertIn("function primeInkDisplayTeacherName(rawValue)", prime)
         self.assertIn("currentCourseTitulaire').textContent = primeInkDisplayTeacherName(course.titulaire)", prime)
+        self.assertIn("...(cls.subDomains && typeof cls.subDomains === 'object' ? { subDomains: cls.subDomains } : {})", prime)
 
         self.assertIn("sub_domains = Column(JSON, nullable=True)", backend)
         self.assertIn("ADD COLUMN IF NOT EXISTS sub_domains JSON", backend)
