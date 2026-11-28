@@ -4034,6 +4034,15 @@ async function bpPushClassBulletin(cls) {
             renderTeachersTable();
         };
 
+        // Fonction partagée par les écrans internes et les modules exécutés hors de DOMContentLoaded.
+        // Le rendu des présences est défini dans une portée distincte : cet utilitaire doit donc
+        // rester au niveau global du script pour être également accessible depuis ce rendu.
+        function getSortedStudentsByClass(classId) {
+            if (typeof sortStudentsAlphabetically === 'function') sortStudentsAlphabetically(appState);
+            const students = Array.isArray(appState.students) ? appState.students : [];
+            return students.filter(st => String(st.classId ?? '') === String(classId ?? ''));
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             window.loadClassData = loadClassData;   // utilisable aussi depuis les fonctions situées hors de ce bloc
 
@@ -4092,13 +4101,6 @@ async function bpPushClassBulletin(cls) {
                     });
                     tbody.appendChild(tr);
                 });
-            }
-
-                    function getSortedStudentsByClass(classId) {
-                // L'ordre est déjà normalisé dans appState.students ; on le réapplique
-                // par sécurité avant chaque liste, au cas où une synchronisation l'aurait changé.
-                sortStudentsAlphabetically(appState);
-                return appState.students.filter(st => String(st.classId ?? '') === String(classId ?? ''));
             }
 
                     // Et sécurise le début de loadClassData() :
