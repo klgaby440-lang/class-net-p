@@ -3216,6 +3216,15 @@ async def classink_llink_assist(payload: dict, request: Request, db: Session = D
         )
 
     context_text = serialize_llink_application_context(context, max_chars=30_000)
+    try:
+        context_was_truncated = bool(json.loads(context_text).get("contextTruncated"))
+    except (TypeError, ValueError):
+        context_was_truncated = False
+    if context_was_truncated:
+        system_instruction += (
+            " Le contexte transmis a été réduit pour respecter la limite de taille : "
+            "signale cette limite et ne déduis rien des enregistrements omis."
+        )
     request_payload = {
         "message": message,
         "history": history,
