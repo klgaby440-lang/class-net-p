@@ -963,7 +963,8 @@ class TestNewFeatureStatic(unittest.TestCase):
         self.assertIn('id="presence-slot"', app)
         self.assertIn("slotKey: selectedSlot", app)
         sync = app.split("async function syncWithIntranet()", 1)[1].split("/* ==========================================================================", 1)[0]
-        self.assertIn("cloudAuthHeaders()", sync)
+        self.assertIn("intranetAuthHeaders()", sync)
+        self.assertIn("classink_intranet_token", app)
         self.assertNotIn("showCustomPrompt", sync)
         self.assertIn("courseCatalog: data.courseCatalog || {}", app)
         self.assertIn('id="support-settings-card"', app)
