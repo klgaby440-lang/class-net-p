@@ -631,7 +631,10 @@ process.stdout.write(JSON.stringify({
         self.assertNotIn("Institut Horizon", source)
         self.assertNotIn("Aline Mukendi", source)
         self.assertIn("window.__CLASSINK_MANAGER_TOKEN__=managerToken", source)
-        self.assertIn('id="llink-assist-widget"', source)
+        self.assertIn('data-page="llink"', source)
+        self.assertIn('id="page-llink"', source)
+        self.assertIn("classink-llink-sessions.js", source)
+        self.assertNotIn('id="llink-assist-widget"', source)
 
     def test_classink_and_crypt_brand_assets_are_wired_into_frontends_and_heads(self):
         classink_logo = (ROOT / "assets/classink-logo.svg").read_text(encoding="utf-8")
@@ -673,25 +676,31 @@ process.stdout.write(JSON.stringify({
         self.assertIn("window.__CRYPT_ADMIN_TOKEN__=token", source)
         self.assertIn('id="llink-assist-widget"', source)
 
-    def test_llink_assist_is_embedded_without_persisting_conversation_data(self):
-        for relative in ("suivi/index.html", "manager/index.html", "crypt/index.html"):
-            source = (ROOT / relative).read_text(encoding="utf-8")
+    def test_llink_is_embedded_in_manager_and_suivi_navigation_with_persistent_sessions(self):
+        manager = (ROOT / "manager/index.html").read_text(encoding="utf-8")
+        suivi = (ROOT / "suivi/index.html").read_text(encoding="utf-8")
+        client = (ROOT / "assets/classink-llink-sessions.js").read_text(encoding="utf-8")
+
+        for relative, source, app_name in (
+            ("manager/index.html", manager, "manager"),
+            ("suivi/index.html", suivi, "suivi"),
+        ):
             self.inspect_file(relative)
-            self.assertIn('id="llink-assist-widget"', source)
-            self.assertIn("/api/llink/assist", source)
-            self.assertIn("history.slice(-8)", source)
-            if relative == "manager/index.html":
-                self.assertIn("classink_manager_theme", source)
-                self.assertNotIn("sessionStorage", source)
-            elif relative == "suivi/index.html":
-                # Seule la préférence d'apparence peut persister ; les données parentales restent éphémères.
-                self.assertIn("classink_suivi_theme", source)
-                self.assertIn("localStorage.setItem('classink_suivi_theme'", source)
-                self.assertNotIn("localStorage.setItem(STORE_KEY", source)
-                self.assertNotIn("sessionStorage", source)
-            else:
-                self.assertNotIn("localStorage", source)
-                self.assertNotIn("sessionStorage", source)
+            self.assertIn('data-llink-app="' + app_name + '"', source)
+            self.assertIn("classink-llink-sessions.js", source)
+            self.assertNotIn('id="llink-assist-widget"', source)
+            self.assertNotIn('id="llink-assist-widget-style"', source)
+
+        self.assertIn('data-page="llink"', manager)
+        self.assertIn('id="page-llink"', manager)
+        self.assertIn('data-go="llink"', suivi)
+        self.assertIn("llink: viewLlink", suivi)
+        self.assertIn("classink_manager_theme", manager)
+        self.assertIn("classink_suivi_theme", suivi)
+        self.assertIn("localStorage.setItem('classink_suivi_theme'", suivi)
+        self.assertIn("/api/llink/assist", client)
+        self.assertIn("history.slice(0, -1).slice(-8)", client)
+        self.assertIn("window.localStorage.setItem(key, JSON.stringify(value))", client)
 
     def test_manager_has_crypt_telemetry_and_no_persistent_storage(self):
         source = (ROOT / "manager/index.html").read_text(encoding="utf-8")
@@ -978,9 +987,11 @@ class TestNewFeatureStatic(unittest.TestCase):
         self.assertIn("safe.evaluations = null;", redaction)
         self.assertIn("safe.grades = null;", redaction)
         self.assertIn("Toutes les interrogations", suivi)
-        self.assertIn("N° du professeur", suivi)
+        self.assertIn("Téléphone du professeur", suivi)
+        self.assertNotIn("N° du professeur", suivi)
         self.assertIn("teacherName", suivi)
-        self.assertIn("teacherCode", suivi)
+        self.assertIn("teacherPhone", suivi)
+        self.assertNotIn("teacherCode", suivi)
         self.assertIn("function viewAttendance()", suivi)
         self.assertIn("safe.attendance = null;", redaction)
         self.assertIn("window.__CLASSINK_SUIVI_LLINK_CONTEXT__", suivi)
@@ -1012,9 +1023,11 @@ class TestNewFeatureStatic(unittest.TestCase):
             self.assertIn(marker, backend)
 
         app = (ROOT / "app/index.html").read_text(encoding="utf-8")
+        llink_client = (ROOT / "assets/classink-llink-sessions.js").read_text(encoding="utf-8")
         self.assertIn("/api/teacher/messages", app)
-        self.assertIn("X-CRYPT-App'] = 'classink'", app)
-        self.assertIn("/api/llink/assist", app)
+        self.assertIn('data-llink-app="classink"', app)
+        self.assertIn("headers.set('X-CRYPT-App', app)", llink_client)
+        self.assertIn("/api/llink/assist", llink_client)
         self.assertIn("slotKey: selectedSlot", app)
 
         prime = (ROOT / "prime/index.html").read_text(encoding="utf-8")
@@ -1144,9 +1157,12 @@ class TestAccountProfileThemeAndRelease(unittest.TestCase):
         suivi = (ROOT / "suivi/index.html").read_text(encoding="utf-8")
         manager = (ROOT / "manager/index.html").read_text(encoding="utf-8")
         prime = (ROOT / "prime/index.html").read_text(encoding="utf-8")
+        llink_client = (ROOT / "assets/classink-llink-sessions.js").read_text(encoding="utf-8")
         self.assertIn('[data-theme="dark"] tr:nth-child(even)', app)
-        self.assertIn('[data-theme="light"] #llink-assist-panel', suivi)
-        self.assertIn('[data-theme="light"] #llink-assist-panel', manager)
+        self.assertIn('data-llink-messages', suivi)
+        self.assertIn('data-llink-messages', manager)
+        self.assertIn('var(--text-primary, var(--text', llink_client)
+        self.assertIn('var(--border-color, var(--line', llink_client)
         self.assertIn('body.theme-dark .fiche-grade-input', prime)
         self.assertIn('color-scheme:dark', prime)
 
@@ -1252,11 +1268,13 @@ class TestCourseSeparationAndDeviceUnlock(unittest.TestCase):
         if not node:
             self.skipTest("Node.js absent : calcul de moyenne des cours-bulletins ignoré.")
         prime = (ROOT / "prime/index.html").read_text(encoding="utf-8")
+        display_start = prime.index("function primeInkDisplayTeacherName(rawValue)")
+        display_end = prime.index("function primeInkTeacherSelectOptions", display_start)
         num_start = prime.index("function bpNum(v)")
         num_end = prime.index("function bpAcc()", num_start)
         values_start = prime.index("function bpBulletinCoursesForClass(cls)")
         values_end = prime.index("function bpStudentTotals", values_start)
-        helper = prime[num_start:num_end] + """
+        helper = prime[display_start:display_end] + prime[num_start:num_end] + """
 function bpSum(values) {
     if (!Array.isArray(values) || !values.length || values.some(value => value === null || value === undefined)) return null;
     return values.reduce((sum, value) => sum + value, 0);
