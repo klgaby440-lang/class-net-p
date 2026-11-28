@@ -5966,7 +5966,7 @@ async function bpPushClassBulletin(cls) {
             if (!headers.Authorization) { alert("Connectez PrimeInk au compte de l'école."); return; }
             if (!email || !dateValue) { alert("Sélectionnez un enseignant confirmé et une date valide."); return; }
 
-            const button = document.querySelector('#presProfTableBody button[onclick*="' + CSS.escape(email) + '"]');
+            const button = checkInInput?.closest('tr')?.querySelector('button');
             if (button) { button.disabled = true; button.textContent = "Enregistrement…"; }
             try {
                 const response = await fetch(API_BASE_URL + '/api/primenet/teacher-attendance', {
