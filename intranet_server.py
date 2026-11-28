@@ -317,7 +317,7 @@ if __name__ == "__main__":
         raise RuntimeError("INTRANET_SSL_CERTFILE et INTRANET_SSL_KEYFILE doivent être renseignés ensemble.")
 
     uvicorn.run(
-        "intranet_server:app",
+        app,
         host=os.getenv("INTRANET_HOST", "0.0.0.0"),
         port=int(os.getenv("INTRANET_PORT", str(DEFAULT_PORT))),
         reload=False,
