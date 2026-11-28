@@ -2187,7 +2187,7 @@ body.theme-dark input::placeholder,body.theme-dark textarea::placeholder{color:v
             <div class="form-group"><label>Max Période (Points)</label><input type="number" id="max-per-cours" class="form-control" value="40"></div>
             <div class="form-group"><label>Enseignant responsable du cours</label><select id="name-titulaire-added-cours" class="form-control"><option value="">-- Aucun enseignant attribué --</option></select><small style="display:block;margin-top:5px;color:var(--text-secondary);">Seul cet enseignant recevra ce cours dans son espace ClassInk.</small></div>
             <div class="form-group"><label>Catégorie du cours</label><select class="form-control" id="choix-categorie"></select></div>
-            <div class="form-group"><label>Sous-domaine (facultatif)</label><input type="text" id="sub-category-cours" class="form-control" placeholder="Ex : Sous-domaine des mathématiques"></div>
+            <div class="form-group"><label>Sous-domaine (facultatif)</label><select id="sub-category-cours" class="form-control"><option value="">— Aucun sous-domaine —</option></select></div>
             <div class="form-group" style="border:1px dashed var(--border-color);border-radius:8px;padding:.75rem;">
                 <label style="display:block;margin-bottom:.45rem;">IMPORTER LES COURS DEPUIS UN BULLETIN</label>
                 <label class="btn-secondary" style="display:inline-flex;position:relative;overflow:hidden;align-items:center;gap:.4rem;cursor:pointer;">
@@ -2530,17 +2530,64 @@ window.alert = function(message) { showCustomAlert(message); };
             if (field) field.focus();
         };
 
-                function populateCategoryDropdown() {
-                    const select = document.getElementById('choix-categorie');
-                    select.innerHTML = '';
-                    const cls = appState.classes.find(c => c.id === activeClassId);
-                    const categories = cls && cls.categories ? cls.categories : ['Général'];
-                    categories.forEach(cat => {
-                        const opt = document.createElement('option');
-                        opt.value = cat;
-                        opt.textContent = cat;
-                        select.appendChild(opt);
+                function primeInkClassDomains(cls) {
+                    const domains = Array.isArray(cls && cls.categories) ? cls.categories.slice() : [];
+                    (appState.courses || []).filter(course => String(course.classId) === String(cls && cls.id))
+                        .forEach(course => {
+                            const value = String(course.category || '').trim();
+                            if (value && !domains.some(item => bpNorm(item) === bpNorm(value))) domains.push(value);
+                        });
+                    return domains.length ? domains : ['Général'];
+                }
+
+                function primeInkClassSubdomains(cls, domain) {
+                    const values = [];
+                    const configured = cls && cls.subDomains && typeof cls.subDomains === 'object'
+                        ? (cls.subDomains[domain] || Object.entries(cls.subDomains).find(([key]) => bpNorm(key) === bpNorm(domain))?.[1] || [])
+                        : [];
+                    if (Array.isArray(configured)) configured.forEach(value => {
+                        const text = String(value || '').trim();
+                        if (text && !values.some(existing => bpNorm(existing) === bpNorm(text))) values.push(text);
                     });
+                    (appState.courses || []).filter(course =>
+                        String(course.classId) === String(cls && cls.id) &&
+                        bpNorm(course.category) === bpNorm(domain)
+                    ).forEach(course => {
+                        const text = String(course.subCategory || '').trim();
+                        if (text && !values.some(existing => bpNorm(existing) === bpNorm(text))) values.push(text);
+                    });
+                    return values;
+                }
+
+                function primeInkFillSubdomainSelect(select, cls, domain, selectedValue) {
+                    if (!select) return;
+                    const previous = selectedValue !== undefined ? String(selectedValue || '') : String(select.value || '');
+                    const values = primeInkClassSubdomains(cls, domain);
+                    select.innerHTML = '<option value="">— Aucun sous-domaine —</option>' + values.map(value =>
+                        '<option value="' + safeHTML(value) + '">' + safeHTML(value) + '</option>'
+                    ).join('');
+                    select.value = values.some(value => bpNorm(value) === bpNorm(previous))
+                        ? values.find(value => bpNorm(value) === bpNorm(previous)) : '';
+                }
+
+                function populateCategoryDropdown(selectedDomain, selectedSubdomain) {
+                    const select = document.getElementById('choix-categorie');
+                    const subSelect = document.getElementById('sub-category-cours');
+                    const cls = appState.classes.find(c => String(c.id) === String(activeClassId));
+                    const categories = primeInkClassDomains(cls);
+                    select.innerHTML = categories.map(cat =>
+                        '<option value="' + safeHTML(cat) + '">' + safeHTML(cat) + '</option>'
+                    ).join('');
+                    if (selectedDomain && categories.some(value => bpNorm(value) === bpNorm(selectedDomain))) {
+                        select.value = categories.find(value => bpNorm(value) === bpNorm(selectedDomain));
+                    }
+                    primeInkFillSubdomainSelect(subSelect, cls, select.value, selectedSubdomain);
+                    if (!select.dataset.subdomainBound) {
+                        select.addEventListener('change', () => primeInkFillSubdomainSelect(
+                            subSelect, appState.classes.find(c => String(c.id) === String(activeClassId)), select.value, ''
+                        ));
+                        select.dataset.subdomainBound = 'true';
+                    }
                 }
 
                 // ======================================================================
@@ -2647,15 +2694,22 @@ window.alert = function(message) { showCustomAlert(message); };
                     const preset = cls ? bpPresetForModel(bpClassModel(cls)) : null;
                     if (!preset) return 0;
                     if (!cls.categories) cls.categories = [];
+                    if (!cls.subDomains || typeof cls.subDomains !== 'object') cls.subDomains = {};
                     const catSpelling = {};
                     preset.categories.forEach(cat => {
                         const existing = cls.categories.find(c => bpNorm(c) === bpNorm(cat));
                         if (existing) catSpelling[cat] = existing;
                         else { cls.categories = cls.categories.filter(c => bpNorm(c) !== 'general'); cls.categories.push(cat); catSpelling[cat] = cat; }
+                        if (!Array.isArray(cls.subDomains[catSpelling[cat]])) cls.subDomains[catSpelling[cat]] = [];
                     });
                     let added = 0;
                     preset.courses.forEach((row, i) => {
                         const [cat, sub, name, maxPer] = row;
+                        if (sub) {
+                            const domainName = catSpelling[cat] || cat;
+                            const list = cls.subDomains[domainName] || (cls.subDomains[domainName] = []);
+                            if (!list.some(value => bpNorm(value) === bpNorm(sub))) list.push(sub);
+                        }
                         const found = appState.courses.find(c => c.classId === cls.id && bpNorm(c.name) === bpNorm(name));
                         if (found) {
                             if (!found.subCategory && sub) found.subCategory = sub;
@@ -2822,12 +2876,23 @@ window.alert = function(message) { showCustomAlert(message); };
                 }
                 const BP_TOTAL_KEYS = ['p1', 'p2', 'ex1', 's1', 'p3', 'p4', 'ex2', 's2', 'tg'];
 
+                function bpTeacherDisplayName(value) {
+                    const raw = String(value || '').trim();
+                    if (!raw || raw === 'Non assigné') return raw;
+                    const teacher = (Array.isArray(appState.teachers) ? appState.teachers : []).find(item =>
+                        [item.uniqueId, item.id, item.email, item.teacherCode, item.code]
+                            .some(identifier => identifier !== undefined && String(identifier).trim().toLowerCase() === raw.toLowerCase())
+                    );
+                    return teacher && teacher.name ? String(teacher.name).trim() : raw;
+                }
+
                 function bpBulletinCoursesForClass(cls) {
                     const taughtCourses = (Array.isArray(appState.courses) ? appState.courses : [])
                         .filter(course => String(course.classId ?? '') === String(cls && cls.id || ''));
                     if (!cls || !Array.isArray(cls.bulletinCourses)) {
                         return taughtCourses.map(course => ({
                             ...course,
+                            titulaire: bpTeacherDisplayName(course.titulaire),
                             sourceCourseIds: [String(course.id)]
                         }));
                     }
@@ -2835,12 +2900,12 @@ window.alert = function(message) { showCustomAlert(message); };
                         const sourceIds = Array.isArray(item.sourceCourseIds) ? item.sourceCourseIds.map(String) : [];
                         const sources = taughtCourses.filter(course => sourceIds.includes(String(course.id)));
                         if (!sources.length) return null;
-                        const teachers = [...new Set(sources.map(course => String(course.titulaire || '').trim()).filter(name => name && name !== 'Non assigné'))];
+                        const teachers = [...new Set(sources.map(course => bpTeacherDisplayName(course.titulaire)).filter(name => name && name !== 'Non assigné'))];
                         return {
                             ...item,
                             classId: cls.id,
                             sourceCourseIds: sources.map(course => String(course.id)),
-                            titulaire: teachers.length === 1 ? teachers[0] : (cls.titulaire || teachers[0] || 'Non assigné')
+                            titulaire: teachers.length === 1 ? teachers[0] : (bpTeacherDisplayName(cls.titulaire) || teachers[0] || 'Non assigné')
                         };
                     }).filter(Boolean);
                 }
@@ -5325,6 +5390,13 @@ async function bpPushClassBulletin(cls) {
                 const titulaire = document.getElementById('name-titulaire-added-cours').value.trim();
                 const category = document.getElementById('choix-categorie').value;
                 const subCategory = document.getElementById('sub-category-cours').value.trim();
+                const courseClass = appState.classes.find(cls => String(cls.id) === String(activeClassId));
+                if (!category || !primeInkClassDomains(courseClass).some(value => bpNorm(value) === bpNorm(category))) {
+                    return alert('Sélectionnez un domaine déjà configuré pour cette classe.');
+                }
+                if (subCategory && !primeInkClassSubdomains(courseClass, category).some(value => bpNorm(value) === bpNorm(subCategory))) {
+                    return alert('Sélectionnez un sous-domaine lié au domaine choisi.');
+                }
 
                 if (!name) return alert('Veuillez entrer le nom du cours.');
 
@@ -7906,7 +7978,8 @@ function refreshPrimeInkTeacherAssignmentSelects() {
                         <button type="button" class="modal-close-btn" data-close-manage-courses>×</button>
                         <h3 style="margin-bottom:0.4rem;color:var(--primary-color);">Modifier les cours</h3>
                         <p id="manageCoursesClassLabel" style="margin-bottom:.5rem;color:var(--text-secondary);"></p>
-                        <p style="margin:0 0 .9rem;color:var(--text-secondary);font-size:.86rem;"><strong>Cours enseignés</strong> — matières réellement attribuées aux enseignants. Elles restent utilisées dans les statistiques et les fiches de saisie.</p>
+                        <p style="margin:0 0 .5rem;color:var(--text-secondary);font-size:.86rem;"><strong>Cours enseignés</strong> — matières réellement attribuées aux enseignants. Elles restent utilisées dans les statistiques et les fiches de saisie.</p>
+                        <div style="display:flex;justify-content:flex-end;margin-bottom:.8rem;"><button type="button" class="btn-secondary" data-open-class-domains>Configurer les domaines et sous-domaines</button></div>
                         <div id="manageCoursesList" style="display:flex;flex-direction:column;gap:0.8rem;"></div>
                         <div style="display:flex;justify-content:flex-end;margin-top:.9rem;">
                             <button type="button" class="btn-primary" data-open-bulletin-courses>Configurer les cours du bulletin</button>
@@ -7917,6 +7990,9 @@ function refreshPrimeInkTeacherAssignmentSelects() {
                 overlay.querySelectorAll('[data-close-manage-courses]').forEach(btn => btn.addEventListener('click', () => overlay.classList.add('hidden')));
                 overlay.querySelector('[data-open-bulletin-courses]')?.addEventListener('click', () => {
                     window.openManageBulletinCoursesModal(overlay.dataset.classId || classId);
+                });
+                overlay.querySelector('[data-open-class-domains]')?.addEventListener('click', () => {
+                    window.openPrimeInkClassDomainsModal(overlay.dataset.classId || classId);
                 });
             }
             overlay.dataset.classId = classId;
@@ -7929,35 +8005,52 @@ function refreshPrimeInkTeacherAssignmentSelects() {
             const overlay = document.getElementById('manageCoursesModal');
             const list = overlay?.querySelector('#manageCoursesList');
             if (!list) return;
-            const courses = appState.courses.filter(crs => crs.classId === classId);
+            const cls = appState.classes.find(item => String(item.id) === String(classId));
+            const courses = appState.courses.filter(crs => String(crs.classId) === String(classId));
             if (!courses.length) {
                 list.innerHTML = '<p style="padding:1rem;text-align:center;color:var(--text-secondary);">Aucun cours dans cette classe.</p>';
                 return;
             }
-            list.innerHTML = courses.map(crs => `
+            const domains = primeInkClassDomains(cls);
+            list.innerHTML = courses.map(crs => {
+                const currentDomain = domains.find(value => bpNorm(value) === bpNorm(crs.category)) || domains[0];
+                const domainOptions = domains.map(value => '<option value="' + safeHTML(value) + '"' +
+                    (bpNorm(value) === bpNorm(currentDomain) ? ' selected' : '') + '>' + safeHTML(value) + '</option>').join('');
+                const subdomains = primeInkClassSubdomains(cls, currentDomain);
+                const currentSubdomain = subdomains.find(value => bpNorm(value) === bpNorm(crs.subCategory)) || '';
+                const subOptions = '<option value="">— Aucun sous-domaine —</option>' + subdomains.map(value =>
+                    '<option value="' + safeHTML(value) + '"' + (bpNorm(value) === bpNorm(currentSubdomain) ? ' selected' : '') + '>' + safeHTML(value) + '</option>'
+                ).join('');
+                return `
                 <div class="settings-card" data-managed-course-row="${safeHTML(crs.id)}" style="padding:0.9rem;box-shadow:none;">
                     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:0.6rem;">
                         <label>Nom du cours<input class="form-control" data-field="name" value="${safeHTML(crs.name || '')}"></label>
                         <label>Maximum par période<input class="form-control" type="number" min="1" step="0.5" data-field="maxPer" value="${safeHTML(crs.maxPer ?? 40)}"></label>
                         <label>Enseignant responsable<select class="form-control" data-field="titulaire">${primeInkTeacherSelectOptions(crs.titulaire || '')}</select></label>
-                        <label>Catégorie<input class="form-control" data-field="category" value="${safeHTML(crs.category || '')}"></label>
-                        <label>Sous-domaine<input class="form-control" data-field="subCategory" value="${safeHTML(crs.subCategory || '')}"></label>
+                        <label>Domaine<select class="form-control" data-field="category">${domainOptions}</select></label>
+                        <label>Sous-domaine<select class="form-control" data-field="subCategory">${subOptions}</select></label>
                     </div>
                     <div style="display:flex;gap:0.5rem;justify-content:flex-end;flex-wrap:wrap;margin-top:0.7rem;">
                         <button type="button" class="btn-primary" data-save-course>Enregistrer</button>
                         <button type="button" class="btn-secondary" data-delete-course style="background:#dc2626;">Supprimer le cours</button>
                     </div>
-                </div>`).join('');
+                </div>`;
+            }).join('');
+            list.querySelectorAll('[data-managed-course-row]').forEach(row => {
+                row.querySelector('[data-field="category"]')?.addEventListener('change', event => {
+                    primeInkFillSubdomainSelect(row.querySelector('[data-field="subCategory"]'), cls, event.target.value, '');
+                });
+            });
             list.querySelectorAll('[data-save-course]').forEach(btn => btn.addEventListener('click', async () => {
                 const row = btn.closest('[data-managed-course-row]');
-                const course = appState.courses.find(crs => crs.id === row.dataset.managedCourseRow);
+                const course = appState.courses.find(crs => String(crs.id) === String(row.dataset.managedCourseRow));
                 if (!course) return;
                 const val = field => row.querySelector(`[data-field="${field}"]`)?.value.trim() || '';
                 const name = val('name');
                 const maxPer = Number(val('maxPer'));
                 if (!name) return alert('Le nom du cours est obligatoire.');
                 if (!Number.isFinite(maxPer) || maxPer <= 0) return alert('Le maximum par période doit être supérieur à zéro.');
-                if (appState.courses.some(other => other.id !== course.id && other.classId === classId && String(other.name).toLowerCase() === name.toLowerCase())) {
+                if (appState.courses.some(other => other.id !== course.id && String(other.classId) === String(classId) && String(other.name).toLowerCase() === name.toLowerCase())) {
                     return alert('Un cours portant ce nom existe déjà dans cette classe.');
                 }
                 course.name = name;
@@ -7975,6 +8068,108 @@ function refreshPrimeInkTeacherAssignmentSelects() {
                 window.deleteCourse(row.dataset.managedCourseRow);
             }));
         }
+
+        window.openPrimeInkClassDomainsModal = function(classId) {
+            const cls = appState.classes.find(item => String(item.id) === String(classId));
+            if (!cls) return alert("Sélectionnez d'abord une classe.");
+            const domains = primeInkClassDomains(cls);
+            if (!cls.subDomains || typeof cls.subDomains !== 'object') cls.subDomains = {};
+            // Les anciennes valeurs de sous-domaines déjà utilisées deviennent des options configurées.
+            domains.forEach(domain => {
+                if (!Array.isArray(cls.subDomains[domain])) cls.subDomains[domain] = primeInkClassSubdomains(cls, domain);
+            });
+            let overlay = document.getElementById('primeInkClassDomainsModal');
+            if (!overlay) {
+                overlay = document.createElement('div');
+                overlay.id = 'primeInkClassDomainsModal';
+                overlay.className = 'lock-overlay hidden';
+                overlay.style.zIndex = '1002';
+                overlay.innerHTML = `
+                    <div class="modal-box" style="max-width:850px;width:96%;max-height:92vh;overflow:auto;">
+                        <button type="button" class="modal-close-btn" data-close-domain-config>×</button>
+                        <h3 style="margin-bottom:.35rem;color:var(--primary-color);">Domaines et sous-domaines de la classe</h3>
+                        <p id="primeInkDomainClassLabel" style="color:var(--text-secondary);margin-bottom:.9rem;"></p>
+                        <p style="color:var(--text-secondary);font-size:.85rem;margin-bottom:1rem;">Chaque ligne correspond à un domaine existant dans la classe. Saisissez ses sous-domaines, un par ligne. Les cours utiliseront ensuite des listes déroulantes dépendantes de ces choix.</p>
+                        <div id="primeInkDomainRows" style="display:flex;flex-direction:column;gap:.75rem;"></div>
+                        <div style="display:flex;justify-content:flex-end;gap:.6rem;flex-wrap:wrap;margin-top:1rem;">
+                            <button class="btn-secondary" type="button" data-close-domain-config>Annuler</button>
+                            <button class="btn-primary" type="button" data-save-domain-config>Enregistrer les domaines</button>
+                        </div>
+                        <p id="primeInkDomainStatus" role="status" aria-live="polite" style="margin-top:.8rem;color:var(--text-secondary);font-size:.85rem;"></p>
+                    </div>`;
+                document.body.appendChild(overlay);
+                overlay.querySelectorAll('[data-close-domain-config]').forEach(button =>
+                    button.addEventListener('click', () => overlay.classList.add('hidden'))
+                );
+                overlay.querySelector('[data-save-domain-config]')?.addEventListener('click', () =>
+                    window.savePrimeInkClassDomains()
+                );
+            }
+            overlay.dataset.classId = String(classId);
+            overlay.querySelector('#primeInkDomainClassLabel').textContent = 'Classe : ' + cls.name;
+            overlay.querySelector('#primeInkDomainRows').innerHTML = domains.map((domain, index) => {
+                const subs = Array.isArray(cls.subDomains[domain]) ? cls.subDomains[domain] : primeInkClassSubdomains(cls, domain);
+                return `
+                    <div class="settings-card" data-domain-row data-domain-name="${safeHTML(domain)}" style="padding:.85rem;box-shadow:none;">
+                        <strong>${safeHTML(domain)}</strong>
+                        <label style="display:block;margin-top:.5rem;">Sous-domaines (un par ligne)
+                            <textarea class="form-control" data-domain-values rows="3" placeholder="Mathématiques&#10;Sciences physiques">${safeHTML(subs.join('\n'))}</textarea>
+                        </label>
+                    </div>`;
+            }).join('') || '<p>Aucun domaine configuré pour cette classe.</p>';
+            overlay.classList.remove('hidden');
+        };
+
+        window.savePrimeInkClassDomains = async function() {
+            const overlay = document.getElementById('primeInkClassDomainsModal');
+            const classId = String(overlay?.dataset.classId || '');
+            const cls = appState.classes.find(item => String(item.id) === classId);
+            const status = overlay?.querySelector('#primeInkDomainStatus');
+            if (!overlay || !cls) return;
+            const domains = [];
+            const subDomains = {};
+            overlay.querySelectorAll('[data-domain-row]').forEach(row => {
+                const domain = String(row.dataset.domainName || '').trim();
+                if (!domain) return;
+                domains.push(domain);
+                const values = String(row.querySelector('[data-domain-values]')?.value || '')
+                    .split(/\r?\n/).map(value => value.trim()).filter(Boolean);
+                subDomains[domain] = [...new Set(values)];
+            });
+            if (!domains.length) {
+                if (status) status.textContent = 'La classe doit conserver au moins un domaine.';
+                return;
+            }
+            cls.categories = domains;
+            cls.subDomains = subDomains;
+            saveState();
+            const headers = primeInkAuthHeaders();
+            if (headers.Authorization) {
+                if (status) status.textContent = 'Synchronisation avec le serveur…';
+                try {
+                    const response = await fetch(API_BASE_URL + '/api/primenet/classes/' +
+                        encodeURIComponent(classId) + '/domains', {
+                            method: 'PUT', headers, cache: 'no-store',
+                            body: JSON.stringify({ categories: domains, subDomains })
+                        });
+                    const result = await response.json().catch(() => ({}));
+                    if (!response.ok || !result.status || !result.data) {
+                        throw new Error(result.detail || result.message || 'Configuration non synchronisée.');
+                    }
+                    cls.categories = result.data.categories || domains;
+                    cls.subDomains = result.data.subDomains || subDomains;
+                    saveState();
+                    if (status) status.textContent = 'Domaines et sous-domaines enregistrés sur le serveur.';
+                } catch (error) {
+                    if (status) status.textContent = 'Sauvegardé sur cet appareil. Synchronisation à refaire : ' + (error.message || 'erreur réseau');
+                    return;
+                }
+            } else if (status) {
+                status.textContent = 'Configuration locale enregistrée. Elle sera envoyée lors de la prochaine sauvegarde en ligne.';
+            }
+            renderManagedCourses(classId);
+            populateCategoryDropdown();
+        };
 
         window.openManageBulletinCoursesModal = function(classId) {
             const cls = appState.classes.find(item => String(item.id) === String(classId));
@@ -8655,7 +8850,8 @@ const classDetailSection = document.getElementById('section-class-detail');
                     categories: Array.isArray(cls.categories) ? cls.categories : [],
                     bulletinModel: cls.bulletinModel || '',
                     bulletinTitle: cls.bulletinTitle || '',
-                    signatureSource: cls.signatureSource || ''
+                    signatureSource: cls.signatureSource || '',
+                    subDomains: cls.subDomains && typeof cls.subDomains === 'object' ? cls.subDomains : {}
                 })),
                 students: (appState.students || []).map(student => ({
                     id: student.id,
