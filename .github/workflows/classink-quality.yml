@@ -55,7 +55,7 @@ jobs:
           python -m pip install -r requirements.txt pytest
 
       - name: Check Python syntax
-        run: python -m compileall -q main.py classnet_common.py tests
+        run: python -m compileall -q main.py classnet_common.py intranet_server.py tests
 
       - name: Check database snapshot and frontend behavior
         run: python -m pytest -q tests
