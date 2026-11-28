@@ -10628,7 +10628,7 @@ window.primeInkFetchWithTimeout = async function(url, options = {}, timeoutMs = 
       const subject = await showCustomPrompt('Quel est le sujet de votre demande ?', '', 'Aide / Réclamation', { placeholder: 'Ex. : erreur de génération du mixage', maxLength: 180, required: true });
       if (!subject || !subject.trim()) return;
       const message = await showCustomPrompt('Décrivez votre demande (10 caractères minimum).', '', 'Description de la demande', { multiline: true, rows: 5, maxLength: 5000, placeholder: 'Expliquez ce qui s’est passé et les étapes concernées…', required: true });
-      if (!message || message.trim().length < 10) return window.alert('Le message est trop court.');
+      if (!message || message.trim().length < 10) { await showCustomAlert('Le message doit contenir au moins 10 caractères.', 'Description trop courte'); return; }
       const contact = (await showCustomPrompt('Indiquez un moyen de contact (facultatif).', '', 'Coordonnées', { placeholder: 'Téléphone ou adresse e-mail', maxLength: 180 })) || '';
       try {
         const headers = new Headers({'Content-Type':'application/json','X-CRYPT-App':APP,'X-CRYPT-Device':SESSION});
@@ -10639,8 +10639,8 @@ window.primeInkFetchWithTimeout = async function(url, options = {}, timeoutMs = 
         });
         const result = await response.json().catch(()=>({}));
         if (!response.ok || !result.status) throw new Error(result.detail || result.message || 'Envoi impossible.');
-        window.alert('Votre demande a été envoyée à CRYPT. Référence : ' + result.ticket_id);
-      } catch (error) { window.alert('La réclamation n’a pas été transmise : ' + error.message); }
+        await showCustomAlert('Votre demande a été envoyée à CRYPT. Référence : ' + result.ticket_id, 'Demande transmise');
+      } catch (error) { await showCustomAlert('La réclamation n’a pas été transmise : ' + error.message, 'Envoi impossible'); }
     });
     document.body.appendChild(button);
   });
