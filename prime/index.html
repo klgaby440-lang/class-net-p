@@ -6366,8 +6366,9 @@ async function bpPushClassBulletin(cls) {
                 await showMixageResultsView({ skipReload: true });
 
                 const publishedToParents = !!result.session.published_to_suivi;
-                const confirmation = "Le nouveau mixage « " + (result.session.exam_name || examName) +
-                    " » a été enregistré. Référence : " + result.session.id + "." +
+                const confirmation = "Le mixage a été enregistré dans la base de données de l'établissement. " +
+                    "Nouveau mixage « " + (result.session.exam_name || examName) +
+                    " » · Référence : " + result.session.id + "." +
                     (publishedToParents
                         ? " Les places individuelles sont publiées dans Class-Ink Suivi ; chaque parent ne verra que les informations de son enfant."
                         : " La publication aux parents est désactivée pour cette session.");
