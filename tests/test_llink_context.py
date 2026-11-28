@@ -1,6 +1,9 @@
 import json
 from pathlib import Path
 
+from fastapi.testclient import TestClient
+
+import main
 from main import serialize_llink_application_context
 
 
@@ -45,3 +48,13 @@ def test_classnet_llink_request_keeps_instructions_and_context_in_separate_field
     assert '"context": context_text' in source
     assert 'context_text = serialize_llink_application_context(context, max_chars=30_000)' in source
     assert '"preferences": system_instruction' not in source
+
+
+
+def test_keepalive_is_lightweight_and_returns_ok():
+    with TestClient(main.app) as client:
+        response = client.get("/api/keepalive")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": True}
+    assert response.headers["cache-control"] == "no-store, max-age=0"

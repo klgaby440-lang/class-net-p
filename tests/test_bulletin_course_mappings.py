@@ -105,3 +105,83 @@ def test_bulletin_course_mapping_rejects_unknown_source_course():
             }]},
         )
     assert response.status_code == 422
+
+
+def test_class_domains_and_linked_subdomains_save_and_reload():
+    school_id, password, class_id, _, token = _school_with_class_and_courses()
+    headers = {"Authorization": "Bearer " + token, "X-CRYPT-App": "primeink"}
+    subdomains = {
+        "Sciences": ["Géologie", "Écologie"],
+        "Langues": ["Anglais", "Français"],
+    }
+    with TestClient(main.app) as client:
+        saved = client.put(
+            f"/api/primenet/classes/{class_id}/domains",
+            headers=headers,
+            json={"categories": ["Sciences", "Langues"], "subDomains": subdomains},
+        )
+        assert saved.status_code == 200
+        assert saved.json()["data"]["subDomains"] == subdomains
+
+        loaded = client.post(
+            "/api/primenet/load",
+            json={"school_id": school_id, "password": password},
+        )
+        assert loaded.status_code == 200
+        classe = loaded.json()["data"]["classes"][0]
+        assert classe["categories"] == ["Sciences", "Langues"]
+        assert classe["subDomains"] == subdomains
+
+
+def test_class_domains_reject_subdomain_linked_to_unknown_domain():
+    _, _, class_id, _, token = _school_with_class_and_courses()
+    headers = {"Authorization": "Bearer " + token, "X-CRYPT-App": "primeink"}
+    with TestClient(main.app) as client:
+        response = client.put(
+            f"/api/primenet/classes/{class_id}/domains",
+            headers=headers,
+            json={
+                "categories": ["Sciences"],
+                "subDomains": {"Langues": ["Anglais"]},
+            },
+        )
+    assert response.status_code == 422
+
+
+def test_llink_conversations_are_persisted_and_separated_by_app():
+    _, _, _, _, token = _school_with_class_and_courses()
+    conversation_id = "llink-conv-" + uuid.uuid4().hex
+    prime_headers = {"Authorization": "Bearer " + token, "X-CRYPT-App": "primeink"}
+    manager_headers = {"Authorization": "Bearer " + token, "X-CRYPT-App": "manager"}
+    payload = {
+        "title": "Analyse de la classe",
+        "messages": [
+            {"role": "user", "text": "Analyse les résultats de la classe."},
+            {"role": "assistant", "text": "Je peux examiner les données disponibles."},
+        ],
+    }
+
+    with TestClient(main.app) as client:
+        saved = client.put(
+            f"/api/llink/conversations/{conversation_id}",
+            headers=prime_headers,
+            json=payload,
+        )
+        assert saved.status_code == 200
+        assert saved.json()["data"]["title"] == payload["title"]
+
+        prime_sessions = client.get("/api/llink/conversations", headers=prime_headers)
+        assert prime_sessions.status_code == 200
+        assert any(row["id"] == conversation_id for row in prime_sessions.json()["data"])
+
+        manager_sessions = client.get("/api/llink/conversations", headers=manager_headers)
+        assert manager_sessions.status_code == 200
+        assert all(row["id"] != conversation_id for row in manager_sessions.json()["data"])
+
+        deleted = client.delete(
+            f"/api/llink/conversations/{conversation_id}",
+            headers=prime_headers,
+        )
+        assert deleted.status_code == 200
+        after_delete = client.get("/api/llink/conversations", headers=prime_headers)
+        assert all(row["id"] != conversation_id for row in after_delete.json()["data"])

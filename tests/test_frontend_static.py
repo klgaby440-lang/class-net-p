@@ -631,7 +631,10 @@ process.stdout.write(JSON.stringify({
         self.assertNotIn("Institut Horizon", source)
         self.assertNotIn("Aline Mukendi", source)
         self.assertIn("window.__CLASSINK_MANAGER_TOKEN__=managerToken", source)
-        self.assertIn('id="llink-assist-widget"', source)
+        self.assertIn('data-page="llink"', source)
+        self.assertIn('id="page-llink"', source)
+        self.assertIn("classink-llink-sessions.js", source)
+        self.assertNotIn('id="llink-assist-widget"', source)
 
     def test_classink_and_crypt_brand_assets_are_wired_into_frontends_and_heads(self):
         classink_logo = (ROOT / "assets/classink-logo.svg").read_text(encoding="utf-8")
@@ -673,25 +676,31 @@ process.stdout.write(JSON.stringify({
         self.assertIn("window.__CRYPT_ADMIN_TOKEN__=token", source)
         self.assertIn('id="llink-assist-widget"', source)
 
-    def test_llink_assist_is_embedded_without_persisting_conversation_data(self):
-        for relative in ("suivi/index.html", "manager/index.html", "crypt/index.html"):
-            source = (ROOT / relative).read_text(encoding="utf-8")
+    def test_llink_is_embedded_in_manager_and_suivi_navigation_with_persistent_sessions(self):
+        manager = (ROOT / "manager/index.html").read_text(encoding="utf-8")
+        suivi = (ROOT / "suivi/index.html").read_text(encoding="utf-8")
+        client = (ROOT / "assets/classink-llink-sessions.js").read_text(encoding="utf-8")
+
+        for relative, source, app_name in (
+            ("manager/index.html", manager, "manager"),
+            ("suivi/index.html", suivi, "suivi"),
+        ):
             self.inspect_file(relative)
-            self.assertIn('id="llink-assist-widget"', source)
-            self.assertIn("/api/llink/assist", source)
-            self.assertIn("history.slice(-8)", source)
-            if relative == "manager/index.html":
-                self.assertIn("classink_manager_theme", source)
-                self.assertNotIn("sessionStorage", source)
-            elif relative == "suivi/index.html":
-                # Seule la préférence d'apparence peut persister ; les données parentales restent éphémères.
-                self.assertIn("classink_suivi_theme", source)
-                self.assertIn("localStorage.setItem('classink_suivi_theme'", source)
-                self.assertNotIn("localStorage.setItem(STORE_KEY", source)
-                self.assertNotIn("sessionStorage", source)
-            else:
-                self.assertNotIn("localStorage", source)
-                self.assertNotIn("sessionStorage", source)
+            self.assertIn('data-llink-app="' + app_name + '"', source)
+            self.assertIn("classink-llink-sessions.js", source)
+            self.assertNotIn('id="llink-assist-widget"', source)
+            self.assertNotIn('id="llink-assist-widget-style"', source)
+
+        self.assertIn('data-page="llink"', manager)
+        self.assertIn('id="page-llink"', manager)
+        self.assertIn('data-go="llink"', suivi)
+        self.assertIn("llink: viewLlink", suivi)
+        self.assertIn("classink_manager_theme", manager)
+        self.assertIn("classink_suivi_theme", suivi)
+        self.assertIn("localStorage.setItem('classink_suivi_theme'", suivi)
+        self.assertIn("/api/llink/assist", client)
+        self.assertIn("item.messages.slice(0, -1).slice(-8)", client)
+        self.assertIn("window.localStorage.setItem(key, JSON.stringify(value))", client)
 
     def test_manager_has_crypt_telemetry_and_no_persistent_storage(self):
         source = (ROOT / "manager/index.html").read_text(encoding="utf-8")
@@ -978,13 +987,17 @@ class TestNewFeatureStatic(unittest.TestCase):
         self.assertIn("safe.evaluations = null;", redaction)
         self.assertIn("safe.grades = null;", redaction)
         self.assertIn("Toutes les interrogations", suivi)
-        self.assertIn("N° du professeur", suivi)
+        self.assertIn("Téléphone du professeur", suivi)
+        self.assertNotIn("N° du professeur", suivi)
         self.assertIn("teacherName", suivi)
-        self.assertIn("teacherCode", suivi)
+        self.assertIn("teacherPhone", suivi)
+        self.assertNotIn("teacherCode", suivi)
         self.assertIn("function viewAttendance()", suivi)
         self.assertIn("safe.attendance = null;", redaction)
         self.assertIn("window.__CLASSINK_SUIVI_LLINK_CONTEXT__", suivi)
-        self.assertIn("student:studentContext", suivi)
+        llink_client = (ROOT / "assets/classink-llink-sessions.js").read_text(encoding="utf-8")
+        self.assertIn("payload.student = selectedStudent", llink_client)
+        self.assertIn("student_code: kid.code", suivi)
 
     def test_attendance_communications_and_llink_are_connected_across_classink_surfaces(self):
         backend = (ROOT / "main.py").read_text(encoding="utf-8")
@@ -1012,9 +1025,11 @@ class TestNewFeatureStatic(unittest.TestCase):
             self.assertIn(marker, backend)
 
         app = (ROOT / "app/index.html").read_text(encoding="utf-8")
+        llink_client = (ROOT / "assets/classink-llink-sessions.js").read_text(encoding="utf-8")
         self.assertIn("/api/teacher/messages", app)
-        self.assertIn("X-CRYPT-App'] = 'classink'", app)
-        self.assertIn("/api/llink/assist", app)
+        self.assertIn('data-llink-app="classink"', app)
+        self.assertIn("new Headers({ 'X-CRYPT-App': app", llink_client)
+        self.assertIn("/api/llink/assist", llink_client)
         self.assertIn("slotKey: selectedSlot", app)
 
         prime = (ROOT / "prime/index.html").read_text(encoding="utf-8")
@@ -1026,7 +1041,8 @@ class TestNewFeatureStatic(unittest.TestCase):
             "/api/primenet/teacher-messages",
             "/api/primenet/teacher-attendance",
             "mergedData.attendanceRecords",
-            "Llink consulte les données autorisées",
+            'data-llink-app="primeink"',
+            "data-llink-sessions",
             "window.renderPresencesEleveTable = function",
         ):
             self.assertIn(marker, prime)
@@ -1144,9 +1160,12 @@ class TestAccountProfileThemeAndRelease(unittest.TestCase):
         suivi = (ROOT / "suivi/index.html").read_text(encoding="utf-8")
         manager = (ROOT / "manager/index.html").read_text(encoding="utf-8")
         prime = (ROOT / "prime/index.html").read_text(encoding="utf-8")
+        llink_client = (ROOT / "assets/classink-llink-sessions.js").read_text(encoding="utf-8")
         self.assertIn('[data-theme="dark"] tr:nth-child(even)', app)
-        self.assertIn('[data-theme="light"] #llink-assist-panel', suivi)
-        self.assertIn('[data-theme="light"] #llink-assist-panel', manager)
+        self.assertIn('data-llink-messages', suivi)
+        self.assertIn('data-llink-messages', manager)
+        self.assertIn('var(--text-primary, var(--text', llink_client)
+        self.assertIn('var(--border-color, var(--line', llink_client)
         self.assertIn('body.theme-dark .fiche-grade-input', prime)
         self.assertIn('color-scheme:dark', prime)
 
@@ -1205,6 +1224,23 @@ class TestCourseSeparationAndDeviceUnlock(unittest.TestCase):
         unlock_handler = prime[unlock_start:unlock_end]
         self.assertIn("window.primeInkVerifyLocalPassword", unlock_handler)
         self.assertIn("Migration des installations plus anciennes", unlock_handler)
+        self.assertIn("if (!schoolId)", unlock_handler)
+        self.assertIn("Impossible de vérifier le mot de passe", unlock_handler)
+        self.assertNotIn("overlay.classList.add('hidden');\\n                    return;", unlock_handler)
+
+        save_start = prime.index("window.savePrimeInkBulletinCourses = async function")
+        save_end = prime.index("window.deleteCourse = async function", save_start)
+        save_handler = prime[save_start:save_end]
+        self.assertIn("if (typeof bpRefreshBulletin === 'function') bpRefreshBulletin();", save_handler)
+        self.assertLess(save_handler.index("bpRefreshBulletin"), save_handler.index("const headers = primeInkAuthHeaders()"))
+
+        delete_start = prime.index("window.deleteCourse = async function(courseId)")
+        delete_end = prime.index("// INITIALISATION ET ÉCOUTEURS D'ÉVÉNEMENTS", delete_start)
+        delete_handler = prime[delete_start:delete_end]
+        self.assertIn("'/api/primenet/classes/'", delete_handler)
+        self.assertIn("'/bulletin-courses'", delete_handler)
+        self.assertIn("method: 'PUT'", delete_handler)
+        self.assertIn("bpRefreshBulletin", delete_handler)
 
         for marker in (
             'bulletin_courses = Column(JSON, nullable=True)',
@@ -1235,16 +1271,19 @@ class TestCourseSeparationAndDeviceUnlock(unittest.TestCase):
         if not node:
             self.skipTest("Node.js absent : calcul de moyenne des cours-bulletins ignoré.")
         prime = (ROOT / "prime/index.html").read_text(encoding="utf-8")
+        display_start = prime.index("function primeInkDisplayTeacherName(rawValue)")
+        display_end = prime.index("function primeInkTeacherSelectOptions", display_start)
         num_start = prime.index("function bpNum(v)")
         num_end = prime.index("function bpAcc()", num_start)
+        wrapper_start = prime.index("function bpTeacherDisplayName(value)")
         values_start = prime.index("function bpBulletinCoursesForClass(cls)")
         values_end = prime.index("function bpStudentTotals", values_start)
-        helper = prime[num_start:num_end] + """
+        helper = prime[display_start:display_end] + prime[num_start:num_end] + """
 function bpSum(values) {
     if (!Array.isArray(values) || !values.length || values.some(value => value === null || value === undefined)) return null;
     return values.reduce((sum, value) => sum + value, 0);
 }
-""" + prime[values_start:values_end]
+""" + prime[wrapper_start:values_end]
         script = helper + """
 const appState = {
   courses: [
@@ -1297,6 +1336,102 @@ process.stdout.write(JSON.stringify({
         ):
             self.assertIn(marker, app)
 
+
+
+class TestLlinkSessionsKeepaliveAndClassDomains(unittest.TestCase):
+    def test_shared_llink_sessions_and_keepalive_are_enabled_in_all_four_apps(self):
+        app = (ROOT / "app/index.html").read_text(encoding="utf-8")
+        suivi = (ROOT / "suivi/index.html").read_text(encoding="utf-8")
+        manager = (ROOT / "manager/index.html").read_text(encoding="utf-8")
+        prime = (ROOT / "prime/index.html").read_text(encoding="utf-8")
+        client = (ROOT / "assets/classink-llink-sessions.js").read_text(encoding="utf-8")
+        backend = (ROOT / "main.py").read_text(encoding="utf-8")
+
+        for source in (app, suivi, manager, prime):
+            self.assertIn("classink-llink-sessions.js", source)
+            self.assertIn("CLASSINK_LLINK_CONFIG", source)
+
+        for app_name, source in (
+            ("classink", app), ("suivi", suivi), ("manager", manager), ("primeink", prime)
+        ):
+            self.assertIn('data-llink-app="' + app_name + '"', source)
+
+        self.assertIn('data-llink-app="classink"', app)
+        self.assertIn("String(teacher) + ':' + String(school)", app)
+        self.assertIn("window.ClassInkLlink.mount(document.querySelector('#view-llink [data-llink-app=\"classink\"]'))", app)
+        self.assertIn("window.ClassInkLlink.mount(document.querySelector('[data-llink-app=\"primeink\"]'))", prime)
+        for marker in (
+            "classink:llink:sessions:v1:",
+            "window.localStorage.setItem(key, JSON.stringify(value))",
+            "/api/llink/conversations",
+            "/api/llink/assist",
+            "data-llink-sessions",
+            "data-llink-new",
+            "data-llink-delete",
+            "ping();",
+            "5 * 60 * 1000",
+        ):
+            self.assertIn(marker, client)
+
+        self.assertIn('@app.get("/api/keepalive")', backend)
+        self.assertIn("LLINK_UPSTREAM_SEMAPHORE = asyncio.Semaphore(3)", backend)
+        self.assertIn("for attempt in range(2)", backend)
+        self.assertIn("await asyncio.sleep(max(0.5, retry_delay))", backend)
+        self.assertIn('@app.get("/api/llink/conversations")', backend)
+        self.assertIn('@app.put("/api/llink/conversations/{conversation_id}")', backend)
+        self.assertIn('@app.delete("/api/llink/conversations/{conversation_id}")', backend)
+        self.assertIn("class LlinkConversation(Base)", backend)
+        self.assertIn("owner_key", backend)
+
+    def test_suivi_and_manager_use_navigation_instead_of_floating_llink_widget(self):
+        suivi = (ROOT / "suivi/index.html").read_text(encoding="utf-8")
+        manager = (ROOT / "manager/index.html").read_text(encoding="utf-8")
+
+        self.assertIn('data-go="llink"', suivi)
+        self.assertIn("llink: viewLlink", suivi)
+        self.assertNotIn('id="llink-assist-widget-style"', suivi)
+        self.assertNotIn('id="llink-assist-toggle"', suivi)
+
+        self.assertIn('data-page="llink"', manager)
+        self.assertIn('id="page-llink"', manager)
+        self.assertNotIn('id="llink-assist-widget-style"', manager)
+        self.assertNotIn('id="llink-assist-toggle"', manager)
+
+    def test_classink_app_navigation_is_content_sized(self):
+        app = (ROOT / "app/index.html").read_text(encoding="utf-8")
+        self.assertIn("width: max-content", app)
+        self.assertIn("max-width: calc(100vw - 112px)", app)
+        self.assertIn('data-llink-sessions', app)
+        self.assertIn('data-llink-form', app)
+
+    def test_suivi_menu_keeps_settings_visible_and_shows_teacher_phone(self):
+        suivi = (ROOT / "suivi/index.html").read_text(encoding="utf-8")
+        self.assertIn("grid-template-columns: repeat(4, minmax(0, 1fr))", suivi)
+        self.assertIn("grid-template-columns: repeat(5, minmax(0, 1fr))", suivi)
+        self.assertIn("Téléphone du professeur", suivi)
+        self.assertNotIn("N° du professeur", suivi)
+
+    def test_primeink_uses_class_configured_domains_and_displays_teacher_names(self):
+        prime = (ROOT / "prime/index.html").read_text(encoding="utf-8")
+        backend = (ROOT / "main.py").read_text(encoding="utf-8")
+
+        self.assertIn('<select id="sub-category-cours"', prime)
+        self.assertIn("function primeInkClassDomains(cls)", prime)
+        self.assertIn("function primeInkClassSubdomains(cls, domain)", prime)
+        self.assertIn("data-open-class-domains", prime)
+        self.assertIn("window.openPrimeInkClassDomainsModal", prime)
+        self.assertIn("window.savePrimeInkClassDomains", prime)
+        self.assertIn("primeInkFillSubdomainSelect", prime)
+        self.assertIn("function bpTeacherDisplayName(value)", prime)
+        self.assertIn("function primeInkDisplayTeacherName(rawValue)", prime)
+        self.assertIn("currentCourseTitulaire').textContent = primeInkDisplayTeacherName(course.titulaire)", prime)
+        self.assertIn("...(cls.subDomains && typeof cls.subDomains === 'object' ? { subDomains: cls.subDomains } : {})", prime)
+
+        self.assertIn("sub_domains = Column(JSON, nullable=True)", backend)
+        self.assertIn("ADD COLUMN IF NOT EXISTS sub_domains JSON", backend)
+        self.assertIn('"subDomains": c.sub_domains if isinstance(c.sub_domains, dict) else {}', backend)
+        self.assertIn('@app.put("/api/primenet/classes/{class_id}/domains")', backend)
+        self.assertIn("clean_class_domain_configuration", backend)
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,4 +1,5 @@
 import os
+import asyncio
 import logging
 import secrets
 import string
@@ -480,6 +481,8 @@ class ClasseInformation(Base):
     signature_source = Column(String(20), nullable=True)    # titulaire | responsable | default | none
     # Cours de bulletin distincts des cours réellement enseignés, composés d'une ou plusieurs sources.
     bulletin_courses = Column(JSON, nullable=True)
+    # Sous-domaines proposés par domaine, configurés séparément pour chaque classe.
+    sub_domains = Column(JSON, nullable=True)
     school = relationship("SchoolInformation", back_populates="classes")
     students = relationship("SchoolStudentInformation", back_populates="classe")
     courses = relationship("CourseInformation", back_populates="classe")
@@ -564,6 +567,18 @@ class CryptDeviceSession(Base):
     last_seen = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
     contact_count = Column(Integer, nullable=False, default=0)
     last_path = Column(String(240), nullable=True)
+
+
+class LlinkConversation(Base):
+    __tablename__ = "llink_conversations"
+    id = Column(String(80), primary_key=True)
+    app = Column(String(30), nullable=False, index=True)
+    owner_key = Column(String(240), nullable=False, index=True)
+    school_id = Column(String(100), nullable=True, index=True)
+    title = Column(String(200), nullable=False, default="Nouvelle conversation")
+    messages = Column(JSON, nullable=False, default=list)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
 
 
 class CryptTelemetryEvent(Base):
@@ -1086,7 +1101,9 @@ SUIVI_LOOKUP_LIMITER = AttemptLimiter(max_attempts=10, window_seconds=900) # 10 
 CRYPT_CONSOLE_LOGIN_LIMITER = AttemptLimiter(max_attempts=5, window_seconds=900)
 CRYPT_TELEMETRY_LIMITER = AttemptLimiter(max_attempts=180, window_seconds=60)
 CRYPT_TICKET_LIMITER = AttemptLimiter(max_attempts=5, window_seconds=3600)
-CRYPT_LLINK_LIMITER = AttemptLimiter(max_attempts=12, window_seconds=300)
+CRYPT_LLINK_LIMITER = AttemptLimiter(max_attempts=60, window_seconds=300)
+# Évite les rafales simultanées vers le moteur distant partagé par les quatre applications.
+LLINK_UPSTREAM_SEMAPHORE = asyncio.Semaphore(3)
 PROFILE_UPDATE_LIMITER = AttemptLimiter(max_attempts=5, window_seconds=900)  # 5 mots de passe erronés / 15 min
 
 
@@ -1325,6 +1342,10 @@ with engine.connect() as conn:
     conn.execute(text("""
         ALTER TABLE classe_informations
         ADD COLUMN IF NOT EXISTS bulletin_courses JSON;
+    """))
+    conn.execute(text("""
+        ALTER TABLE classe_informations
+        ADD COLUMN IF NOT EXISTS sub_domains JSON;
     """))
     
     # S'assurer que la colonne identifier existe dans otp_codes
@@ -1856,7 +1877,8 @@ def login_school(data: LoginSchema, db: Session = Depends(get_db)):
             "bulletinModel": c.bulletin_model or "classink",
             "bulletinTitle": c.bulletin_title or "",
             "signatureSource": c.signature_source or "titulaire",
-            "bulletinCourses": c.bulletin_courses if isinstance(c.bulletin_courses, list) else None
+            "bulletinCourses": c.bulletin_courses if isinstance(c.bulletin_courses, list) else None,
+            "subDomains": c.sub_domains if isinstance(c.sub_domains, dict) else {}
         })
 
     # 2. Chargement des élèves
@@ -3024,6 +3046,186 @@ def serialize_llink_application_context(context: dict, max_chars: int = 30_000) 
     return serialized
 
 
+def _llink_conversation_identity(request: Request, db: Session, student_ref: Optional[dict] = None):
+    """Identifie le propriétaire d'une conversation sans jamais faire confiance à son ID seul."""
+    app_name = str(request.headers.get("x-crypt-app") or "").strip().lower()
+    if app_name not in ("suivi", "classink", "primeink", "manager", "crypt"):
+        raise HTTPException(status_code=403, detail="Application non autorisée pour Llink.")
+
+    authorization = request.headers.get("authorization", "")
+    claims = verify_token(authorization[7:].strip()) if authorization.lower().startswith("bearer ") else None
+    claims = claims or {}
+    school_id = None
+
+    if app_name in ("manager", "primeink"):
+        if claims.get("role") != "school":
+            raise HTTPException(status_code=401, detail="Session établissement requise pour les conversations Llink.")
+        school_id = str(claims.get("school_id") or "").strip()
+        school = db.query(SchoolInformation).filter(SchoolInformation.school_id == school_id).first()
+        if not school or licence_state(school)["locked"]:
+            raise HTTPException(status_code=403, detail="L'établissement n'est pas accessible.")
+        owner_key = "school:" + school_id
+
+    elif app_name == "classink":
+        if claims.get("role") != "teacher":
+            raise HTTPException(status_code=401, detail="Session enseignant requise pour les conversations Llink.")
+        email = str(claims.get("email") or "").strip().lower()
+        teacher = db.query(Teacher).filter(Teacher.email == email).first()
+        if not teacher:
+            raise HTTPException(status_code=401, detail="Compte enseignant introuvable.")
+        school_id = str(claims.get("school_id") or "").strip() or None
+        independent = str(claims.get("workspace_mode") or "").strip().lower() == "independent"
+        if school_id and not independent:
+            if not teacher_has_school_access(db, teacher, school_id):
+                raise HTTPException(status_code=403, detail="Cet espace enseignant n'est pas autorisé.")
+            blocked = teacher_school_block(db, teacher, school_id)
+            if blocked:
+                raise HTTPException(status_code=403, detail=blocked)
+        owner_key = "teacher:" + email + ":" + (school_id or "independent")
+
+    elif app_name == "suivi":
+        ref = student_ref if isinstance(student_ref, dict) else {}
+        school_id = str(ref.get("school_id") or request.query_params.get("school_id") or "").strip()
+        student_code = str(ref.get("student_code") or request.query_params.get("student_code") or "").strip().upper()
+        if not school_id or not student_code or len(student_code) > 40:
+            raise HTTPException(status_code=401, detail="Sélectionnez un enfant lié dans ClassInk Suivi.")
+        remote = request.client.host if request.client else "unknown"
+        parent_rate_key = "suivi:" + remote + ":" + school_id
+        if SUIVI_LOOKUP_LIMITER.is_blocked(parent_rate_key):
+            raise HTTPException(status_code=429, detail="Trop d'essais. Réessayez dans 15 minutes.")
+        school = db.query(SchoolInformation).filter(SchoolInformation.school_id == school_id).first()
+        if not school or licence_state(school)["locked"]:
+            SUIVI_LOOKUP_LIMITER.record(parent_rate_key)
+            raise HTTPException(status_code=404, detail="Établissement indisponible.")
+        student = db.query(SchoolStudentInformation).filter(
+            SchoolStudentInformation.school_id == school_id,
+            func.upper(SchoolStudentInformation.suivi_code) == student_code,
+        ).first()
+        if not student:
+            SUIVI_LOOKUP_LIMITER.record(parent_rate_key)
+            raise HTTPException(status_code=404, detail="Enfant introuvable. Actualisez son espace.")
+        SUIVI_LOOKUP_LIMITER.reset(parent_rate_key)
+        owner_key = "parent:" + school_id + ":" + str(student.id)
+
+    else:
+        if claims.get("role") != "crypt_admin":
+            raise HTTPException(status_code=403, detail="Session CRYPT administrateur requise.")
+        owner_key = "crypt:" + str(claims.get("email") or claims.get("sub") or "admin")
+
+    return app_name, owner_key, school_id
+
+
+def clean_llink_conversation_messages(raw_messages):
+    """Valide un historique de conversation avant stockage sur le serveur."""
+    if not isinstance(raw_messages, list):
+        raise HTTPException(status_code=422, detail="L'historique de conversation est invalide.")
+    cleaned = []
+    for item in raw_messages[-100:]:
+        if not isinstance(item, dict):
+            continue
+        role = str(item.get("role") or "").strip().lower()
+        value = item.get("text")
+        if role not in ("user", "assistant") or not isinstance(value, str):
+            continue
+        value = value.strip()
+        if not value:
+            continue
+        cleaned.append({"role": role, "text": value[:12000]})
+    while cleaned and sum(len(item["text"]) for item in cleaned) > 60000:
+        cleaned.pop(0)
+    return cleaned
+
+
+@app.get("/api/llink/conversations")
+def list_llink_conversations(
+    request: Request,
+    school_id: Optional[str] = None,
+    student_code: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    ref = {"school_id": school_id, "student_code": student_code}
+    app_name, owner_key, _ = _llink_conversation_identity(request, db, ref)
+    rows = db.query(LlinkConversation).filter(
+        LlinkConversation.app == app_name,
+        LlinkConversation.owner_key == owner_key,
+    ).order_by(LlinkConversation.updated_at.desc()).limit(30).all()
+    return {"status": True, "data": [{
+        "id": row.id,
+        "title": row.title,
+        "messages": row.messages if isinstance(row.messages, list) else [],
+        "createdAt": row.created_at.isoformat() + "Z" if row.created_at else "",
+        "updatedAt": row.updated_at.isoformat() + "Z" if row.updated_at else "",
+    } for row in rows]}
+
+
+@app.put("/api/llink/conversations/{conversation_id}")
+def save_llink_conversation(
+    conversation_id: str,
+    payload: dict,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    if not re.fullmatch(r"[A-Za-z0-9_-]{12,80}", str(conversation_id or "")):
+        raise HTTPException(status_code=422, detail="Identifiant de conversation invalide.")
+    app_name, owner_key, school_id = _llink_conversation_identity(
+        request, db, payload.get("student") if isinstance(payload.get("student"), dict) else None
+    )
+    messages = clean_llink_conversation_messages(payload.get("messages"))
+    title = clean_text(payload.get("title"), 200) or "Nouvelle conversation"
+    row = db.query(LlinkConversation).filter(
+        LlinkConversation.id == conversation_id,
+        LlinkConversation.app == app_name,
+        LlinkConversation.owner_key == owner_key,
+    ).first()
+    if not row:
+        row = LlinkConversation(
+            id=conversation_id, app=app_name, owner_key=owner_key,
+            school_id=school_id, title=title, messages=messages,
+        )
+        db.add(row)
+    else:
+        row.title = title
+        row.messages = messages
+        row.updated_at = datetime.utcnow()
+    db.commit()
+    return {"status": True, "data": {
+        "id": row.id, "title": row.title,
+        "messages": row.messages if isinstance(row.messages, list) else [],
+        "updatedAt": row.updated_at.isoformat() + "Z" if row.updated_at else "",
+    }}
+
+
+@app.delete("/api/llink/conversations/{conversation_id}")
+def delete_llink_conversation(
+    conversation_id: str,
+    request: Request,
+    school_id: Optional[str] = None,
+    student_code: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    app_name, owner_key, _ = _llink_conversation_identity(
+        request, db, {"school_id": school_id, "student_code": student_code}
+    )
+    row = db.query(LlinkConversation).filter(
+        LlinkConversation.id == conversation_id,
+        LlinkConversation.app == app_name,
+        LlinkConversation.owner_key == owner_key,
+    ).first()
+    if row:
+        db.delete(row)
+        db.commit()
+    return {"status": True}
+
+
+@app.get("/api/keepalive")
+def keepalive():
+    """Point de santé volontairement léger : aucune lecture DB ni opération métier."""
+    return JSONResponse(
+        content={"status": True},
+        headers={"Cache-Control": "no-store, max-age=0"},
+    )
+
+
 @app.post("/api/llink/assist")
 async def classink_llink_assist(payload: dict, request: Request, db: Session = Depends(get_db)):
     """Relais Llink : le contexte scolaire est construit côté serveur et filtré par rôle."""
@@ -3043,10 +3245,21 @@ async def classink_llink_assist(payload: dict, request: Request, db: Session = D
     if app_name == "crypt" and claims.get("role") != "crypt_admin":
         raise HTTPException(status_code=403, detail="Session CRYPT administrateur requise.")
 
+    # Le proxy Render peut présenter la même IP à plusieurs écoles et parents.
+    # Le quota est donc isolé par application et identité authentifiée, pas par IP partagée.
     remote = request.client.host if request.client else "unknown"
-    limiter_key = "llink-assist:" + remote
+    if app_name == "suivi":
+        parent_ref = payload.get("student") if isinstance(payload.get("student"), dict) else {}
+        limiter_identity = str(parent_ref.get("school_id") or "") + ":" + str(parent_ref.get("student_code") or "").upper()
+    elif app_name == "classink":
+        limiter_identity = str(claims.get("email") or "") + ":" + str(claims.get("school_id") or claims.get("workspace_mode") or "")
+    elif app_name in ("primeink", "manager"):
+        limiter_identity = str(claims.get("school_id") or "")
+    else:
+        limiter_identity = str(claims.get("email") or claims.get("sub") or "admin")
+    limiter_key = "llink-assist:" + app_name + ":" + limiter_identity
     if CRYPT_LLINK_LIMITER.is_blocked(limiter_key):
-        raise HTTPException(status_code=429, detail="Limite Llink atteinte. Réessayez dans quelques minutes.")
+        raise HTTPException(status_code=429, detail="Limite temporaire de messages Llink atteinte pour ce compte. Réessayez dans quelques minutes.")
 
     message = str(payload.get("message") or "").strip()
     if not message or len(message) > 5000:
@@ -3250,23 +3463,58 @@ async def classink_llink_assist(payload: dict, request: Request, db: Session = D
 
     client = httpx.AsyncClient(timeout=httpx.Timeout(connect=30.0, read=90.0, write=20.0, pool=12.0))
     url = os.getenv("LLINK_API_BASE_URL", "https://llink-usz9.onrender.com").rstrip("/") + "/api/chat"
+    await LLINK_UPSTREAM_SEMAPHORE.acquire()
+    semaphore_held = True
     try:
-        upstream = await client.send(
-            client.build_request(
-                "POST", url, json=request_payload,
-                headers={"Accept": "text/event-stream", "Cache-Control": "no-cache"},
-            ),
-            stream=True,
-        )
-    except httpx.HTTPError as exc:
+        upstream = None
+        for attempt in range(2):
+            upstream = await client.send(
+                client.build_request(
+                    "POST", url, json=request_payload,
+                    headers={"Accept": "text/event-stream", "Cache-Control": "no-cache"},
+                ),
+                stream=True,
+            )
+            if upstream.status_code != 429 or attempt == 1:
+                break
+
+            # Une seule relance, uniquement après un court délai, pour ne pas
+            # transformer une limite du moteur en boucle de requêtes.
+            retry_after = str(upstream.headers.get("retry-after") or "").strip()
+            try:
+                retry_delay = float(retry_after) if retry_after else 1.5
+            except ValueError:
+                retry_delay = 1.5
+            await upstream.aread()
+            await upstream.aclose()
+            if retry_delay <= 0 or retry_delay > 5:
+                break
+            await asyncio.sleep(max(0.5, retry_delay))
+    except BaseException as exc:
+        if semaphore_held:
+            LLINK_UPSTREAM_SEMAPHORE.release()
         await client.aclose()
-        raise HTTPException(status_code=503, detail="Le serveur Llink est injoignable. Réessayez.") from exc
+        if isinstance(exc, httpx.HTTPError):
+            raise HTTPException(status_code=503, detail="Le serveur Llink est injoignable. Réessayez.") from exc
+        raise
 
     if upstream.status_code >= 400:
-        status_code = upstream.status_code if upstream.status_code in (401, 403, 422, 429, 503) else 502
+        upstream_status = upstream.status_code
+        retry_after = str(upstream.headers.get("retry-after") or "").strip()
         raw_error = (await upstream.aread()).decode("utf-8", "replace")[:500]
         await upstream.aclose()
         await client.aclose()
+        if semaphore_held:
+            LLINK_UPSTREAM_SEMAPHORE.release()
+            semaphore_held = False
+        if upstream_status == 429:
+            wait_hint = (" Réessayez dans " + retry_after + " seconde(s)." if retry_after.isdigit() else " Réessayez dans quelques instants.")
+            raise HTTPException(
+                status_code=429,
+                detail="Le moteur Llink a temporairement atteint sa limite de requêtes (HTTP 429)." + wait_hint +
+                    " Votre conversation reste enregistrée sur cet appareil.",
+            )
+        status_code = upstream_status if upstream_status in (401, 403, 422, 503) else 502
         raise HTTPException(status_code=status_code, detail="Llink : " + (raw_error or "service indisponible"))
 
     async def relay_llink_stream():
@@ -3277,6 +3525,8 @@ async def classink_llink_assist(payload: dict, request: Request, db: Session = D
         finally:
             await upstream.aclose()
             await client.aclose()
+            if semaphore_held:
+                LLINK_UPSTREAM_SEMAPHORE.release()
 
     return StreamingResponse(
         relay_llink_stream(),
@@ -5057,7 +5307,7 @@ def build_suivi_attendance_payload(db: Session, school: SchoolInformation, stude
             "status": row.status,
             "statusLabel": {"P": "Présent", "A": "Absent", "R": "En retard"}.get(row.status, "Non renseigné"),
             "teacherName": teacher.full_name if teacher else "Enseignant",
-            "teacherCode": (teacher.teacher_code or f"prof_{teacher.id}") if teacher else "",
+            "teacherPhone": (teacher.phone_number or "") if teacher else "",
             "slot": row.slot_key or "",
         }
         records.append(entry)
@@ -5173,7 +5423,7 @@ def build_suivi_results_payload(db: Session, school: SchoolInformation, student:
             "obtained": float(row.score),
             "course": course.course_name,
             "teacherName": teacher.full_name or "Enseignant",
-            "teacherCode": teacher_number,
+            "teacherPhone": teacher.phone_number or "",
             "content": "",
         })
 
@@ -5951,6 +6201,77 @@ def update_school_settings(payload: dict, db: Session = Depends(get_db), claims:
     return {"status": True, "message": "Réglages de l'école enregistrés."}
 
 
+def clean_class_domain_configuration(raw_domains, raw_subdomains):
+    """Valide les domaines et la liste de sous-domaines autorisés pour chaque classe."""
+    if not isinstance(raw_domains, list) or len(raw_domains) > 100:
+        raise HTTPException(status_code=422, detail="La liste des domaines est invalide.")
+    domains = []
+    seen_domains = set()
+    for raw in raw_domains:
+        name = clean_text(raw, 100)
+        if not name:
+            continue
+        key = name.casefold()
+        if key in seen_domains:
+            continue
+        seen_domains.add(key)
+        domains.append(name)
+    if not domains:
+        domains = ["Général"]
+
+    if raw_subdomains is None:
+        raw_subdomains = {}
+    if not isinstance(raw_subdomains, dict) or len(raw_subdomains) > 100:
+        raise HTTPException(status_code=422, detail="La configuration des sous-domaines est invalide.")
+
+    by_domain = {name: [] for name in domains}
+    domain_lookup = {name.casefold(): name for name in domains}
+    for raw_domain, raw_values in raw_subdomains.items():
+        domain_name = domain_lookup.get(str(raw_domain).strip().casefold())
+        if not domain_name:
+            raise HTTPException(status_code=422, detail="Un sous-domaine référence un domaine qui n'existe pas dans cette classe.")
+        if not isinstance(raw_values, list) or len(raw_values) > 100:
+            raise HTTPException(status_code=422, detail="La liste des sous-domaines d'un domaine est invalide.")
+        values = []
+        seen = set()
+        for raw_value in raw_values:
+            value = clean_text(raw_value, 160)
+            if not value:
+                continue
+            key = value.casefold()
+            if key not in seen:
+                seen.add(key)
+                values.append(value)
+        by_domain[domain_name] = values
+    return domains, by_domain
+
+
+@app.put("/api/primenet/classes/{class_id}/domains")
+def update_primeink_class_domains(
+    class_id: str,
+    payload: dict,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(require_active_school),
+):
+    """Enregistre les domaines et leurs sous-domaines pour une seule classe de l'école."""
+    school_id = str(claims.get("school_id") or "")
+    classe = db.query(ClasseInformation).filter(
+        ClasseInformation.id == class_id,
+        ClasseInformation.school_id == school_id,
+    ).first()
+    if not classe:
+        raise HTTPException(status_code=404, detail="Classe introuvable.")
+    raw_domains = payload.get("categories")
+    raw_subdomains = payload.get("subDomains", classe.sub_domains if isinstance(classe.sub_domains, dict) else {})
+    domains, subdomains = clean_class_domain_configuration(raw_domains, raw_subdomains)
+    classe.domaines = domains
+    classe.sub_domains = subdomains
+    db.commit()
+    return {"status": True, "message": "Domaines et sous-domaines enregistrés.", "data": {
+        "classId": class_id, "categories": domains, "subDomains": subdomains,
+    }}
+
+
 def clean_bulletin_course_mappings(db: Session, school_id: str, class_id: str, raw_courses):
     """Valide les cours-bulletins et leurs sources enseignées dans une même classe."""
     if not isinstance(raw_courses, list) or len(raw_courses) > 100:
@@ -6213,6 +6534,13 @@ def sync_primenet(payload: dict, db: Session = Depends(get_db), claims: dict = D
         classe_obj.class_name = c.get("name", "")
         classe_obj.titulaire_name = c.get("titulaire", "")
         classe_obj.domaines = c.get("categories", [])
+        if "subDomains" in c and c.get("subDomains") is not None:
+            clean_domains, clean_subdomains = clean_class_domain_configuration(
+                classe_obj.domaines if isinstance(classe_obj.domaines, list) else [],
+                c.get("subDomains"),
+            )
+            classe_obj.domaines = clean_domains
+            classe_obj.sub_domains = clean_subdomains
         if c.get("bulletinModel") in BULLETIN_MODELS: classe_obj.bulletin_model = c.get("bulletinModel")
         if "bulletinTitle" in c: classe_obj.bulletin_title = clean_text(c.get("bulletinTitle"), 160)
         if c.get("signatureSource") in SIGNATURE_SOURCES: classe_obj.signature_source = c.get("signatureSource")

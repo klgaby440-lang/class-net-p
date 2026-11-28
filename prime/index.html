@@ -1291,36 +1291,25 @@ body.theme-dark input::placeholder,body.theme-dark textarea::placeholder{color:v
 
     <!-- Interface Llink AI -->
     <div id="section-llink" class="app-section">
-        <div class="llink-container">
-            <div class="llink-header">
-                <div style="display: flex; align-items: center; gap: 0.6rem;">
-                    <h3>🤖 Llink AI Engine</h3>
-                    <span id="llinkNetworkStatus" class="status-badge" style="display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer;" onclick="toggleLlinkOnline()">
-                        <span id="llinkStatusDot" style="width: 8px; height: 8px; border-radius: 50%; background-color: #16a34a;"></span>
-                        <span id="llinkStatusText">En ligne</span>
-                    </span>
-                </div>
-                <select id="llinkModelSelector" class="form-control" style="width: auto; padding: 0.38rem 0.6rem; font-size: 0.85rem; font-weight: 600;">
-                    <option value="gemini-1.5-flash">✨ Standard (Gemini)</option>
-                    <option value="deepseek-v3">🧠 Réflexion (DeepSeek)</option>
-                </select>
+        <div class="llink-container" data-llink-app="primeink" style="display:flex;flex-direction:column;gap:.7rem;min-height:64vh;">
+            <div class="llink-header" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+                <div><h3>🤖 Llink AI Engine</h3><small style="color:var(--text-secondary);">VELORA · Assistant de l'établissement</small></div>
+                <span class="status-badge" style="display:inline-flex;align-items:center;gap:.4rem;"><span style="width:8px;height:8px;border-radius:50%;background:#16a34a;"></span>Assistant</span>
             </div>
-
-            <div class="llink-chat-box" id="llinkChatBox">
-                <div class="chat-message ai">
-                    <p>Bonjour ! Je suis Llink. Comment puis-je t'aider dans la gestion des points ou des enseignants de PrimeInk aujourd'hui ? 🚀</p>
-                </div>
+            <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;padding:.55rem;background:var(--bg-main);border:1px solid var(--border-color);border-radius:10px;">
+                <select data-llink-sessions aria-label="Conversations Llink" class="form-control" style="flex:1;min-width:150px;"></select>
+                <button type="button" class="btn-secondary" data-llink-new>Nouvelle</button>
+                <button type="button" class="btn-secondary" data-llink-delete>Supprimer</button>
+                <small data-llink-status role="status" style="width:100%;color:var(--text-secondary);font-size:.72rem;">Sauvegarde locale et serveur</small>
             </div>
-
-            <div class="llink-input-container" style="display: flex; flex-direction: column; gap: 0.5rem; background: var(--bg-main); padding: 0.8rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
-                <textarea id="llinkInput" placeholder="Pose ta question ou demande une analyse à Llink..." class="llink-input" style="width: 100%; min-height: 48px; border: none; outline: none; background: transparent; color: var(--text-primary); resize: none; font-size: 0.95rem;"></textarea>
-                <div class="llink-input-actions" style="display: flex; justify-content: space-between; align-items: center;">
-                    <span style="font-size: 0.75rem; font-weight: 700; color: var(--text-secondary);">Source : <code>PrimeInk</code></span>
-                    <button class="btn-primary" id="llinkSendBtn" style="display: flex; align-items: center; gap: 0.4rem;">
-                        <span>Envoyer</span> ⚡
-                    </button>
-                </div>
+            <div class="llink-chat-box" id="llinkChatBox" data-llink-messages aria-live="polite" style="flex:1;min-height:300px;max-height:58vh;overflow:auto;display:flex;flex-direction:column;gap:10px;">
             </div>
+            <form class="llink-input-container" data-llink-form style="display:flex;flex-direction:column;gap:.5rem;background:var(--bg-main);padding:.8rem;border-radius:var(--radius-md);border:1px solid var(--border-color);">
+                <textarea id="llinkInput" data-llink-input maxlength="5000" placeholder="Pose ta question ou demande une analyse à Llink..." class="llink-input" style="width:100%;min-height:48px;border:none;outline:none;background:transparent;color:var(--text-primary);resize:vertical;font-size:.95rem;" required></textarea>
+                <div class="llink-input-actions" style="display:flex;justify-content:flex-end;align-items:center;">
+                    <button class="btn-primary" id="llinkSendBtn" data-llink-send type="submit"><span>Envoyer</span> ⚡</button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -2187,7 +2176,7 @@ body.theme-dark input::placeholder,body.theme-dark textarea::placeholder{color:v
             <div class="form-group"><label>Max Période (Points)</label><input type="number" id="max-per-cours" class="form-control" value="40"></div>
             <div class="form-group"><label>Enseignant responsable du cours</label><select id="name-titulaire-added-cours" class="form-control"><option value="">-- Aucun enseignant attribué --</option></select><small style="display:block;margin-top:5px;color:var(--text-secondary);">Seul cet enseignant recevra ce cours dans son espace ClassInk.</small></div>
             <div class="form-group"><label>Catégorie du cours</label><select class="form-control" id="choix-categorie"></select></div>
-            <div class="form-group"><label>Sous-domaine (facultatif)</label><input type="text" id="sub-category-cours" class="form-control" placeholder="Ex : Sous-domaine des mathématiques"></div>
+            <div class="form-group"><label>Sous-domaine (facultatif)</label><select id="sub-category-cours" class="form-control"><option value="">— Aucun sous-domaine —</option></select></div>
             <div class="form-group" style="border:1px dashed var(--border-color);border-radius:8px;padding:.75rem;">
                 <label style="display:block;margin-bottom:.45rem;">IMPORTER LES COURS DEPUIS UN BULLETIN</label>
                 <label class="btn-secondary" style="display:inline-flex;position:relative;overflow:hidden;align-items:center;gap:.4rem;cursor:pointer;">
@@ -2445,6 +2434,11 @@ window.alert = function(message) { showCustomAlert(message); };
             try {
                 window.localStorage.setItem('classnet_p_db', JSON.stringify(appState));
                 primeInkStorageAvailable = true;
+                // La connexion PrimeInk peut renseigner l'école après le montage initial de Llink.
+                // Le remontage recharge alors les sessions du bon établissement.
+                if (window.ClassInkLlink) {
+                    window.ClassInkLlink.mount(document.querySelector('[data-llink-app="primeink"]'));
+                }
                 return true;
             } catch (error) {
                 primeInkStorageAvailable = false;
@@ -2530,17 +2524,64 @@ window.alert = function(message) { showCustomAlert(message); };
             if (field) field.focus();
         };
 
-                function populateCategoryDropdown() {
-                    const select = document.getElementById('choix-categorie');
-                    select.innerHTML = '';
-                    const cls = appState.classes.find(c => c.id === activeClassId);
-                    const categories = cls && cls.categories ? cls.categories : ['Général'];
-                    categories.forEach(cat => {
-                        const opt = document.createElement('option');
-                        opt.value = cat;
-                        opt.textContent = cat;
-                        select.appendChild(opt);
+                function primeInkClassDomains(cls) {
+                    const domains = Array.isArray(cls && cls.categories) ? cls.categories.slice() : [];
+                    (appState.courses || []).filter(course => String(course.classId) === String(cls && cls.id))
+                        .forEach(course => {
+                            const value = String(course.category || '').trim();
+                            if (value && !domains.some(item => bpNorm(item) === bpNorm(value))) domains.push(value);
+                        });
+                    return domains.length ? domains : ['Général'];
+                }
+
+                function primeInkClassSubdomains(cls, domain) {
+                    const values = [];
+                    const configured = cls && cls.subDomains && typeof cls.subDomains === 'object'
+                        ? (cls.subDomains[domain] || Object.entries(cls.subDomains).find(([key]) => bpNorm(key) === bpNorm(domain))?.[1] || [])
+                        : [];
+                    if (Array.isArray(configured)) configured.forEach(value => {
+                        const text = String(value || '').trim();
+                        if (text && !values.some(existing => bpNorm(existing) === bpNorm(text))) values.push(text);
                     });
+                    (appState.courses || []).filter(course =>
+                        String(course.classId) === String(cls && cls.id) &&
+                        bpNorm(course.category) === bpNorm(domain)
+                    ).forEach(course => {
+                        const text = String(course.subCategory || '').trim();
+                        if (text && !values.some(existing => bpNorm(existing) === bpNorm(text))) values.push(text);
+                    });
+                    return values;
+                }
+
+                function primeInkFillSubdomainSelect(select, cls, domain, selectedValue) {
+                    if (!select) return;
+                    const previous = selectedValue !== undefined ? String(selectedValue || '') : String(select.value || '');
+                    const values = primeInkClassSubdomains(cls, domain);
+                    select.innerHTML = '<option value="">— Aucun sous-domaine —</option>' + values.map(value =>
+                        '<option value="' + safeHTML(value) + '">' + safeHTML(value) + '</option>'
+                    ).join('');
+                    select.value = values.some(value => bpNorm(value) === bpNorm(previous))
+                        ? values.find(value => bpNorm(value) === bpNorm(previous)) : '';
+                }
+
+                function populateCategoryDropdown(selectedDomain, selectedSubdomain) {
+                    const select = document.getElementById('choix-categorie');
+                    const subSelect = document.getElementById('sub-category-cours');
+                    const cls = appState.classes.find(c => String(c.id) === String(activeClassId));
+                    const categories = primeInkClassDomains(cls);
+                    select.innerHTML = categories.map(cat =>
+                        '<option value="' + safeHTML(cat) + '">' + safeHTML(cat) + '</option>'
+                    ).join('');
+                    if (selectedDomain && categories.some(value => bpNorm(value) === bpNorm(selectedDomain))) {
+                        select.value = categories.find(value => bpNorm(value) === bpNorm(selectedDomain));
+                    }
+                    primeInkFillSubdomainSelect(subSelect, cls, select.value, selectedSubdomain);
+                    if (!select.dataset.subdomainBound) {
+                        select.addEventListener('change', () => primeInkFillSubdomainSelect(
+                            subSelect, appState.classes.find(c => String(c.id) === String(activeClassId)), select.value, ''
+                        ));
+                        select.dataset.subdomainBound = 'true';
+                    }
                 }
 
                 // ======================================================================
@@ -2647,15 +2688,22 @@ window.alert = function(message) { showCustomAlert(message); };
                     const preset = cls ? bpPresetForModel(bpClassModel(cls)) : null;
                     if (!preset) return 0;
                     if (!cls.categories) cls.categories = [];
+                    if (!cls.subDomains || typeof cls.subDomains !== 'object') cls.subDomains = {};
                     const catSpelling = {};
                     preset.categories.forEach(cat => {
                         const existing = cls.categories.find(c => bpNorm(c) === bpNorm(cat));
                         if (existing) catSpelling[cat] = existing;
                         else { cls.categories = cls.categories.filter(c => bpNorm(c) !== 'general'); cls.categories.push(cat); catSpelling[cat] = cat; }
+                        if (!Array.isArray(cls.subDomains[catSpelling[cat]])) cls.subDomains[catSpelling[cat]] = [];
                     });
                     let added = 0;
                     preset.courses.forEach((row, i) => {
                         const [cat, sub, name, maxPer] = row;
+                        if (sub) {
+                            const domainName = catSpelling[cat] || cat;
+                            const list = cls.subDomains[domainName] || (cls.subDomains[domainName] = []);
+                            if (!list.some(value => bpNorm(value) === bpNorm(sub))) list.push(sub);
+                        }
                         const found = appState.courses.find(c => c.classId === cls.id && bpNorm(c.name) === bpNorm(name));
                         if (found) {
                             if (!found.subCategory && sub) found.subCategory = sub;
@@ -2798,7 +2846,9 @@ window.alert = function(message) { showCustomAlert(message); };
                     if (source === 'none') return { src: '', missing: '' };
                     if (source === 'default') return { src: BP_DEFAULT_SIGNATURE, missing: '' };
                     if (source === 'responsable') return { src: bpHeadSignature(), missing: '' };
-                    const name = (crs.titulaire && crs.titulaire !== 'Non assigné') ? crs.titulaire : (cls && cls.titulaire);
+                    const name = primeInkDisplayTeacherName(
+                        (crs.titulaire && crs.titulaire !== 'Non assigné') ? crs.titulaire : (cls && cls.titulaire)
+                    );
                     const s = bpSignatureForName(name);
                     return { src: s, missing: s ? '' : (name && name !== 'Non assigné' ? name : 'cours sans titulaire') };
                 }
@@ -2822,12 +2872,17 @@ window.alert = function(message) { showCustomAlert(message); };
                 }
                 const BP_TOTAL_KEYS = ['p1', 'p2', 'ex1', 's1', 'p3', 'p4', 'ex2', 's2', 'tg'];
 
+                function bpTeacherDisplayName(value) {
+                    return primeInkDisplayTeacherName(value);
+                }
+
                 function bpBulletinCoursesForClass(cls) {
                     const taughtCourses = (Array.isArray(appState.courses) ? appState.courses : [])
                         .filter(course => String(course.classId ?? '') === String(cls && cls.id || ''));
                     if (!cls || !Array.isArray(cls.bulletinCourses)) {
                         return taughtCourses.map(course => ({
                             ...course,
+                            titulaire: bpTeacherDisplayName(course.titulaire),
                             sourceCourseIds: [String(course.id)]
                         }));
                     }
@@ -2835,12 +2890,12 @@ window.alert = function(message) { showCustomAlert(message); };
                         const sourceIds = Array.isArray(item.sourceCourseIds) ? item.sourceCourseIds.map(String) : [];
                         const sources = taughtCourses.filter(course => sourceIds.includes(String(course.id)));
                         if (!sources.length) return null;
-                        const teachers = [...new Set(sources.map(course => String(course.titulaire || '').trim()).filter(name => name && name !== 'Non assigné'))];
+                        const teachers = [...new Set(sources.map(course => bpTeacherDisplayName(course.titulaire)).filter(name => name && name !== 'Non assigné'))];
                         return {
                             ...item,
                             classId: cls.id,
                             sourceCourseIds: sources.map(course => String(course.id)),
-                            titulaire: teachers.length === 1 ? teachers[0] : (cls.titulaire || teachers[0] || 'Non assigné')
+                            titulaire: teachers.length === 1 ? teachers[0] : (bpTeacherDisplayName(cls.titulaire) || teachers[0] || 'Non assigné')
                         };
                     }).filter(Boolean);
                 }
@@ -4246,7 +4301,7 @@ async function bpPushClassBulletin(cls) {
                     tr.className = 'clickable-row';
                     tr.innerHTML = `
                         <td>${safeHTML(cls.name)}</td>
-                        <td>${safeHTML(cls.titulaire)}</td>
+                        <td>${safeHTML(primeInkDisplayTeacherName(cls.titulaire))}</td>
                         <td>${safeHTML(count)}</td>
                     `;
                     tr.setAttribute('aria-label', 'Ouvrir la classe ' + cls.name);
@@ -4743,7 +4798,7 @@ async function bpPushClassBulletin(cls) {
                 if (!course) return;
                 currentFicheCourseId = course.id;
                 document.getElementById('currentCourseName').textContent = course.name || '';
-                document.getElementById('currentCourseTitulaire').textContent = course.titulaire || 'Non assigné';
+                document.getElementById('currentCourseTitulaire').textContent = primeInkDisplayTeacherName(course.titulaire);
                 const tbody = document.getElementById('ficheNotesBody');
                 if (!tbody) return;
                 tbody.innerHTML = '';
@@ -5325,6 +5380,13 @@ async function bpPushClassBulletin(cls) {
                 const titulaire = document.getElementById('name-titulaire-added-cours').value.trim();
                 const category = document.getElementById('choix-categorie').value;
                 const subCategory = document.getElementById('sub-category-cours').value.trim();
+                const courseClass = appState.classes.find(cls => String(cls.id) === String(activeClassId));
+                if (!category || !primeInkClassDomains(courseClass).some(value => bpNorm(value) === bpNorm(category))) {
+                    return alert('Sélectionnez un domaine déjà configuré pour cette classe.');
+                }
+                if (subCategory && !primeInkClassSubdomains(courseClass, category).some(value => bpNorm(value) === bpNorm(subCategory))) {
+                    return alert('Sélectionnez un sous-domaine lié au domaine choisi.');
+                }
 
                 if (!name) return alert('Veuillez entrer le nom du cours.');
 
@@ -5389,71 +5451,12 @@ async function bpPushClassBulletin(cls) {
             }
 
             /* 7. LLINK AI ENGINE INTERACTION */
-            const llinkSendBtn = document.getElementById('llinkSendBtn');
             const llinkInput = document.getElementById('llinkInput');
             const llinkChatBox = document.getElementById('llinkChatBox');
-            const llinkModelSelector = document.getElementById('llinkModelSelector');
-            const SERVER_URL = "https://llink-usz9.onrender.com";
-            let isLlinkOnline = true;
-
-            window.toggleLlinkOnline = function() {
-                isLlinkOnline = !isLlinkOnline;
-                document.getElementById('llinkStatusDot').style.backgroundColor = isLlinkOnline ? "#16a34a" : "#dc2626";
-                document.getElementById('llinkStatusText').textContent = isLlinkOnline ? "En ligne" : "Hors ligne";
-            };
-
-            const primeInkLlinkHistory = [];
-            async function sendLlinkMessage() {
-                const text = llinkInput.value.trim();
-                if (!text) return;
-                const userMsg = document.createElement('div');
-                userMsg.className = 'chat-message user';
-                userMsg.innerHTML = '<p>' + escapeHTML(text) + '</p>';
-                llinkChatBox.appendChild(userMsg);
-                llinkInput.value = '';
-                llinkChatBox.scrollTop = llinkChatBox.scrollHeight;
-                const aiMsg = document.createElement('div');
-                aiMsg.className = 'chat-message ai';
-                aiMsg.innerHTML = '<p><em>Llink consulte les données autorisées de l’école…</em></p>';
-                llinkChatBox.appendChild(aiMsg);
-                llinkChatBox.scrollTop = llinkChatBox.scrollHeight;
-                if (!cloudAuthHeaders().Authorization) {
-                    aiMsg.textContent = "Connectez-vous à l'espace scolaire PrimeInk pour permettre à Llink de consulter les données autorisées.";
-                    return;
-                }
-                try {
-                    const headers = cloudAuthHeaders();
-                    headers['X-CRYPT-App'] = 'primeink';
-                    headers['Accept'] = 'text/event-stream';
-                    const response = await fetch(API_BASE_URL + '/api/llink/assist', {
-                        method: 'POST', headers, cache: 'no-store',
-                        body: JSON.stringify({ message: text, history: primeInkLlinkHistory.slice(-8), source: 'primeink' })
-                    });
-                    if (!response.ok) {
-                        const raw = await response.text();
-                        let detail = raw;
-                        try { const parsed = JSON.parse(raw); detail = parsed.detail || parsed.message || raw; } catch (_) {}
-                        throw new Error(detail || ('Erreur HTTP ' + response.status));
-                    }
-                    aiMsg.textContent = '';
-                    if (response.body && response.body.getReader) {
-                        const reader = response.body.getReader(), decoder = new TextDecoder();
-                        while (true) {
-                            const part = await reader.read();
-                            if (part.done) break;
-                            aiMsg.textContent += decoder.decode(part.value, { stream: true });
-                            llinkChatBox.scrollTop = llinkChatBox.scrollHeight;
-                        }
-                        aiMsg.textContent += decoder.decode();
-                    } else aiMsg.textContent = await response.text();
-                    if (!aiMsg.textContent.trim()) aiMsg.textContent = "Llink n'a pas retourné de réponse.";
-                    primeInkLlinkHistory.push({ role: 'user', text }, { role: 'assistant', text: aiMsg.textContent });
-                    if (primeInkLlinkHistory.length > 12) primeInkLlinkHistory.splice(0, primeInkLlinkHistory.length - 12);
-                } catch (error) {
-                    aiMsg.textContent = "Llink est momentanément indisponible : " + (error.message || "erreur réseau");
-                } finally {
-                    llinkChatBox.scrollTop = llinkChatBox.scrollHeight;
-                }
+            const llinkSendBtn = document.getElementById('llinkSendBtn');
+            function sendLlinkMessage() {
+                const form = document.querySelector('[data-llink-app="primeink"] [data-llink-form]');
+                if (form && typeof form.requestSubmit === 'function') form.requestSubmit();
             }
 
             function escapeHTML(str) {
@@ -5469,15 +5472,7 @@ async function bpPushClassBulletin(cls) {
                     .replace(/\*(.*?)\*/g, '<em>$1</em>');
             }
 
-            if (llinkSendBtn && llinkInput) {
-                llinkSendBtn.addEventListener('click', sendLlinkMessage);
-                llinkInput.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        sendLlinkMessage();
-                    }
-                });
-            }
+            // La soumission, le streaming et les sessions sont gérés par classink-llink-sessions.js.
             
             /* 8. VERROUILLAGE ET INITIALISATION */
             const lockOverlay = document.getElementById('lock-screen-overlay');
@@ -5773,7 +5768,7 @@ async function bpPushClassBulletin(cls) {
                 const card = document.createElement('div');
                 card.className = 'settings-card';
                 card.innerHTML = '<h2>Cours ' + (idx + 1) + ' : ' + safeHTML(course.name) +
-                    (course.titulaire ? ' | Prof. ' + safeHTML(course.titulaire) : '') + '</h2>' +
+                    (course.titulaire ? ' | Prof. ' + safeHTML(primeInkDisplayTeacherName(course.titulaire)) : '') + '</h2>' +
                     '<p class="sub" style="margin:5px 0 10px">' + safeHTML(dateValue) + ' · ' + records.length + ' appel(s) reçu(s)</p>' +
                     '<div style="overflow-x:auto"><table class="data-table"><thead><tr><th>Élève</th><th>Statut(s)</th><th>Enseignant(s)</th><th>Séance(s)</th></tr></thead><tbody>' +
                     students.map(student => {
@@ -7602,6 +7597,17 @@ function primeInkResolveTeacherOptionValue(rawValue) {
     return match ? String(match.uniqueId || '') : raw;
 }
 
+function primeInkDisplayTeacherName(rawValue) {
+    const raw = String(rawValue || '').trim();
+    if (!raw || ['non assigné', 'non attribué', 'aucun', 'aucune'].includes(raw.toLocaleLowerCase())) return 'Non assigné';
+    const key = raw.toLocaleLowerCase();
+    const teacher = (Array.isArray(appState.teachers) ? appState.teachers : []).find(item =>
+        [item.uniqueId, item.id, item.email, item.teacherCode, item.code]
+            .some(value => value !== undefined && String(value).trim().toLocaleLowerCase() === key)
+    );
+    return teacher && teacher.name ? String(teacher.name).trim() : raw;
+}
+
 function primeInkTeacherSelectOptions(rawValue = '') {
     const raw = String(rawValue || '').trim();
     const resolved = primeInkResolveTeacherOptionValue(raw);
@@ -7906,7 +7912,8 @@ function refreshPrimeInkTeacherAssignmentSelects() {
                         <button type="button" class="modal-close-btn" data-close-manage-courses>×</button>
                         <h3 style="margin-bottom:0.4rem;color:var(--primary-color);">Modifier les cours</h3>
                         <p id="manageCoursesClassLabel" style="margin-bottom:.5rem;color:var(--text-secondary);"></p>
-                        <p style="margin:0 0 .9rem;color:var(--text-secondary);font-size:.86rem;"><strong>Cours enseignés</strong> — matières réellement attribuées aux enseignants. Elles restent utilisées dans les statistiques et les fiches de saisie.</p>
+                        <p style="margin:0 0 .5rem;color:var(--text-secondary);font-size:.86rem;"><strong>Cours enseignés</strong> — matières réellement attribuées aux enseignants. Elles restent utilisées dans les statistiques et les fiches de saisie.</p>
+                        <div style="display:flex;justify-content:flex-end;margin-bottom:.8rem;"><button type="button" class="btn-secondary" data-open-class-domains>Configurer les domaines et sous-domaines</button></div>
                         <div id="manageCoursesList" style="display:flex;flex-direction:column;gap:0.8rem;"></div>
                         <div style="display:flex;justify-content:flex-end;margin-top:.9rem;">
                             <button type="button" class="btn-primary" data-open-bulletin-courses>Configurer les cours du bulletin</button>
@@ -7917,6 +7924,9 @@ function refreshPrimeInkTeacherAssignmentSelects() {
                 overlay.querySelectorAll('[data-close-manage-courses]').forEach(btn => btn.addEventListener('click', () => overlay.classList.add('hidden')));
                 overlay.querySelector('[data-open-bulletin-courses]')?.addEventListener('click', () => {
                     window.openManageBulletinCoursesModal(overlay.dataset.classId || classId);
+                });
+                overlay.querySelector('[data-open-class-domains]')?.addEventListener('click', () => {
+                    window.openPrimeInkClassDomainsModal(overlay.dataset.classId || classId);
                 });
             }
             overlay.dataset.classId = classId;
@@ -7929,35 +7939,52 @@ function refreshPrimeInkTeacherAssignmentSelects() {
             const overlay = document.getElementById('manageCoursesModal');
             const list = overlay?.querySelector('#manageCoursesList');
             if (!list) return;
-            const courses = appState.courses.filter(crs => crs.classId === classId);
+            const cls = appState.classes.find(item => String(item.id) === String(classId));
+            const courses = appState.courses.filter(crs => String(crs.classId) === String(classId));
             if (!courses.length) {
                 list.innerHTML = '<p style="padding:1rem;text-align:center;color:var(--text-secondary);">Aucun cours dans cette classe.</p>';
                 return;
             }
-            list.innerHTML = courses.map(crs => `
+            const domains = primeInkClassDomains(cls);
+            list.innerHTML = courses.map(crs => {
+                const currentDomain = domains.find(value => bpNorm(value) === bpNorm(crs.category)) || domains[0];
+                const domainOptions = domains.map(value => '<option value="' + safeHTML(value) + '"' +
+                    (bpNorm(value) === bpNorm(currentDomain) ? ' selected' : '') + '>' + safeHTML(value) + '</option>').join('');
+                const subdomains = primeInkClassSubdomains(cls, currentDomain);
+                const currentSubdomain = subdomains.find(value => bpNorm(value) === bpNorm(crs.subCategory)) || '';
+                const subOptions = '<option value="">— Aucun sous-domaine —</option>' + subdomains.map(value =>
+                    '<option value="' + safeHTML(value) + '"' + (bpNorm(value) === bpNorm(currentSubdomain) ? ' selected' : '') + '>' + safeHTML(value) + '</option>'
+                ).join('');
+                return `
                 <div class="settings-card" data-managed-course-row="${safeHTML(crs.id)}" style="padding:0.9rem;box-shadow:none;">
                     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:0.6rem;">
                         <label>Nom du cours<input class="form-control" data-field="name" value="${safeHTML(crs.name || '')}"></label>
                         <label>Maximum par période<input class="form-control" type="number" min="1" step="0.5" data-field="maxPer" value="${safeHTML(crs.maxPer ?? 40)}"></label>
                         <label>Enseignant responsable<select class="form-control" data-field="titulaire">${primeInkTeacherSelectOptions(crs.titulaire || '')}</select></label>
-                        <label>Catégorie<input class="form-control" data-field="category" value="${safeHTML(crs.category || '')}"></label>
-                        <label>Sous-domaine<input class="form-control" data-field="subCategory" value="${safeHTML(crs.subCategory || '')}"></label>
+                        <label>Domaine<select class="form-control" data-field="category">${domainOptions}</select></label>
+                        <label>Sous-domaine<select class="form-control" data-field="subCategory">${subOptions}</select></label>
                     </div>
                     <div style="display:flex;gap:0.5rem;justify-content:flex-end;flex-wrap:wrap;margin-top:0.7rem;">
                         <button type="button" class="btn-primary" data-save-course>Enregistrer</button>
                         <button type="button" class="btn-secondary" data-delete-course style="background:#dc2626;">Supprimer le cours</button>
                     </div>
-                </div>`).join('');
+                </div>`;
+            }).join('');
+            list.querySelectorAll('[data-managed-course-row]').forEach(row => {
+                row.querySelector('[data-field="category"]')?.addEventListener('change', event => {
+                    primeInkFillSubdomainSelect(row.querySelector('[data-field="subCategory"]'), cls, event.target.value, '');
+                });
+            });
             list.querySelectorAll('[data-save-course]').forEach(btn => btn.addEventListener('click', async () => {
                 const row = btn.closest('[data-managed-course-row]');
-                const course = appState.courses.find(crs => crs.id === row.dataset.managedCourseRow);
+                const course = appState.courses.find(crs => String(crs.id) === String(row.dataset.managedCourseRow));
                 if (!course) return;
                 const val = field => row.querySelector(`[data-field="${field}"]`)?.value.trim() || '';
                 const name = val('name');
                 const maxPer = Number(val('maxPer'));
                 if (!name) return alert('Le nom du cours est obligatoire.');
                 if (!Number.isFinite(maxPer) || maxPer <= 0) return alert('Le maximum par période doit être supérieur à zéro.');
-                if (appState.courses.some(other => other.id !== course.id && other.classId === classId && String(other.name).toLowerCase() === name.toLowerCase())) {
+                if (appState.courses.some(other => other.id !== course.id && String(other.classId) === String(classId) && String(other.name).toLowerCase() === name.toLowerCase())) {
                     return alert('Un cours portant ce nom existe déjà dans cette classe.');
                 }
                 course.name = name;
@@ -7975,6 +8002,108 @@ function refreshPrimeInkTeacherAssignmentSelects() {
                 window.deleteCourse(row.dataset.managedCourseRow);
             }));
         }
+
+        window.openPrimeInkClassDomainsModal = function(classId) {
+            const cls = appState.classes.find(item => String(item.id) === String(classId));
+            if (!cls) return alert("Sélectionnez d'abord une classe.");
+            const domains = primeInkClassDomains(cls);
+            if (!cls.subDomains || typeof cls.subDomains !== 'object') cls.subDomains = {};
+            // Les anciennes valeurs de sous-domaines déjà utilisées deviennent des options configurées.
+            domains.forEach(domain => {
+                if (!Array.isArray(cls.subDomains[domain])) cls.subDomains[domain] = primeInkClassSubdomains(cls, domain);
+            });
+            let overlay = document.getElementById('primeInkClassDomainsModal');
+            if (!overlay) {
+                overlay = document.createElement('div');
+                overlay.id = 'primeInkClassDomainsModal';
+                overlay.className = 'lock-overlay hidden';
+                overlay.style.zIndex = '1002';
+                overlay.innerHTML = `
+                    <div class="modal-box" style="max-width:850px;width:96%;max-height:92vh;overflow:auto;">
+                        <button type="button" class="modal-close-btn" data-close-domain-config>×</button>
+                        <h3 style="margin-bottom:.35rem;color:var(--primary-color);">Domaines et sous-domaines de la classe</h3>
+                        <p id="primeInkDomainClassLabel" style="color:var(--text-secondary);margin-bottom:.9rem;"></p>
+                        <p style="color:var(--text-secondary);font-size:.85rem;margin-bottom:1rem;">Chaque ligne correspond à un domaine existant dans la classe. Saisissez ses sous-domaines, un par ligne. Les cours utiliseront ensuite des listes déroulantes dépendantes de ces choix.</p>
+                        <div id="primeInkDomainRows" style="display:flex;flex-direction:column;gap:.75rem;"></div>
+                        <div style="display:flex;justify-content:flex-end;gap:.6rem;flex-wrap:wrap;margin-top:1rem;">
+                            <button class="btn-secondary" type="button" data-close-domain-config>Annuler</button>
+                            <button class="btn-primary" type="button" data-save-domain-config>Enregistrer les domaines</button>
+                        </div>
+                        <p id="primeInkDomainStatus" role="status" aria-live="polite" style="margin-top:.8rem;color:var(--text-secondary);font-size:.85rem;"></p>
+                    </div>`;
+                document.body.appendChild(overlay);
+                overlay.querySelectorAll('[data-close-domain-config]').forEach(button =>
+                    button.addEventListener('click', () => overlay.classList.add('hidden'))
+                );
+                overlay.querySelector('[data-save-domain-config]')?.addEventListener('click', () =>
+                    window.savePrimeInkClassDomains()
+                );
+            }
+            overlay.dataset.classId = String(classId);
+            overlay.querySelector('#primeInkDomainClassLabel').textContent = 'Classe : ' + cls.name;
+            overlay.querySelector('#primeInkDomainRows').innerHTML = domains.map((domain, index) => {
+                const subs = Array.isArray(cls.subDomains[domain]) ? cls.subDomains[domain] : primeInkClassSubdomains(cls, domain);
+                return `
+                    <div class="settings-card" data-domain-row data-domain-name="${safeHTML(domain)}" style="padding:.85rem;box-shadow:none;">
+                        <strong>${safeHTML(domain)}</strong>
+                        <label style="display:block;margin-top:.5rem;">Sous-domaines (un par ligne)
+                            <textarea class="form-control" data-domain-values rows="3" placeholder="Mathématiques&#10;Sciences physiques">${safeHTML(subs.join('\n'))}</textarea>
+                        </label>
+                    </div>`;
+            }).join('') || '<p>Aucun domaine configuré pour cette classe.</p>';
+            overlay.classList.remove('hidden');
+        };
+
+        window.savePrimeInkClassDomains = async function() {
+            const overlay = document.getElementById('primeInkClassDomainsModal');
+            const classId = String(overlay?.dataset.classId || '');
+            const cls = appState.classes.find(item => String(item.id) === classId);
+            const status = overlay?.querySelector('#primeInkDomainStatus');
+            if (!overlay || !cls) return;
+            const domains = [];
+            const subDomains = {};
+            overlay.querySelectorAll('[data-domain-row]').forEach(row => {
+                const domain = String(row.dataset.domainName || '').trim();
+                if (!domain) return;
+                domains.push(domain);
+                const values = String(row.querySelector('[data-domain-values]')?.value || '')
+                    .split(/\r?\n/).map(value => value.trim()).filter(Boolean);
+                subDomains[domain] = [...new Set(values)];
+            });
+            if (!domains.length) {
+                if (status) status.textContent = 'La classe doit conserver au moins un domaine.';
+                return;
+            }
+            cls.categories = domains;
+            cls.subDomains = subDomains;
+            saveState();
+            const headers = primeInkAuthHeaders();
+            if (headers.Authorization) {
+                if (status) status.textContent = 'Synchronisation avec le serveur…';
+                try {
+                    const response = await fetch(API_BASE_URL + '/api/primenet/classes/' +
+                        encodeURIComponent(classId) + '/domains', {
+                            method: 'PUT', headers, cache: 'no-store',
+                            body: JSON.stringify({ categories: domains, subDomains })
+                        });
+                    const result = await response.json().catch(() => ({}));
+                    if (!response.ok || !result.status || !result.data) {
+                        throw new Error(result.detail || result.message || 'Configuration non synchronisée.');
+                    }
+                    cls.categories = result.data.categories || domains;
+                    cls.subDomains = result.data.subDomains || subDomains;
+                    saveState();
+                    if (status) status.textContent = 'Domaines et sous-domaines enregistrés sur le serveur.';
+                } catch (error) {
+                    if (status) status.textContent = 'Sauvegardé sur cet appareil. Synchronisation à refaire : ' + (error.message || 'erreur réseau');
+                    return;
+                }
+            } else if (status) {
+                status.textContent = 'Configuration locale enregistrée. Elle sera envoyée lors de la prochaine sauvegarde en ligne.';
+            }
+            renderManagedCourses(classId);
+            populateCategoryDropdown();
+        };
 
         window.openManageBulletinCoursesModal = function(classId) {
             const cls = appState.classes.find(item => String(item.id) === String(classId));
@@ -8142,6 +8271,11 @@ function refreshPrimeInkTeacherAssignmentSelects() {
 
             cls.bulletinCourses = courses;
             saveState();
+            // Le bulletin doit refléter immédiatement la configuration locale,
+            // même si la synchronisation serveur échoue ou si l'appareil est hors ligne.
+            if (activeStudentId && String(appState.students.find(student => String(student.id) === String(activeStudentId))?.classId) === classId) {
+                if (typeof bpRefreshBulletin === 'function') bpRefreshBulletin();
+            }
             const headers = primeInkAuthHeaders();
             if (headers.Authorization) {
                 if (status) status.textContent = 'Synchronisation de la configuration…';
@@ -8166,9 +8300,6 @@ function refreshPrimeInkTeacherAssignmentSelects() {
             } else if (status) {
                 status.textContent = 'Configuration enregistrée sur cet appareil. Elle sera envoyée lors de la prochaine synchronisation PrimeInk.';
             }
-            if (activeStudentId && String(appState.students.find(student => String(student.id) === String(activeStudentId))?.classId) === classId) {
-                if (typeof bpRefreshBulletin === 'function') bpRefreshBulletin();
-            }
         };
 
                 // Suppression avec confirmation et nettoyage des notes/présences dépendantes.
@@ -8188,6 +8319,38 @@ function refreshPrimeInkTeacherAssignmentSelects() {
             if (appState.tools?.presences?.students) appState.tools.presences.students = appState.tools.presences.students.filter(p => p.courseId !== courseId);
             if (appState.tools?.mixage?.coursProgrammes) appState.tools.mixage.coursProgrammes = appState.tools.mixage.coursProgrammes.filter(p => p.courseId !== courseId && p.id !== courseId);
             saveState();
+            // La suppression d'un cours enseigné modifie aussi les cours-bulletins
+            // qui en dépendent. Enregistrer cette nouvelle composition sur le serveur
+            // évite qu'une ancienne association réapparaisse au prochain chargement.
+            if (owningClass && Array.isArray(owningClass.bulletinCourses)) {
+                const headers = primeInkAuthHeaders();
+                if (headers.Authorization) {
+                    try {
+                        const response = await fetch(API_BASE_URL + '/api/primenet/classes/' +
+                            encodeURIComponent(String(course.classId)) + '/bulletin-courses', {
+                                method: 'PUT',
+                                headers,
+                                cache: 'no-store',
+                                body: JSON.stringify({ bulletinCourses: owningClass.bulletinCourses })
+                            });
+                        const result = await response.json().catch(() => ({}));
+                        if (!response.ok || !result.status || !result.data) {
+                            throw new Error(result.detail || result.message || 'Configuration des cours-bulletins non synchronisée.');
+                        }
+                        owningClass.bulletinCourses = result.data.bulletinCourses || [];
+                        saveState();
+                    } catch (error) {
+                        console.warn('[PrimeInk] Suppression locale réussie, synchronisation des cours-bulletins échouée.', error);
+                        await showCustomAlert(
+                            'Le cours a été supprimé sur cet appareil, mais la configuration des cours-bulletins n’a pas pu être synchronisée. Utilisez « Save data base OnLine » avant de changer d’appareil.',
+                            'Synchronisation à terminer'
+                        );
+                    }
+                }
+            }
+            if (activeStudentId && String(appState.students.find(student => String(student.id) === String(activeStudentId))?.classId) === String(course.classId)) {
+                if (typeof bpRefreshBulletin === 'function') bpRefreshBulletin();
+            }
             if (typeof window.loadClassData === 'function') window.loadClassData(course.classId);
             renderClassesTable();
             renderManagedCourses(course.classId);
@@ -8326,8 +8489,7 @@ const classDetailSection = document.getElementById('section-class-detail');
                 const overlay = document.getElementById('lock-screen-overlay');
                 if (!pass) return alert("Saisissez le mot de passe de l'établissement.");
                 if (!schoolId) {
-                    overlay.classList.add('hidden');
-                    return;
+                    throw new Error("Impossible de vérifier le mot de passe : l'identifiant de l'établissement est manquant. Rechargez d'abord les données de l'école.");
                 }
                 if (button) { button.disabled = true; button.textContent = "Vérification locale…"; }
                 try {
@@ -8383,7 +8545,7 @@ const classDetailSection = document.getElementById('section-class-detail');
                 tr.className = 'clickable-row';
                 tr.innerHTML = `
                     <td><strong>${safeHTML(cls.name)}</strong></td>
-                    <td>${safeHTML(cls.titulaire)}</td>
+                    <td>${safeHTML(primeInkDisplayTeacherName(cls.titulaire))}</td>
                     <td><span class="id-badge">${safeHTML(count)} élèves</span></td>
                 `;
                 tr.addEventListener('click', () => {
@@ -8622,7 +8784,8 @@ const classDetailSection = document.getElementById('section-class-detail');
                     categories: Array.isArray(cls.categories) ? cls.categories : [],
                     bulletinModel: cls.bulletinModel || '',
                     bulletinTitle: cls.bulletinTitle || '',
-                    signatureSource: cls.signatureSource || ''
+                    signatureSource: cls.signatureSource || '',
+                    ...(cls.subDomains && typeof cls.subDomains === 'object' ? { subDomains: cls.subDomains } : {})
                 })),
                 students: (appState.students || []).map(student => ({
                     id: student.id,
@@ -10464,5 +10627,16 @@ window.primeInkFetchWithTimeout = async function(url, options = {}, timeoutMs = 
             if (event.persisted) location.reload();
         });
 </script>
+<script>
+window.CLASSINK_LLINK_CONFIG = {
+    apiBase: 'https://class-net-p.onrender.com',
+    headers: () => typeof cloudAuthHeaders === 'function' ? cloudAuthHeaders() : {},
+    owner: () => {
+        try { return typeof appState !== 'undefined' && appState.school ? appState.school.id || 'primeink' : 'primeink'; }
+        catch (_) { return 'primeink'; }
+    }
+};
+</script>
+<script src="../assets/classink-llink-sessions.js"></script>
 </body>
 </html>

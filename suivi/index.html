@@ -137,14 +137,13 @@ table.t.schedule-grid { min-width:760px; table-layout:fixed; background:var(--su
 .fab .x { opacity: 0; transform: rotate(-90deg) scale(.6); }
 .fab.open .dots { opacity: 0; transform: rotate(90deg) scale(.6); }
 .fab.open .x { opacity: 1; transform: none; }
-.dock { position: fixed; z-index: 1100; left: 12px; right: 88px; bottom: calc(17px + env(safe-area-inset-bottom)); width: auto; max-width: 720px; margin: 0 auto; display: flex; justify-content: flex-start; align-items: center; gap: 4px; padding: 7px; border-radius: 20px; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow); overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; opacity: 0; visibility: hidden; transform: translateY(14px) scale(.97); transform-origin: bottom right; transition: opacity .2s, transform .25s, visibility .25s; }
-.dock::-webkit-scrollbar { display: none; }
+.dock { position: fixed; z-index: 1100; left: 12px; right: 88px; bottom: calc(17px + env(safe-area-inset-bottom)); width: auto; max-width: 760px; margin: 0 auto; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; padding: 8px; border-radius: 20px; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow); overflow: visible; opacity: 0; visibility: hidden; transform: translateY(14px) scale(.97); transform-origin: bottom center; transition: opacity .2s, transform .25s, visibility .25s; }
 .dock.open { opacity: 1; visibility: visible; transform: none; }
-.dock button { position: relative; flex: 0 0 84px; min-width: 84px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 9px 4px; border-radius: 14px; font-size: .68rem; font-weight: 600; color: var(--muted); white-space: nowrap; }
+.dock button { position: relative; min-width: 0; min-height: 52px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 7px 2px; border-radius: 12px; font-size: .64rem; line-height: 1.1; font-weight: 600; color: var(--muted); white-space: normal; text-align: center; }
 .dock button.on { color: var(--accent); background: rgba(124,92,255,.12); }
 @media (min-width: 640px) {
-    .dock { right: 88px; bottom: calc(17px + env(safe-area-inset-bottom)); }
-    .dock button { flex-basis: 92px; min-width: 92px; font-size: .72rem; }
+    .dock { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+    .dock button { min-height: 56px; font-size: .72rem; }
 }
 
 /* ---------- Fenêtres de message ---------- */
@@ -200,6 +199,7 @@ table.t.schedule-grid { min-width:760px; table-layout:fixed; background:var(--su
     <button data-go="mixages"><svg class="i" viewBox="0 0 24 24"><path d="M4 4h16v16H4zM4 9h16M9 4v16m6-16v16"/></svg>Examens</button>
     <button data-go="fees"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="14" rx="3"/><path d="M3 10h18"/><circle cx="16.5" cy="15" r="1.2"/></svg>Frais</button>
     <button data-go="messages"><svg class="i" viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>Messages<i class="badge-dot hidden" id="msgDot"></i></button>
+    <button data-go="llink"><svg class="i" viewBox="0 0 24 24"><path d="M12 3v3m0 12v3M3 12h3m12 0h3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1m0-12.8-2.1 2.1m-8.6 8.6-2.1 2.1"/><circle cx="12" cy="12" r="4"/></svg>Llink</button>
     <button data-go="settings"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>Réglages</button>
 </nav>
 <button class="fab" id="fab" aria-label="Ouvrir le menu" aria-expanded="false" aria-controls="dock">
@@ -251,7 +251,7 @@ const DEMO_FLAG = 'classink_suivi_demo';
 const PERIODS = ['P1', 'P2', 'EX1', 'P3', 'P4', 'EX2'];
 const LABELS = { P1: '1ère période', P2: '2ème période', EX1: 'Examens S1', S1: 'Semestre 1', P3: '3ème période', P4: '4ème période', EX2: 'Examens S2', S2: 'Semestre 2', TG: 'Année' };
 const SHORT = { P1: 'P1', P2: 'P2', EX1: 'Ex. 1', S1: 'Sem. 1', P3: 'P3', P4: 'P4', EX2: 'Ex. 2', S2: 'Sem. 2', TG: 'Année' };
-const VIEWS = ['home', 'notes', 'attendance', 'schedule', 'mixages', 'fees', 'messages', 'settings'];
+const VIEWS = ['home', 'notes', 'attendance', 'schedule', 'mixages', 'fees', 'messages', 'llink', 'settings'];
 const IDLE_LOCK_MS = 5 * 60 * 1000;
 
 /* ---------- Outils ---------- */
@@ -693,11 +693,11 @@ function viewNotes() {
     } else {
         out += '<div class="list" style="margin-top:10px">' + allEvaluations.map(e => {
             const teacher = e.teacherName || 'Enseignant non renseigné';
-            const teacherCode = e.teacherCode || 'Non renseigné';
+            const teacherPhone = e.teacherPhone || 'Non renseigné';
             return '<article class="item" style="display:block"><div class="row sb wrap"><strong class="t">' + esc(e.title || 'Interrogation') + '</strong><span class="m">' + esc(fdate(e.date)) + '</span></div>' +
                 '<div class="m" style="margin-top:5px">Cours : <strong>' + esc(e.courseName) + '</strong>' + (e.courseCategory ? ' · ' + esc(e.courseCategory) : '') + '</div>' +
                 '<div class="m" style="margin-top:4px">Professeur : <strong>' + esc(teacher) + '</strong></div>' +
-                '<div class="m">N° du professeur : <strong>' + esc(teacherCode) + '</strong></div>' +
+                '<div class="m">Téléphone du professeur : <strong>' + esc(teacherPhone) + '</strong></div>' +
                 '<div class="row sb" style="margin-top:8px"><span class="m">' + esc(LABELS[e.period] || e.period || '') + '</span><strong class="num">' + fmt(e.obtained) + ' / ' + fmt(e.max) + '</strong></div>' +
                 (e.content ? '<p class="m" style="margin-top:6px">' + esc(e.content) + '</p>' : '') + '</article>';
         }).join('') + '</div>';
@@ -724,7 +724,7 @@ function viewAttendance() {
             out += '<div class="list" style="margin-top:10px">' + records.map(record => {
                 const recordStatus = String(record.status || '?').toUpperCase();
                 const recordLabel = record.statusLabel || ({P:'Présent',A:'Absent',R:'En retard'}[recordStatus] || 'Non renseigné');
-                return '<article class="item" style="display:block"><div class="row sb wrap"><strong class="t">' + esc(record.course || 'Cours') + '</strong><span class="chip">' + esc(recordLabel) + '</span></div><div class="m" style="margin-top:5px">Enseignant : <strong>' + esc(record.teacherName || 'Non renseigné') + '</strong></div><div class="m">N° du professeur : <strong>' + esc(record.teacherCode || 'Non renseigné') + '</strong></div>' + (record.slot ? '<div class="m">Séance : ' + esc(record.slot) + '</div>' : '') + '</article>';
+                return '<article class="item" style="display:block"><div class="row sb wrap"><strong class="t">' + esc(record.course || 'Cours') + '</strong><span class="chip">' + esc(recordLabel) + '</span></div><div class="m" style="margin-top:5px">Enseignant : <strong>' + esc(record.teacherName || 'Non renseigné') + '</strong></div><div class="m">Téléphone du professeur : <strong>' + esc(record.teacherPhone || 'Non renseigné') + '</strong></div>' + (record.slot ? '<div class="m">Séance : ' + esc(record.slot) + '</div>' : '') + '</article>';
             }).join('') + '</div>';
         }
         out += '</div>';
@@ -802,7 +802,7 @@ function courseSheet(i) {
     const evs = (c.evaluations || []).slice().sort((a, b) => String(b.date).localeCompare(String(a.date)));
     const html = '<table class="t"><thead><tr><th>Période</th><th>Points</th><th>Maximum</th></tr></thead><tbody>' + row + '</tbody></table>' +
         '<p class="sub" style="margin:12px 0"><strong>Pour réussir.</strong> ' + esc(passAdvice(c)) + '</p>' +
-        (evs.length ? '<h4 style="margin:14px 0 4px">Évaluations</h4><div class="list">' + evs.map(e => '<div class="item" style="display:block"><div class="row sb"><span class="t">' + esc(e.title) + '</span><strong class="num">' + (num(e.obtained) === null ? '—' : fmt(e.obtained)) + ' / ' + fmt(e.max) + '</strong></div><div class="m">' + esc(fdate(e.date)) + (e.period ? ' · ' + esc(LABELS[e.period] || e.period) : '') + '</div><div class="m">Professeur : <strong>' + esc(e.teacherName || 'Non renseigné') + '</strong></div><div class="m">N° du professeur : <strong>' + esc(e.teacherCode || 'Non renseigné') + '</strong></div>' + (e.content ? '<div class="m" style="margin-top:4px;color:var(--text)">' + esc(e.content) + '</div>' : '') + '</div>').join('') + '</div>' : '');
+        (evs.length ? '<h4 style="margin:14px 0 4px">Évaluations</h4><div class="list">' + evs.map(e => '<div class="item" style="display:block"><div class="row sb"><span class="t">' + esc(e.title) + '</span><strong class="num">' + (num(e.obtained) === null ? '—' : fmt(e.obtained)) + ' / ' + fmt(e.max) + '</strong></div><div class="m">' + esc(fdate(e.date)) + (e.period ? ' · ' + esc(LABELS[e.period] || e.period) : '') + '</div><div class="m">Professeur : <strong>' + esc(e.teacherName || 'Non renseigné') + '</strong></div><div class="m">Téléphone du professeur : <strong>' + esc(e.teacherPhone || 'Non renseigné') + '</strong></div>' + (e.content ? '<div class="m" style="margin-top:4px;color:var(--text)">' + esc(e.content) + '</div>' : '') + '</div>').join('') + '</div>' : '');
     ui.sheet(c.subCategory ? c.name + ' — ' + c.subCategory : c.name, html);
 }
 
@@ -845,6 +845,19 @@ function viewMessages() {
     return out;
 }
 
+function viewLlink() {
+    const kid = activeKid();
+    let out = demoBanner() + offlineBanner() + kidBar();
+    out += '<section class="card llink-workspace" data-llink-app="suivi" style="display:flex;flex-direction:column;gap:10px;min-height:62vh;">' +
+        '<div class="row sb wrap"><div><h2>Llink · Assistant</h2><p class="sub">Aide liée au dossier de l’enfant sélectionné.</p></div><span class="chip">' + esc(kid ? (kid.name || kid.code) : 'Aucun enfant') + '</span></div>' +
+        '<div class="row wrap" style="gap:8px"><select data-llink-sessions aria-label="Conversations Llink" style="flex:1;min-width:150px"></select><button class="btn sm" type="button" data-llink-new>Nouvelle</button><button class="btn sm ghost" type="button" data-llink-delete>Supprimer</button></div>' +
+        '<div data-llink-messages aria-live="polite" style="display:flex;flex-direction:column;gap:9px;min-height:34vh;max-height:52vh;overflow:auto;padding:10px;border:1px solid var(--border);border-radius:14px;background:var(--surface-2)"></div>' +
+        '<form data-llink-form style="display:flex;gap:8px;align-items:flex-end"><textarea data-llink-input rows="2" maxlength="5000" placeholder="Écrivez votre question…" required style="flex:1;min-width:0;resize:vertical;border:1px solid var(--border);border-radius:12px;background:var(--surface);color:var(--text);padding:10px"></textarea><button class="btn" type="submit" data-llink-send>Envoyer</button></form>' +
+        '<p class="sub" data-llink-status role="status" aria-live="polite">Les conversations sont sauvegardées sur cet appareil et synchronisées avec le serveur.</p>' +
+        '</section>';
+    return out;
+}
+
 function viewSettings() {
     const themes = [['dark', 'Sombre'], ['light', 'Clair']];
     let out = demoBanner();
@@ -869,8 +882,9 @@ function updateMsgDot() {
 }
 function render() {
     const view = $('#view');
-    const fn = { home: viewHome, notes: viewNotes, attendance: viewAttendance, schedule: viewSchedule, mixages: viewMixages, fees: viewFees, messages: viewMessages, settings: viewSettings }[V.tab] || viewHome;
+    const fn = { home: viewHome, notes: viewNotes, attendance: viewAttendance, schedule: viewSchedule, mixages: viewMixages, fees: viewFees, messages: viewMessages, llink: viewLlink, settings: viewSettings }[V.tab] || viewHome;
     view.innerHTML = fn();
+    if (V.tab === 'llink' && window.ClassInkLlink) window.ClassInkLlink.mount(view.querySelector('[data-llink-app="suivi"]'));
     document.querySelectorAll('#dock button').forEach(b => b.classList.toggle('on', b.dataset.go === V.tab));
     const k = activeKid();
     $('#subtitle').textContent = k ? (k.name || k.code).split(' ')[0] + ' · ' + (k.className || 'Espace parents') : 'Espace parents';
@@ -1192,132 +1206,18 @@ window.addEventListener('pageshow', event => {
 </script>
 
 
-<style id="llink-assist-widget-style">
-#llink-assist-root{position:fixed;left:18px;bottom:calc(84px + env(safe-area-inset-bottom));z-index:99980;font:13px/1.45 Inter,system-ui,sans-serif;color:#edf2fb}
-#llink-assist-toggle{border:1px solid #5379cb;background:#172b4b;color:#fff;border-radius:24px;padding:11px 16px;font-weight:750;box-shadow:0 8px 25px #0003;cursor:pointer}
-#llink-assist-toggle:hover{background:#203b64}
-#llink-assist-panel{position:absolute;left:0;bottom:58px;width:min(370px,calc(100vw - 36px));height:min(520px,calc(100vh - 115px));background:#101a2b;border:1px solid #304361;border-radius:16px;box-shadow:0 18px 55px #0007;display:flex;flex-direction:column;overflow:hidden}
-#llink-assist-panel[hidden]{display:none}
-#llink-assist-head{padding:13px 15px;background:#172842;border-bottom:1px solid #304361;display:flex;align-items:center;justify-content:space-between;gap:10px}
-#llink-assist-head strong{display:block;font-size:13px}#llink-assist-head small{display:block;color:#aab8ce;font-size:10px;margin-top:2px}
-#llink-assist-close{border:0;background:transparent;color:#cbd5e1;font-size:20px;padding:2px 7px;cursor:pointer}
-#llink-assist-messages{flex:1;overflow:auto;padding:12px;display:flex;flex-direction:column;gap:9px}
-.llink-assist-message{max-width:92%;padding:9px 11px;border-radius:12px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}
-.llink-assist-message.assistant{align-self:flex-start;background:#1c2a40;color:#edf2fb;border:1px solid #2c405d}
-.llink-assist-message.user{align-self:flex-end;background:#315ca0;color:#fff}
-#llink-assist-foot{border-top:1px solid #304361;padding:10px;background:#111d30}
-#llink-assist-warning{font-size:10px;line-height:1.4;color:#aab8ce;margin:0 0 8px}
-#llink-assist-form{display:flex;gap:7px;align-items:flex-end}
-#llink-assist-input{min-width:0;flex:1;min-height:42px;max-height:100px;resize:vertical;background:#0b1423;color:#edf2fb;border:1px solid #344862;border-radius:10px;padding:9px;font:12px/1.4 inherit}
-#llink-assist-send{border:0;border-radius:10px;padding:10px 12px;background:#477fe5;color:#fff;font-weight:750;cursor:pointer}
-#llink-assist-send:disabled,#llink-assist-input:disabled{opacity:.5;cursor:wait}
-@media(max-width:600px){#llink-assist-root{left:12px;bottom:12px}#llink-assist-panel{width:calc(100vw - 24px);height:min(68vh,560px)}}
-
-/* Contrastes Llink adaptés au thème de l'application */
-[data-theme="light"] #llink-assist-panel{background:var(--surface);color:var(--text);border-color:var(--border)}
-[data-theme="light"] #llink-assist-head,[data-theme="light"] #llink-assist-foot{background:var(--surface-2);border-color:var(--border)}
-[data-theme="light"] #llink-assist-head small,[data-theme="light"] #llink-assist-warning{color:var(--muted)}
-[data-theme="light"] .llink-assist-message.assistant{background:var(--surface-2);color:var(--text);border-color:var(--border)}
-[data-theme="light"] .llink-assist-message.user{background:#dce9ff;color:#17345f}
-[data-theme="light"] #llink-assist-input{background:var(--surface);color:var(--text);border-color:var(--border);color-scheme:light}
-[data-theme="light"] #llink-assist-toggle{background:var(--surface);color:var(--text);border-color:var(--border)}
-[data-theme="light"] #llink-assist-send{background:var(--accent);color:#fff}
-[data-theme="dark"] #llink-assist-input{color-scheme:dark}
-
-
-[data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]),[data-theme="dark"] select,[data-theme="dark"] textarea{color-scheme:dark}
-[data-theme="light"] input:not([type="checkbox"]):not([type="radio"]),[data-theme="light"] select,[data-theme="light"] textarea{color-scheme:light}
-[data-theme="dark"] input::placeholder,[data-theme="dark"] textarea::placeholder{color:var(--muted);opacity:1}
-
-</style>
-<div id="llink-assist-root" data-app="suivi">
- <button type="button" id="llink-assist-toggle" aria-expanded="false" aria-controls="llink-assist-panel">✦ Demander à Llink</button>
- <section id="llink-assist-panel" hidden aria-label="Llink · Aide aux parents">
-  <header id="llink-assist-head"><div><strong>Llink · Aide aux parents</strong><small>VELORA · Réponse en ligne</small></div><button type="button" id="llink-assist-close" aria-label="Fermer">×</button></header>
-  <div id="llink-assist-messages" aria-live="polite"><div class="llink-assist-message assistant">Bonjour ! Je peux expliquer les résultats autorisés, les présences de l’enfant sélectionné et les communiqués publiés par son école.</div></div>
-  <div id="llink-assist-foot">
-   <p id="llink-assist-warning">Llink consulte uniquement le dossier de l’enfant actuellement sélectionné. Ne partagez aucun mot de passe ni code parent dans le message.</p>
-   <form id="llink-assist-form"><textarea id="llink-assist-input" rows="2" maxlength="5000" placeholder="Écrivez votre question…" required></textarea><button id="llink-assist-send" type="submit">Envoyer</button></form>
-  </div>
- </section>
-</div>
-<script id="llink-assist-widget">
-(() => {
- 'use strict';
- const root=document.getElementById('llink-assist-root');
- if(!root||root.dataset.ready==='1')return;
- root.dataset.ready='1';
- const APP=root.dataset.app,API='https://class-net-p.onrender.com';
- const toggle=document.getElementById('llink-assist-toggle');
- const panel=document.getElementById('llink-assist-panel');
- const close=document.getElementById('llink-assist-close');
- const form=document.getElementById('llink-assist-form');
- const input=document.getElementById('llink-assist-input');
- const send=document.getElementById('llink-assist-send');
- const messages=document.getElementById('llink-assist-messages');
- const history=[];
- let busy=false;
- const addMessage=(role,text)=>{
-  const el=document.createElement('div');
-  el.className='llink-assist-message '+role;
-  el.textContent=text||'';
-  messages.appendChild(el);
-  messages.scrollTop=messages.scrollHeight;
-  return el;
- };
- const setOpen=value=>{
-  panel.hidden=!value;
-  toggle.setAttribute('aria-expanded',String(value));
-  if(value)input.focus();
- };
- toggle.addEventListener('click',()=>setOpen(panel.hidden));
- close.addEventListener('click',()=>setOpen(false));
- const sessionToken=()=>{
-  if(APP==='manager')return window.__CLASSINK_MANAGER_TOKEN__||'';
-  if(APP==='crypt')return window.__CRYPT_ADMIN_TOKEN__||'';
-  return '';
- };
- form.addEventListener('submit',async event=>{
-  event.preventDefault();
-  const message=input.value.trim();
-  if(!message||busy)return;
-  if(APP==='manager'&&!sessionToken()){addMessage('assistant','Connectez-vous à ClassInk Manager pour utiliser Llink.');return;}
-  if(APP==='crypt'&&!sessionToken()){addMessage('assistant','Connectez-vous au centre de contrôle pour utiliser Llink.');return;}
-  const studentContext = APP==='suivi' && typeof window.__CLASSINK_SUIVI_LLINK_CONTEXT__==='function'
-   ? window.__CLASSINK_SUIVI_LLINK_CONTEXT__() : null;
-  if(APP==='suivi'&&!studentContext){addMessage('assistant','Liez ou sélectionnez d’abord un enfant dans ClassInk Suivi.');return;}
-  addMessage('user',message);
-  input.value='';
-  busy=true;send.disabled=true;input.disabled=true;send.textContent='…';
-  const answer=addMessage('assistant','Llink réfléchit…');
-  try{
-   const headers=new Headers({'Content-Type':'application/json','X-CRYPT-App':APP,'Accept':'text/event-stream'});
-   const token=sessionToken();if(token)headers.set('Authorization','Bearer '+token);
-   const response=await fetch(API+'/api/llink/assist',{
-    method:'POST',headers,cache:'no-store',credentials:'omit',referrerPolicy:'no-referrer',
-    body:JSON.stringify({message,history:history.slice(-8),source:APP,...(studentContext?{student:studentContext}:{})})
-   });
-   if(!response.ok){
-    const raw=await response.text();
-    let detail=raw;try{const parsed=JSON.parse(raw);detail=parsed.detail||parsed.message||raw;}catch(_){}
-    throw new Error(detail||('Erreur HTTP '+response.status));
-   }
-   answer.textContent='';
-   if(response.body&&response.body.getReader){
-    const reader=response.body.getReader(),decoder=new TextDecoder();
-    while(true){const part=await reader.read();if(part.done)break;answer.textContent+=decoder.decode(part.value,{stream:true});messages.scrollTop=messages.scrollHeight;}
-    answer.textContent+=decoder.decode();
-   }else answer.textContent=await response.text();
-   if(!answer.textContent.trim())answer.textContent='Llink n’a pas retourné de réponse. Réessayez.';
-   history.push({role:'user',text:message},{role:'assistant',text:answer.textContent});
-   if(history.length>12)history.splice(0,history.length-12);
-  }catch(error){
-   answer.textContent='Llink est momentanément indisponible : '+(error.message||'erreur réseau');
-  }finally{
-   busy=false;send.disabled=false;input.disabled=false;send.textContent='Envoyer';input.focus();
-  }
- });
-})();
+<script>
+window.CLASSINK_LLINK_CONFIG = {
+    apiBase: 'https://class-net-p.onrender.com',
+    student: () => typeof window.__CLASSINK_SUIVI_LLINK_CONTEXT__ === 'function'
+        ? window.__CLASSINK_SUIVI_LLINK_CONTEXT__() : null,
+    owner: () => {
+        const student = typeof window.__CLASSINK_SUIVI_LLINK_CONTEXT__ === 'function'
+            ? window.__CLASSINK_SUIVI_LLINK_CONTEXT__() : null;
+        return student ? student.school_id + ':' + student.student_code : 'suivi-unlinked';
+    }
+};
 </script>
+<script src="../assets/classink-llink-sessions.js"></script>
 </body>
 </html>
