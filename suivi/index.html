@@ -137,14 +137,39 @@ table.t.schedule-grid { min-width:760px; table-layout:fixed; background:var(--su
 .fab .x { opacity: 0; transform: rotate(-90deg) scale(.6); }
 .fab.open .dots { opacity: 0; transform: rotate(90deg) scale(.6); }
 .fab.open .x { opacity: 1; transform: none; }
-.dock { position: fixed; z-index: 1100; left: 12px; right: 88px; bottom: calc(17px + env(safe-area-inset-bottom)); width: auto; max-width: 720px; margin: 0 auto; display: flex; justify-content: flex-start; align-items: center; gap: 4px; padding: 7px; border-radius: 20px; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow); overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; opacity: 0; visibility: hidden; transform: translateY(14px) scale(.97); transform-origin: bottom right; transition: opacity .2s, transform .25s, visibility .25s; }
-.dock::-webkit-scrollbar { display: none; }
-.dock.open { opacity: 1; visibility: visible; transform: none; }
-.dock button { position: relative; flex: 0 0 84px; min-width: 84px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 9px 4px; border-radius: 14px; font-size: .68rem; font-weight: 600; color: var(--muted); white-space: nowrap; }
+.dock {
+    position: fixed; z-index: 1100; left: 12px; right: 88px;
+    bottom: calc(17px + env(safe-area-inset-bottom)); width: auto;
+    max-width: 840px; margin: 0 auto; display: flex;
+    justify-content: space-between; align-items: stretch; gap: 4px;
+    padding: 7px; border-radius: 20px; background: var(--surface);
+    border: 1px solid var(--border); box-shadow: var(--shadow);
+    overflow: hidden; opacity: 0; visibility: hidden;
+    transform: translateY(14px) scale(.97); transform-origin: bottom right;
+    transition: opacity .2s, transform .25s, visibility .25s;
+}
+.dock.open { opacity: 1; visibility: visible; transform: translateY(0) scale(1); }
+.dock button {
+    position: relative; flex: 1 1 0; min-width: 0; min-height: 58px;
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 3px; padding: 8px 2px;
+    border-radius: 14px; font-size: .68rem; font-weight: 600;
+    color: var(--muted); white-space: nowrap;
+}
 .dock button.on { color: var(--accent); background: rgba(124,92,255,.12); }
-@media (min-width: 640px) {
-    .dock { right: 88px; bottom: calc(17px + env(safe-area-inset-bottom)); }
-    .dock button { flex-basis: 92px; min-width: 92px; font-size: .72rem; }
+@media (max-width: 639px) {
+    .dock {
+        left: 12px; right: 12px; bottom: calc(84px + env(safe-area-inset-bottom));
+        width: auto; max-width: none; margin: 0; display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px;
+        transform: translateY(14px) scale(.97); transform-origin: bottom center;
+    }
+    .dock.open { transform: translateY(0) scale(1); }
+    .dock button {
+        width: 100%; min-width: 0; min-height: 58px; padding: 7px 2px;
+        font-size: .66rem; white-space: normal; line-height: 1.15;
+    }
+    .dock button .i { width: 21px; height: 21px; }
 }
 
 /* ---------- Fenêtres de message ---------- */
@@ -849,6 +874,7 @@ function viewSettings() {
     const themes = [['dark', 'Sombre'], ['light', 'Clair']];
     let out = demoBanner();
     out += '<div class="card"><h3 style="margin-bottom:10px">Apparence</h3><div class="seg">' + themes.map(t => '<button class="' + (S.theme === t[0] ? 'on' : '') + '" data-act="theme" data-t="' + t[0] + '">' + t[1] + '</button>').join('') + '</div></div>';
+    out += '<div class="card"><h3>Aide / Réclamation</h3><p class="sub" style="margin:4px 0 12px">Une question sur ClassInk Suivi, un problème technique ou une réclamation ? Envoyez une demande à l’équipe CRYPT.</p><button class="btn sm ghost" type="button" data-act="support-toggle" aria-expanded="false" aria-controls="crypt-support-form">Contacter l’assistance</button><form id="crypt-support-form" hidden style="margin-top:14px;display:grid;gap:10px"><label class="sub" for="crypt-support-category">TYPE DE DEMANDE</label><select class="input" id="crypt-support-category" name="category"><option value="support">Demande d’aide</option><option value="bug">Signaler un problème technique</option><option value="complaint">Réclamation</option></select><label class="sub" for="crypt-support-subject">OBJET</label><input class="input" id="crypt-support-subject" name="subject" type="text" maxlength="180" required placeholder="Résumez votre demande"><label class="sub" for="crypt-support-message">DESCRIPTION</label><textarea class="input" id="crypt-support-message" name="message" rows="4" minlength="10" maxlength="5000" required placeholder="Décrivez le problème ou votre question (10 caractères minimum)."></textarea><label class="sub" for="crypt-support-contact">MOYEN DE CONTACT (FACULTATIF)</label><input class="input" id="crypt-support-contact" name="contact" type="text" maxlength="180" placeholder="Téléphone ou adresse e-mail"><div class="row wrap"><button class="btn sm" type="submit" id="crypt-support-submit">Envoyer la demande</button><button class="btn sm ghost" type="button" data-act="support-close">Annuler</button></div><p class="sub" id="crypt-support-status" role="status" aria-live="polite"></p></form></div>';
     out += '<div class="card"><h3>Code PIN</h3><p class="sub" style="margin:4px 0 12px">' + (S.pin ? 'Le PIN protège l’affichage du suivi sur cet appareil. Il se verrouille aussi après 5 minutes sans activité.' : 'Ajoutez un PIN pour masquer le suivi si quelqu’un d’autre utilise votre téléphone.') + '</p><div class="row wrap"><button class="btn sm" data-act="pin-set">' + (S.pin ? 'Changer le PIN' : 'Créer un PIN') + '</button>' + (S.pin ? '<button class="btn sm ghost" data-act="lock-now">Verrouiller maintenant</button><button class="btn sm ghost" data-act="pin-off">Retirer</button>' : '') + '</div><p class="sub" style="margin-top:10px;font-size:.78rem">Le PIN est un simple verrou d’écran : il ne remplace pas la sécurité de votre téléphone.</p></div>';
     const list = kids();
     out += '<div class="card"><h3 style="margin-bottom:4px">Enfants liés</h3>' + (list.length ? '<div class="list">' + list.map(k => '<div class="item"><div class="grow"><div class="t">' + esc(k.name || k.code) + '</div><div class="m">' + esc(k.schoolName || '') + (k.className ? ' · ' + esc(k.className) : '') + '</div></div><button class="icon-btn" data-act="unlink" data-key="' + esc(k.key) + '" aria-label="Retirer ' + esc(k.name || k.code) + '">' + icon(IC.trash) + '</button></div>').join('') + '</div>' : '<p class="sub">Aucun enfant lié.</p>') + '<div style="margin-top:12px"><button class="btn sm ghost" data-act="addkid">' + icon(IC.plus, ' style="width:16px;height:16px"') + ' Lier un enfant</button></div></div>';
@@ -1008,8 +1034,39 @@ async function setPin() {
     S.pin = { salt, hash: await sha(salt + first) }; saveState(); armIdle(); render(); toast('PIN enregistré');
 }
 async function removePin() {
-    if (!(await ui.confirm('Retirer le code PIN ? Le suivi ne sera plus protégé par un code.', 'Retirer le PIN', { ok: 'Retirer' }))) return;
-    S.pin = null; saveState(); clearTimeout(idleTimer); render(); toast('PIN retiré');
+    if (!S.pin || !S.pin.salt || !S.pin.hash) {
+        await ui.alert('Aucun PIN valide n’est enregistré sur cet appareil.');
+        return;
+    }
+    const wait = lockUntil - Date.now();
+    if (wait > 0) {
+        await ui.alert('Trop de tentatives. Réessayez dans ' + Math.ceil(wait / 1000) + ' seconde(s).');
+        return;
+    }
+    const current = await ui.prompt('Saisissez votre PIN actuel pour désactiver le verrouillage.', {
+        title: 'Vérifier le PIN actuel', type: 'password', inputmode: 'numeric',
+        maxLength: 6, placeholder: '••••'
+    });
+    if (current === null) return;
+    const valid = (await sha(S.pin.salt + current)) === S.pin.hash;
+    if (!valid) {
+        lockFails++;
+        if (lockFails >= 5) {
+            lockUntil = Date.now() + 30000;
+            lockFails = 0;
+            await ui.alert('PIN incorrect. Trop de tentatives : réessayez dans 30 secondes.');
+        } else {
+            await ui.alert('PIN incorrect. Le verrouillage est conservé.');
+        }
+        return;
+    }
+    lockFails = 0;
+    if (!(await ui.confirm('PIN vérifié. Retirer le code PIN ? Le suivi ne sera plus protégé par un code.', 'Retirer le PIN', { ok: 'Retirer' }))) return;
+    S.pin = null;
+    saveState();
+    clearTimeout(idleTimer);
+    render();
+    toast('PIN retiré');
 }
 let lockFails = 0, lockUntil = 0, idleTimer = null;
 function showLock() {
@@ -1066,6 +1123,22 @@ document.addEventListener('click', async e => {
             saveState(); applyTheme(); render(); break;
         case 'pin-set': setPin(); break;
         case 'pin-off': removePin(); break;
+        case 'support-toggle': {
+            const form = $('#crypt-support-form');
+            if (form) {
+                form.hidden = !form.hidden;
+                b.setAttribute('aria-expanded', String(!form.hidden));
+                if (!form.hidden) { const input = $('#crypt-support-subject'); if (input) input.focus(); }
+            }
+            break;
+        }
+        case 'support-close': {
+            const form = $('#crypt-support-form');
+            if (form) form.hidden = true;
+            const toggle = document.querySelector('[data-act="support-toggle"]');
+            if (toggle) toggle.setAttribute('aria-expanded', 'false');
+            break;
+        }
         case 'lock-now': showLock(); break;
         case 'unlink': unlinkKid(b.dataset.key); break;
         case 'erase': eraseAll(); break;
@@ -1153,40 +1226,44 @@ window.addEventListener('pageshow', event => {
   window.addEventListener('unhandledrejection', e => send('client_error', window.__CRYPT_FEATURE__, String(e.reason || 'Erreur asynchrone')));
   document.addEventListener('click', e => {
     const el = e.target && e.target.closest ? e.target.closest('button,[role="button"]') : null;
-    if (!el || el.disabled || el.id === 'cryptComplaintButton') return;
+    if (!el || el.disabled) return;
     const text = String(el.getAttribute('data-feature') || el.getAttribute('data-act') || el.getAttribute('data-go') || el.getAttribute('aria-label') || el.id || 'action').replace(/\s+/g,' ').trim().slice(0,120);
     if (!text) return;
     window.__CRYPT_FEATURE__ = text;
     send('feature', text, 'Fonction activée par l’utilisateur');
   }, true);
-  document.addEventListener('DOMContentLoaded', () => {
-    if (document.getElementById('cryptComplaintButton')) return;
-    const button = document.createElement('button');
-    button.id = 'cryptComplaintButton';
-    button.type = 'button';
-    button.innerHTML = '<span aria-hidden="true" style="font-size:23px;line-height:1">?</span>';
-    button.setAttribute('aria-label','Aide / Réclamation à CRYPT');
-    button.title = 'Aide / Réclamation';
-    button.style.cssText = 'position:fixed;right:18px;bottom:calc(84px + env(safe-area-inset-bottom));z-index:1103;width:56px;height:56px;display:flex;align-items:center;justify-content:center;border:0;border-radius:50%;padding:0;background:#244d83;color:white;font:700 22px system-ui;box-shadow:0 6px 24px #0004;cursor:pointer';
-    button.addEventListener('click', async () => {
-      const subject = window.prompt('Sujet de votre réclamation ou demande :');
-      if (!subject || !subject.trim()) return;
-      const message = window.prompt('Décrivez le problème rencontré (10 caractères minimum) :');
-      if (!message || message.trim().length < 10) return window.alert('Le message est trop court.');
-      const contact = window.prompt('Téléphone ou e-mail pour vous recontacter (facultatif) :') || '';
-      try {
-        const headers = new Headers({'Content-Type':'application/json','X-CRYPT-App':APP,'X-CRYPT-Device':SESSION});
-        if (window.__CRYPT_SCHOOL__) headers.set('X-CRYPT-School',String(window.__CRYPT_SCHOOL__));
-        const response = await originalFetch(API + '/api/telemetry/complaints', {
-          method:'POST',headers,cache:'no-store',credentials:'omit',
-          body:JSON.stringify({app:APP,device_id:SESSION,subject:subject.trim(),message:message.trim(),contact:contact.trim(),category:'support'})
-        });
-        const result = await response.json().catch(()=>({}));
-        if (!response.ok || !result.status) throw new Error(result.detail || result.message || 'Envoi impossible.');
-        window.alert('Votre demande a été envoyée à CRYPT. Référence : ' + result.ticket_id);
-      } catch (error) { window.alert('La réclamation n’a pas été transmise : ' + error.message); }
-    });
-    document.body.appendChild(button);
+  document.addEventListener('submit', async event => {
+    const form = event.target;
+    if (!form || form.id !== 'crypt-support-form') return;
+    event.preventDefault();
+    const subject = String(form.elements.subject.value || '').trim();
+    const message = String(form.elements.message.value || '').trim();
+    const contact = String(form.elements.contact.value || '').trim();
+    const category = String(form.elements.category.value || 'support');
+    const status = document.getElementById('crypt-support-status');
+    const submit = document.getElementById('crypt-support-submit');
+    if (!subject || message.length < 10) {
+      if (status) status.textContent = 'Ajoutez un objet et une description d’au moins 10 caractères.';
+      return;
+    }
+    if (submit) { submit.disabled = true; submit.textContent = 'Envoi en cours…'; }
+    if (status) status.textContent = '';
+    try {
+      const headers = new Headers({'Content-Type':'application/json','X-CRYPT-App':APP,'X-CRYPT-Device':SESSION});
+      if (window.__CRYPT_SCHOOL__) headers.set('X-CRYPT-School', String(window.__CRYPT_SCHOOL__).slice(0,100));
+      const response = await originalFetch(API + '/api/telemetry/complaints', {
+        method:'POST', headers, cache:'no-store', credentials:'omit',
+        body:JSON.stringify({app:APP,device_id:SESSION,subject,message,contact,category})
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.status) throw new Error(result.detail || result.message || 'Envoi impossible.');
+      form.reset();
+      if (status) status.textContent = 'Votre demande a été envoyée à CRYPT. Référence : ' + result.ticket_id;
+    } catch (error) {
+      if (status) status.textContent = 'La demande n’a pas été transmise : ' + (error.message || 'Erreur inconnue.');
+    } finally {
+      if (submit) { submit.disabled = false; submit.textContent = 'Envoyer la demande'; }
+    }
   });
 })();
 </script>
