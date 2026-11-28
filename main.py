@@ -19,6 +19,7 @@ from sqlalchemy.orm import sessionmaker, Session, relationship
 from sqlalchemy.exc import IntegrityError
 import random
 import re
+import math
 from classnet_common import (
     PERIODS, CONDUCT_KINDS, CONDUCT_MAX_LEN, SIGNER_ROLES, ACCESS_AUDIENCES, MATCH_METHODS, sql_in,
     validate_conduct_value, normalize_name, name_tokens_key, resolve_grade_access,
