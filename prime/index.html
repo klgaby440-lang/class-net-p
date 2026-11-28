@@ -6001,7 +6001,7 @@ async function bpPushClassBulletin(cls) {
                 appState.tools.mixage.generatedSchedules = [result];
                 saveState();
                 bpRenderMixage();
-                showMixageResultsView();
+                await showMixageResultsView();
                 const savedToDatabase = !!result.session;
                 const publishedToParents = !!(result.session && result.session.published_to_suivi);
                 const confirmation = (savedToDatabase
@@ -6041,13 +6041,19 @@ async function bpPushClassBulletin(cls) {
             return seats.sort((a, b) =>
                 a.sourceRow - b.sourceRow ||
                 a.sourceBench - b.sourceBench ||
-                (a.sourceSide === 'left' ? -1 : 1)
+                (a.sourceSide === b.sourceSide ? 0 : (a.sourceSide === 'left' ? -1 : 1))
             );
         }
 
         function bpMixageSeats(result) {
             return (result && Array.isArray(result.seating_plans) ? result.seating_plans : [])
                 .flatMap(room => bpMixageRoomSeats(room));
+        }
+
+        function bpClassLabel(classId) {
+            const classItem = (Array.isArray(appState.classes) ? appState.classes : [])
+                .find(item => String(item.id) === String(classId));
+            return classItem && classItem.name ? classItem.name : String(classId || 'Classe');
         }
 
         // Regroupe visuellement deux affectations successives sur un même banc,
