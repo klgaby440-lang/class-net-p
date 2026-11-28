@@ -73,7 +73,8 @@ def _b64url_decode(value: str) -> bytes:
 
 def _auth_secret() -> str:
     # La valeur est fournie à l'installation, jamais incluse dans le dépôt.
-    return os.getenv("INTRANET_AUTH_SECRET") or os.getenv("AUTH_SECRET") or ""
+    # Clé dédiée au relais : ne jamais réutiliser AUTH_SECRET, qui signe les sessions cloud.
+    return os.getenv("INTRANET_AUTH_SECRET", "").strip()
 
 
 def _claims_from_token(authorization: str | None) -> dict[str, Any]:
@@ -98,6 +99,8 @@ def _claims_from_token(authorization: str | None) -> dict[str, Any]:
         claims = json.loads(_b64url_decode(payload_part).decode("utf-8"))
         if not isinstance(claims, dict) or int(claims.get("exp", 0)) < int(time.time()):
             raise ValueError("expired")
+        if claims.get("iss") != "classink" or claims.get("aud") != "classink-intranet-relay":
+            raise ValueError("wrong token audience")
         return claims
     except Exception as exc:
         raise HTTPException(status_code=401, detail="Session invalide ou expirée. Reconnectez-vous.") from exc
