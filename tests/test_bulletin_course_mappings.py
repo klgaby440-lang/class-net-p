@@ -25,6 +25,8 @@ def _school_with_class_and_courses():
             adresse_physique="Bukavu",
             email="bulletin-" + suffix + "@example.test",
             pass_word=main.hash_password(password),
+            licence_date="2026-12-31",
+            is_locked=False,
         )
         classe = main.ClasseInformation(
             id=class_id,
