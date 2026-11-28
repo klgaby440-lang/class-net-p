@@ -5547,23 +5547,60 @@ async function bpPushClassBulletin(cls) {
         // 1. Récupération des moyennes (Intranet Polling)
         // Même adresse que ClassInk (CONFIG.PRIMARY_URL). Le serveur Intranet écoute sur le port 5001.
         const INTRANET_URL = window.PRIMEINK_INTRANET_URL || "http://serveur-class-net-prime.local:5001";
-        let lastIntranetSnapshot = "";
+        let intranetPollInProgress = false;
         async function fetchIntranetAverages() {
+            if (intranetPollInProgress) return;
+            const headers = cloudAuthHeaders();
+            if (!headers.Authorization) return;
+            intranetPollInProgress = true;
             try {
-                // Lecture NON destructive : /api/intranet/fetch marque les mises à jour comme lues, on ne l'utilise pas ici
-                let response = await window.primeInkFetchWithTimeout(`${INTRANET_URL}/api/primenet/sync`, { headers: cloudAuthHeaders() }, 4000);
-                if (!response.ok) return; // 404 = aucun enseignant n'a encore envoyé de données
-                let result = await response.json();
-                let snapshot = JSON.stringify(result.data || {});
-                if (snapshot === lastIntranetSnapshot) return; // rien de nouveau
-                lastIntranetSnapshot = snapshot;
-                applyMergedPrimenetData(result.data);
-                saveState();
+                const response = await window.primeInkFetchWithTimeout(
+                    INTRANET_URL + "/api/primenet/sync",
+                    { headers, cache: 'no-store' },
+                    5000
+                );
+                if (!response.ok) return;
+                const result = await response.json();
+                const submissions = result && result.data && Array.isArray(result.data.submissions)
+                    ? result.data.submissions : [];
+                if (!submissions.length) return;
+
+                const receiptIds = [];
+                let receivedCount = 0;
+                submissions.forEach(submission => {
+                    if (!submission || !submission.data || typeof submission.data !== 'object') return;
+                    applyMergedPrimenetData(submission.data);
+                    if (submission.receipt_id) receiptIds.push(String(submission.receipt_id));
+                    receivedCount += 1;
+                });
+                if (!receivedCount || !receiptIds.length) return;
+
+                // Le paquet ne sera supprimé du relais qu'après confirmation du stockage local PrimeInk.
+                if (saveState() === false) return;
+                if (typeof renderClassesTable === 'function') renderClassesTable();
+                if (typeof window.renderMixClassChoices === 'function') window.renderMixClassChoices();
                 if (typeof renderOfficialBulletin === "function" && activeStudentId) {
                     renderOfficialBulletin(activeStudentId);
                 }
+
+                try {
+                    await window.primeInkFetchWithTimeout(
+                        INTRANET_URL + "/api/primenet/ack",
+                        {
+                            method: 'POST',
+                            headers,
+                            cache: 'no-store',
+                            body: JSON.stringify({ receipt_ids: receiptIds })
+                        },
+                        5000
+                    );
+                } catch (_) {
+                    // Sans accusé, le même paquet sera relu. L'application locale est idempotente.
+                }
             } catch (error) {
-                // serveur local introuvable pour l'instant : nouvel essai au prochain cycle
+                // Passerelle absente ou réseau indisponible : nouvel essai au prochain cycle.
+            } finally {
+                intranetPollInProgress = false;
             }
         }
 
@@ -8635,14 +8672,30 @@ const classDetailSection = document.getElementById('section-class-detail');
                 });
             }
 
-            // Conduite : seules les valeurs vérifiées côté serveur (envoyées par le titulaire de la classe) arrivent ici
+            // Conduite reçue du titulaire autorisé. Les identifiants enseignants sont rapprochés
+            // des élèves PrimeInk grâce au nom transmis avec le paquet, sans changer les identifiants officiels.
             if (mergedData.conduct && typeof mergedData.conduct === 'object') {
                 if (!appState.behaviour) appState.behaviour = {};
-                Object.keys(mergedData.conduct).forEach(studentId => {
-                    if (!appState.students.some(s => s.id === studentId)) return;
-                    const entry = appState.behaviour[studentId] = appState.behaviour[studentId] || { app: {}, cond: {} };
+                const aliasesByClass = mergedData.studentAliases || {};
+                Object.keys(mergedData.conduct).forEach(sourceStudentId => {
+                    let student = appState.students.find(s => String(s.id) === String(sourceStudentId));
+                    if (!student) {
+                        for (const className of Object.keys(aliasesByClass)) {
+                            const alias = aliasesByClass[className] && aliasesByClass[className][sourceStudentId];
+                            if (!alias) continue;
+                            const classItem = appState.classes.find(c => c.name === className);
+                            student = appState.students.find(s =>
+                                (!classItem || String(s.classId) === String(classItem.id)) &&
+                                [s.name, s.postname, s.prename].filter(Boolean).join(' ').trim().toLowerCase() === String(alias).trim().toLowerCase()
+                            );
+                            if (student) break;
+                        }
+                    }
+                    if (!student) return;
+                    const officialStudentId = String(student.id);
+                    const entry = appState.behaviour[officialStudentId] = appState.behaviour[officialStudentId] || { app: {}, cond: {} };
                     ['app', 'cond'].forEach(kind => {
-                        entry[kind] = Object.assign(entry[kind] || {}, (mergedData.conduct[studentId] || {})[kind] || {});
+                        entry[kind] = Object.assign(entry[kind] || {}, (mergedData.conduct[sourceStudentId] || {})[kind] || {});
                     });
                 });
             }
@@ -8663,10 +8716,19 @@ const classDetailSection = document.getElementById('section-class-detail');
                                 Object.keys(periods).forEach(periodKey => {
                                     const studentGrades = periods[periodKey];
                                     Object.keys(studentGrades).forEach(studentName => {
-                                        const stObj = String(studentName).startsWith('__id__')
-                                            ? appState.students.find(s => String(s.id) === String(studentName).slice(6))
-                                            : appState.students.find(s => `${s.name} ${s.postname}`.trim() === studentName.trim()
-                                                || `${s.name} ${s.postname} ${s.prename || ''}`.trim() === studentName.trim());
+                                        const isTeacherStudentId = String(studentName).startsWith('__id__');
+                                        const sourceStudentId = isTeacherStudentId ? String(studentName).slice(6) : '';
+                                        const sourceAlias = sourceStudentId && mergedData.studentAliases
+                                            && mergedData.studentAliases[className]
+                                            ? mergedData.studentAliases[className][sourceStudentId] : '';
+                                        const classStudent = appState.students.filter(s => String(s.classId) === String(clsObj.id));
+                                        const stObj = (isTeacherStudentId
+                                            ? classStudent.find(s => String(s.id) === sourceStudentId)
+                                            : null) || classStudent.find(s => {
+                                                const fullName = [s.name, s.postname, s.prename].filter(Boolean).join(' ').trim().toLowerCase();
+                                                const wantedName = String(sourceAlias || (isTeacherStudentId ? '' : studentName)).trim().toLowerCase();
+                                                return wantedName && fullName === wantedName;
+                                            });
                                         if (stObj) {
                                             const gradeKey = `${stObj.id}_${crsObj.id}`;
                                             if (!appState.grades[gradeKey]) appState.grades[gradeKey] = {};
@@ -8683,13 +8745,56 @@ const classDetailSection = document.getElementById('section-class-detail');
             if (!appState.tools) appState.tools = JSON.parse(JSON.stringify(defaultState.tools));
             if (!appState.tools.presences) appState.tools.presences = { students: [], teachers: [] };
             if (Array.isArray(mergedData.attendanceRecords)) {
-                appState.tools.presences.students = mergedData.attendanceRecords.map(row => ({
-                    id: row.id, date: row.date, classId: String(row.classId), className: row.className,
-                    courseId: String(row.courseId), course: row.courseName,
-                    studentId: String(row.studentId), studentName: row.studentName,
-                    status: row.status, slotKey: row.slotKey || '',
-                    teacherName: row.teacherName || '', teacherCode: row.teacherCode || ''
-                }));
+                const attendanceMap = new Map();
+                const attendanceKey = row => [
+                    row.date || '', row.classId || '', row.courseId || '',
+                    row.studentId || '', row.slotKey || ''
+                ].join('|');
+                (appState.tools.presences.students || []).forEach(row => {
+                    attendanceMap.set(attendanceKey(row), row);
+                });
+                mergedData.attendanceRecords.forEach(row => {
+                    if (!row || !row.date) return;
+                    const classItem = appState.classes.find(c =>
+                        String(c.id) === String(row.classId || '') || c.name === String(row.className || '')
+                    );
+                    const classStudents = classItem
+                        ? appState.students.filter(s => String(s.classId) === String(classItem.id))
+                        : appState.students;
+                    const aliases = mergedData.studentAliases || {};
+                    const sourceStudentId = String(row.studentId || '');
+                    const sourceAlias = (aliases[row.className] || {})[sourceStudentId] || row.studentName || '';
+                    const student = classStudents.find(s => String(s.id) === sourceStudentId)
+                        || classStudents.find(s =>
+                            [s.name, s.postname, s.prename].filter(Boolean).join(' ').trim().toLowerCase()
+                            === String(sourceAlias).trim().toLowerCase()
+                        );
+                    const course = (row.courseId
+                        ? appState.courses.find(c => String(c.id) === String(row.courseId)
+                            && (!classItem || String(c.classId) === String(classItem.id)))
+                        : null) || appState.courses.find(c =>
+                            c.name === String(row.courseName || row.course || '')
+                            && (!classItem || String(c.classId) === String(classItem.id))
+                        );
+                    const normalized = {
+                        id: String(row.id || [row.teacherCode, row.date, row.studentId, row.slotKey].join('_')),
+                        date: String(row.date || ''),
+                        classId: String(classItem ? classItem.id : row.classId || ''),
+                        className: classItem ? classItem.name : String(row.className || ''),
+                        courseId: String(course ? course.id : row.courseId || ''),
+                        course: course ? course.name : String(row.courseName || row.course || ''),
+                        studentId: String(student ? student.id : row.studentId || ''),
+                        studentName: student
+                            ? [student.name, student.postname, student.prename].filter(Boolean).join(' ')
+                            : String(row.studentName || sourceAlias || ''),
+                        status: String(row.status || ''),
+                        slotKey: String(row.slotKey || row.slot || ''),
+                        teacherName: String(row.teacherName || ''),
+                        teacherCode: String(row.teacherCode || '')
+                    };
+                    attendanceMap.set(attendanceKey(normalized), normalized);
+                });
+                appState.tools.presences.students = Array.from(attendanceMap.values());
             }
             if (Array.isArray(mergedData.teacherAttendance)) {
                 appState.tools.presences.teachers = mergedData.teacherAttendance.slice();
