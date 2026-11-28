@@ -1901,10 +1901,16 @@ body.theme-dark input::placeholder,body.theme-dark textarea::placeholder{color:v
 
             <!-- Interface qui prend en charge les presences des enseignants -->
             <div id="pres-sub-prof" class="hidden">
-                <div class="form-group" style="max-width: 300px; margin-bottom: 1rem;">
-                    <label>Date</label>
-                    <input type="date" id="presProfDate" class="form-control" onchange="loadPrimeInkTeacherAttendance()">
+                <div style="display:flex;align-items:flex-end;gap:.8rem;flex-wrap:wrap;margin-bottom:1rem;">
+                    <div class="form-group" style="max-width:300px;margin-bottom:0;">
+                        <label>Date</label>
+                        <input type="date" id="presProfDate" class="form-control" onchange="loadPrimeInkTeacherAttendance()">
+                    </div>
+                    <button type="button" id="saveAllTeacherAttendanceButton" class="btn-primary" onclick="saveAllPrimeInkTeacherAttendance()">
+                        Sauvegarder toutes les présences
+                    </button>
                 </div>
+                <p id="presProfBulkSaveStatus" role="status" aria-live="polite" style="margin:0 0 .8rem;color:var(--text-secondary);font-size:.9rem;"></p>
 
                 <div class="settings-card">
                     <table class="data-table">
@@ -5991,6 +5997,107 @@ async function bpPushClassBulletin(cls) {
                 alert(error.message || "Impossible d'enregistrer la présence.");
             } finally {
                 if (button) { button.disabled = false; button.textContent = "Sauvegarder"; }
+            }
+        };
+
+        // Enregistre en une seule action toutes les lignes renseignées pour la date active.
+        // Les lignes vierges sans fiche existante sont ignorées ; vider une fiche déjà enregistrée
+        // reste possible et efface donc ses heures côté serveur.
+        window.saveAllPrimeInkTeacherAttendance = async function() {
+            const dateValue = document.getElementById('presProfDate')?.value || '';
+            const headers = primeInkAuthHeaders();
+            const button = document.getElementById('saveAllTeacherAttendanceButton');
+            const status = document.getElementById('presProfBulkSaveStatus');
+            const setStatus = message => { if (status) status.textContent = message; };
+
+            if (!headers.Authorization) { setStatus("Connectez PrimeInk au compte de l'école."); return; }
+            if (!dateValue) { setStatus("Sélectionnez une date avant la sauvegarde."); return; }
+
+            const teachers = Array.isArray(__primeInkTeacherAttendanceRoster)
+                ? __primeInkTeacherAttendanceRoster
+                : (appState.teachers || []);
+            const records = appState.tools?.presences?.teachers || [];
+            const entries = [];
+            let skipped = 0;
+
+            teachers.forEach(teacher => {
+                const rawEmail = String(teacher.email || (String(teacher.uniqueId || '').includes('@') ? teacher.uniqueId : '')).trim();
+                const email = rawEmail.toLowerCase();
+                if (!email) { skipped++; return; }
+                const checkIn = document.getElementById('pres-prof-in-' + rawEmail)?.value || '';
+                const checkOut = document.getElementById('pres-prof-out-' + rawEmail)?.value || '';
+                const hasExistingRecord = records.some(row =>
+                    row.date === dateValue && String(row.teacherEmail || '').trim().toLowerCase() === email
+                );
+                if (!checkIn && !checkOut && !hasExistingRecord) { skipped++; return; }
+                entries.push({
+                    email,
+                    name: String(teacher.name || email),
+                    checkIn,
+                    checkOut
+                });
+            });
+
+            if (!entries.length) {
+                setStatus("Aucune présence renseignée à enregistrer pour cette date.");
+                return;
+            }
+
+            if (button) { button.disabled = true; button.textContent = "Enregistrement…"; }
+            setStatus("Enregistrement de " + entries.length + " présence(s)…");
+            let savedCount = 0;
+            const failures = [];
+
+            try {
+                for (let index = 0; index < entries.length; index++) {
+                    const entry = entries[index];
+                    if (button) button.textContent = "Enregistrement " + (index + 1) + "/" + entries.length + "…";
+                    try {
+                        const response = await fetch(API_BASE_URL + '/api/primenet/teacher-attendance', {
+                            method: 'POST',
+                            headers,
+                            body: JSON.stringify({
+                                teacher_email: entry.email,
+                                date: dateValue,
+                                check_in: entry.checkIn,
+                                check_out: entry.checkOut
+                            })
+                        });
+                        const result = await response.json().catch(() => ({}));
+                        if (!response.ok || !result.status) {
+                            throw new Error(result.detail || result.message || "Enregistrement refusé.");
+                        }
+                        const saved = result.data || {
+                            teacherEmail: entry.email,
+                            date: dateValue,
+                            checkIn: entry.checkIn,
+                            checkOut: entry.checkOut
+                        };
+                        if (!appState.tools) appState.tools = JSON.parse(JSON.stringify(defaultState.tools));
+                        if (!appState.tools.presences) appState.tools.presences = { students: [], teachers: [] };
+                        appState.tools.presences.teachers = (appState.tools.presences.teachers || [])
+                            .filter(row => !(row.date === dateValue && String(row.teacherEmail || '').trim().toLowerCase() === entry.email))
+                            .concat([saved]);
+                        savedCount++;
+                    } catch (error) {
+                        failures.push(entry.name + ": " + (error.message || "échec"));
+                    }
+                }
+
+                if (savedCount) {
+                    saveState();
+                    await loadPrimeInkTeacherAttendance();
+                }
+
+                let message = savedCount + " présence(s) enregistrée(s).";
+                if (skipped) message += " " + skipped + " ligne(s) vide(s) ou sans adresse e-mail ignorée(s).";
+                if (failures.length) {
+                    message += " Échec(s) : " + failures.slice(0, 3).join(" ; ");
+                    if (failures.length > 3) message += " ; et " + (failures.length - 3) + " autre(s).";
+                }
+                setStatus(message);
+            } finally {
+                if (button) { button.disabled = false; button.textContent = "Sauvegarder toutes les présences"; }
             }
         };
 
