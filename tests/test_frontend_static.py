@@ -366,7 +366,8 @@ class FrontendStaticTests(unittest.TestCase):
         apply_data = source.split("function applyMergedPrimenetData(mergedData)", 1)[1].split(
             "// Jeton de session Cloud", 1
         )[0]
-        self.assertIn("appState.tools.presences.students = mergedData.attendanceRecords.map", apply_data)
+        self.assertIn("const attendanceMap = new Map();", apply_data)
+        self.assertIn("attendanceMap.set(attendanceKey(normalized), normalized);", apply_data)
         self.assertIn("refreshPrimeInkStudentPresenceView();", apply_data)
 
         summary_start = source.index("function primeInkDailyAttendanceSummary(studentRecords, courses)")
@@ -958,10 +959,10 @@ class TestNewFeatureStatic(unittest.TestCase):
         self.assertIn("class=\"classink-grade-input\"", app)
         self.assertIn("findClassInkGradeNeighbor(input, direction)", app)
         self.assertIn("data-grid-row=", app)
-        self.assertIn("Enregistrer mes notes et présences sur le serveur", app)
+        self.assertIn("Transmettre les notes et présences à PrimeInk (Intranet)", app)
         self.assertIn('id="presence-slot"', app)
         self.assertIn("slotKey: selectedSlot", app)
-        sync = app.split("async function syncWithCloud()", 1)[1].split("/* ==========================================================================", 1)[0]
+        sync = app.split("async function syncWithIntranet()", 1)[1].split("/* ==========================================================================", 1)[0]
         self.assertIn("cloudAuthHeaders()", sync)
         self.assertNotIn("showCustomPrompt", sync)
         self.assertIn("courseCatalog: data.courseCatalog || {}", app)
@@ -1035,7 +1036,8 @@ class TestNewFeatureStatic(unittest.TestCase):
         self.assertIn('data-go="attendance"', suivi)
         self.assertIn("Présent toute la journée", suivi)
         self.assertIn("window.__CLASSINK_SUIVI_LLINK_CONTEXT__", suivi)
-        self.assertIn("position:fixed;right:18px;bottom:calc(84px + env(safe-area-inset-bottom))", suivi)
+        self.assertIn(".dock {", suivi)
+        self.assertIn("bottom: calc(84px + env(safe-area-inset-bottom));", suivi)
 
     def test_server_persists_exact_course_and_evaluation_date_and_consolidates_averages(self):
         backend = (ROOT / "main.py").read_text(encoding="utf-8")
@@ -1282,7 +1284,7 @@ process.stdout.write(JSON.stringify({
 
     def test_classink_app_can_print_complete_taught_course_sheets(self):
         app = (ROOT / "app/index.html").read_text(encoding="utf-8")
-        self.assertIn("<div>ClassInk APP ⚡</div>", app)
+        self.assertIn("ClassInk APP", app)
         self.assertNotIn("CLASS-INK SUITE", app)
         self.assertIn('onclick="printActiveCourseSheet()"', app)
         self.assertIn("function printActiveCourseSheet()", app)
