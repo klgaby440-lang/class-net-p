@@ -341,6 +341,82 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn("renderDeliberationView(activeStudentId, false);", source)
 
 
+    def test_primeink_student_attendance_refreshes_after_sync_and_renders_daily_summary(self):
+        source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
+        self.assertIn("function refreshPresenceClassOptions()", source)
+        self.assertIn("function refreshPrimeInkStudentPresenceView()", source)
+        self.assertIn("refreshPrimeInkStudentPresenceView();", source)
+        self.assertIn("if (tabId === 'tab-presence') {", source)
+        self.assertIn("if (type === 'eleve') {", source)
+        self.assertIn("select.disabled = classes.length === 0;", source)
+        self.assertIn("window.renderPresencesEleveTable = function()", source)
+        self.assertIn("Statut(s)", source)
+        self.assertIn("studentRows.map(record =>", source)
+        self.assertIn("const summary = primeInkDailyAttendanceSummary(studentRecords, courses);", source)
+        self.assertIn("safeHTML(details)", source)
+
+        apply_data = source.split("function applyMergedPrimenetData(mergedData)", 1)[1].split(
+            "// Jeton de session Cloud", 1
+        )[0]
+        self.assertIn("appState.tools.presences.students = mergedData.attendanceRecords.map", apply_data)
+        self.assertIn("refreshPrimeInkStudentPresenceView();", apply_data)
+
+        summary_start = source.index("function primeInkDailyAttendanceSummary(studentRecords, courses)")
+        summary_end = source.index("function primeInkAuthHeaders()", summary_start)
+        helper = source[summary_start:summary_end]
+        self.assertIn("statuses.includes('A')", helper)
+        self.assertIn("allCoursesRecorded && statuses.length > 0", helper)
+        self.assertIn("statuses.every(value => value === 'P')", helper)
+        self.assertIn("label = 'Présent';", helper)
+        self.assertIn("label = 'Absent';", helper)
+        self.assertIn("label = 'Présent avec retard';", helper)
+        self.assertIn("label = 'Incomplet';", helper)
+
+    def test_primeink_daily_attendance_summary_truth_table(self):
+        if not self.node:
+            self.skipTest("Node.js absent : test du résumé quotidien ignoré.")
+        source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
+        helper_start = source.index("function primeInkDailyAttendanceSummary(studentRecords, courses)")
+        helper_end = source.index("window.renderPresencesEleveTable = function()", helper_start)
+        helper = source[helper_start:helper_end]
+        script = helper + """
+const courses = [{id: "c1"}, {id: "c2"}];
+const cases = [
+  primeInkDailyAttendanceSummary([
+    {courseId: "c1", status: "P"},
+    {courseId: "c2", status: "P"}
+  ], courses),
+  primeInkDailyAttendanceSummary([
+    {courseId: "c1", status: "A"}
+  ], courses),
+  primeInkDailyAttendanceSummary([
+    {courseId: "c1", status: "P"}
+  ], courses),
+  primeInkDailyAttendanceSummary([
+    {courseId: "c1", status: "R"},
+    {courseId: "c2", status: "P"}
+  ], courses)
+];
+process.stdout.write(JSON.stringify(cases.map(item => ({code:item.code,label:item.label}))));
+"""
+        result = subprocess.run(
+            [self.node, "-e", script],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        import json
+        self.assertEqual(
+            json.loads(result.stdout),
+            [
+                {"code": "P", "label": "Présent"},
+                {"code": "A", "label": "Absent"},
+                {"code": "INCOMPLETE", "label": "Incomplet"},
+                {"code": "R", "label": "Présent avec retard"},
+            ],
+        )
+
     def test_suivi_parent_html_ids_and_inline_javascript(self):
         source = (ROOT / "suivi/index.html").read_text(encoding="utf-8")
         self.inspect_file("suivi/index.html")

@@ -5418,7 +5418,10 @@ async function bpPushClassBulletin(cls) {
             const targetContent = document.getElementById(tabId);
             if (targetContent) targetContent.classList.add('active');
             if (tabId === 'tab-mixage' && typeof renderMixClassChoices === 'function') renderMixClassChoices();
-            if (tabId === 'tab-presence' && typeof loadPrimeInkTeacherAttendance === 'function') loadPrimeInkTeacherAttendance();
+            if (tabId === 'tab-presence') {
+                refreshPrimeInkStudentPresenceView();
+                if (typeof loadPrimeInkTeacherAttendance === 'function') loadPrimeInkTeacherAttendance();
+            }
         };
 
         // 2. PRÉSENCES : BASCULE ÉLÈVES / PROFESSEURS
@@ -5433,6 +5436,7 @@ async function bpPushClassBulletin(cls) {
                 if(btnProf) btnProf.classList.remove('active');
                 if(subEleve) subEleve.classList.remove('hidden');
                 if(subProf) subProf.classList.add('hidden');
+                refreshPrimeInkStudentPresenceView();
             } else {
                 if(btnProf) btnProf.classList.add('active');
                 if(btnEleve) btnEleve.classList.remove('active');
@@ -5442,43 +5446,117 @@ async function bpPushClassBulletin(cls) {
             }
         };
 
+        function refreshPresenceClassOptions() {
+            const select = document.getElementById('presEleveClassSelect');
+            if (!select) return;
+            const previous = String(select.value || '');
+            const classes = Array.isArray(appState.classes) ? appState.classes : [];
+            select.innerHTML = classes.map(cls =>
+                '<option value="' + safeHTML(cls.id) + '">' + safeHTML(cls.name || 'Classe') + '</option>'
+            ).join('');
+            if (classes.some(cls => String(cls.id) === previous)) {
+                select.value = previous;
+            } else {
+                select.value = classes.length ? String(classes[0].id) : '';
+            }
+            select.disabled = classes.length === 0;
+        }
+
+        function refreshPrimeInkStudentPresenceView() {
+            refreshPresenceClassOptions();
+            if (typeof window.renderPresencesEleveTable === 'function') {
+                window.renderPresencesEleveTable();
+            }
+        }
+
         function initPresenceModule() {
             const select = document.getElementById('presEleveClassSelect');
-            if(!select) return;
-            select.innerHTML = '';
-            appState.classes.forEach(c => {
-                const opt = document.createElement('option');
-                opt.value = c.id;
-                opt.textContent = c.name;
-                select.appendChild(opt);
-            });
+            if (!select) return;
+            refreshPresenceClassOptions();
 
-            const today = new Date().toISOString().split('T')[0];
-            if(document.getElementById('presEleveDate')) document.getElementById('presEleveDate').value = today;
-            if(document.getElementById('presProfDate')) document.getElementById('presProfDate').value = today;
+            const localDate = new Date();
+            localDate.setMinutes(localDate.getMinutes() - localDate.getTimezoneOffset());
+            const today = localDate.toISOString().slice(0, 10);
+            if (document.getElementById('presEleveDate')) document.getElementById('presEleveDate').value = today;
+            if (document.getElementById('presProfDate')) document.getElementById('presProfDate').value = today;
 
-            renderPresencesEleveTable();
+            refreshPrimeInkStudentPresenceView();
             if (typeof loadPrimeInkTeacherAttendance === 'function') loadPrimeInkTeacherAttendance();
+        }
+
+        function primeInkDailyAttendanceSummary(studentRecords, courses) {
+            const rows = Array.isArray(studentRecords) ? studentRecords : [];
+            const courseList = Array.isArray(courses) ? courses : [];
+            const statuses = rows.map(row => String(row.status || '').trim().toUpperCase());
+            const hasAbsence = statuses.includes('A');
+            const hasLate = statuses.includes('R');
+            const recordedCourseIds = new Set(rows.map(row => String(row.courseId || '')));
+            const allCoursesRecorded = courseList.length > 0 &&
+                courseList.every(course => recordedCourseIds.has(String(course.id)));
+            const isPresentAllDay = allCoursesRecorded && statuses.length > 0 &&
+                statuses.every(value => value === 'P');
+
+            let code = 'INCOMPLETE';
+            let label = 'Incomplet';
+            let badgeClass = 'badge-warning';
+            if (hasAbsence) {
+                code = 'A';
+                label = 'Absent';
+                badgeClass = 'badge-danger';
+            } else if (isPresentAllDay) {
+                code = 'P';
+                label = 'Présent';
+                badgeClass = 'badge-success';
+            } else if (allCoursesRecorded && hasLate && statuses.every(value => value === 'P' || value === 'R')) {
+                code = 'R';
+                label = 'Présent avec retard';
+                badgeClass = 'badge-warning';
+            }
+            return {
+                code, label, badgeClass, hasAbsence, hasLate,
+                allCoursesRecorded, isPresentAllDay,
+                coursesRecorded: recordedCourseIds.size,
+                sessionsRecorded: rows.length
+            };
         }
 
         window.renderPresencesEleveTable = function() {
             const select = document.getElementById('presEleveClassSelect');
             const dateValue = document.getElementById('presEleveDate')?.value || '';
-            if (!select || !select.value) return;
-            const classId = String(select.value);
+            const container = document.getElementById('presEleveCoursesContainer');
+            const summaryBody = document.getElementById('presEleveSummaryBody');
+            if (!container) return;
+
+            const classId = String(select && select.value || '');
+            if (!classId) {
+                container.innerHTML = '<div class="settings-card"><p class="sub">Aucune classe disponible. Chargez d’abord les informations de l’établissement.</p></div>';
+                if (summaryBody) summaryBody.innerHTML = '<tr><td colspan="3">Aucune classe sélectionnée.</td></tr>';
+                return;
+            }
+
             const className = (appState.classes || []).find(c => String(c.id) === classId)?.name || '';
             const students = getSortedStudentsByClass(classId);
             const courses = (appState.courses || []).filter(c => String(c.classId) === classId);
             const allRecords = (appState.tools?.presences?.students || []).filter(row =>
                 String(row.classId) === classId && String(row.date) === dateValue
             );
-            const container = document.getElementById('presEleveCoursesContainer');
-            if (!container) return;
             container.innerHTML = '';
+
+            if (!students.length) {
+                container.innerHTML = '<div class="settings-card"><p class="sub">Aucun élève enregistré dans cette classe.</p></div>';
+                if (summaryBody) summaryBody.innerHTML = '<tr><td colspan="3">Aucun élève à résumer.</td></tr>';
+                return;
+            }
 
             if (!courses.length) {
                 container.innerHTML = '<div class="settings-card"><p class="sub">Aucun cours enregistré pour cette classe.</p></div>';
+                if (summaryBody) summaryBody.innerHTML = students.map(student =>
+                    '<tr><td><strong>' + safeHTML([student.name, student.postname, student.prename].filter(Boolean).join(' ')) +
+                    '</strong></td><td><span class="badge-warning">Incomplet</span></td><td>Aucun cours configuré.</td></tr>'
+                ).join('');
+                return;
             }
+
             courses.forEach((course, idx) => {
                 const records = allRecords.filter(row => String(row.courseId) === String(course.id));
                 const byStudent = new Map();
@@ -5492,41 +5570,48 @@ async function bpPushClassBulletin(cls) {
                 card.innerHTML = '<h2>Cours ' + (idx + 1) + ' : ' + safeHTML(course.name) +
                     (course.titulaire ? ' | Prof. ' + safeHTML(course.titulaire) : '') + '</h2>' +
                     '<p class="sub" style="margin:5px 0 10px">' + safeHTML(dateValue) + ' · ' + records.length + ' appel(s) reçu(s)</p>' +
-                    '<div style="overflow-x:auto"><table class="data-table"><thead><tr><th>Élève</th><th>Statut</th><th>Enseignant</th><th>Séance</th></tr></thead><tbody>' +
+                    '<div style="overflow-x:auto"><table class="data-table"><thead><tr><th>Élève</th><th>Statut(s)</th><th>Enseignant(s)</th><th>Séance(s)</th></tr></thead><tbody>' +
                     students.map(student => {
-                        const studentRows = byStudent.get(String(student.id)) || [];
-                        if (!studentRows.length) return '<tr><td><strong>' + safeHTML([student.name, student.postname, student.prename].filter(Boolean).join(' ')) + '</strong></td><td>Non renseigné</td><td>—</td><td>—</td></tr>';
-                        return studentRows.map(record => {
-                            const status = String(record.status || '').toUpperCase();
+                        const studentRows = (byStudent.get(String(student.id)) || []).slice().sort((a, b) =>
+                            String(a.slotKey || '').localeCompare(String(b.slotKey || ''), 'fr', { numeric: true })
+                        );
+                        const studentName = safeHTML([student.name, student.postname, student.prename].filter(Boolean).join(' '));
+                        if (!studentRows.length) {
+                            return '<tr><td><strong>' + studentName + '</strong></td><td><span class="badge-warning">Non renseigné</span></td><td>—</td><td>—</td></tr>';
+                        }
+                        const statusMarkup = studentRows.map(record => {
+                            const status = String(record.status || '').trim().toUpperCase();
                             const label = status === 'P' ? 'Présent' : status === 'A' ? 'Absent' : status === 'R' ? 'En retard' : 'Non renseigné';
-                            const color = status === 'P' ? 'badge-success' : status === 'A' ? 'badge-danger' : status === 'R' ? 'badge-warning' : '';
-                            return '<tr><td><strong>' + safeHTML([student.name, student.postname, student.prename].filter(Boolean).join(' ')) + '</strong></td>' +
-                                '<td><span class="' + color + '">' + label + '</span></td>' +
-                                '<td>' + safeHTML(record.teacherName || '—') + '</td>' +
-                                '<td>' + safeHTML(record.slotKey || '—') + '</td></tr>';
-                        }).join('');
+                            const badgeClass = status === 'P' ? 'badge-success' : status === 'A' ? 'badge-danger' : 'badge-warning';
+                            return '<span class="' + badgeClass + '">' + label + '</span>';
+                        }).join('<br>');
+                        const teacherMarkup = studentRows.map(record => safeHTML(record.teacherName || '—')).join('<br>');
+                        const slotMarkup = studentRows.map(record => safeHTML(record.slotKey || 'Journée')).join('<br>');
+                        return '<tr><td><strong>' + studentName + '</strong></td><td>' + statusMarkup +
+                            '</td><td>' + teacherMarkup + '</td><td>' + slotMarkup + '</td></tr>';
                     }).join('') +
                     '</tbody></table></div>';
                 container.appendChild(card);
             });
 
-            const summaryBody = document.getElementById('presEleveSummaryBody');
             if (summaryBody) {
                 summaryBody.innerHTML = students.map(student => {
                     const studentRecords = allRecords.filter(row => String(row.studentId) === String(student.id));
-                    const statuses = studentRecords.map(row => String(row.status || '').toUpperCase());
-                    const hasAbsence = statuses.includes('A');
-                    const hasLate = statuses.includes('R');
-                    const recordedCourseIds = new Set(studentRecords.map(row => String(row.courseId)));
-                    const allCoursesRecorded = courses.length > 0 && courses.every(course => recordedCourseIds.has(String(course.id)));
-                    const isPresentAllDay = allCoursesRecorded && statuses.length > 0 && statuses.every(value => value === 'P');
-                    const statusLabel = hasAbsence ? 'Absent' : isPresentAllDay ? 'Présent toute la journée' : hasLate ? 'Présent avec retard' : 'Incomplet';
-                    const statusClass = hasAbsence ? 'badge-danger' : isPresentAllDay ? 'badge-success' : 'badge-warning';
-                    const details = studentRecords.length + ' / ' + courses.length + ' cours renseigné(s)' +
-                        (hasAbsence ? ' · au moins une heure manquée' : '');
+                    const summary = primeInkDailyAttendanceSummary(studentRecords, courses);
+                    const details = summary.coursesRecorded + ' / ' + courses.length + ' cours renseigné(s)' +
+                        (summary.hasAbsence ? ' · au moins une absence' : summary.code === 'INCOMPLETE' ? ' · appel(s) manquant(s)' : '');
                     return '<tr><td><strong>' + safeHTML([student.name, student.postname, student.prename].filter(Boolean).join(' ')) +
-                        '</strong></td><td><span class="' + statusClass + '">' + statusLabel + '</span></td><td>' + safeHTML(details) + '</td></tr>';
+                        '</strong></td><td><span class="' + summary.badgeClass + '">' + summary.label + '</span></td><td>' +
+                        safeHTML(details) + '</td></tr>';
                 }).join('');
+            }
+
+            if (!allRecords.length) {
+                const notice = document.createElement('p');
+                notice.className = 'sub';
+                notice.style.margin = '.5rem 0';
+                notice.textContent = 'Aucun appel reçu pour cette classe à cette date. Les cours restent visibles avec le statut « Non renseigné ».';
+                container.prepend(notice);
             }
         };
 
@@ -7470,6 +7555,7 @@ const classDetailSection = document.getElementById('section-class-detail');
             if (Array.isArray(mergedData.teacherAttendance)) {
                 appState.tools.presences.teachers = mergedData.teacherAttendance.slice();
             }
+            refreshPrimeInkStudentPresenceView();
         }
 
         // Jeton de session Cloud reçu au chargement de l'école. Stocké à part de appState pour ne jamais être renvoyé dans les synchronisations.
