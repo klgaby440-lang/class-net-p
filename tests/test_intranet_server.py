@@ -16,7 +16,13 @@ def _b64url(value: bytes) -> str:
 
 
 def _token(role: str, **claims) -> str:
-    payload = {"role": role, "exp": int(time.time()) + 3600, **claims}
+    payload = {
+        "role": role,
+        "iss": "classink",
+        "aud": "classink-intranet-relay",
+        "exp": int(time.time()) + 3600,
+        **claims,
+    }
     encoded = _b64url(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
     signature = _b64url(
         hmac.new(
@@ -180,3 +186,47 @@ def test_rejects_independent_workspace_and_unapproved_fields():
 def test_server_has_no_database_dependency():
     assert not hasattr(intranet_server, "SessionLocal")
     assert not hasattr(intranet_server, "engine")
+
+
+def test_relay_does_not_fall_back_to_the_cloud_signing_secret(monkeypatch):
+    monkeypatch.delenv("INTRANET_AUTH_SECRET", raising=False)
+    monkeypatch.setenv("AUTH_SECRET", "cloud-secret-must-never-be-used-by-relay")
+    assert intranet_server._auth_secret() == ""
+    client = TestClient(intranet_server.app)
+    response = client.get(
+        "/api/primenet/sync",
+        headers={"Authorization": "Bearer any-token"},
+    )
+    assert response.status_code == 503
+
+
+def test_rejects_cloud_tokens_even_when_they_have_a_valid_cloud_signature():
+    client = TestClient(intranet_server.app)
+    payload = {
+        "role": "teacher",
+        "email": "teacher@example.test",
+        "school_id": "SCHOOL-01",
+        "workspace_mode": "school",
+        "exp": int(time.time()) + 3600,
+        "iss": "classink",
+        "aud": "classink-cloud-api",
+    }
+    encoded = _b64url(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
+    signature = _b64url(
+        hmac.new(
+            os.environ["INTRANET_AUTH_SECRET"].encode("utf-8"),
+            encoded.encode("ascii"),
+            hashlib.sha256,
+        ).digest()
+    )
+    response = client.post(
+        "/api/intranet/sync",
+        headers={"Authorization": "Bearer " + encoded + "." + signature},
+        json={
+            "school_id": "SCHOOL-01",
+            "teacher_email": "teacher@example.test",
+            "data": {},
+        },
+    )
+    assert response.status_code == 401
+
