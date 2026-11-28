@@ -6189,22 +6189,22 @@ async function bpPushClassBulletin(cls) {
                             (item.id != null && String(item.id) === String(room.room_id || ''))
                         ) || room;
                         const previousSeatContext = __mixageSeatDisplayContext;
-                    __mixageSeatDisplayContext = { classId, hideOtherClasses: true };
-                    try {
-                        return bpMixageSeatingPlanHTML(
-                            bpClassLabel(classId) + ' · ' + (room.room_name || 'Salle'),
-                            room.supervisor,
-                            roomSeats,
-                            config,
-                            {
-                                classId,
-                                classAssignedSeats: classSeats.length,
-                                hideOtherClasses: true
-                            }
-                        );
-                    } finally {
-                        __mixageSeatDisplayContext = previousSeatContext;
-                    }
+                        __mixageSeatDisplayContext = { classId, hideOtherClasses: true };
+                        try {
+                            return bpMixageSeatingPlanHTML(
+                                bpClassLabel(classId) + ' · ' + (room.room_name || 'Salle'),
+                                room.supervisor,
+                                roomSeats,
+                                config,
+                                {
+                                    classId,
+                                    classAssignedSeats: classSeats.length,
+                                    hideOtherClasses: true
+                                }
+                            );
+                        } finally {
+                            __mixageSeatDisplayContext = previousSeatContext;
+                        }
                     }).join('');
                     return '<div class="primeink-mixage-class-group"><h2>' + safeHTML(bpClassLabel(classId)) + '</h2>' +
                         (roomHTML || '<div class="primeink-mixage-empty">Aucune salle ou place attribuée à cette classe.</div>') +
