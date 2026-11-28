@@ -2841,7 +2841,9 @@ window.alert = function(message) { showCustomAlert(message); };
                     if (source === 'none') return { src: '', missing: '' };
                     if (source === 'default') return { src: BP_DEFAULT_SIGNATURE, missing: '' };
                     if (source === 'responsable') return { src: bpHeadSignature(), missing: '' };
-                    const name = (crs.titulaire && crs.titulaire !== 'Non assigné') ? crs.titulaire : (cls && cls.titulaire);
+                    const name = primeInkDisplayTeacherName(
+                        (crs.titulaire && crs.titulaire !== 'Non assigné') ? crs.titulaire : (cls && cls.titulaire)
+                    );
                     const s = bpSignatureForName(name);
                     return { src: s, missing: s ? '' : (name && name !== 'Non assigné' ? name : 'cours sans titulaire') };
                 }
@@ -2866,13 +2868,7 @@ window.alert = function(message) { showCustomAlert(message); };
                 const BP_TOTAL_KEYS = ['p1', 'p2', 'ex1', 's1', 'p3', 'p4', 'ex2', 's2', 'tg'];
 
                 function bpTeacherDisplayName(value) {
-                    const raw = String(value || '').trim();
-                    if (!raw || raw === 'Non assigné') return raw;
-                    const teacher = (Array.isArray(appState.teachers) ? appState.teachers : []).find(item =>
-                        [item.uniqueId, item.id, item.email, item.teacherCode, item.code]
-                            .some(identifier => identifier !== undefined && String(identifier).trim().toLowerCase() === raw.toLowerCase())
-                    );
-                    return teacher && teacher.name ? String(teacher.name).trim() : raw;
+                    return primeInkDisplayTeacherName(value);
                 }
 
                 function bpBulletinCoursesForClass(cls) {
@@ -4300,7 +4296,7 @@ async function bpPushClassBulletin(cls) {
                     tr.className = 'clickable-row';
                     tr.innerHTML = `
                         <td>${safeHTML(cls.name)}</td>
-                        <td>${safeHTML(cls.titulaire)}</td>
+                        <td>${safeHTML(primeInkDisplayTeacherName(cls.titulaire))}</td>
                         <td>${safeHTML(count)}</td>
                     `;
                     tr.setAttribute('aria-label', 'Ouvrir la classe ' + cls.name);
@@ -4797,7 +4793,7 @@ async function bpPushClassBulletin(cls) {
                 if (!course) return;
                 currentFicheCourseId = course.id;
                 document.getElementById('currentCourseName').textContent = course.name || '';
-                document.getElementById('currentCourseTitulaire').textContent = course.titulaire || 'Non assigné';
+                document.getElementById('currentCourseTitulaire').textContent = primeInkDisplayTeacherName(course.titulaire);
                 const tbody = document.getElementById('ficheNotesBody');
                 if (!tbody) return;
                 tbody.innerHTML = '';
@@ -5767,7 +5763,7 @@ async function bpPushClassBulletin(cls) {
                 const card = document.createElement('div');
                 card.className = 'settings-card';
                 card.innerHTML = '<h2>Cours ' + (idx + 1) + ' : ' + safeHTML(course.name) +
-                    (course.titulaire ? ' | Prof. ' + safeHTML(course.titulaire) : '') + '</h2>' +
+                    (course.titulaire ? ' | Prof. ' + safeHTML(primeInkDisplayTeacherName(course.titulaire)) : '') + '</h2>' +
                     '<p class="sub" style="margin:5px 0 10px">' + safeHTML(dateValue) + ' · ' + records.length + ' appel(s) reçu(s)</p>' +
                     '<div style="overflow-x:auto"><table class="data-table"><thead><tr><th>Élève</th><th>Statut(s)</th><th>Enseignant(s)</th><th>Séance(s)</th></tr></thead><tbody>' +
                     students.map(student => {
@@ -7596,6 +7592,17 @@ function primeInkResolveTeacherOptionValue(rawValue) {
     return match ? String(match.uniqueId || '') : raw;
 }
 
+function primeInkDisplayTeacherName(rawValue) {
+    const raw = String(rawValue || '').trim();
+    if (!raw || ['non assigné', 'non attribué', 'aucun', 'aucune'].includes(raw.toLocaleLowerCase())) return 'Non assigné';
+    const key = raw.toLocaleLowerCase();
+    const teacher = (Array.isArray(appState.teachers) ? appState.teachers : []).find(item =>
+        [item.uniqueId, item.id, item.email, item.teacherCode, item.code]
+            .some(value => value !== undefined && String(value).trim().toLocaleLowerCase() === key)
+    );
+    return teacher && teacher.name ? String(teacher.name).trim() : raw;
+}
+
 function primeInkTeacherSelectOptions(rawValue = '') {
     const raw = String(rawValue || '').trim();
     const resolved = primeInkResolveTeacherOptionValue(raw);
@@ -8533,7 +8540,7 @@ const classDetailSection = document.getElementById('section-class-detail');
                 tr.className = 'clickable-row';
                 tr.innerHTML = `
                     <td><strong>${safeHTML(cls.name)}</strong></td>
-                    <td>${safeHTML(cls.titulaire)}</td>
+                    <td>${safeHTML(primeInkDisplayTeacherName(cls.titulaire))}</td>
                     <td><span class="id-badge">${safeHTML(count)} élèves</span></td>
                 `;
                 tr.addEventListener('click', () => {
