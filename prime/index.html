@@ -2434,6 +2434,11 @@ window.alert = function(message) { showCustomAlert(message); };
             try {
                 window.localStorage.setItem('classnet_p_db', JSON.stringify(appState));
                 primeInkStorageAvailable = true;
+                // La connexion PrimeInk peut renseigner l'école après le montage initial de Llink.
+                // Le remontage recharge alors les sessions du bon établissement.
+                if (window.ClassInkLlink) {
+                    window.ClassInkLlink.mount(document.querySelector('[data-llink-app="primeink"]'));
+                }
                 return true;
             } catch (error) {
                 primeInkStorageAvailable = false;
