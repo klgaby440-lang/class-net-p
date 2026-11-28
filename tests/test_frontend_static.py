@@ -355,6 +355,13 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn("const summary = primeInkDailyAttendanceSummary(studentRecords, courses);", source)
         self.assertIn("safeHTML(details)", source)
 
+        # Le tri des élèves est partagé avec le rendu des présences, qui est hors de
+        # la portée du gestionnaire DOMContentLoaded contenant les anciens écrans.
+        helper_start = source.index("function getSortedStudentsByClass(classId)")
+        dom_ready_start = source.index("document.addEventListener('DOMContentLoaded', () => {", helper_start)
+        self.assertLess(helper_start, dom_ready_start)
+        self.assertIn("return students.filter(st => String(st.classId ?? '') === String(classId ?? ''));", source)
+
         apply_data = source.split("function applyMergedPrimenetData(mergedData)", 1)[1].split(
             "// Jeton de session Cloud", 1
         )[0]
