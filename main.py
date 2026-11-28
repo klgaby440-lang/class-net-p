@@ -3086,15 +3086,22 @@ def _llink_conversation_identity(request: Request, db: Session, student_ref: Opt
         student_code = str(ref.get("student_code") or request.query_params.get("student_code") or "").strip().upper()
         if not school_id or not student_code or len(student_code) > 40:
             raise HTTPException(status_code=401, detail="Sélectionnez un enfant lié dans ClassInk Suivi.")
+        remote = request.client.host if request.client else "unknown"
+        parent_rate_key = "suivi:" + remote + ":" + school_id
+        if SUIVI_LOOKUP_LIMITER.is_blocked(parent_rate_key):
+            raise HTTPException(status_code=429, detail="Trop d'essais. Réessayez dans 15 minutes.")
         school = db.query(SchoolInformation).filter(SchoolInformation.school_id == school_id).first()
         if not school or licence_state(school)["locked"]:
+            SUIVI_LOOKUP_LIMITER.record(parent_rate_key)
             raise HTTPException(status_code=404, detail="Établissement indisponible.")
         student = db.query(SchoolStudentInformation).filter(
             SchoolStudentInformation.school_id == school_id,
             func.upper(SchoolStudentInformation.suivi_code) == student_code,
         ).first()
         if not student:
+            SUIVI_LOOKUP_LIMITER.record(parent_rate_key)
             raise HTTPException(status_code=404, detail="Enfant introuvable. Actualisez son espace.")
+        SUIVI_LOOKUP_LIMITER.reset(parent_rate_key)
         owner_key = "parent:" + school_id + ":" + str(student.id)
 
     else:
@@ -3237,6 +3244,7 @@ async def classink_llink_assist(payload: dict, request: Request, db: Session = D
 
     # Le proxy Render peut présenter la même IP à plusieurs écoles et parents.
     # Le quota est donc isolé par application et identité authentifiée, pas par IP partagée.
+    remote = request.client.host if request.client else "unknown"
     if app_name == "suivi":
         parent_ref = payload.get("student") if isinstance(payload.get("student"), dict) else {}
         limiter_identity = str(parent_ref.get("school_id") or "") + ":" + str(parent_ref.get("student_code") or "").upper()
