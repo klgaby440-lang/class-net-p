@@ -91,12 +91,8 @@
             padding: 4px 8px;
         }
         .bottom-nav button.active { color: var(--primary); font-weight: bold; }
-        .bottom-nav button::before { content: '📊'; font-size: 1.1rem; margin-bottom: 2px; }
-        .bottom-nav button[data-target="view-presence"]::before { content: '📅'; }
-        .bottom-nav button[data-target="view-llink"]::before { content: '🤖'; }
-        .bottom-nav button[data-target="view-interrogations"]::before { content: '📝'; }
-        .bottom-nav button[data-target="view-settings"]::before { content: '⚙️'; }
-        .bottom-nav button[data-target="view-conduite"]::before { content: '🧭'; }
+        .bottom-nav button::before { content: none; }
+        .bottom-nav button[data-target="view-presence"]::before { content: '📅'; font-size: 1.1rem; margin-bottom: 2px; }
 
         /* --- VIEWS --- */
         .view-section { display: none; padding: 15px; animation: fadeIn 0.3s ease-in-out; }
@@ -409,7 +405,19 @@
         [data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]), [data-theme="dark"] select, [data-theme="dark"] textarea { color-scheme: dark; }
         [data-theme="light"] input:not([type="checkbox"]):not([type="radio"]), [data-theme="light"] select, [data-theme="light"] textarea { color-scheme: light; }
         [data-theme="dark"] input::placeholder, [data-theme="dark"] textarea::placeholder { color: var(--text-muted); opacity: 1; }
-</style>
+
+        .ci-icon-library { position:absolute; width:0; height:0; overflow:hidden; pointer-events:none; }
+        .ci-icon { display:inline-block; width:1.08em; height:1.08em; flex:0 0 auto; vertical-align:-0.2em; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+        .ci-inline { margin-right:7px; }
+        .ci-brand { display:flex; align-items:center; gap:8px; }
+        .ci-brand img { width:27px; height:27px; object-fit:contain; }
+        .ci-illustration { width:78px; height:78px; display:grid; place-items:center; margin:0 auto 12px; color:var(--primary); border:1px solid rgba(109,40,217,.16); border-radius:24px; background:radial-gradient(circle at 30% 25%, rgba(167,139,250,.28), transparent 58%), linear-gradient(145deg, rgba(109,40,217,.10), rgba(37,99,235,.08)); box-shadow:0 10px 24px rgba(37,32,90,.08); }
+        .ci-illustration .ci-icon { width:43px; height:43px; stroke-width:1.55; }
+        [data-theme="dark"] .ci-illustration { background:radial-gradient(circle at 30% 25%, rgba(167,139,250,.20), transparent 58%), linear-gradient(145deg, rgba(109,40,217,.22), rgba(37,99,235,.16)); border-color:rgba(167,139,250,.22); }
+        .bottom-nav button::before { line-height:21px; }
+        .bottom-nav button > .ci-icon { display:block; width:21px; height:21px; margin-bottom:2px; }
+
+    </style>
 </head>
 
 <!-- SPLASH SCREEN ANIMÉ -->
@@ -427,12 +435,57 @@
 
 <body>
 
+    <svg class="ci-icon-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <symbol id="ci-icon-chart" viewBox="0 0 24 24"><path d="M3 3v18h18M8 17v-5M13 17V7M18 17V4"/></symbol>
+      <symbol id="ci-icon-calendar" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="17" rx="2"/><path d="M16 2.5v4M8 2.5v4M3 9.5h18M8 13h2M14 13h2M8 17h2"/></symbol>
+      <symbol id="ci-icon-bot" viewBox="0 0 24 24"><rect x="4" y="7" width="16" height="13" rx="3"/><path d="M12 3v4M9 12h.01M15 12h.01M8 16h8M2 12h2M20 12h2"/></symbol>
+      <symbol id="ci-icon-clipboard" viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="18" rx="2"/><path d="M9 4V2h6v2M9 10h6M9 14h6M9 18h3"/></symbol>
+      <symbol id="ci-icon-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.5"/><path d="M19.4 15.1a1.8 1.8 0 0 0 .4 2l.1.1-2.5 2.5-.1-.1a1.8 1.8 0 0 0-2-.4 1.8 1.8 0 0 0-1.1 1.7v.2h-3.6v-.2a1.8 1.8 0 0 0-1.1-1.7 1.8 1.8 0 0 0-2 .4l-.1.1-2.5-2.5.1-.1a1.8 1.8 0 0 0 .4-2 1.8 1.8 0 0 0-1.7-1.1h-.2v-3.6h.2a1.8 1.8 0 0 0 1.7-1.1 1.8 1.8 0 0 0-.4-2l-.1-.1 2.5-2.5.1.1a1.8 1.8 0 0 0 2 .4A1.8 1.8 0 0 0 10.6 3v-.2h3.6V3a1.8 1.8 0 0 0 1.1 1.7 1.8 1.8 0 0 0 2-.4l.1-.1 2.5 2.5-.1.1a1.8 1.8 0 0 0-.4 2 1.8 1.8 0 0 0 1.7 1.1h.2v3.6h-.2a1.8 1.8 0 0 0-1.7 1.1Z"/></symbol>
+      <symbol id="ci-icon-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5"/><path d="m15.8 8.2-2.5 5.1-5.1 2.5 2.5-5.1 5.1-2.5Z"/></symbol>
+      <symbol id="ci-icon-search" viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="7.2"/><path d="m16.2 16.2 4.3 4.3"/></symbol>
+      <symbol id="ci-icon-book" viewBox="0 0 24 24"><path d="M3 5.5A2.5 2.5 0 0 1 5.5 3H20v17H5.5A2.5 2.5 0 0 0 3 22.5Z"/><path d="M3 5.5v17M7 7h9M7 11h9"/></symbol>
+      <symbol id="ci-icon-save" viewBox="0 0 24 24"><path d="M4 3h13l4 4v14H3V4a1 1 0 0 1 1-1Z"/><path d="M7 3v6h10V3M7 21v-8h10v8"/></symbol>
+      <symbol id="ci-icon-file" viewBox="0 0 24 24"><path d="M5 2.5h9l5 5V21a1 1 0 0 1-1 1H5a2 2 0 0 1-2-2V4.5a2 2 0 0 1 2-2Z"/><path d="M14 2.5v5h5M7 13h10M7 17h7"/></symbol>
+      <symbol id="ci-icon-graduation" viewBox="0 0 24 24"><path d="m2 9 10-5 10 5-10 5L2 9Z"/><path d="M6 11v5c3.5 2.5 8.5 2.5 12 0v-5M22 9v6"/></symbol>
+      <symbol id="ci-icon-pen" viewBox="0 0 24 24"><path d="m4 16.5 11.8-11.8a2.1 2.1 0 0 1 3 3L7 19.5 3 21l1-4.5Z"/><path d="m14 6 4 4"/></symbol>
+      <symbol id="ci-icon-sparkles" viewBox="0 0 24 24"><path d="m12 3 1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z"/><path d="m19 15 .9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15ZM5 2l.7 1.8L7.5 4.5l-1.8.7L5 7l-.7-1.8-1.8-.7 1.8-.7L5 2Z"/></symbol>
+      <symbol id="ci-icon-library" viewBox="0 0 24 24"><path d="M4 4h16v17H4zM8 4V2h8v2M8 9h8M8 13h8M8 17h5"/></symbol>
+      <symbol id="ci-icon-camera" viewBox="0 0 24 24"><path d="M3 7h4l2-3h6l2 3h4v13H3z"/><circle cx="12" cy="13" r="4"/></symbol>
+      <symbol id="ci-icon-image" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></symbol>
+      <symbol id="ci-icon-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+      <symbol id="ci-icon-moon" viewBox="0 0 24 24"><path d="M20.5 15.5A8.7 8.7 0 0 1 8.5 3.5 8.8 8.8 0 1 0 20.5 15.5Z"/></symbol>
+      <symbol id="ci-icon-download" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M4 20h16"/></symbol>
+      <symbol id="ci-icon-alert" viewBox="0 0 24 24"><path d="M10.3 3.8 2.7 17a2 2 0 0 0 1.7 3h15.2a2 2 0 0 0 1.7-3L13.7 3.8a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4m0 3h.01"/></symbol>
+      <symbol id="ci-icon-school" viewBox="0 0 24 24"><path d="m2 9 10-5 10 5-10 5L2 9Z"/><path d="M5 11v7l7 3 7-3v-7M22 9v7"/></symbol>
+      <symbol id="ci-icon-messages" viewBox="0 0 24 24"><path d="M4 4h16v12H9l-5 4V4Z"/><path d="M8 9h8M8 12h5"/></symbol>
+      <symbol id="ci-icon-x" viewBox="0 0 24 24"><path d="m18 6-12 12M6 6l12 12"/></symbol>
+      <symbol id="ci-icon-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+      <symbol id="ci-icon-trash" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2m3 0-1 15H6L5 6m4 4v7m6-7v7"/></symbol>
+      <symbol id="ci-icon-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></symbol>
+      <symbol id="ci-icon-eye-off" viewBox="0 0 24 24"><path d="m3 3 18 18M10.6 10.6a2 2 0 0 0 2.8 2.8M9.9 5.2A10.7 10.7 0 0 1 12 5c6.5 0 10 7 10 7a18 18 0 0 1-3.1 3.8M6.2 6.2C3.5 8 2 12 2 12s3.5 7 10 7c1 0 1.9-.2 2.8-.5"/></symbol>
+      <symbol id="ci-icon-printer" viewBox="0 0 24 24"><path d="M6 8V3h12v5M6 17H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v7H6zM18 11h.01"/></symbol>
+      <symbol id="ci-icon-chart-bars" viewBox="0 0 24 24"><path d="M4 20V11h4v9M10 20V4h4v16M16 20v-7h4v7M2 20h20"/></symbol>
+      <symbol id="ci-icon-brain" viewBox="0 0 24 24"><path d="M12 4a3 3 0 0 0-5.5 1.5A3.5 3.5 0 0 0 5 12a3.5 3.5 0 0 0 1.5 6.5A3 3 0 0 0 12 20V4ZM12 4a3 3 0 0 1 5.5 1.5A3.5 3.5 0 0 1 19 12a3.5 3.5 0 0 1-1.5 6.5A3 3 0 0 1 12 20M8 9h2m-2 5h2m4-5h2m-2 5h2"/></symbol>
+      <symbol id="ci-icon-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></symbol>
+      <symbol id="ci-icon-send" viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4 20-7ZM22 2 11 13"/></symbol>
+    </svg>
+    <script>
+      window.ciIcon = function(name, size = 18, extraClass = '') {
+        const allowed = ['chart','calendar','bot','clipboard','settings','compass','search','book','save','file','graduation','pen','sparkles','library','camera','image','sun','moon','download','alert','school','messages','x','user','trash','eye','eye-off','printer','chart-bars','brain','target','send'];
+        const iconName = allowed.includes(name) ? name : 'search';
+        const px = Math.max(12, Math.min(64, Number(size) || 18));
+        const safeClass = String(extraClass || '').replace(/[^a-zA-Z0-9 _-]/g, '');
+        return '<svg class="ci-icon ' + safeClass + '" width="' + px + '" height="' + px + '" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#ci-icon-' + iconName + '"></use></svg>';
+      };
+    </script>
+
+
     <!-- HEADER -->
     <header>
-        <div>ClassInk APP ⚡</div>
+        <div class="ci-brand"><img src="../assets/classink-logo.svg" alt=""><span>ClassInk App</span></div>
         <div class="header-actions">
             <!-- NOUVEAU BOUTON DE MENU STYLE THINK / PAY.HTML -->
-            <button id="btn-header-schedule" class="icon-btn" title="Horaire & Admin Chat" onclick="toggleScheduleDrawer()">📅💬</button>
+            <button id="btn-header-schedule" class="icon-btn" title="Horaire et discussion de l'administration" aria-label="Horaire et discussion de l'administration" onclick="toggleScheduleDrawer()"><svg class="ci-icon" width="21" height="21" viewBox="0 0 24 24" aria-hidden="true"><use href="#ci-icon-calendar"></use></svg><svg class="ci-icon" width="19" height="19" viewBox="0 0 24 24" aria-hidden="true"><use href="#ci-icon-messages"></use></svg></button>
             <button id="btn-login-header" class="btn-auth-header">Se connecter</button>
         </div>
     </header>
@@ -495,7 +548,7 @@
                 </div>
                 <div style="display: flex; gap: 10px; margin-top: 20px;">
                     <button class="btn-action" style="flex:1;" onclick="switchAuthSubView('login')">Retour</button>
-                    <button class="btn-primary" style="flex:1;" id="btn-send-otp" onclick="handleRegisterInit()">Recevoir le code OTP ⚡</button>
+                    <button class="btn-primary" style="flex:1;" id="btn-send-otp" onclick="handleRegisterInit()">Recevoir le code OTP </button>
                 </div>
             </div>
 
@@ -561,7 +614,7 @@
         <!-- CHAMP DE RECHERCHE DYNAMIQUE POUR LES NOTES -->
         <div class="card" style="margin-bottom: 12px;">
             <div class="form-group" style="margin-bottom: 0;">
-                <label>🔍 RECHERCHE DYNAMIQUE D'ÉLÈVE</label>
+                <label><svg class="ci-icon ci-inline" viewBox="0 0 24 24" aria-hidden="true"><use href="#ci-icon-search"></use></svg> RECHERCHE DYNAMIQUE D'ÉLÈVE</label>
                 <input type="text" id="grades-filter-search" placeholder="Tapez le nom d'un élève pour filtrer..." oninput="renderGradesTables()">
             </div>
         </div>
@@ -569,7 +622,7 @@
         <!-- FILTRE DE COURS EN SÉPARÉ POUR LES NOTES -->
         <div class="card" style="margin-bottom: 12px;">
             <div class="form-group" style="margin-bottom: 0;">
-                <label>📖 SÉLECTIONNER LE COURS ÀA FICHER / Saisir</label>
+                <label><svg class="ci-icon ci-inline" viewBox="0 0 24 24" aria-hidden="true"><use href="#ci-icon-book"></use></svg> SÉLECTIONNER LE COURS ÀA FICHIER / Saisir</label>
                 <select id="grades-filter-course" onchange="changeGradeCourseFilter(this.value)"></select>
             </div>
         </div>
@@ -642,7 +695,7 @@
     <!-- SECTION : CONDUITE ET APPLICATION (réservée au titulaire de la classe) -->
     <main id="view-conduite" class="view-section">
         <div class="card">
-            <h3 style="color: var(--primary); margin-bottom: 8px;">🧭 Conduite et Application — <span id="conduite-class-label"></span></h3>
+            <h3 style="color: var(--primary); margin-bottom: 8px;"><svg class="ci-icon ci-inline" viewBox="0 0 24 24" aria-hidden="true"><use href="#ci-icon-compass"></use></svg> Conduite et Application — <span id="conduite-class-label"></span></h3>
             <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">Seul le titulaire de la classe saisit l'Application et la Conduite de ses élèves. PrimeInk vérifie que ces données viennent bien du titulaire avant de les mettre sur les bulletins.</p>
             <div class="form-inline">
                 <div class="form-group">
@@ -662,7 +715,7 @@
             <div id="conduite-list-container"></div>
             <datalist id="conduite-suggestions"><option value="E"></option><option value="TB"></option><option value="B"></option></datalist>
             <div style="display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap;">
-                <button class="btn-primary" style="flex: 2;" onclick="saveConduite()">💾 Enregistrer la conduite</button>
+                <button class="btn-primary" style="flex: 2;" onclick="saveConduite()"><svg class="ci-icon ci-inline" viewBox="0 0 24 24" aria-hidden="true"><use href="#ci-icon-save"></use></svg> Enregistrer la conduite</button>
             </div>
             <p id="conduite-status" style="font-size: 12px; color: var(--text-muted); margin-top: 10px;"></p>
         </div>
@@ -692,19 +745,19 @@
                 </div>
                 <!-- Sélecteur de modèle basé sur la structure ChatPayload -->
                 <select id="llink-model-select" style="padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-color); color: var(--text-main); font-size: 0.8rem; font-weight: bold; outline: none;">
-                    <option value="gemini-1.5-flash">✨ Standard</option>
-                    <option value="deepseek-v3">🧠 Reflexion</option>
+                    <option value="gemini-1.5-flash"> Standard</option>
+                    <option value="deepseek-v3"> Reflexion</option>
                 </select>
             </div>
 
             <!-- FENÊTRE DE CHAT STREAMING -->
             <div id="llink-chat-window" style="flex-grow: 1; overflow-y: auto; padding: 12px; background: var(--card-bg); border-radius: 12px; border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 12px;">
                 <div class="empty-state" id="llink-empty-state">
-                    <h3 style="color: var(--primary); margin-bottom: 6px;">Bienvenue sur Llink 🤖</h3>
+                    <div class="ci-illustration" aria-hidden="true"><svg class="ci-icon" viewBox="0 0 24 24"><use href="#ci-icon-bot"></use></svg></div><h3 style="color: var(--primary); margin-bottom: 6px;">Bienvenue sur Llink</h3>
                     <p style="margin-bottom: 12px;">Assistant pédagogique autonome. Choisissez une suggestion ou posez votre question :</p>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; text-align: left;">
-                        <button class="btn-action" onclick="setLlinkPrompt('Peux-tu m\'aider à préparer un cours sur : ')">🎓 Aide au cours</button>
-                        <button class="btn-action" onclick="setLlinkPrompt('Génère un sujet d\'examen sur : ')">✍️ Énoncé d'examen</button>
+                        <button class="btn-action" onclick="setLlinkPrompt('Peux-tu m\'aider à préparer un cours sur : ')"><svg class="ci-icon ci-inline" viewBox="0 0 24 24" aria-hidden="true"><use href="#ci-icon-graduation"></use></svg> Aide au cours</button>
+                        <button class="btn-action" onclick="setLlinkPrompt('Génère un sujet d\'examen sur : ')"><svg class="ci-icon ci-inline" viewBox="0 0 24 24" aria-hidden="true"><use href="#ci-icon-pen"></use></svg> Énoncé d'examen</button>
                     </div>
                 </div>
             </div>
@@ -712,7 +765,7 @@
             <!-- ZONE DE SAISIE -->
             <div class="llink-input-area" style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 24px; padding: 6px 14px; display: flex; align-items: center; gap: 8px;">
                 <input type="text" id="llink-input" placeholder="Posez votre question à Llink..." style="flex-grow: 1; border: none; background: transparent; color: var(--text-main); outline: none; padding: 6px; font-size: 0.9rem;" onkeydown="if(event.key==='Enter') sendLlinkMessage()">
-                <button onclick="sendLlinkMessage()" style="background: var(--primary); color: white; border: none; border-radius: 50%; width: 34px; height: 34px; cursor: pointer; font-weight: bold; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">➤</button>
+                <button onclick="sendLlinkMessage()" aria-label="Envoyer le message" title="Envoyer" style="background: var(--primary); color: white; border: none; border-radius: 50%; width: 34px; height: 34px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0;"><svg class="ci-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#ci-icon-send"></use></svg></button>
             </div>
 
         </div>
@@ -722,7 +775,7 @@
     <main id="view-interrogations" class="view-section">
         <!-- FORMULAIRE DE CRÉATION DE QUIZ -->
         <div class="card">
-            <h3 style="color: var(--primary); margin-bottom: 12px;">✍️ Créer / Générer une Interrogation</h3>
+            <h3 style="color: var(--primary); margin-bottom: 12px;"><svg class="ci-icon ci-inline" viewBox="0 0 24 24" aria-hidden="true"><use href="#ci-icon-pen"></use></svg> Créer / Générer une Interrogation</h3>
             
             <div class="form-group">
                 <label>TITRE DE L'ÉVALUATION / SUJET</label>
@@ -750,14 +803,14 @@
             </div>
 
             <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                <button class="btn-secondary" onclick="generateQuizWithLlink()">✨ Générer avec Llink AI</button>
-                <button class="btn-primary" onclick="saveQuizToDB()">💾 Enregistrer l'Interrogation</button>
+                <button class="btn-secondary" onclick="generateQuizWithLlink()"><svg class="ci-icon ci-inline" viewBox="0 0 24 24" aria-hidden="true"><use href="#ci-icon-sparkles"></use></svg> Générer avec Llink AI</button>
+                <button class="btn-primary" onclick="saveQuizToDB()"><svg class="ci-icon ci-inline" viewBox="0 0 24 24" aria-hidden="true"><use href="#ci-icon-save"></use></svg> Enregistrer l'Interrogation</button>
             </div>
         </div>
 
         <!-- BANQUE DES QUIZ ENREGISTRÉS -->
         <div class="card">
-            <h3 style="color: var(--primary); margin-bottom: 12px;">📚 Banque des Interrogations Sauvegardées</h3>
+            <h3 style="color: var(--primary); margin-bottom: 12px;"><svg class="ci-icon ci-inline" viewBox="0 0 24 24" aria-hidden="true"><use href="#ci-icon-library"></use></svg> Banque des Interrogations Sauvegardées</h3>
             <div id="quizzes-container"></div>
         </div>
     </main>
@@ -833,8 +886,8 @@
                 <img id="signature-preview" alt="Ma signature" style="display: none; max-height: 80px; max-width: 100%;">
             </div>
             <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                <button class="btn-primary" onclick="captureSignature(true)">📷 Prendre une photo</button>
-                <button class="btn-action" onclick="captureSignature(false)">🖼️ Choisir une image</button>
+                <button class="btn-primary" onclick="captureSignature(true)"><svg class="ci-icon ci-inline" viewBox="0 0 24 24" aria-hidden="true"><use href="#ci-icon-camera"></use></svg> Prendre une photo</button>
+                <button class="btn-action" onclick="captureSignature(false)"><svg class="ci-icon ci-inline" viewBox="0 0 24 24" aria-hidden="true"><use href="#ci-icon-image"></use></svg> Choisir une image</button>
                 <button class="btn-action" id="signature-delete-btn" style="display: none; color: var(--danger); border-color: var(--danger);" onclick="deleteSignature()">Supprimer</button>
             </div>
         </div>
@@ -854,8 +907,8 @@
             <div class="form-group">
                 <label>THÈME D'AFFICHAGE</label>
                 <div style="display: flex; gap: 15px; margin-top: 5px;">
-                    <label><input type="radio" name="theme" value="light" checked onchange="setTheme('light')"> ☀️ Clair</label>
-                    <label><input type="radio" name="theme" value="dark" onchange="setTheme('dark')"> 🌙 Sombre</label>
+                    <label><input type="radio" name="theme" value="light" checked onchange="setTheme('light')"> <svg class="ci-icon ci-inline" viewBox="0 0 24 24" aria-hidden="true"><use href="#ci-icon-sun"></use></svg> Clair</label>
+                    <label><input type="radio" name="theme" value="dark" onchange="setTheme('dark')"> <svg class="ci-icon ci-inline" viewBox="0 0 24 24" aria-hidden="true"><use href="#ci-icon-moon"></use></svg> Sombre</label>
                 </div>
             </div>
 
@@ -871,31 +924,31 @@
         <div class="card">
             <h3 style="color: var(--primary); margin-bottom: 15px;">Sauvegarde & Maintenance</h3>
             <div style="display: flex; flex-direction: column; gap: 10px;">
-                <button class="btn-action" onclick="exportDatabaseJSON()">📥 Exporter la Base de Données (JSON)</button>
-                <button class="btn-action" style="color: var(--danger); border-color: var(--danger);" onclick="resetAppDatabase()">⚠️ Réinitialiser toutes les données locales</button>
+                <button class="btn-action" onclick="exportDatabaseJSON()"><svg class="ci-icon ci-inline" viewBox="0 0 24 24" aria-hidden="true"><use href="#ci-icon-download"></use></svg> Exporter la Base de Données (JSON)</button>
+                <button class="btn-action" style="color: var(--danger); border-color: var(--danger);" onclick="resetAppDatabase()"><svg class="ci-icon ci-inline" viewBox="0 0 24 24" aria-hidden="true"><use href="#ci-icon-alert"></use></svg> Réinitialiser toutes les données locales</button>
             </div>
         </div>
 
         <div class="app-info">
             <p><strong>ClassInk</strong> - Version 2.1.30245 (Build Cryptographique)</p>
             <p>Site officiel : <a href="https://klgaby440-lang.github.io/class-net/" target="_blank" style="color: var(--primary);">klgaby440-lang.github.io/classnet</a></p>
-            <p style="margin-top: 8px; color: var(--primary); font-weight: bold;">Developped by CRYPT Entreprise ⚡</p>
+            <p style="margin-top: 8px; color: var(--primary); font-weight: bold;">Developed by CRYPT Entreprise</p>
         </div>
     </main>
 
     <button id="nav-toggle-btn" class="floating-nav-btn" aria-label="Menu des options">
         <span class="spinner-ring"></span>
-        <span class="btn-icon">⚙️</span>
+        <span class="btn-icon"><svg class="ci-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#ci-icon-settings"></use></svg></span>
     </button>
 
     <!-- NAVIGATION INFERIEURE -->
     <nav id="bottom-nav" class="bottom-nav">
-        <button class="nav-btn active" data-target="view-notes">Notes</button>
+        <button class="nav-btn active" data-target="view-notes"><svg class="ci-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#ci-icon-chart"></use></svg><span>Notes</span></button>
         <button class="nav-btn" data-target="view-presence">Présences</button>
-        <button class="nav-btn" data-target="view-llink">Llink</button>
-        <button class="nav-btn" data-target="view-interrogations">Quiz</button>
-        <button class="nav-btn" id="nav-conduite" data-target="view-conduite" style="display: none;">Conduite</button>
-        <button class="nav-btn" data-target="view-settings">Réglages</button>
+        <button class="nav-btn" data-target="view-llink"><svg class="ci-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#ci-icon-bot"></use></svg><span>Llink</span></button>
+        <button class="nav-btn" data-target="view-interrogations"><svg class="ci-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#ci-icon-clipboard"></use></svg><span>Quiz</span></button>
+        <button class="nav-btn" id="nav-conduite" data-target="view-conduite" style="display: none;"><svg class="ci-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#ci-icon-compass"></use></svg><span>Conduite</span></button>
+        <button class="nav-btn" data-target="view-settings"><svg class="ci-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#ci-icon-settings"></use></svg><span>Réglages</span></button>
     </nav>
 
     <!-- MODAL DE REMPLACEMENT DE PROMPT() -->
@@ -937,14 +990,14 @@
     <div id="schedule-chat-drawer" class="drawer-overlay">
         <div class="drawer-content">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">
-                <h3 style="color: var(--primary);">🏫 Centre de Contrôle & Admin</h3>
-                <button onclick="toggleScheduleDrawer()" style="background:none; border:none; font-size:1.4rem; cursor:pointer; color:var(--text-main);">✕</button>
+                <h3 style="color: var(--primary);"><svg class="ci-icon ci-inline" viewBox="0 0 24 24" aria-hidden="true"><use href="#ci-icon-school"></use></svg> Centre de Contrôle & Admin</h3>
+                <button onclick="toggleScheduleDrawer()" aria-label="Fermer" title="Fermer" style="background:none; border:none; font-size:1.4rem; cursor:pointer; color:var(--text-main);"><svg class="ci-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#ci-icon-x"></use></svg></button>
             </div>
 
             <!-- SÉLECTEUR D'ONGLETS -->
             <div style="display: flex; gap: 8px; margin-bottom: 15px;">
-                <button class="btn-primary" style="flex:1; font-size:0.75rem;" onclick="switchDrawerTab('schedule')">📅 Horaire & Sonnerie</button>
-                <button class="btn-action" style="flex:1; font-size:0.75rem;" onclick="switchDrawerTab('chat')">💬 Groupe Direction</button>
+                <button class="btn-primary" style="flex:1; font-size:0.75rem;" onclick="switchDrawerTab('schedule')"><svg class="ci-icon ci-inline" viewBox="0 0 24 24" aria-hidden="true"><use href="#ci-icon-calendar"></use></svg> Horaire & Sonnerie</button>
+                <button class="btn-action" style="flex:1; font-size:0.75rem;" onclick="switchDrawerTab('chat')"><svg class="ci-icon ci-inline" viewBox="0 0 24 24" aria-hidden="true"><use href="#ci-icon-messages"></use></svg> Groupe Direction</button>
             </div>
 
             <!-- SECTION 1 : HORAIRE & MINUTEUR SONNERIE -->
@@ -1029,7 +1082,7 @@ async function search_version(url, version_actuelle) {
         
         if (data && data.status === true) {
             if (version_actuelle !== data.latest_version) {
-                await showCustomAlert("📢 Une nouvelle version est disponible. Rendez-vous sur CRYPT Store pour la télécharger.");
+                await showCustomAlert(" Une nouvelle version est disponible. Rendez-vous sur CRYPT Store pour la télécharger.");
             }
         }
     } catch (err) {
@@ -1150,7 +1203,7 @@ async function exporterPDF(doc, filename = "interrogation.pdf") {
         }
         
         if (typeof showCustomAlert === 'function') {
-          await showCustomAlert("✅ Le fichier PDF a été enregistré avec succès !");
+          await showCustomAlert(" Le fichier PDF a été enregistré avec succès !");
         }
       }
       return;
@@ -1221,11 +1274,11 @@ async function deleteClass(classNameToDelete) {
     const targetClass = classNameToDelete || activeClass;
 
     if (!targetClass) {
-        alert("⚠️ Aucune classe sélectionnée à supprimer.");
+        alert(" Aucune classe sélectionnée à supprimer.");
         return;
     }
 
-    const confirmDelete = await showCustomConfirm(`⚠️ Es-tu sûr de vouloir supprimer la classe "${targetClass}" ?\n\nToutes les données associées (élèves, cours, évaluations et présences) seront définitivement effacées.`);
+    const confirmDelete = await showCustomConfirm(` Es-tu sûr de vouloir supprimer la classe "${targetClass}" ?\n\nToutes les données associées (élèves, cours, évaluations et présences) seront définitivement effacées.`);
     if (!confirmDelete) return;
 
     // 1. Retrait de la liste des classes
@@ -1251,7 +1304,7 @@ async function deleteClass(classNameToDelete) {
     renderGradesTables();
     renderAttendanceList();
 
-    alert(`✅ La classe "${targetClass}" a été supprimée avec succès.`);
+    alert(` La classe "${targetClass}" a été supprimée avec succès.`);
 }
 
 let classInkStorageAvailable = true;
@@ -1386,7 +1439,7 @@ async function copyTeacherAccessCode() {
 function updateLoginHeaderButton() {
     const btn = document.getElementById('btn-login-header');
     if (db.user.isLoggedIn) {
-        btn.textContent = `👤 ${db.user.name.split(' ')[0]}`;
+        btn.innerHTML = ciIcon('user', 16, 'ci-inline') + safeHTML(db.user.name.split(' ')[0]);
         btn.style.background = "#10B981";
     } else {
         btn.textContent = "Se connecter";
@@ -1606,7 +1659,7 @@ async function handleLogin() {
     const pass = document.getElementById('login-password').value.trim();
 
     if (!email || !pass) {
-        await showCustomAlert("⚠️ Veuillez saisir votre e-mail et votre mot de passe.");
+        await showCustomAlert(" Veuillez saisir votre e-mail et votre mot de passe.");
         return;
     }
 
@@ -1653,9 +1706,9 @@ async function handleLogin() {
             const schoolLinkNote = db.schoolId
                 ? ""
                 : " Pour recevoir les données de votre école, communiquez votre identifiant ClassInk (" + (db.user.id || "indisponible") + ") à l'administration afin qu'elle vous ajoute dans PrimeInk.";
-            await showCustomAlert(`✅ Connexion réussie ! ${schoolClasses} classe(s) chargée(s) depuis l'école.${titularNote}${schoolLinkNote}`);
+            await showCustomAlert(` Connexion réussie ! ${schoolClasses} classe(s) chargée(s) depuis l'école.${titularNote}${schoolLinkNote}`);
         } else {
-            await showCustomAlert(`❌ Échec de connexion : ${result.message || 'Identifiants incorrects.'}`);
+            await showCustomAlert(` Échec de connexion : ${result.message || 'Identifiants incorrects.'}`);
         }
     } catch (error) {
         await systemLog("Impossible de joindre le serveur Cloud. Vérifiez votre connexion Internet.", 'error', "Erreur Connexion Cloud");
@@ -1672,7 +1725,7 @@ async function handleRegisterInit() {
     const pass = document.getElementById('reg-password').value.trim();
 
     if (!fullName || !email || !phone || !ageVal || !pass) {
-        alert("⚠️ Veuillez remplir tous les champs obligatoires.");
+        alert(" Veuillez remplir tous les champs obligatoires.");
         return;
     }
 
@@ -1701,15 +1754,15 @@ async function handleRegisterInit() {
         if (result.status) {
             document.getElementById('otp-target-email').textContent = email;
             switchAuthSubView('otp');
-            alert(`📧 ${result.message}`);
+            alert(` ${result.message}`);
         } else {
-            alert(`❌ ${result.message}`);
+            alert(` ${result.message}`);
         }
     } catch (err) {
-        alert("❌ Erreur de réseau lors de la demande du code OTP.");
+        alert(" Erreur de réseau lors de la demande du code OTP.");
     } finally {
         btn.disabled = false;
-        btn.textContent = "Recevoir le code OTP ⚡";
+        btn.textContent = "Recevoir le code OTP ";
     }
 }
 
@@ -1718,7 +1771,7 @@ async function handleRegisterVerify() {
     const otpCode = document.getElementById('reg-otp-code').value.trim();
 
     if (!otpCode || !tempTeacherData) {
-        alert("⚠️ Veuillez entrer le code OTP à 6 chiffres reçu par mail.");
+        alert(" Veuillez entrer le code OTP à 6 chiffres reçu par mail.");
         return;
     }
 
@@ -1742,16 +1795,16 @@ async function handleRegisterVerify() {
         const result = await response.json();
 
         if (result.status) {
-            alert("🎉 " + result.message);
+            alert(" " + result.message);
             // Pré-remplissage des champs de connexion
             document.getElementById('login-email').value = tempTeacherData.email;
             document.getElementById('login-password').value = tempTeacherData.password;
             switchAuthSubView('login');
         } else {
-            alert(`❌ ${result.message}`);
+            alert(` ${result.message}`);
         }
     } catch (err) {
-        alert("❌ Erreur de vérification du code OTP.");
+        alert(" Erreur de vérification du code OTP.");
     } finally {
         btn.disabled = false;
         btn.textContent = "Valider mon compte";
@@ -2093,7 +2146,7 @@ function changeGradeCourseFilter(courseName) {
 
 async function promptAddCourseToActiveClass() {
     if (!activeClass) {
-        await showCustomAlert("⚠️ Veuillez d'abord sélectionner ou créer une classe.");
+        await showCustomAlert(" Veuillez d'abord sélectionner ou créer une classe.");
         return;
     }
 
@@ -2114,9 +2167,9 @@ async function promptAddCourseToActiveClass() {
         renderClassSelectors();
         renderGradesTables();
         renderAttendanceList();
-        await showCustomAlert(`✅ Cours "${courseName}" ajouté avec succès à la classe "${activeClass}" !`);
+        await showCustomAlert(` Cours "${courseName}" ajouté avec succès à la classe "${activeClass}" !`);
     } else {
-        await showCustomAlert("⚠️ Ce cours existe déjà pour cette classe.");
+        await showCustomAlert(" Ce cours existe déjà pour cette classe.");
     }
 }
 
@@ -2186,7 +2239,7 @@ function renderClassSelectors() {
 
     // La classe reste distincte ; les cours apparaissent chacun comme un choix.
     document.getElementById('current-class-title').innerHTML = activeClass
-        ? safeHTML(activeClass) + ' <button onclick="deleteClass(' + jsArg(activeClass) + ')" style="background:none;border:none;cursor:pointer;font-size:1.1rem;margin-left:8px;" title="Supprimer cette classe">🗑️</button>'
+        ? safeHTML(activeClass) + ' <button onclick="deleteClass(' + jsArg(activeClass) + ')" style="background:none;border:none;cursor:pointer;margin-left:8px;color:var(--danger);" title="Supprimer cette classe" aria-label="Supprimer cette classe">' + ciIcon('trash', 16) + '</button>'
         : "Aucune classe";
 
     renderPresenceCourseOptions();
@@ -2288,9 +2341,9 @@ function renderGradesTables() {
     // 2. Boutons d'action rapides (Édition des élèves & Fiche Récapitulative)
     const toolbarHTML = `
         <div class="card" style="margin-bottom: 12px; display: flex; gap: 10px; flex-wrap: wrap;">
-            <button class="btn-action" style="flex:1;" onclick="openEditStudentsModal()">✏️ Éditer la liste des élèves</button>
-            <button class="btn-secondary" style="flex:1;" onclick="renderCourseSummarySheet()">📊 Fiche Récapitulative des Moyennes</button>
-            <button class="btn-action" style="flex:1;" onclick="printActiveCourseSheet()">🖨️ Imprimer la fiche</button>
+            <button class="btn-action" style="flex:1;" onclick="openEditStudentsModal()">${ciIcon('pen', 16, 'ci-inline')} Éditer la liste des élèves</button>
+            <button class="btn-secondary" style="flex:1;" onclick="renderCourseSummarySheet()">${ciIcon('chart-bars', 16, 'ci-inline')} Fiche Récapitulative des Moyennes</button>
+            <button class="btn-action" style="flex:1;" onclick="printActiveCourseSheet()">${ciIcon('printer', 16, 'ci-inline')} Imprimer la fiche</button>
         </div>
     `;
     container.innerHTML += toolbarHTML;
@@ -2319,7 +2372,7 @@ function renderGradesTables() {
             <div class="card-header-toggle">
                 <h4 style="color: var(--primary);">${periodLabels[pKey]} <small style="font-weight:normal; color:var(--text-muted);">(${safeHTML(selectedCourse)}) · Barème : ${safeHTML(pKey)}/${safeHTML(currentMaxBulletin)}</small></h4>
                 <button class="btn-action" onclick="togglePeriodVisibility(${jsArg(pKey)})">
-                    ${isVisible === 'block' ? '👁️ Masquer' : '👁️ Afficher'}
+                    ${isVisible === 'block' ? ciIcon('eye', 16, 'ci-inline') + ' Masquer' : ciIcon('eye-off', 16, 'ci-inline') + ' Afficher'}
                 </button>
             </div>
             <div id="period-body-${safeHTML(pKey)}" style="display: ${isVisible}; overflow-x: auto;">
@@ -2328,9 +2381,9 @@ function renderGradesTables() {
                         <tr>
                             <th>Nom de l'Élève</th><th>Notes</th>`;
         
-        // 📅 Affichage conditionnel de la date sous le titre du devoir
+        //  Affichage conditionnel de la date sous le titre du devoir
         evals.forEach(ev => {
-            const dateBadge = ev.date ? `<br><small style="color:var(--text-muted); font-weight:normal; font-size:0.75rem;">📅 ${safeHTML(ev.date)}</small>` : '';
+            const dateBadge = ev.date ? `<br><small style="color:var(--text-muted); font-weight:normal; font-size:0.75rem;">${ciIcon('calendar', 13, 'ci-inline')} ${safeHTML(ev.date)}</small>` : '';
             tableHTML += `<th style="text-align:center;">${safeHTML(ev.name)}${dateBadge}<br><small style="color:var(--primary); font-weight:bold;">/${safeHTML(ev.max)}</small></th>`;
         });
 
@@ -2340,7 +2393,7 @@ function renderGradesTables() {
         </tr></thead><tbody>`;
 
         if (filteredStudents.length === 0) {
-            tableHTML += `<tr><td colspan="${evals.length + 4}" style="text-align:center; color: var(--text-muted); padding: 12px;">🔍 Aucun élève ne correspond à "${safeHTML(searchTerm)}"</td></tr>`;
+            tableHTML += `<tr><td colspan="${evals.length + 4}" style="text-align:center; color: var(--text-muted); padding: 12px;"> Aucun élève ne correspond à "${safeHTML(searchTerm)}"</td></tr>`;
         } else {
             filteredStudents.forEach(st => {
                 let total = 0;
@@ -2359,17 +2412,17 @@ function renderGradesTables() {
                         const numVal = parseFloat(gradeVal);
                         const maxVal = parseFloat(ev.max);
 
-                        // 🔴 CAS 1 : Note supérieure au max
+                        //  CAS 1 : Note supérieure au max
                         if (numVal > maxVal) {
                             inputStyle += " background-color: #FEE2E2; color: #DC2626; border-color: #EF4444;";
                         } 
-                        // 🟠 CAS 2 : Note inférieure à la moyenne
+                        //  CAS 2 : Note inférieure à la moyenne
                         else if (numVal < (maxVal / 2)) {
                             inputStyle += " background-color: #FEF3C7; color: #D97706; border-color: #F59E0B;";
                             total += numVal;
                             maxTotal += maxVal;
                         } 
-                        // 🟢 CAS 3 : Note valide et >= moyenne
+                        //  CAS 3 : Note valide et >= moyenne
                         else {
                             inputStyle += " background-color: #DCFCE7; color: #15803D; border-color: #22C55E;";
                             total += numVal;
@@ -2552,7 +2605,7 @@ function openEditStudentsModal() {
         modal.className = 'modal-overlay';
         modal.innerHTML = `
             <div class="modal-content" style="max-width: 500px; width: 95%;">
-                <h3 style="margin-bottom: 12px; color: var(--primary);">✏️ Édition de la Classe</h3>
+                <h3 style="margin-bottom: 12px; color: var(--primary);">${ciIcon('pen', 18, 'ci-inline')} Édition de la Classe</h3>
                 
                 <!-- NOUVEAU : Édition de la classe et des cours -->
                 <div class="form-group">
@@ -2574,7 +2627,7 @@ function openEditStudentsModal() {
                 <hr style="border: 0; border-top: 1px dashed var(--border-color); margin: 15px 0;">
 
                 <div class="form-group">
-                    <label>🔍 RECHERCHER UN ÉLÈVE DANS LA LISTE</label>
+                    <label>${ciIcon('search', 16, 'ci-inline')} RECHERCHER UN ÉLÈVE DANS LA LISTE</label>
                     <input type="text" id="edit-student-search" placeholder="Filtrer par nom..." oninput="renderEditStudentsList()">
                 </div>
                 <div id="edit-students-list" style="max-height: 300px; overflow-y: auto; margin-bottom: 15px;"></div>
@@ -2618,7 +2671,7 @@ function renderEditStudentsList() {
                            onchange="updateStudentName(${jsArg(st.id)}, this.value)">
                 </td>
                 <td style="width: 40px; text-align: center;">
-                    <button onclick="removeStudent(${jsArg(st.id)})" style="background:none; border:none; cursor:pointer;" title="Supprimer cet élève">🗑️</button>
+                    <button onclick="removeStudent(${jsArg(st.id)})" style="background:none; border:none; cursor:pointer;color:var(--danger);" title="Supprimer cet élève" aria-label="Supprimer cet élève">${ciIcon('trash', 16)}</button>
                 </td>
             </tr>
         `;
@@ -2638,7 +2691,7 @@ function updateStudentName(studentId, newName) {
 }
 
 async function removeStudent(studentId) {
-    if (await showCustomConfirm("⚠️ Voulez-vous vraiment supprimer cet élève de la classe ?")) {
+    if (await showCustomConfirm(" Voulez-vous vraiment supprimer cet élève de la classe ?")) {
         db.students[activeClass] = db.students[activeClass].filter(s => s.id !== studentId);
         saveDB();
         renderEditStudentsList();
@@ -2667,8 +2720,8 @@ function renderCourseSummarySheet() {
     let html = `
         <div class="card" style="margin-top: 20px; border: 2px solid var(--primary);">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-                <h3 style="color: var(--primary);">📊 Fiche Récapitulative : ${safeHTML(selectedCourse)} (${safeHTML(activeClass)})</h3>
-                <button class="btn-action" onclick="document.getElementById('course-summary-sheet-container').innerHTML=''">✖ Masquer</button>
+                <h3 style="color: var(--primary);">${ciIcon('chart-bars', 18, 'ci-inline')} Fiche Récapitulative : ${safeHTML(selectedCourse)} (${safeHTML(activeClass)})</h3>
+                <button class="btn-action" onclick="document.getElementById('course-summary-sheet-container').innerHTML=''" aria-label="Masquer">${ciIcon('x', 15, 'ci-inline')} Masquer</button>
             </div>
             <div style="overflow-x: auto;">
                 <table>
@@ -2783,7 +2836,7 @@ async function addEvaluationColumn(pKey) {
         || (db.courses[activeClass] ? db.courses[activeClass][0] : null);
 
     if (!currentCourse) {
-        await showCustomAlert("⚠️ Veuillez d'abord ajouter un cours à la classe.");
+        await showCustomAlert(" Veuillez d'abord ajouter un cours à la classe.");
         return;
     }
 
@@ -3203,10 +3256,10 @@ const CONFIG = {
  */
 async function saveOfflineCommit() {
     // 1. Vérification par mot de passe
-    const inputPass = await showCustomPrompt("🔒 Entrez votre mot de passe pour autoriser l'envoi vers l'Intranet (Push Off) :");
+    const inputPass = await showCustomPrompt(" Entrez votre mot de passe pour autoriser l'envoi vers l'Intranet (Push Off) :");
     if (inputPass === null) return;
     if (inputPass !== db.user.password) {
-        await showCustomAlert("❌ Mot de passe incorrect. Synchronisation Intranet annulée.");
+        await showCustomAlert(" Mot de passe incorrect. Synchronisation Intranet annulée.");
         return;
     }
 
@@ -3225,9 +3278,9 @@ async function saveOfflineCommit() {
     if (result.success) {
         db.pendingCommits = 0;
         saveDB();
-        await showCustomAlert(`💾 Push Off réussi ! La base de données complète a été transmise au serveur Intranet via : ${result.url}`);
+        await showCustomAlert(` Push Off réussi ! La base de données complète a été transmise au serveur Intranet via : ${result.url}`);
     } else {
-        await showCustomAlert("❌ Échec de la synchronisation : Le serveur Intranet est inatteignable (URL primaire et de secours hors ligne).");
+        await showCustomAlert(" Échec de la synchronisation : Le serveur Intranet est inatteignable (URL primaire et de secours hors ligne).");
     }
 }
 
@@ -3763,7 +3816,7 @@ function exportDatabaseJSON() {
 }
 
 async function resetAppDatabase() {
-    if (await showCustomConfirm("⚠️ ATTENTION : Cela effacera l'intégralité des élèves, notes, présences et quiz enregistrés sur cet appareil. Continuer ?")) {
+    if (await showCustomConfirm(" ATTENTION : Cela effacera l'intégralité des élèves, notes, présences et quiz enregistrés sur cet appareil. Continuer ?")) {
         try { localStorage.removeItem(DB_KEY); } catch (error) {
             showClassInkCompatibilityNotice("Le navigateur ne permet pas de supprimer le stockage local. Ouvrez ClassInk dans un navigateur compatible.");
             return;
@@ -3853,7 +3906,7 @@ async function sendLlinkMessage() {
 
     const botMsgContainer = document.createElement('div');
     botMsgContainer.style.cssText = "align-self:flex-start;background:var(--bg-color);color:var(--text-main);border:1px solid var(--border-color);padding:10px 14px;border-radius:14px 14px 14px 2px;max-width:85%;font-size:.88rem;word-break:break-word;line-height:1.4;";
-    botMsgContainer.innerHTML = "<em>Llink consulte votre espace autorisé… 🧠</em>";
+    botMsgContainer.innerHTML = ciIcon('brain', 16, 'ci-inline') + "<em>Llink consulte votre espace autorisé…</em>";
     chatWindow.appendChild(botMsgContainer);
     chatWindow.scrollTop = chatWindow.scrollHeight;
 
@@ -3905,11 +3958,11 @@ async function generateQuizWithLlink() {
     const textarea = document.getElementById('quiz-text-content');
 
     if (!title) {
-        await showCustomAlert("⚠️ Précise d'abord le titre ou le sujet dans le champ 'TITRE DE L'ÉVALUATION'.");
+        await showCustomAlert(" Précise d'abord le titre ou le sujet dans le champ 'TITRE DE L'ÉVALUATION'.");
         return;
     }
 
-    textarea.value = "🤖 Llink rédige ton interrogation en arrière-plan... Patientez quelques secondes...";
+    textarea.value = "Llink rédige ton interrogation en arrière-plan... Patientez quelques secondes...";
 
     const promptText = `Rédige une interrogation écrite complète et prête à imprimer sur le sujet : "${title}".
 Classe : ${className}
@@ -3953,7 +4006,7 @@ Structure demandée :
 
     } catch (err) {
         await systemLog("Erreur lors de la génération du quiz via Llink AI.", 'error', 'Génération Quiz');
-        textarea.value = "❌ Erreur de génération. Vérifie ta connexion réseau à l'API Llink.";
+        textarea.value = " Erreur de génération. Vérifie ta connexion réseau à l'API Llink.";
     }
 }
 
@@ -4025,7 +4078,7 @@ function saveQuizToDB() {
     const textContent = document.getElementById('quiz-text-content').value.trim();
 
     if (!title || !textContent || !className) {
-        alert("⚠️ Veuille remplir au moins le titre, la classe et l'énoncé du quiz.");
+        alert(" Veuille remplir au moins le titre, la classe et l'énoncé du quiz.");
         return;
     }
 
@@ -4049,7 +4102,7 @@ function saveQuizToDB() {
     // Réinitialisation des champs
     document.getElementById('quiz-title-input').value = '';
     document.getElementById('quiz-text-content').value = '';
-    alert("✅ Interrogation enregistrée avec succès dans la banque de données !");
+    alert(" Interrogation enregistrée avec succès dans la banque de données !");
 }
 
 // 5. Affichage dynamique de la liste des quiz
@@ -4058,7 +4111,7 @@ function renderQuizList() {
     if (!container) return;
 
     if (!db.quizzes || db.quizzes.length === 0) {
-        container.innerHTML = '<p class="empty-state">Aucune interrogation enregistrée pour le moment.</p>';
+        container.innerHTML = '<div class="empty-state"><div class="ci-illustration">' + ciIcon('clipboard', 42) + '</div><p>Aucune interrogation enregistrée pour le moment.</p></div>';
         return;
     }
 
@@ -4070,14 +4123,14 @@ function renderQuizList() {
                     <div>
                         <strong style="color: var(--primary); font-size: 0.95rem;">${safeHTML(q.title)}</strong>
                         <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">
-                            📚 ${safeHTML(q.class)} | 📖 ${safeHTML(q.course)} | 🎯 Note Max: ${safeHTML(q.maxScore)} pts | 📅 ${safeHTML(q.createdAt)}
+                            ${ciIcon('school', 14, 'ci-inline')} ${safeHTML(q.class)} | ${ciIcon('book', 14, 'ci-inline')} ${safeHTML(q.course)} | ${ciIcon('target', 14, 'ci-inline')} Note Max: ${safeHTML(q.maxScore)} pts | ${ciIcon('calendar', 14, 'ci-inline')} ${safeHTML(q.createdAt)}
                         </div>
                     </div>
-                    <button onclick="deleteQuiz(${jsArg(q.id)})" style="background:none; border:none; cursor:pointer; font-size:1rem;" title="Supprimer">🗑️</button>
+                    <button onclick="deleteQuiz(${jsArg(q.id)})" style="background:none; border:none; cursor:pointer; font-size:1rem;color:var(--danger);" title="Supprimer" aria-label="Supprimer">${ciIcon('trash', 16)}</button>
                 </div>
                 <pre style="white-space: pre-wrap; font-family: inherit; font-size: 0.82rem; background: var(--card-bg); padding: 8px; border-radius: 6px; border: 1px solid var(--border-color); max-height: 120px; overflow-y: auto; margin: 8px 0;">${safeHTML(q.textContent)}</pre>
                 <div style="display: flex; gap: 8px; justify-content: flex-end;">
-                    <button class="btn-action" onclick="printQuiz(${jsArg(q.id)})" style="font-size:0.75rem; padding: 4px 10px;">🖨️ Imprimer / Exporter</button>
+                    <button class="btn-action" onclick="printQuiz(${jsArg(q.id)})" style="font-size:0.75rem; padding: 4px 10px;">${ciIcon('printer', 15, 'ci-inline')} Imprimer / Exporter</button>
                 </div>
             </div>
         `;
@@ -4102,7 +4155,7 @@ function printQuiz(quizId) {
 
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
-        alert("⚠️ Activez les fenêtres surgissantes (pop-ups) pour imprimer.");
+        alert(" Activez les fenêtres surgissantes (pop-ups) pour imprimer.");
         return;
     }
 
@@ -4152,17 +4205,17 @@ function importDatabaseJSON(event) {
             
             // Validation de la structure minimale
             if (!importedDB.user || !importedDB.classes || !importedDB.students) {
-                alert("⚠️ Fichier de sauvegarde invalide ou corrompu.");
+                alert(" Fichier de sauvegarde invalide ou corrompu.");
                 return;
             }
 
-            if (await showCustomConfirm("⚠️ Souhaitez-vous remplacer la base de données actuelle par cette sauvegarde ?")) {
+            if (await showCustomConfirm(" Souhaitez-vous remplacer la base de données actuelle par cette sauvegarde ?")) {
                 db = importedDB;
                 saveDB();
                 location.reload(); // Rechargement pour réinitialiser l'UI
             }
         } catch (err) {
-            alert("❌ Erreur lors de la lecture du fichier : " + err.message);
+            alert(" Erreur lors de la lecture du fichier : " + err.message);
         }
     };
     reader.readAsText(file);
@@ -4242,11 +4295,11 @@ async function updateActiveClassName() {
     const newName = document.getElementById('edit-class-name').value.trim();
     if (!newName || newName === activeClass) return;
     if (db.classes.includes(newName)) {
-        alert("❌ Ce nom de classe existe déjà.");
+        alert(" Ce nom de classe existe déjà.");
         return;
     }
     
-    const confirmChange = await showCustomConfirm(`⚠️ Renommer "${activeClass}" en "${newName}" ? Toutes les données liées seront transférées.`);
+    const confirmChange = await showCustomConfirm(` Renommer "${activeClass}" en "${newName}" ? Toutes les données liées seront transférées.`);
     if (!confirmChange) return;
     
     // 1. Mise à jour de la liste principale
@@ -4283,7 +4336,7 @@ async function updateActiveClassName() {
     saveDB();
     renderClassSelectors();
     closeEditStudentsModal();
-    alert("✅ Nom de la classe mis à jour avec succès.");
+    alert(" Nom de la classe mis à jour avec succès.");
 }
 
 function updateActiveClassCourses() {
@@ -4291,7 +4344,7 @@ function updateActiveClassCourses() {
     const newCourses = coursesStr.split(',').map(c => c.trim()).filter(c => c !== "");
     
     if(newCourses.length === 0) {
-        alert("⚠️ La classe doit conserver au moins un cours.");
+        alert(" La classe doit conserver au moins un cours.");
         return;
     }
     
@@ -4299,7 +4352,7 @@ function updateActiveClassCourses() {
     saveDB();
     renderClassSelectors();
     renderGradesTables();
-    alert("✅ La liste des cours a été mise à jour.");
+    alert(" La liste des cours a été mise à jour.");
 }
 
 // Remplacement du journal de logs interne
@@ -4446,7 +4499,7 @@ function showCustomPrompt(message, defaultValue = "", title = "Saisie requise") 
  * Console du système pour intercepter et afficher les erreurs/logs dans la modale
  */
 function systemLog(message, type = 'info', title = 'Console ClassInk') {
-    const prefix = type === 'error' ? '❌ Erreur Système : ' : (type === 'warn' ? '⚠️ Avertissement : ' : 'ℹ️ ');
+    const prefix = type === 'error' ? ' Erreur Système : ' : (type === 'warn' ? ' Avertissement : ' : ' ');
     return showCustomAlert(`${prefix}${message}`, title);
 }
 
