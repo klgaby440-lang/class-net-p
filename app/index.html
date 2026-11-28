@@ -1506,6 +1506,16 @@ function cloudAuthHeaders() {
     return headers;
 }
 
+// Jeton dédié à la passerelle locale : il ne permet pas d'appeler l'API Cloud.
+function intranetAuthHeaders() {
+    const headers = { 'Content-Type': 'application/json' };
+    try {
+        const token = localStorage.getItem('classink_intranet_token');
+        if (token) headers['Authorization'] = 'Bearer ' + token;
+    } catch (e) { /* stockage indisponible */ }
+    return headers;
+}
+
 // Copie des données sans le mot de passe de l'enseignant : le serveur n'en a pas besoin pour synchroniser.
 function withoutSecrets(data) {
     const copy = JSON.parse(JSON.stringify(data));
@@ -1715,6 +1725,10 @@ async function handleLogin() {
             if (result.token) {
                 try { localStorage.setItem('classink_cloud_token', result.token); } catch (e) { /* stockage indisponible */ }
             }
+            try {
+                if (result.intranet_token) localStorage.setItem('classink_intranet_token', result.intranet_token);
+                else localStorage.removeItem('classink_intranet_token');
+            } catch (e) { /* le relais reste désactivé si le jeton dédié ne peut pas être stocké */ }
             await loadTeacherScheduleFromServer(true);
             db.user.isLoggedIn = true;
             saveDB();
@@ -1847,7 +1861,10 @@ document.getElementById('btn-login-header').addEventListener('click', async () =
     if (db.user.isLoggedIn) {
         if (await showCustomConfirm("Voulez-vous vous déconnecter ?")) {
             db.user.isLoggedIn = false;
-            try { localStorage.removeItem('classink_cloud_token'); } catch (e) { /* stockage indisponible */ }
+            try {
+                localStorage.removeItem('classink_cloud_token');
+                localStorage.removeItem('classink_intranet_token');
+            } catch (e) { /* stockage indisponible */ }
             saveDB();
             updateLoginHeaderButton();
         }
@@ -1975,7 +1992,10 @@ async function openIndependentTeacherWorkspace() {
         db.workspaceMode = 'independent';
         db.user.schoolId = '';
         db.schoolId = '';
-        try { localStorage.setItem('classink_cloud_token', result.token); }
+        try {
+            localStorage.setItem('classink_cloud_token', result.token);
+            localStorage.removeItem('classink_intranet_token');
+        }
         catch (error) {
             db = previous;
             throw new Error("Le navigateur ne permet pas d'enregistrer la session indépendante.");
@@ -2024,7 +2044,14 @@ async function refreshTeacherSessionStatus(options = {}) {
         db.teacherSpaces = Array.isArray(result.teacherSpaces) ? result.teacherSpaces : [];
         db.pendingTeacherSpaces = Array.isArray(result.pendingSpaces) ? result.pendingSpaces : [];
         db.workspaceMode = result.workspaceMode || 'auto';
-        try { if (result.token) localStorage.setItem('classink_cloud_token', result.token); } catch (_) { /* la session courante reste valable */ }
+        try {
+            if (result.token) localStorage.setItem('classink_cloud_token', result.token);
+            if (result.intranet_token && result.workspaceMode === 'school') {
+                localStorage.setItem('classink_intranet_token', result.intranet_token);
+            } else {
+                localStorage.removeItem('classink_intranet_token');
+            }
+        } catch (_) { /* le relais reste désactivé si le jeton dédié ne peut pas être stocké */ }
         renderTeacherSpacesSettings();
 
         if (result.schoolLocked) {
@@ -3407,9 +3434,9 @@ async function postIntranetPacket(baseUrl, payload, headers) {
 }
 
 async function syncWithIntranet() {
-    const headers = cloudAuthHeaders();
+    const headers = intranetAuthHeaders();
     if (!headers.Authorization) {
-        await showCustomAlert("Connectez-vous à votre compte enseignant pour transmettre les données à PrimeInk.");
+        await showCustomAlert("Le jeton intranet dédié est absent. Vérifiez que le serveur ClassInk possède INTRANET_AUTH_SECRET, puis reconnectez-vous à votre espace scolaire.");
         return;
     }
 
