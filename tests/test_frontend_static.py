@@ -1394,6 +1394,8 @@ class TestLlinkSessionsKeepaliveAndClassDomains(unittest.TestCase):
         self.assertIn("window.savePrimeInkClassDomains", prime)
         self.assertIn("primeInkFillSubdomainSelect", prime)
         self.assertIn("function bpTeacherDisplayName(value)", prime)
+        self.assertIn("function primeInkDisplayTeacherName(rawValue)", prime)
+        self.assertIn("currentCourseTitulaire').textContent = primeInkDisplayTeacherName(course.titulaire)", prime)
 
         self.assertIn("sub_domains = Column(JSON, nullable=True)", backend)
         self.assertIn("ADD COLUMN IF NOT EXISTS sub_domains JSON", backend)
