@@ -817,6 +817,39 @@
 
     <!-- SECTION 5 : PARAMÈTRES ET PROFIL -->
     <main id="view-settings" class="view-section">
+        <div class="card" id="support-settings-card">
+            <h3 style="color:var(--primary);margin-bottom:8px;">Aide et réclamation</h3>
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">Une question sur ClassInk, un problème technique ou une réclamation ? Contactez directement l’équipe CRYPT.</p>
+            <button type="button" class="btn-primary" id="crypt-support-toggle" aria-expanded="false" aria-controls="crypt-support-form"><svg class="ci-icon ci-inline" viewBox="0 0 24 24" aria-hidden="true"><use href="#ci-icon-messages"></use></svg> Aide / Réclamation</button>
+            <form id="crypt-support-form" style="display:none;margin-top:14px;" novalidate>
+                <div class="form-group">
+                    <label for="crypt-support-category">TYPE DE DEMANDE</label>
+                    <select id="crypt-support-category" name="category">
+                        <option value="support">Demande d'aide</option>
+                        <option value="bug">Signaler un problème technique</option>
+                        <option value="complaint">Réclamation</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="crypt-support-subject">OBJET</label>
+                    <input type="text" id="crypt-support-subject" name="subject" maxlength="180" required placeholder="Résumez votre demande">
+                </div>
+                <div class="form-group">
+                    <label for="crypt-support-message">DESCRIPTION</label>
+                    <textarea id="crypt-support-message" name="message" rows="4" minlength="10" maxlength="5000" required style="width:100%;padding:10px;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-color);color:var(--text-main);font:inherit;resize:vertical;" placeholder="Décrivez le problème ou votre question (10 caractères minimum)."></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="crypt-support-contact">MOYEN DE CONTACT (FACULTATIF)</label>
+                    <input type="text" id="crypt-support-contact" name="contact" maxlength="180" autocomplete="email" placeholder="Téléphone ou adresse e-mail">
+                </div>
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                    <button type="submit" class="btn-primary" id="crypt-support-submit">Envoyer la demande</button>
+                    <button type="button" class="btn-secondary" id="crypt-support-cancel">Annuler</button>
+                </div>
+                <small id="crypt-support-status" role="status" aria-live="polite" style="display:block;margin-top:10px;color:var(--text-muted);"></small>
+            </form>
+        </div>
+
         <div class="card">
             <h3 style="color: var(--primary); margin-bottom: 15px;">Profil & Identité Enseignant</h3>
             
@@ -927,39 +960,6 @@
                 <button class="btn-action" onclick="exportDatabaseJSON()"><svg class="ci-icon ci-inline" viewBox="0 0 24 24" aria-hidden="true"><use href="#ci-icon-download"></use></svg> Exporter la Base de Données (JSON)</button>
                 <button class="btn-action" style="color: var(--danger); border-color: var(--danger);" onclick="resetAppDatabase()"><svg class="ci-icon ci-inline" viewBox="0 0 24 24" aria-hidden="true"><use href="#ci-icon-alert"></use></svg> Réinitialiser toutes les données locales</button>
             </div>
-        </div>
-
-        <div class="card" id="support-settings-card">
-            <h3 style="color:var(--primary);margin-bottom:8px;">Assistance et réclamations</h3>
-            <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">Une question sur ClassInk, un problème technique ou une réclamation ? Envoyez une demande à l'équipe CRYPT depuis ce formulaire.</p>
-            <button type="button" class="btn-action" id="crypt-support-toggle" aria-expanded="false">Contacter l'assistance</button>
-            <form id="crypt-support-form" style="display:none;margin-top:14px;" novalidate>
-                <div class="form-group">
-                    <label for="crypt-support-category">TYPE DE DEMANDE</label>
-                    <select id="crypt-support-category" name="category">
-                        <option value="support">Demande d'aide</option>
-                        <option value="bug">Signaler un problème technique</option>
-                        <option value="complaint">Réclamation</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="crypt-support-subject">OBJET</label>
-                    <input type="text" id="crypt-support-subject" name="subject" maxlength="180" required placeholder="Résumez votre demande">
-                </div>
-                <div class="form-group">
-                    <label for="crypt-support-message">DESCRIPTION</label>
-                    <textarea id="crypt-support-message" name="message" rows="4" minlength="10" maxlength="5000" required style="width:100%;padding:10px;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-color);color:var(--text-main);font:inherit;resize:vertical;" placeholder="Décrivez le problème ou votre question (10 caractères minimum)."></textarea>
-                </div>
-                <div class="form-group">
-                    <label for="crypt-support-contact">MOYEN DE CONTACT (FACULTATIF)</label>
-                    <input type="text" id="crypt-support-contact" name="contact" maxlength="180" autocomplete="email" placeholder="Téléphone ou adresse e-mail">
-                </div>
-                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-                    <button type="submit" class="btn-primary" id="crypt-support-submit">Envoyer la demande</button>
-                    <button type="button" class="btn-secondary" id="crypt-support-cancel">Annuler</button>
-                </div>
-                <small id="crypt-support-status" role="status" aria-live="polite" style="display:block;margin-top:10px;color:var(--text-muted);"></small>
-            </form>
         </div>
 
         <div class="app-info">
@@ -4930,7 +4930,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const setFormOpen = open => {
       form.style.display = open ? 'block' : 'none';
       toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-      toggle.textContent = open ? 'Masquer le formulaire' : "Contacter l'assistance";
+      toggle.textContent = open ? 'Masquer le formulaire' : 'Aide / Réclamation';
       if (open) document.getElementById('crypt-support-subject')?.focus();
     };
 
