@@ -1039,7 +1039,8 @@ class TestNewFeatureStatic(unittest.TestCase):
             "/api/primenet/teacher-messages",
             "/api/primenet/teacher-attendance",
             "mergedData.attendanceRecords",
-            "Llink consulte les données autorisées",
+            'data-llink-app="primeink"',
+            "data-llink-sessions",
             "window.renderPresencesEleveTable = function",
         ):
             self.assertIn(marker, prime)
