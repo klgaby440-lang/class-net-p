@@ -21,7 +21,7 @@ La mémoire vive est nécessaire pour faire le pont entre l'envoi de l'enseignan
 ## Échanges
 
 1. ClassInk envoie POST /api/intranet/sync avec le jeton signé de l'enseignant.
-2. Le relais vérifie la signature, l'expiration, le rôle, l'adresse électronique et l'établissement du jeton. Il met le paquet métier en attente dans la RAM.
+2. Le relais vérifie la signature, l'expiration, l'émetteur, l'audience, le rôle, l'adresse électronique et l'établissement du jeton. Le jeton est signé avec une clé dédiée au relais, différente de la clé principale des sessions cloud. Il met le paquet métier en attente dans la RAM.
 3. PrimeInk interroge GET /api/primenet/sync toutes les 10 secondes avec le jeton de l'école.
 4. PrimeInk applique les notes et présences à son état local, puis sauvegarde localement.
 5. Seulement après une sauvegarde locale réussie, PrimeInk envoie POST /api/primenet/ack avec les identifiants reçus. Le relais supprime alors ces paquets de sa mémoire.
@@ -35,8 +35,13 @@ Python 3.11 ou plus récent est recommandé.
 Installation des dépendances :
     py -m pip install -r requirements-intranet.txt
 
-Configurer la même clé secrète que AUTH_SECRET du serveur ClassInk dans une variable d'environnement locale :
-    $env:INTRANET_AUTH_SECRET = "REMPLACER_PAR_LA_VALEUR_SECRETE"
+Créer une clé dédiée aléatoire (ne jamais réutiliser AUTH_SECRET) :
+    py -c "import secrets; print(secrets.token_urlsafe(48))"
+
+Configurer cette valeur sous le nom INTRANET_AUTH_SECRET dans les variables d'environnement du service ClassInk sur Render, puis redéployer ce service. Configurer exactement la même valeur sur l'ordinateur intranet :
+    $env:INTRANET_AUTH_SECRET = "COLLER_ICI_LA_CLE_DEDIEE"
+
+Les applications devront ensuite se reconnecter une fois pour recevoir les jetons intranet dédiés. Le relais refuse les anciens jetons cloud et ne connaît pas la clé qui signe les sessions cloud.
 
 Lancer le relais :
     py intranet_server.py
@@ -57,7 +62,7 @@ Le jeton est vérifié hors ligne avec la clé HMAC partagée ; le relais ne con
 
 - INTRANET_HOST : adresse d'écoute, défaut 0.0.0.0.
 - INTRANET_PORT : port, défaut 5001.
-- INTRANET_AUTH_SECRET : clé identique à AUTH_SECRET du serveur ClassInk.
+- INTRANET_AUTH_SECRET : clé aléatoire dédiée, identique sur Render et sur le serveur local, mais différente de AUTH_SECRET.
 - INTRANET_ALLOWED_ORIGINS : origines web autorisées, séparées par des virgules ; défaut *.
 - INTRANET_BUFFER_TTL_SECONDS : durée maximale en RAM, défaut 86400 secondes.
 - INTRANET_MAX_PAYLOAD_BYTES : taille maximale d'un paquet, défaut 8 MiB.
