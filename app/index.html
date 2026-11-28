@@ -429,7 +429,7 @@
 
     <!-- HEADER -->
     <header>
-        <div>CLASS-INK SUITE ⚡</div>
+        <div>ClassInk APP ⚡</div>
         <div class="header-actions">
             <!-- NOUVEAU BOUTON DE MENU STYLE THINK / PAY.HTML -->
             <button id="btn-header-schedule" class="icon-btn" title="Horaire & Admin Chat" onclick="toggleScheduleDrawer()">📅💬</button>
@@ -2290,6 +2290,7 @@ function renderGradesTables() {
         <div class="card" style="margin-bottom: 12px; display: flex; gap: 10px; flex-wrap: wrap;">
             <button class="btn-action" style="flex:1;" onclick="openEditStudentsModal()">✏️ Éditer la liste des élèves</button>
             <button class="btn-secondary" style="flex:1;" onclick="renderCourseSummarySheet()">📊 Fiche Récapitulative des Moyennes</button>
+            <button class="btn-action" style="flex:1;" onclick="printActiveCourseSheet()">🖨️ Imprimer la fiche</button>
         </div>
     `;
     container.innerHTML += toolbarHTML;
@@ -2419,6 +2420,124 @@ function renderGradesTables() {
     const summaryContainer = document.createElement('div');
     summaryContainer.id = 'course-summary-sheet-container';
     container.appendChild(summaryContainer);
+}
+
+// Imprime la fiche de notes du cours enseigné actuellement sélectionné.
+function printActiveCourseSheet() {
+    const className = String(activeClass || '').trim();
+    const selectedCourse = String(
+        (db.activeCourseFilter && db.activeCourseFilter[activeClass]) || ''
+    ).trim();
+    if (!className || !selectedCourse) {
+        alert("Sélectionnez une classe et un cours avant d'imprimer la fiche.");
+        return;
+    }
+
+    const students = getSortedClassStudents(activeClass);
+    const periods = ["P1", "P2", "EX1", "P3", "P4", "EX2"];
+    const maxPer = Number((db.courseMax && db.courseMax[activeClass + '_' + selectedCourse]) || 100);
+    const schoolName = String(db.user?.school || '').trim();
+    const teacherName = String(db.user?.name || '').trim();
+    const teacherEmail = String(db.user?.email || '').trim();
+    const schoolYear = String(db.user?.schoolYear || db.schoolYear || '').trim();
+    const printedAt = new Date().toLocaleDateString('fr-FR');
+
+    const sheets = [];
+    periods.forEach(period => {
+        const allEvals = (db.evaluations[activeClass] && db.evaluations[activeClass][period]) || [];
+        const evals = allEvals.filter(ev => !ev.course || ev.course === selectedCourse);
+        if (!evals.length) return;
+
+        const isExam = period.startsWith("EX");
+        const periodMax = maxPer * (isExam ? 2 : 1);
+        const rows = students.map(student => {
+            let total = 0;
+            let maxTotal = 0;
+            const cells = evals.map(ev => {
+                const gradeKey = student.id + "_" + ev.id;
+                const raw = db.grades[gradeKey];
+                const score = raw === "" || raw === null || raw === undefined ? null : Number(raw);
+                const max = Number(ev.max) || 0;
+                const valid = Number.isFinite(score) && score >= 0 && max > 0 && score <= max;
+                if (valid) {
+                    total += score;
+                    maxTotal += max;
+                }
+                return '<td>' + (score === null || !Number.isFinite(score) ? '—' : safeHTML(score)) +
+                    '<small> / ' + safeHTML(max) + '</small></td>';
+            }).join('');
+            const average = maxTotal > 0 ? ((total / maxTotal) * periodMax).toFixed(1) : '—';
+            return '<tr><td class="student-name">' + safeHTML(student.name) +
+                '</td>' + cells +
+                '<td class="total">' + safeHTML(total.toFixed(1).replace(/\.0$/, '')) +
+                ' / ' + safeHTML(maxTotal) + '</td>' +
+                '<td class="average">' + safeHTML(average) + ' / ' + safeHTML(periodMax) + '</td></tr>';
+        }).join('');
+
+        const headings = evals.map(ev =>
+            '<th>' + safeHTML(ev.name || 'Évaluation') +
+            (ev.date ? '<small>' + safeHTML(ev.date) + '</small>' : '') +
+            '<small>/' + safeHTML(ev.max) + '</small></th>'
+        ).join('');
+        sheets.push(
+            '<section class="period-sheet">' +
+            '<h2>' + safeHTML(periodLabels[period] || period) + '</h2>' +
+            '<table><thead><tr><th>Élève</th>' + headings +
+            '<th>Total</th><th>Moyenne</th></tr></thead><tbody>' + rows +
+            '</tbody></table></section>'
+        );
+    });
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+        alert("Autorisez les fenêtres surgissantes pour imprimer la fiche.");
+        return;
+    }
+    const body = sheets.length ? sheets.join('') :
+        '<p class="empty">Aucune évaluation n’est enregistrée pour ce cours.</p>';
+    const html = '<!doctype html><html lang="fr"><head><meta charset="utf-8">' +
+        '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+        '<title>Fiche de notes - ' + safeHTML(selectedCourse) + '</title>' +
+        '<style>' +
+        '@page{size:A4 landscape;margin:12mm}' +
+        '*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#111;margin:0;font-size:10pt}' +
+        '.school-heading{text-align:center;border-bottom:2px solid #111;padding-bottom:9px;margin-bottom:12px}' +
+        '.school-heading h1{font-size:15pt;margin:0 0 4px;text-transform:uppercase}' +
+        '.school-heading h2{font-size:12pt;margin:3px 0;text-transform:uppercase}' +
+        '.metadata{display:grid;grid-template-columns:1fr 1fr;gap:5px 18px;margin:12px 0 18px;font-size:10pt}' +
+        '.metadata strong{display:inline-block;min-width:82px}' +
+        '.period-sheet{page-break-inside:avoid;margin-bottom:16px}' +
+        '.period-sheet:not(:last-child){page-break-after:always}' +
+        '.period-sheet h2{text-align:center;font-size:12pt;margin:8px 0}' +
+        'table{width:100%;border-collapse:collapse;table-layout:auto}' +
+        'th,td{border:1px solid #333;padding:5px 6px;text-align:center;vertical-align:middle}' +
+        'th{background:#e5e7eb;font-size:8.5pt}' +
+        'th small{display:block;font-weight:normal;margin-top:2px}' +
+        'td small{display:block;font-size:7.5pt;color:#444}' +
+        '.student-name{text-align:left;font-weight:bold;min-width:145px}' +
+        '.total{font-weight:bold}.average{font-weight:bold}' +
+        '.empty{text-align:center;margin:40px 0}' +
+        '.footer{border-top:1px solid #999;margin-top:25px;padding-top:7px;text-align:right;font-size:8pt}' +
+        '@media screen{body{padding:18px}.period-sheet{margin-bottom:26px}}' +
+        '</style></head><body>' +
+        '<header class="school-heading"><h1>' + safeHTML(schoolName || 'Établissement scolaire') +
+        '</h1><h2>FICHE DE NOTES</h2>' +
+        (schoolYear ? '<div>Année scolaire : ' + safeHTML(schoolYear) + '</div>' : '') +
+        '</header>' +
+        '<div class="metadata">' +
+        '<div><strong>Classe :</strong> ' + safeHTML(className) + '</div>' +
+        '<div><strong>Cours :</strong> ' + safeHTML(selectedCourse) + '</div>' +
+        '<div><strong>Enseignant :</strong> ' + safeHTML(teacherName || 'Non renseigné') + '</div>' +
+        '<div><strong>E-mail :</strong> ' + safeHTML(teacherEmail || 'Non renseigné') + '</div>' +
+        '<div><strong>Barème :</strong> ' + safeHTML(maxPer) + ' points par période</div>' +
+        '<div><strong>Imprimé le :</strong> ' + safeHTML(printedAt) + '</div>' +
+        '</div>' + body +
+        '<footer class="footer">ClassInk APP · ' + safeHTML(teacherName) + '</footer>' +
+        '<script>window.addEventListener("load",function(){window.focus();window.print();});<\/script>' +
+        '</body></html>';
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
 }
 
 /* ==========================================================================
