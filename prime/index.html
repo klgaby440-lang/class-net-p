@@ -1098,6 +1098,43 @@ body {
 #horResultsArea .tp-cell small { display:block; margin-top:.25rem; font-size:.72rem; color:var(--text-secondary); overflow-wrap:anywhere; }
 #horResultsArea .schedule-empty-cell { color:var(--text-secondary); opacity:.7; }
 #horResultsArea .schedule-no-results { padding:1rem; color:var(--text-secondary); border:1px dashed var(--border-color); border-radius:8px; }
+
+/* Plans de mixage : un banc visuel contient deux places côte à côte. */
+.primeink-mixage-plan { color:var(--text-primary); font-family:inherit; margin:0 0 1.25rem; padding:1rem; border:1px solid var(--border-color); border-radius:12px; background:var(--bg-card); }
+.primeink-mixage-plan h2 { color:var(--primary-color); font-size:1.05rem; margin:0 0 .45rem; }
+.primeink-mixage-meta { color:var(--text-secondary); font-size:.82rem; margin:0 0 .75rem; }
+.primeink-mixage-metrics { display:flex; flex-wrap:wrap; gap:.45rem; margin:.6rem 0 1rem; }
+.primeink-mixage-metric { border:1px solid var(--border-color); background:var(--bg-main); color:var(--text-primary); border-radius:8px; padding:.35rem .6rem; font-size:.78rem; font-weight:700; }
+.primeink-mixage-row { display:grid; grid-template-columns:92px minmax(0,1fr); gap:.7rem; align-items:start; margin:.75rem 0; }
+.primeink-mixage-row-label { color:var(--text-secondary); font-weight:700; font-size:.8rem; padding-top:.4rem; }
+.primeink-mixage-benches { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.7rem; }
+.primeink-mixage-bench { min-width:0; border:1px solid var(--border-color); border-radius:9px; padding:.4rem; background:var(--bg-main); }
+.primeink-mixage-bench-title { font-size:.72rem; font-weight:800; color:var(--text-secondary); margin:0 0 .35rem; text-align:center; text-transform:uppercase; }
+.primeink-mixage-bench-seats { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0; border:1px solid var(--border-color); border-radius:6px; overflow:hidden; }
+.primeink-mixage-seat { min-width:0; min-height:86px; padding:.45rem .35rem; display:flex; flex-direction:column; justify-content:center; gap:.18rem; background:var(--bg-card); }
+.primeink-mixage-seat + .primeink-mixage-seat { border-left:2px solid var(--border-color); }
+.primeink-mixage-seat-empty { color:var(--text-secondary); opacity:.65; align-items:center; text-align:center; font-size:.75rem; }
+.primeink-mixage-seat-code { display:flex; justify-content:space-between; align-items:center; gap:.25rem; font-size:.82rem; font-weight:800; color:var(--primary-color); }
+.primeink-mixage-seat-name { font-size:.75rem; font-weight:700; overflow-wrap:anywhere; }
+.primeink-mixage-seat-class { font-size:.68rem; color:var(--text-secondary); overflow-wrap:anywhere; }
+.primeink-mixage-seat-source { border-top:1px dashed var(--border-color); margin-top:.2rem; padding-top:.2rem; font-size:.62rem; color:var(--text-secondary); }
+.primeink-mixage-empty { padding:1rem; border:1px dashed var(--border-color); color:var(--text-secondary); border-radius:8px; }
+.primeink-mixage-class-group { margin-bottom:1.2rem; }
+.primeink-mixage-class-group > h2 { color:var(--primary-color); font-size:1.15rem; margin:0 0 .7rem; }
+@media (max-width:900px) {
+    .primeink-mixage-benches { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+@media (max-width:620px) {
+    .primeink-mixage-row { grid-template-columns:minmax(0,1fr); gap:.25rem; }
+    .primeink-mixage-benches { grid-template-columns:minmax(0,1fr); }
+    .primeink-mixage-seat { min-height:72px; }
+}
+@media print {
+    .primeink-mixage-plan { background:#fff!important; color:#000!important; border:1px solid #777!important; break-inside:avoid; }
+    .primeink-mixage-plan h2,.primeink-mixage-row-label,.primeink-mixage-seat-code { color:#000!important; }
+    .primeink-mixage-metric,.primeink-mixage-bench,.primeink-mixage-seat { background:#fff!important; color:#000!important; }
+}
+
 @media (max-width:760px) {
     #horResultsArea .sub-view-content.active { grid-template-columns:minmax(0,1fr); }
     #horResultsArea .retractable-sidebar { max-height:230px; }
@@ -1866,10 +1903,10 @@ body.theme-dark input::placeholder,body.theme-dark textarea::placeholder{color:v
                 </div>
                 <div class="settings-card">
                     <label style="display:flex;gap:.65rem;align-items:center;font-weight:600">
-                        <input type="checkbox" id="mixPublishToSuivi">
-                        Publier les informations individuelles de placement dans Class-Ink Suivi
+                        <input type="checkbox" id="mixPublishToSuivi" checked>
+                        Transmettre automatiquement les places individuelles aux parents dans Class-Ink Suivi
                     </label>
-                    <p class="sub" style="margin-top:.45rem">Chaque parent ne verra que la salle et la place attribuées à son enfant.</p>
+                    <p class="sub" style="margin-top:.45rem">La session est enregistrée dans la base de l’établissement après génération. Chaque parent ne reçoit que la salle, la place et le code de sujet de son enfant. Décochez uniquement si la publication doit rester privée.</p>
                 </div>
             </div>
 
@@ -5965,54 +6002,185 @@ async function bpPushClassBulletin(cls) {
                 saveState();
                 bpRenderMixage();
                 showMixageResultsView();
-                if (result.unassigned_students > 0) alert(result.unassigned_students + " élève(s) n'ont pas de place : ajoutez une salle ou des places.");
+                const savedToDatabase = !!result.session;
+                const publishedToParents = !!(result.session && result.session.published_to_suivi);
+                const confirmation = (savedToDatabase
+                    ? "Le mixage a été enregistré dans la base de données de l'établissement."
+                    : "Le mixage a été généré, mais la confirmation de sauvegarde serveur est absente.") +
+                    (publishedToParents
+                        ? " Les places individuelles sont publiées dans Class-Ink Suivi ; chaque parent ne verra que les informations de son enfant."
+                        : " La publication aux parents est désactivée pour cette session.");
+                if (result.unassigned_students > 0) {
+                    alert(result.unassigned_students + " élève(s) n'ont pas de place. " + confirmation);
+                } else {
+                    await showCustomAlert(confirmation, "Mixage enregistré");
+                }
             } catch (e) {
                 alert("Le serveur est injoignable. Vérifiez la connexion internet et réessayez.");
             }
         };
 
-        function bpMixageSeats(result) {
+        function bpMixageRoomSeats(room) {
             const seats = [];
-            (result.seating_plans || []).forEach(room => (room.benches || []).forEach(b => {
-                const s = b.student_left || {};
-                seats.push({ room: room.room_name, supervisor: room.supervisor, row: b.row, bench: b.bench_number, id: s.id, name: s.name, classId: s.class, variant: s.variant_code });
+            (room && Array.isArray(room.benches) ? room.benches : []).forEach(bench => {
+                [['left', bench.student_left], ['right', bench.student_right]].forEach(([side, student]) => {
+                    if (!student || typeof student !== 'object') return;
+                    seats.push({
+                        room: room.room_name || '',
+                        supervisor: room.supervisor || '',
+                        sourceRow: Number(bench.row) || 0,
+                        sourceBench: Number(bench.bench_number) || 0,
+                        sourceSide: side,
+                        id: student.id || '',
+                        name: student.name || '',
+                        classId: String(student.class || ''),
+                        variant: student.variant_code || ''
+                    });
+                });
+            });
+            return seats.sort((a, b) =>
+                a.sourceRow - b.sourceRow ||
+                a.sourceBench - b.sourceBench ||
+                (a.sourceSide === 'left' ? -1 : 1)
+            );
+        }
+
+        function bpMixageSeats(result) {
+            return (result && Array.isArray(result.seating_plans) ? result.seating_plans : [])
+                .flatMap(room => bpMixageRoomSeats(room));
+        }
+
+        // Regroupe visuellement deux affectations successives sur un même banc,
+        // sans modifier les coordonnées ni les enregistrements retournés par le serveur.
+        function bpMixageCreateSeatPlan(seats, config = {}, overrides = {}) {
+            const assigned = Array.isArray(seats) ? seats : [];
+            const requestedPlaces = Number(config.places);
+            const availablePlaces = Math.max(
+                assigned.length,
+                Number.isFinite(requestedPlaces) && requestedPlaces > 0 ? Math.floor(requestedPlaces) : 0
+            );
+            const requestedBenches = Number(overrides.benches || config.bancs);
+            const benchCount = Math.max(
+                1,
+                Number.isFinite(requestedBenches) && requestedBenches > 0 ? Math.floor(requestedBenches) : 0,
+                Math.ceil(availablePlaces / 2),
+                Math.ceil(assigned.length / 2)
+            );
+            const requestedRows = Number(overrides.rangees || config.rangees);
+            const rowCount = Math.max(1, Math.min(60,
+                Number.isFinite(requestedRows) && requestedRows > 0 ? Math.floor(requestedRows) : 1
+            ));
+            const benches = Array.from({ length: benchCount }, (_, index) => ({
+                number: index + 1,
+                left: assigned[index * 2] || null,
+                right: assigned[index * 2 + 1] || null
             }));
-            return seats;
+            const basePerRow = Math.floor(benchCount / rowCount);
+            const extraRows = benchCount % rowCount;
+            let cursor = 0;
+            const rows = Array.from({ length: rowCount }, (_, index) => {
+                const count = basePerRow + (index < extraRows ? 1 : 0);
+                const rowBenches = benches.slice(cursor, cursor + count);
+                cursor += count;
+                return { number: index + 1, benches: rowBenches };
+            });
+            return {
+                benchCount,
+                rowCount,
+                availablePlaces,
+                assignedSeats: assigned.length,
+                freePlaces: Math.max(0, availablePlaces - assigned.length),
+                rows
+            };
         }
 
-        function bpClassLabel(classId) {
-            const c = appState.classes.find(x => x.id === classId);
-            return c ? c.name : classId;
+        function bpMixageSeatHTML(seat) {
+            if (!seat) {
+                return '<div class="primeink-mixage-seat primeink-mixage-seat-empty"><strong>Place libre</strong></div>';
+            }
+            const source = seat.sourceRow && seat.sourceBench
+                ? 'Coord. serveur : R' + seat.sourceRow + ' · B' + seat.sourceBench
+                : 'Coordonnée non renseignée';
+            return '<div class="primeink-mixage-seat">' +
+                '<div class="primeink-mixage-seat-code"><strong>' + safeHTML(seat.id || '—') + '</strong><span>' + safeHTML(seat.variant || '') + '</span></div>' +
+                '<div class="primeink-mixage-seat-name">' + safeHTML(seat.name || 'Élève') + '</div>' +
+                '<div class="primeink-mixage-seat-class">' + safeHTML(bpClassLabel(seat.classId)) + '</div>' +
+                '<div class="primeink-mixage-seat-source">' + safeHTML(source) + '</div>' +
+                '</div>';
         }
 
-        function bpMixageClassesHTML(result) {
-            const seats = bpMixageSeats(result);
-            const byClass = {};
-            seats.forEach(s => (byClass[s.classId] = byClass[s.classId] || []).push(s));
-            return Object.keys(byClass).map(cid => '<div class="tp-page"><h2>' + safeHTML(bpClassLabel(cid)) + ' — répartition</h2>' +
-                '<table class="tp-table"><thead><tr><th>Code</th><th>Élève</th><th>Salle</th><th>Rangée</th><th>Banc</th><th>Sujet</th></tr></thead><tbody>' +
-                byClass[cid].sort((a, b) => String(a.name).localeCompare(String(b.name))).map(s => '<tr><td><strong>' + safeHTML(s.id) + '</strong></td><td class="tp-left">' + safeHTML(s.name) + '</td><td>' + safeHTML(s.room) + '</td><td>' + safeHTML(s.row) + '</td><td>' + safeHTML(s.bench) + '</td><td>' + safeHTML(s.variant) + '</td></tr>').join('') +
-                '</tbody></table></div>').join('');
+        function bpMixageSeatingPlanHTML(title, supervisor, seats, config = {}, overrides = {}) {
+            const plan = bpMixageCreateSeatPlan(seats, config, overrides);
+            const metrics = [
+                plan.benchCount + ' banc(s)',
+                plan.availablePlaces + ' place(s) disponible(s)',
+                plan.rowCount + ' rangée(s)',
+                plan.assignedSeats + ' élève(s) placé(s)',
+                plan.freePlaces + ' place(s) libre(s)'
+            ];
+            const rowsHTML = plan.rows.map(row =>
+                '<div class="primeink-mixage-row">' +
+                '<div class="primeink-mixage-row-label">Rangée ' + row.number + '</div>' +
+                '<div class="primeink-mixage-benches">' + row.benches.map(bench =>
+                    '<div class="primeink-mixage-bench">' +
+                    '<div class="primeink-mixage-bench-title">Banc ' + bench.number + '</div>' +
+                    '<div class="primeink-mixage-bench-seats">' +
+                    bpMixageSeatHTML(bench.left) + bpMixageSeatHTML(bench.right) +
+                    '</div></div>'
+                ).join('') + '</div></div>'
+            ).join('');
+            return '<div class="tp-page primeink-mixage-plan">' +
+                '<h2>' + safeHTML(title || 'Plan de salle') + '</h2>' +
+                '<p class="primeink-mixage-meta">Surveillant : <strong>' + safeHTML(supervisor || 'Non renseigné') + '</strong></p>' +
+                '<div class="primeink-mixage-metrics">' + metrics.map(value =>
+                    '<span class="primeink-mixage-metric">' + safeHTML(value) + '</span>'
+                ).join('') + '</div>' +
+                '<p class="primeink-mixage-meta">Les places sont regroupées deux par banc pour la lecture du plan. La coordonnée serveur de chaque élève reste affichée et demeure celle transmise à Class-Ink Suivi.</p>' +
+                (plan.assignedSeats ? rowsHTML : '<div class="primeink-mixage-empty">Aucun élève placé dans cette salle.</div>') +
+                '</div>';
+        }
+
+        function bpMixageClassesHTML(result, rooms) {
+            const allSeats = bpMixageSeats(result);
+            const byClass = new Map();
+            allSeats.forEach(seat => {
+                const key = String(seat.classId || '');
+                if (!byClass.has(key)) byClass.set(key, []);
+                byClass.get(key).push(seat);
+            });
+            if (!byClass.size) return '<div class="primeink-mixage-empty">Aucun élève affecté.</div>';
+            return Array.from(byClass.entries())
+                .sort((a, b) => bpClassLabel(a[0]).localeCompare(bpClassLabel(b[0]), 'fr'))
+                .map(([classId, classSeats]) => {
+                    const roomHTML = (result.seating_plans || []).map(room => {
+                        const seats = bpMixageRoomSeats(room).filter(seat => String(seat.classId) === classId);
+                        if (!seats.length) return '';
+                        const config = (rooms || []).find(item => item.nom === room.room_name) || {};
+                        const classBenchCount = Math.ceil(seats.length / 2);
+                        return bpMixageSeatingPlanHTML(
+                            bpClassLabel(classId) + ' · ' + (room.room_name || 'Salle'),
+                            room.supervisor,
+                            seats,
+                            { places: seats.length, rangees: config.rangees || 1, bancs: classBenchCount },
+                            { benches: classBenchCount, rangees: config.rangees || 1 }
+                        );
+                    }).join('');
+                    return '<div class="primeink-mixage-class-group"><h2>' + safeHTML(bpClassLabel(classId)) + '</h2>' +
+                        (roomHTML || '<div class="primeink-mixage-empty">Aucune place attribuée à cette classe.</div>') +
+                        '</div>';
+                }).join('');
         }
 
         function bpMixageRoomsHTML(result, rooms) {
-            return (result.seating_plans || []).map(room => {
-                const cfg = (rooms || []).find(r => r.nom === room.room_name) || {};
-                const nRows = cfg.rangees || Math.max(0, ...room.benches.map(b => b.row));
-                const nBench = cfg.bancs || Math.max(0, ...room.benches.map(b => b.bench_number));
-                const grid = {};
-                room.benches.forEach(b => { grid[b.row + '_' + b.bench_number] = b.student_left || {}; });
-                let rowsHtml = '';
-                for (let r = 1; r <= nRows; r++) {
-                    rowsHtml += '<tr><th>Rangée ' + r + '</th>';
-                    for (let k = 1; k <= nBench; k++) {
-                        const s = grid[r + '_' + k];
-                        rowsHtml += '<td class="tp-cell">' + (s ? '<strong>' + safeHTML(s.id) + '</strong> (' + safeHTML(s.variant_code) + ')<small>' + safeHTML(s.name) + '</small>' : '') + '</td>';
-                    }
-                    rowsHtml += '</tr>';
-                }
-                return '<div class="tp-page"><h2>' + safeHTML(room.room_name) + '</h2><p>Surveillant : <strong>' + safeHTML(room.supervisor) + '</strong> — ' + room.benches.length + ' élève(s)</p>' +
-                    '<table class="tp-table"><thead><tr><th></th>' + Array.from({ length: nBench }, (_, i) => '<th>Banc ' + (i + 1) + '</th>').join('') + '</tr></thead><tbody>' + rowsHtml + '</tbody></table></div>';
+            return (result && Array.isArray(result.seating_plans) ? result.seating_plans : []).map(room => {
+                const config = (rooms || []).find(item => item.nom === room.room_name) || {};
+                const seats = bpMixageRoomSeats(room);
+                return bpMixageSeatingPlanHTML(
+                    room.room_name || 'Salle',
+                    room.supervisor,
+                    seats,
+                    config
+                );
             }).join('');
         }
 
@@ -6036,15 +6204,40 @@ async function bpPushClassBulletin(cls) {
             return true;
         }
 
+        async function bpLoadMixagesFromDatabase() {
+            const headers = cloudAuthHeaders();
+            if (!headers || !headers.Authorization) return false;
+            try {
+                const response = await window.primeInkFetchWithTimeout(API_BASE_URL + '/api/manager/mixages', {
+                    method: 'GET',
+                    headers,
+                    cache: 'no-store',
+                    credentials: 'omit'
+                }, 20000);
+                if (!response.ok) return false;
+                const payload = await response.json().catch(() => ({}));
+                if (!payload || payload.status !== true || !Array.isArray(payload.data)) return false;
+                appState.mixageSessions = payload.data;
+                saveState();
+                __lastMixage = null;
+                return true;
+            } catch (error) {
+                console.warn('[PrimeInk Mixage] Chargement de la base impossible :', error);
+                return false;
+            }
+        }
+
         function bpRenderMixage() {
             if (!bpRestorePublishedMixage()) return;
-            document.getElementById('mix-view-classes').innerHTML = bpMixageClassesHTML(__lastMixage.result);
+            document.getElementById('mix-view-classes').innerHTML = bpMixageClassesHTML(__lastMixage.result, __lastMixage.rooms);
             document.getElementById('mix-view-salles').innerHTML = bpMixageRoomsHTML(__lastMixage.result, __lastMixage.rooms);
         }
 
-        window.showMixageResultsView = function() {
+        window.showMixageResultsView = async function() {
+            // La liste serveur est prioritaire pour retrouver les sessions depuis un autre appareil.
+            await bpLoadMixagesFromDatabase();
             if (!bpRestorePublishedMixage()) {
-                return showCustomAlert("Aucune session de mixage enregistrée sur le serveur.");
+                return showCustomAlert("Aucune session de mixage enregistrée dans la base de l'établissement.");
             }
             bpRenderMixage();
             document.getElementById('mixConfigArea').classList.add('hidden');
