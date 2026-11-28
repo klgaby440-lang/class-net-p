@@ -929,6 +929,39 @@
             </div>
         </div>
 
+        <div class="card" id="support-settings-card">
+            <h3 style="color:var(--primary);margin-bottom:8px;">Assistance et réclamations</h3>
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">Une question sur ClassInk, un problème technique ou une réclamation ? Envoyez une demande à l'équipe CRYPT depuis ce formulaire.</p>
+            <button type="button" class="btn-action" id="crypt-support-toggle" aria-expanded="false">Contacter l'assistance</button>
+            <form id="crypt-support-form" style="display:none;margin-top:14px;" novalidate>
+                <div class="form-group">
+                    <label for="crypt-support-category">TYPE DE DEMANDE</label>
+                    <select id="crypt-support-category" name="category">
+                        <option value="support">Demande d'aide</option>
+                        <option value="bug">Signaler un problème technique</option>
+                        <option value="complaint">Réclamation</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="crypt-support-subject">OBJET</label>
+                    <input type="text" id="crypt-support-subject" name="subject" maxlength="180" required placeholder="Résumez votre demande">
+                </div>
+                <div class="form-group">
+                    <label for="crypt-support-message">DESCRIPTION</label>
+                    <textarea id="crypt-support-message" name="message" rows="4" minlength="10" maxlength="5000" required style="width:100%;padding:10px;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-color);color:var(--text-main);font:inherit;resize:vertical;" placeholder="Décrivez le problème ou votre question (10 caractères minimum)."></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="crypt-support-contact">MOYEN DE CONTACT (FACULTATIF)</label>
+                    <input type="text" id="crypt-support-contact" name="contact" maxlength="180" autocomplete="email" placeholder="Téléphone ou adresse e-mail">
+                </div>
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                    <button type="submit" class="btn-primary" id="crypt-support-submit">Envoyer la demande</button>
+                    <button type="button" class="btn-secondary" id="crypt-support-cancel">Annuler</button>
+                </div>
+                <small id="crypt-support-status" role="status" aria-live="polite" style="display:block;margin-top:10px;color:var(--text-muted);"></small>
+            </form>
+        </div>
+
         <div class="app-info">
             <p><strong>ClassInk</strong> - Version 2.1.30245 (Build Cryptographique)</p>
             <p>Site officiel : <a href="https://klgaby440-lang.github.io/class-net/" target="_blank" style="color: var(--primary);">klgaby440-lang.github.io/classnet</a></p>
@@ -4798,7 +4831,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (next) { next.focus(); if (typeof next.select === 'function') next.select(); }
     });
 
-    // Le bouton du bas contrôle le dock horizontal, sans être recouvert par les réclamations.
+    // Le bouton du bas contrôle l'ouverture du dock horizontal.
     if (toggleBtn && bottomNav) toggleBtn.addEventListener('click', () => {
         bottomNav.classList.toggle('show');
         toggleBtn.setAttribute('aria-expanded', bottomNav.classList.contains('show') ? 'true' : 'false');
@@ -4880,40 +4913,74 @@ document.addEventListener('DOMContentLoaded', () => {
   window.addEventListener('unhandledrejection', e => send('client_error', window.__CRYPT_FEATURE__, String(e.reason || 'Erreur asynchrone')));
   document.addEventListener('click', e => {
     const el = e.target && e.target.closest ? e.target.closest('button,[role="button"]') : null;
-    if (!el || el.disabled || el.id === 'cryptComplaintButton') return;
+    if (!el || el.disabled) return;
     const text = String(el.getAttribute('data-feature') || el.getAttribute('data-act') || el.getAttribute('data-go') || el.getAttribute('aria-label') || el.id || 'action').replace(/\s+/g,' ').trim().slice(0,120);
     if (!text) return;
     window.__CRYPT_FEATURE__ = text;
     send('feature', text, 'Fonction activée par l’utilisateur');
   }, true);
   document.addEventListener('DOMContentLoaded', () => {
-    if (document.getElementById('cryptComplaintButton')) return;
-    const button = document.createElement('button');
-    button.id = 'cryptComplaintButton';
-    button.type = 'button';
-    button.innerHTML = '<span aria-hidden="true" style="font-size:23px;line-height:1">?</span>';
-    button.setAttribute('aria-label','Aide / Réclamation à CRYPT');
-    button.title = 'Aide / Réclamation';
-    button.style.cssText = 'position:fixed;right:18px;bottom:84px;z-index:1103;width:56px;height:56px;display:flex;align-items:center;justify-content:center;border:0;border-radius:50%;padding:0;background:#244d83;color:white;font:700 22px system-ui;box-shadow:0 6px 24px #0004;cursor:pointer';
-    button.addEventListener('click', async () => {
-      const subject = window.prompt('Sujet de votre réclamation ou demande :');
-      if (!subject || !subject.trim()) return;
-      const message = window.prompt('Décrivez le problème rencontré (10 caractères minimum) :');
-      if (!message || message.trim().length < 10) return window.alert('Le message est trop court.');
-      const contact = window.prompt('Téléphone ou e-mail pour vous recontacter (facultatif) :') || '';
+    const form = document.getElementById('crypt-support-form');
+    const toggle = document.getElementById('crypt-support-toggle');
+    const cancel = document.getElementById('crypt-support-cancel');
+    const submit = document.getElementById('crypt-support-submit');
+    const status = document.getElementById('crypt-support-status');
+    if (!form || !toggle || !cancel || !submit || !status) return;
+
+    const setFormOpen = open => {
+      form.style.display = open ? 'block' : 'none';
+      toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+      toggle.textContent = open ? 'Masquer le formulaire' : "Contacter l'assistance";
+      if (open) document.getElementById('crypt-support-subject')?.focus();
+    };
+
+    toggle.addEventListener('click', () => {
+      setFormOpen(form.style.display === 'none' || !form.style.display);
+    });
+    cancel.addEventListener('click', () => {
+      form.reset();
+      status.textContent = '';
+      status.style.color = 'var(--text-muted)';
+      setFormOpen(false);
+    });
+
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+      const subject = document.getElementById('crypt-support-subject').value.trim();
+      const message = document.getElementById('crypt-support-message').value.trim();
+      const contact = document.getElementById('crypt-support-contact').value.trim();
+      const category = document.getElementById('crypt-support-category').value || 'support';
+
+      if (!subject || message.length < 10) {
+        status.textContent = 'Ajoutez un objet et une description d'au moins 10 caractères.';
+        status.style.color = 'var(--danger)';
+        return;
+      }
+
+      submit.disabled = true;
+      submit.textContent = 'Envoi en cours…';
+      status.textContent = '';
+      status.style.color = 'var(--text-muted)';
       try {
         const headers = new Headers({'Content-Type':'application/json','X-CRYPT-App':APP,'X-CRYPT-Device':SESSION});
-        if (window.__CRYPT_SCHOOL__) headers.set('X-CRYPT-School',String(window.__CRYPT_SCHOOL__));
+        if (window.__CRYPT_SCHOOL__) headers.set('X-CRYPT-School', String(window.__CRYPT_SCHOOL__).slice(0,100));
         const response = await originalFetch(API + '/api/telemetry/complaints', {
-          method:'POST',headers,cache:'no-store',credentials:'omit',
-          body:JSON.stringify({app:APP,device_id:SESSION,subject:subject.trim(),message:message.trim(),contact:contact.trim(),category:'support'})
+          method:'POST', headers, cache:'no-store', credentials:'omit',
+          body:JSON.stringify({app:APP,device_id:SESSION,subject,message,contact,category})
         });
-        const result = await response.json().catch(()=>({}));
+        const result = await response.json().catch(() => ({}));
         if (!response.ok || !result.status) throw new Error(result.detail || result.message || 'Envoi impossible.');
-        window.alert('Votre demande a été envoyée à CRYPT. Référence : ' + result.ticket_id);
-      } catch (error) { window.alert('La réclamation n’a pas été transmise : ' + error.message); }
+        form.reset();
+        status.textContent = 'Votre demande a été envoyée à CRYPT. Référence : ' + result.ticket_id;
+        status.style.color = 'var(--success, #15803d)';
+      } catch (error) {
+        status.textContent = 'La demande n’a pas été transmise : ' + (error.message || 'Erreur inconnue.');
+        status.style.color = 'var(--danger)';
+      } finally {
+        submit.disabled = false;
+        submit.textContent = 'Envoyer la demande';
+      }
     });
-    document.body.appendChild(button);
   });
 })();
 </script>
