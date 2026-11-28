@@ -6242,7 +6242,8 @@ def sync_primenet(payload: dict, db: Session = Depends(get_db), claims: dict = D
     # La composition des cours-bulletins n'affecte pas le catalogue des cours enseignés.
     db.flush()
     for class_payload in classes_payload:
-        if not isinstance(class_payload, dict) or "bulletinCourses" not in class_payload:
+        if (not isinstance(class_payload, dict) or "bulletinCourses" not in class_payload
+                or class_payload.get("bulletinCourses") is None):
             continue
         class_id = str(class_payload.get("id") or "")
         classe_obj = db.query(ClasseInformation).filter(
