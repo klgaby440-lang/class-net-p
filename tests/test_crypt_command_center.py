@@ -187,6 +187,9 @@ def test_llink_assistant_relays_velora_stream_without_school_context(monkeypatch
     assert captured["payload"]["model"] == "velora"
     assert captured["payload"]["level"] == "velora"
     assert captured["payload"]["data_collection_consent"] is False
-    assert "aucune donnée de l'école" in captured["payload"]["preferences"]
+    assert "aucune donnée de l'école" in captured["payload"]["application_instructions"].lower()
+    assert '"role":"school_administrator"' in captured["payload"]["context"]
+    assert '"school":"CI School"' in captured["payload"]["context"]
+    assert "preferences" not in captured["payload"]
     assert captured["upstream_closed"] is True
     assert captured["client_closed"] is True
