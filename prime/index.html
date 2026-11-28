@@ -6384,6 +6384,8 @@ async function bpPushClassBulletin(cls) {
                         ? result.session.class_ids.map(String) : targetClasses.slice(),
                     rooms: Array.isArray(result.session.rooms) && result.session.rooms.length
                         ? result.session.rooms : rooms.map(room => ({ ...room })),
+                    total_mixed: Number(result.session.total_mixed ?? result.total_mixed ?? 0),
+                    unassigned_students: Number(result.session.unassigned_students ?? result.unassigned_students ?? 0),
                     created_at: result.session.created_at || generatedAt,
                     local_generated_at: generatedAt
                 };
