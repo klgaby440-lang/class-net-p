@@ -6686,13 +6686,21 @@ async function bpPushClassBulletin(cls) {
 
         function bpRestorePublishedMixage() {
             if (__lastMixage && __lastMixage.result && Array.isArray(__lastMixage.result.seating_plans)) return true;
+            const sessions = Array.isArray(appState.mixageSessions) ? appState.mixageSessions : [];
+            const orderedSessions = sessions.slice().sort((a, b) =>
+                String(a && (a.created_at || a.local_generated_at) || '').localeCompare(String(b && (b.created_at || b.local_generated_at) || ''))
+            );
+            const latestSession = orderedSessions.length ? orderedSessions[orderedSessions.length - 1] : null;
             const archives = appState.tools && appState.tools.mixage && Array.isArray(appState.tools.mixage.generatedSchedules)
                 ? appState.tools.mixage.generatedSchedules : [];
             const latestArchive = archives.slice().sort((a, b) =>
                 String(a && (a.generated_at || a.session && a.session.created_at) || '')
                     .localeCompare(String(b && (b.generated_at || b.session && b.session.created_at) || ''))
             ).pop();
-            if (latestArchive && latestArchive.result && Array.isArray(latestArchive.result.seating_plans)) {
+            const archiveTime = String(latestArchive && (latestArchive.generated_at || latestArchive.session && latestArchive.session.created_at) || '');
+            const sessionTime = String(latestSession && (latestSession.local_generated_at || latestSession.created_at) || '');
+            if (latestArchive && latestArchive.result && Array.isArray(latestArchive.result.seating_plans) &&
+                (!latestSession || !sessionTime || archiveTime >= sessionTime)) {
                 const session = latestArchive.session || (Array.isArray(appState.mixageSessions)
                     ? appState.mixageSessions.find(item => String(item.id) === String(latestArchive.id)) : null);
                 __lastMixage = {
@@ -6705,11 +6713,7 @@ async function bpPushClassBulletin(cls) {
                 };
                 return true;
             }
-            const sessions = Array.isArray(appState.mixageSessions) ? appState.mixageSessions : [];
-            const orderedSessions = sessions.slice().sort((a, b) =>
-                String(a && a.created_at || '').localeCompare(String(b && b.created_at || ''))
-            );
-            const session = orderedSessions.length ? orderedSessions[orderedSessions.length - 1] : null;
+            const session = latestSession;
             if (!session || !Array.isArray(session.seating_plans)) return false;
             __lastMixage = {
                 session,
