@@ -561,6 +561,10 @@ $('#appRoot').hidden=true;
       actions.appendChild(ok);
       card.append(eyebrow,heading,description,actions);
       overlay.appendChild(card);
+      const onKey=event=>{
+        if(event.key==='Escape'){event.preventDefault();document.removeEventListener('keydown',onKey,true);close();}
+      };
+      document.addEventListener('keydown',onKey,true);
       overlay.addEventListener('click',event=>{if(event.target===overlay)close();});
       document.body.appendChild(overlay);
       ok.focus();
