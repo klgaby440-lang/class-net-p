@@ -60,6 +60,24 @@ body:not(.manager-ready) .app{display:none}
 @media(max-width:900px){.topbar{padding:0 17px}.content{padding:20px 17px 35px}.kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.overview-grid,.lower-grid{grid-template-columns:1fr}}
 @media(max-width:600px){.crumb{min-width:0}.crumb small{display:none}.search-wrap{width:42vw}.readonly-pill{display:none}.top-actions{gap:6px}.top-actions .logout-btn{padding:8px;font-size:10px}.page-head{align-items:flex-start;flex-direction:column}.head-actions{width:100%;flex-wrap:wrap}.grid.info-grid,.school-info-grid{grid-template-columns:1fr}.detail-grid{grid-template-columns:1fr}.report-summary{grid-template-columns:repeat(3,minmax(0,1fr))}.summary-box{padding:12px 9px}.summary-box strong{font-size:18px}.schedule-table{min-width:760px}}
 </style>
+<style id="manager-system-console-style">
+.manager-system-overlay{position:fixed;inset:0;z-index:100000;display:grid;place-items:center;padding:16px;background:rgba(4,8,20,.66);backdrop-filter:blur(7px)}
+.manager-system-card{width:min(520px,100%);max-height:min(90vh,820px);overflow:auto;padding:22px;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:20px;box-shadow:0 25px 75px #0005}
+.manager-system-eyebrow{margin:0 0 7px;color:var(--accent);font-size:10px;font-weight:850;letter-spacing:1.25px;text-transform:uppercase}
+.manager-system-title{margin:0 0 8px;font-size:19px;font-weight:850;letter-spacing:-.35px}
+.manager-system-description{margin:0 0 18px;color:var(--muted);font-size:13px;line-height:1.55;white-space:pre-wrap}
+.manager-system-field{display:grid;gap:6px;margin:0 0 13px}
+.manager-system-field label{font-size:11px;font-weight:800;color:var(--muted);letter-spacing:.45px}
+.manager-system-field input,.manager-system-field select,.manager-system-field textarea{width:100%;min-width:0;padding:11px 12px;border:1px solid var(--line);border-radius:11px;background:var(--panel-2);color:var(--text);font:inherit;outline:none}
+.manager-system-field textarea{min-height:125px;resize:vertical}
+.manager-system-field input:focus,.manager-system-field select:focus,.manager-system-field textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 15%,transparent)}
+.manager-system-status{min-height:18px;margin:2px 0 10px;color:var(--red);font-size:12px}
+.manager-system-actions{display:flex;justify-content:flex-end;gap:9px;flex-wrap:wrap}
+.manager-system-actions button{min-height:40px;padding:9px 15px;border:1px solid var(--line);border-radius:10px;font-weight:750}
+.manager-system-cancel{background:var(--panel-2);color:var(--text)}
+.manager-system-submit{background:var(--accent);color:white;border-color:transparent!important}
+@media(max-width:540px){.manager-system-card{padding:18px;border-radius:17px}.manager-system-title{font-size:17px}}
+</style>
 </head>
 <body>
 <div class="auth-screen" id="authScreen">
@@ -515,6 +533,128 @@ $('#appRoot').hidden=true;
     window.__CRYPT_FEATURE__ = text;
     send('feature', text, 'Fonction activée par l’utilisateur');
   }, true);
+  function managerSystemAlert(message, title = 'ClassInk Manager') {
+    return new Promise(resolve => {
+      const overlay = document.createElement('div');
+      overlay.className = 'manager-system-overlay';
+      const card = document.createElement('section');
+      card.className = 'manager-system-card';
+      card.setAttribute('role','dialog');
+      card.setAttribute('aria-modal','true');
+      const eyebrow = document.createElement('p');
+      eyebrow.className = 'manager-system-eyebrow';
+      eyebrow.textContent = 'CRYPT · CONSOLE SYSTÈME';
+      const heading = document.createElement('h2');
+      heading.className = 'manager-system-title';
+      heading.textContent = title;
+      const description = document.createElement('p');
+      description.className = 'manager-system-description';
+      description.textContent = String(message || '');
+      const actions = document.createElement('div');
+      actions.className = 'manager-system-actions';
+      const ok = document.createElement('button');
+      ok.type = 'button';
+      ok.className = 'manager-system-submit';
+      ok.textContent = 'Compris';
+      const close = () => { overlay.remove(); resolve(); };
+      ok.addEventListener('click',close);
+      actions.appendChild(ok);
+      card.append(eyebrow,heading,description,actions);
+      overlay.appendChild(card);
+      overlay.addEventListener('click',event=>{if(event.target===overlay)close();});
+      document.body.appendChild(overlay);
+      ok.focus();
+    });
+  }
+
+  function managerSupportConsole() {
+    return new Promise(resolve => {
+      const overlay = document.createElement('div');
+      overlay.className = 'manager-system-overlay';
+      const card = document.createElement('section');
+      card.className = 'manager-system-card';
+      card.setAttribute('role','dialog');
+      card.setAttribute('aria-modal','true');
+      const eyebrow = document.createElement('p');
+      eyebrow.className = 'manager-system-eyebrow';
+      eyebrow.textContent = 'CRYPT · CENTRE D’ASSISTANCE';
+      const heading = document.createElement('h2');
+      heading.className = 'manager-system-title';
+      heading.textContent = 'Aide / Réclamation';
+      const description = document.createElement('p');
+      description.className = 'manager-system-description';
+      description.textContent = 'Décrivez votre question ou le problème rencontré. Votre demande sera transmise à l’équipe CRYPT.';
+      const form = document.createElement('form');
+      const makeField = (labelText, id, control) => {
+        const wrap = document.createElement('div');
+        wrap.className = 'manager-system-field';
+        const label = document.createElement('label');
+        label.htmlFor = id;
+        label.textContent = labelText;
+        control.id = id;
+        wrap.append(label,control);
+        form.appendChild(wrap);
+        return control;
+      };
+      const category = document.createElement('select');
+      [['support','Demande d’aide'],['bug','Signaler un problème technique'],['complaint','Réclamation']].forEach(([value,label])=>{
+        const option=document.createElement('option');option.value=value;option.textContent=label;category.appendChild(option);
+      });
+      makeField('TYPE DE DEMANDE','manager-support-category',category);
+      const subject=document.createElement('input');
+      subject.type='text';subject.maxLength=180;subject.required=true;
+      subject.placeholder='Résumez votre demande';
+      makeField('OBJET','manager-support-subject',subject);
+      const message=document.createElement('textarea');
+      message.required=true;message.minLength=10;message.maxLength=5000;
+      message.placeholder='Décrivez le problème ou votre question (10 caractères minimum).';
+      makeField('DESCRIPTION','manager-support-message',message);
+      const contact=document.createElement('input');
+      contact.type='text';contact.maxLength=180;
+      contact.placeholder='Téléphone ou adresse e-mail (facultatif)';
+      makeField('MOYEN DE CONTACT (FACULTATIF)','manager-support-contact',contact);
+      const status=document.createElement('p');
+      status.className='manager-system-status';
+      status.setAttribute('role','alert');
+      const actions=document.createElement('div');
+      actions.className='manager-system-actions';
+      const cancel=document.createElement('button');
+      cancel.type='button';cancel.className='manager-system-cancel';cancel.textContent='Annuler';
+      const submit=document.createElement('button');
+      submit.type='submit';submit.className='manager-system-submit';submit.textContent='Envoyer la demande';
+      actions.append(cancel,submit);
+      form.append(status,actions);
+      const close=value=>{
+        overlay.remove();
+        document.removeEventListener('keydown',onKey,true);
+        resolve(value);
+      };
+      const onKey=event=>{if(event.key==='Escape'){event.preventDefault();close(null);}};
+      document.addEventListener('keydown',onKey,true);
+      cancel.addEventListener('click',()=>close(null));
+      form.addEventListener('submit',event=>{
+        event.preventDefault();
+        const values={
+          category:category.value,
+          subject:subject.value.trim(),
+          message:message.value.trim(),
+          contact:contact.value.trim()
+        };
+        if(!values.subject||values.message.length<10){
+          status.textContent='Ajoutez un objet et une description d’au moins 10 caractères.';
+          (!values.subject?subject:message).focus();
+          return;
+        }
+        close(values);
+      });
+      card.append(eyebrow,heading,description,form);
+      overlay.appendChild(card);
+      overlay.addEventListener('click',event=>{if(event.target===overlay)close(null);});
+      document.body.appendChild(overlay);
+      subject.focus();
+    });
+  }
+
   document.addEventListener('DOMContentLoaded', () => {
     if (document.getElementById('cryptComplaintButton')) return;
     const button = document.createElement('button');
@@ -524,22 +664,21 @@ $('#appRoot').hidden=true;
     button.setAttribute('aria-label','Envoyer une réclamation à CRYPT');
     button.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:99990;border:0;border-radius:24px;padding:10px 15px;background:#244d83;color:white;font:600 12px system-ui;box-shadow:0 6px 24px #0004;cursor:pointer';
     button.addEventListener('click', async () => {
-      const subject = window.prompt('Sujet de votre réclamation ou demande :');
-      if (!subject || !subject.trim()) return;
-      const message = window.prompt('Décrivez le problème rencontré (10 caractères minimum) :');
-      if (!message || message.trim().length < 10) return window.alert('Le message est trop court.');
-      const contact = window.prompt('Téléphone ou e-mail pour vous recontacter (facultatif) :') || '';
+      const values = await managerSupportConsole();
+      if (!values) return;
       try {
         const headers = new Headers({'Content-Type':'application/json','X-CRYPT-App':APP,'X-CRYPT-Device':SESSION});
         if (window.__CRYPT_SCHOOL__) headers.set('X-CRYPT-School',String(window.__CRYPT_SCHOOL__));
         const response = await originalFetch(API + '/api/telemetry/complaints', {
           method:'POST',headers,cache:'no-store',credentials:'omit',
-          body:JSON.stringify({app:APP,device_id:SESSION,subject:subject.trim(),message:message.trim(),contact:contact.trim(),category:'support'})
+          body:JSON.stringify({app:APP,device_id:SESSION,...values})
         });
         const result = await response.json().catch(()=>({}));
         if (!response.ok || !result.status) throw new Error(result.detail || result.message || 'Envoi impossible.');
-        window.alert('Votre demande a été envoyée à CRYPT. Référence : ' + result.ticket_id);
-      } catch (error) { window.alert('La réclamation n’a pas été transmise : ' + error.message); }
+        await managerSystemAlert('Votre demande a été envoyée à CRYPT. Référence : ' + result.ticket_id,'Demande transmise');
+      } catch (error) {
+        await managerSystemAlert('La demande n’a pas été transmise : ' + (error.message || 'Erreur inconnue.'),'Envoi impossible');
+      }
     });
     document.body.appendChild(button);
   });
