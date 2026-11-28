@@ -1291,36 +1291,25 @@ body.theme-dark input::placeholder,body.theme-dark textarea::placeholder{color:v
 
     <!-- Interface Llink AI -->
     <div id="section-llink" class="app-section">
-        <div class="llink-container">
-            <div class="llink-header">
-                <div style="display: flex; align-items: center; gap: 0.6rem;">
-                    <h3>🤖 Llink AI Engine</h3>
-                    <span id="llinkNetworkStatus" class="status-badge" style="display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer;" onclick="toggleLlinkOnline()">
-                        <span id="llinkStatusDot" style="width: 8px; height: 8px; border-radius: 50%; background-color: #16a34a;"></span>
-                        <span id="llinkStatusText">En ligne</span>
-                    </span>
-                </div>
-                <select id="llinkModelSelector" class="form-control" style="width: auto; padding: 0.38rem 0.6rem; font-size: 0.85rem; font-weight: 600;">
-                    <option value="gemini-1.5-flash">✨ Standard (Gemini)</option>
-                    <option value="deepseek-v3">🧠 Réflexion (DeepSeek)</option>
-                </select>
+        <div class="llink-container" data-llink-app="primeink" style="display:flex;flex-direction:column;gap:.7rem;min-height:64vh;">
+            <div class="llink-header" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+                <div><h3>🤖 Llink AI Engine</h3><small style="color:var(--text-secondary);">VELORA · Assistant de l'établissement</small></div>
+                <span class="status-badge" style="display:inline-flex;align-items:center;gap:.4rem;"><span style="width:8px;height:8px;border-radius:50%;background:#16a34a;"></span>Assistant</span>
             </div>
-
-            <div class="llink-chat-box" id="llinkChatBox">
-                <div class="chat-message ai">
-                    <p>Bonjour ! Je suis Llink. Comment puis-je t'aider dans la gestion des points ou des enseignants de PrimeInk aujourd'hui ? 🚀</p>
-                </div>
+            <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;padding:.55rem;background:var(--bg-main);border:1px solid var(--border-color);border-radius:10px;">
+                <select data-llink-sessions aria-label="Conversations Llink" class="form-control" style="flex:1;min-width:150px;"></select>
+                <button type="button" class="btn-secondary" data-llink-new>Nouvelle</button>
+                <button type="button" class="btn-secondary" data-llink-delete>Supprimer</button>
+                <small data-llink-status role="status" style="width:100%;color:var(--text-secondary);font-size:.72rem;">Sauvegarde locale et serveur</small>
             </div>
-
-            <div class="llink-input-container" style="display: flex; flex-direction: column; gap: 0.5rem; background: var(--bg-main); padding: 0.8rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
-                <textarea id="llinkInput" placeholder="Pose ta question ou demande une analyse à Llink..." class="llink-input" style="width: 100%; min-height: 48px; border: none; outline: none; background: transparent; color: var(--text-primary); resize: none; font-size: 0.95rem;"></textarea>
-                <div class="llink-input-actions" style="display: flex; justify-content: space-between; align-items: center;">
-                    <span style="font-size: 0.75rem; font-weight: 700; color: var(--text-secondary);">Source : <code>PrimeInk</code></span>
-                    <button class="btn-primary" id="llinkSendBtn" style="display: flex; align-items: center; gap: 0.4rem;">
-                        <span>Envoyer</span> ⚡
-                    </button>
-                </div>
+            <div class="llink-chat-box" id="llinkChatBox" data-llink-messages aria-live="polite" style="flex:1;min-height:300px;max-height:58vh;overflow:auto;display:flex;flex-direction:column;gap:10px;">
             </div>
+            <form class="llink-input-container" data-llink-form style="display:flex;flex-direction:column;gap:.5rem;background:var(--bg-main);padding:.8rem;border-radius:var(--radius-md);border:1px solid var(--border-color);">
+                <textarea id="llinkInput" data-llink-input maxlength="5000" placeholder="Pose ta question ou demande une analyse à Llink..." class="llink-input" style="width:100%;min-height:48px;border:none;outline:none;background:transparent;color:var(--text-primary);resize:vertical;font-size:.95rem;" required></textarea>
+                <div class="llink-input-actions" style="display:flex;justify-content:flex-end;align-items:center;">
+                    <button class="btn-primary" id="llinkSendBtn" data-llink-send type="submit"><span>Envoyer</span> ⚡</button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -5461,71 +5450,12 @@ async function bpPushClassBulletin(cls) {
             }
 
             /* 7. LLINK AI ENGINE INTERACTION */
-            const llinkSendBtn = document.getElementById('llinkSendBtn');
             const llinkInput = document.getElementById('llinkInput');
             const llinkChatBox = document.getElementById('llinkChatBox');
-            const llinkModelSelector = document.getElementById('llinkModelSelector');
-            const SERVER_URL = "https://llink-usz9.onrender.com";
-            let isLlinkOnline = true;
-
-            window.toggleLlinkOnline = function() {
-                isLlinkOnline = !isLlinkOnline;
-                document.getElementById('llinkStatusDot').style.backgroundColor = isLlinkOnline ? "#16a34a" : "#dc2626";
-                document.getElementById('llinkStatusText').textContent = isLlinkOnline ? "En ligne" : "Hors ligne";
-            };
-
-            const primeInkLlinkHistory = [];
-            async function sendLlinkMessage() {
-                const text = llinkInput.value.trim();
-                if (!text) return;
-                const userMsg = document.createElement('div');
-                userMsg.className = 'chat-message user';
-                userMsg.innerHTML = '<p>' + escapeHTML(text) + '</p>';
-                llinkChatBox.appendChild(userMsg);
-                llinkInput.value = '';
-                llinkChatBox.scrollTop = llinkChatBox.scrollHeight;
-                const aiMsg = document.createElement('div');
-                aiMsg.className = 'chat-message ai';
-                aiMsg.innerHTML = '<p><em>Llink consulte les données autorisées de l’école…</em></p>';
-                llinkChatBox.appendChild(aiMsg);
-                llinkChatBox.scrollTop = llinkChatBox.scrollHeight;
-                if (!cloudAuthHeaders().Authorization) {
-                    aiMsg.textContent = "Connectez-vous à l'espace scolaire PrimeInk pour permettre à Llink de consulter les données autorisées.";
-                    return;
-                }
-                try {
-                    const headers = cloudAuthHeaders();
-                    headers['X-CRYPT-App'] = 'primeink';
-                    headers['Accept'] = 'text/event-stream';
-                    const response = await fetch(API_BASE_URL + '/api/llink/assist', {
-                        method: 'POST', headers, cache: 'no-store',
-                        body: JSON.stringify({ message: text, history: primeInkLlinkHistory.slice(-8), source: 'primeink' })
-                    });
-                    if (!response.ok) {
-                        const raw = await response.text();
-                        let detail = raw;
-                        try { const parsed = JSON.parse(raw); detail = parsed.detail || parsed.message || raw; } catch (_) {}
-                        throw new Error(detail || ('Erreur HTTP ' + response.status));
-                    }
-                    aiMsg.textContent = '';
-                    if (response.body && response.body.getReader) {
-                        const reader = response.body.getReader(), decoder = new TextDecoder();
-                        while (true) {
-                            const part = await reader.read();
-                            if (part.done) break;
-                            aiMsg.textContent += decoder.decode(part.value, { stream: true });
-                            llinkChatBox.scrollTop = llinkChatBox.scrollHeight;
-                        }
-                        aiMsg.textContent += decoder.decode();
-                    } else aiMsg.textContent = await response.text();
-                    if (!aiMsg.textContent.trim()) aiMsg.textContent = "Llink n'a pas retourné de réponse.";
-                    primeInkLlinkHistory.push({ role: 'user', text }, { role: 'assistant', text: aiMsg.textContent });
-                    if (primeInkLlinkHistory.length > 12) primeInkLlinkHistory.splice(0, primeInkLlinkHistory.length - 12);
-                } catch (error) {
-                    aiMsg.textContent = "Llink est momentanément indisponible : " + (error.message || "erreur réseau");
-                } finally {
-                    llinkChatBox.scrollTop = llinkChatBox.scrollHeight;
-                }
+            const llinkSendBtn = document.getElementById('llinkSendBtn');
+            function sendLlinkMessage() {
+                const form = document.querySelector('[data-llink-app="primeink"] [data-llink-form]');
+                if (form && typeof form.requestSubmit === 'function') form.requestSubmit();
             }
 
             function escapeHTML(str) {
@@ -5541,15 +5471,7 @@ async function bpPushClassBulletin(cls) {
                     .replace(/\*(.*?)\*/g, '<em>$1</em>');
             }
 
-            if (llinkSendBtn && llinkInput) {
-                llinkSendBtn.addEventListener('click', sendLlinkMessage);
-                llinkInput.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        sendLlinkMessage();
-                    }
-                });
-            }
+            // La soumission, le streaming et les sessions sont gérés par classink-llink-sessions.js.
             
             /* 8. VERROUILLAGE ET INITIALISATION */
             const lockOverlay = document.getElementById('lock-screen-overlay');
@@ -10693,5 +10615,16 @@ window.primeInkFetchWithTimeout = async function(url, options = {}, timeoutMs = 
             if (event.persisted) location.reload();
         });
 </script>
+<script>
+window.CLASSINK_LLINK_CONFIG = {
+    apiBase: 'https://class-net-p.onrender.com',
+    headers: () => typeof cloudAuthHeaders === 'function' ? cloudAuthHeaders() : {},
+    owner: () => {
+        try { return typeof appState !== 'undefined' && appState.school ? appState.school.id || 'primeink' : 'primeink'; }
+        catch (_) { return 'primeink'; }
+    }
+};
+</script>
+<script src="../assets/classink-llink-sessions.js"></script>
 </body>
 </html>
