@@ -699,7 +699,7 @@ process.stdout.write(JSON.stringify({
         self.assertIn("classink_suivi_theme", suivi)
         self.assertIn("localStorage.setItem('classink_suivi_theme'", suivi)
         self.assertIn("/api/llink/assist", client)
-        self.assertIn("history.slice(0, -1).slice(-8)", client)
+        self.assertIn("item.messages.slice(0, -1).slice(-8)", client)
         self.assertIn("window.localStorage.setItem(key, JSON.stringify(value))", client)
 
     def test_manager_has_crypt_telemetry_and_no_persistent_storage(self):
@@ -995,7 +995,9 @@ class TestNewFeatureStatic(unittest.TestCase):
         self.assertIn("function viewAttendance()", suivi)
         self.assertIn("safe.attendance = null;", redaction)
         self.assertIn("window.__CLASSINK_SUIVI_LLINK_CONTEXT__", suivi)
-        self.assertIn("student:studentContext", suivi)
+        llink_client = (ROOT / "assets/classink-llink-sessions.js").read_text(encoding="utf-8")
+        self.assertIn("payload.student = selectedStudent", llink_client)
+        self.assertIn("student_code: kid.code", suivi)
 
     def test_attendance_communications_and_llink_are_connected_across_classink_surfaces(self):
         backend = (ROOT / "main.py").read_text(encoding="utf-8")
@@ -1026,7 +1028,7 @@ class TestNewFeatureStatic(unittest.TestCase):
         llink_client = (ROOT / "assets/classink-llink-sessions.js").read_text(encoding="utf-8")
         self.assertIn("/api/teacher/messages", app)
         self.assertIn('data-llink-app="classink"', app)
-        self.assertIn("headers.set('X-CRYPT-App', app)", llink_client)
+        self.assertIn("new Headers({ 'X-CRYPT-App': app", llink_client)
         self.assertIn("/api/llink/assist", llink_client)
         self.assertIn("slotKey: selectedSlot", app)
 
@@ -1273,6 +1275,7 @@ class TestCourseSeparationAndDeviceUnlock(unittest.TestCase):
         display_end = prime.index("function primeInkTeacherSelectOptions", display_start)
         num_start = prime.index("function bpNum(v)")
         num_end = prime.index("function bpAcc()", num_start)
+        wrapper_start = prime.index("function bpTeacherDisplayName(value)")
         values_start = prime.index("function bpBulletinCoursesForClass(cls)")
         values_end = prime.index("function bpStudentTotals", values_start)
         helper = prime[display_start:display_end] + prime[num_start:num_end] + """
@@ -1280,7 +1283,7 @@ function bpSum(values) {
     if (!Array.isArray(values) || !values.length || values.some(value => value === null || value === undefined)) return null;
     return values.reduce((sum, value) => sum + value, 0);
 }
-""" + prime[values_start:values_end]
+""" + prime[wrapper_start:values_end]
         script = helper + """
 const appState = {
   courses: [
