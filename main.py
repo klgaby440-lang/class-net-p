@@ -6888,8 +6888,24 @@ def generate_optimized_schedule(payload: ScheduleGenerationRequest, db: Session 
             class_id = str(assignment.get("class_id") or "").strip()
             course = course_by_id.get(course_id)
             classe = class_by_id.get(class_id)
-            if not course or not classe or str(course.class_id) != class_id:
-                raise HTTPException(status_code=422, detail="Le cours ou la classe ne correspond pas au catalogue officiel.")
+            if not course:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Le cours sélectionné (ID : {course_id or 'absent'}) est introuvable dans le catalogue officiel de cette école. Le catalogue a été synchronisé ; rechargez PrimeInk et réessayez.",
+                )
+            if not classe:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"La classe sélectionnée (ID : {class_id or 'absent'}) est introuvable dans le catalogue officiel de cette école. Rechargez PrimeInk et réessayez.",
+                )
+            official_class_id = str(course.class_id or "").strip()
+            if official_class_id != class_id:
+                linked_class = class_by_id.get(official_class_id)
+                linked_name = linked_class.class_name if linked_class else official_class_id
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Le cours « {course.course_name} » est officiellement rattaché à « {linked_name} », mais PrimeInk l'a envoyé pour une autre classe. Rechargez les données de l'école avant de générer l'horaire.",
+                )
             if not teacher_matches_catalog_name(teacher, course.titulaire_name):
                 raise HTTPException(status_code=403, detail=f"{course.course_name} n'est pas affecté à {teacher.full_name}.")
             raw_hours = assignment.get("hours_per_week")
