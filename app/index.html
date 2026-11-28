@@ -1325,6 +1325,10 @@ function saveDB() {
     if (!saved || classInkIsOperaMini) {
         showClassInkCompatibilityNotice("ATTENTION : Opera Mini n'est pas compatible avec le stockage local requis par ClassInk. Les modifications risquent de ne pas être conservées. Utilisez Chrome, Edge, Firefox ou Opera normal pour travailler.");
     }
+    // Après connexion ou changement d'espace enseignant, remonte Llink avec le bon périmètre.
+    if (saved && window.ClassInkLlink) {
+        window.ClassInkLlink.mount(document.querySelector('#view-llink [data-llink-app="classink"]'));
+    }
     return saved;
 }
 
