@@ -630,8 +630,8 @@
         <div id="periods-container"></div>
 
         <div class="push-actions">
-            <button class="btn-primary" onclick="saveOfflineCommit()">Push Off (WiFi)</button>
-            <button class="btn-secondary" onclick="syncWithCloud()">Enregistrer mes notes et présences sur le serveur</button>
+            <button class="btn-primary" id="syncIntranetButton" onclick="syncWithIntranet()">Transmettre les notes et présences à PrimeInk (Intranet)</button>
+            <p class="form-hint" style="width:100%;margin:0;">Les données restent sur cet appareil et sont transférées au réseau local de l'établissement quand il est disponible.</p>
         </div>
     </main>
 
@@ -3267,98 +3267,206 @@ function saveAttendanceSession() {
 }
 
 /* ==========================================================================
-   6. SYNCHRONISATION (INTRANET & INTERNET)
-   ========================================================================== */
-/* ==========================================================================
-   CONFIG ET SYNCHRONISATION INTRANET (PUSH OFF)
+   6. TRANSMISSION INTRANET VERS PRIMEINK
    ========================================================================== */
 
 const CONFIG = {
-  PRIMARY_URL: "http://serveur-class-net-prime.local:5001",
-  FALLBACK_URL: "http://192.168.1.200:5001", // IP fixe attribuée au serveur sur le routeur
-  TIMEOUT_MS: 3500 // 3.5 secondes max par tentative
+    PRIMARY_URL: "http://serveur-class-net-prime.local:5001",
+    FALLBACK_URL: "http://192.168.1.200:5001",
+    TIMEOUT_MS: 7000
 };
 
-/**
- * Effectue une requête POST avec gestion du timeout et basculement automatique (fallback)
- */
+function buildPrimeInkTransferEnvelope() {
+    const user = db.user || {};
+    const schoolId = String(user.schoolId || db.schoolId || db.school_id || "").trim();
+    const teacherEmail = String(user.email || "").trim().toLowerCase();
+    const teacherCode = String(user.id || user.teacherCode || teacherEmail).trim();
+    if (!schoolId) throw new Error("Aucun établissement n'est associé à cette session enseignante.");
+    if (!teacherEmail) throw new Error("L'adresse e-mail de l'enseignant est absente.");
 
-/**
- * Transmet l'intégralité de la base de données locale vers le serveur Intranet
- */
-async function saveOfflineCommit() {
-    // 1. Vérification par mot de passe
-    const inputPass = await showCustomPrompt(" Entrez votre mot de passe pour autoriser l'envoi vers l'Intranet (Push Off) :");
-    if (inputPass === null) return;
-    if (inputPass !== db.user.password) {
-        await showCustomAlert(" Mot de passe incorrect. Synchronisation Intranet annulée.");
+    const data = {
+        teachers: teacherCode ? [teacherCode] : [],
+        moyenne_classe: {},
+        studentAliases: {},
+        attendanceRecords: [],
+        conduct: {},
+        signatures: {}
+    };
+    const periods = ["P1", "P2", "EX1", "P3", "P4", "EX2"];
+    const classNames = Array.isArray(db.classes)
+        ? db.classes.slice()
+        : Object.keys(db.students || {});
+
+    classNames.forEach(className => {
+        const students = Array.isArray((db.students || {})[className])
+            ? db.students[className] : [];
+        data.studentAliases[className] = {};
+        students.forEach(student => {
+            const studentId = String(student && student.id || "").trim();
+            if (!studentId) return;
+            data.studentAliases[className][studentId] = [
+                student.name, student.postname, student.prename
+            ].filter(Boolean).join(" ").trim();
+        });
+
+        const classPeriods = (db.evaluations || {})[className] || {};
+        const courseTotals = {};
+        periods.forEach(period => {
+            const evaluations = Array.isArray(classPeriods[period]) ? classPeriods[period] : [];
+            evaluations.forEach(evaluation => {
+                const courseName = String(evaluation && evaluation.course || "").trim();
+                const evaluationId = String(evaluation && evaluation.id || "").trim();
+                const maxScore = Number(evaluation && evaluation.max);
+                if (!courseName || !evaluationId || !Number.isFinite(maxScore) || maxScore <= 0) return;
+
+                const courseKey = className + "|" + courseName + "|" + period;
+                if (!courseTotals[courseKey]) courseTotals[courseKey] = {};
+                students.forEach(student => {
+                    const studentId = String(student && student.id || "").trim();
+                    if (!studentId) return;
+                    const rawScore = (db.grades || {})[studentId + "_" + evaluationId];
+                    if (rawScore === "" || rawScore === null || rawScore === undefined) return;
+                    const score = Number(String(rawScore).replace(",", "."));
+                    if (!Number.isFinite(score) || score < 0 || score > maxScore) return;
+                    const current = courseTotals[courseKey][studentId] || { score: 0, max: 0 };
+                    current.score += score;
+                    current.max += maxScore;
+                    courseTotals[courseKey][studentId] = current;
+                });
+            });
+        });
+
+        Object.keys(courseTotals).forEach(courseKey => {
+            const parts = courseKey.split("|");
+            const courseName = parts[1];
+            const period = parts[2];
+            const configuredMax = Number((db.courseMax || {})[className + "_" + courseName]) || 40;
+            const periodMax = configuredMax * (period.startsWith("EX") ? 2 : 1);
+            const values = {};
+            Object.entries(courseTotals[courseKey]).forEach(([studentId, totals]) => {
+                if (totals.max > 0) {
+                    values["__id__" + studentId] = Number(((totals.score / totals.max) * periodMax).toFixed(2));
+                }
+            });
+            if (!Object.keys(values).length) return;
+            if (!data.moyenne_classe[className]) data.moyenne_classe[className] = {};
+            if (!data.moyenne_classe[className][courseName]) data.moyenne_classe[className][courseName] = {};
+            data.moyenne_classe[className][courseName][period] = values;
+        });
+    });
+
+    data.attendanceRecords = (Array.isArray(db.presences) ? db.presences : []).map(item => ({
+        id: String(item.id || ""),
+        date: String(item.date || ""),
+        className: String(item.class || item.className || ""),
+        courseName: String(item.courseLabel || item.course || item.courseName || ""),
+        courseId: String(item.courseId || ""),
+        studentId: String(item.studentId || ""),
+        studentName: String(item.studentName || ""),
+        slotKey: String(item.slotKey || item.slot || ""),
+        status: String(item.status || ""),
+        teacherName: String(user.name || ""),
+        teacherCode: teacherCode
+    })).filter(item => item.date && item.className && item.studentId);
+
+    const titularClass = String(user.titulaireOf || "").trim();
+    const titularConduct = titularClass && db.conduct && db.conduct[titularClass]
+        && typeof db.conduct[titularClass] === "object" ? db.conduct[titularClass] : {};
+    Object.entries(titularConduct).forEach(([studentId, values]) => {
+        if (values && typeof values === "object") data.conduct[studentId] = values;
+    });
+
+    if (user.signature && teacherCode) data.signatures[teacherCode] = user.signature;
+
+    return {
+        school_id: schoolId,
+        teacher_email: teacherEmail,
+        data: data
+    };
+}
+
+async function postIntranetPacket(baseUrl, payload, headers) {
+    const response = await classInkFetchWithTimeout(
+        baseUrl.replace(/\/+$/, "") + "/api/intranet/sync",
+        {
+            method: "POST",
+            headers: headers,
+            cache: "no-store",
+            body: JSON.stringify(payload)
+        },
+        CONFIG.TIMEOUT_MS
+    );
+    let result = {};
+    try { result = await response.json(); } catch (_) {}
+    if (!response.ok || !result.status) {
+        const error = new Error(result.detail || result.message || ("Réponse HTTP " + response.status));
+        error.status = response.status;
+        throw error;
+    }
+    return result;
+}
+
+async function syncWithIntranet() {
+    const headers = cloudAuthHeaders();
+    if (!headers.Authorization) {
+        await showCustomAlert("Connectez-vous à votre compte enseignant pour transmettre les données à PrimeInk.");
         return;
     }
 
-    // 2. Préparation du payload contenant toute la base de données
-    const payload = {
-        ecole: db.user.school,
-        professeur: db.user.email,
-        database: db, // Envoi complet de l'objet db (élèves, classes, notes, présences, quiz, etc.)
-        action: "FULL_DATABASE_SYNC",
-        timestamp: new Date().toISOString()
-    };
+    const button = document.getElementById("syncIntranetButton");
+    if (button) {
+        button.disabled = true;
+        button.textContent = "Transmission en cours…";
+    }
 
-    // 3. Tentative d'envoi avec basculement automatique
-    const result = await postDataWithFallback('/api/intranet/sync', payload);
+    try {
+        saveDB();
+        const payload = buildPrimeInkTransferEnvelope();
+        let receipt = null;
+        let successfulUrl = "";
 
-    if (result.success) {
+        for (const baseUrl of [CONFIG.PRIMARY_URL, CONFIG.FALLBACK_URL]) {
+            try {
+                receipt = await postIntranetPacket(baseUrl, payload, headers);
+                successfulUrl = baseUrl;
+                break;
+            } catch (error) {
+                if (error && (error.status === 401 || error.status === 403 || error.status === 422 || error.status === 413)) {
+                    throw error;
+                }
+            }
+        }
+
+        if (!receipt) {
+            throw new Error("La passerelle Intranet est injoignable. Vos données restent conservées sur cet appareil ; réessayez lorsque le réseau local sera disponible.");
+        }
+
         db.pendingCommits = 0;
         saveDB();
-        await showCustomAlert(` Push Off réussi ! La base de données complète a été transmise au serveur Intranet via : ${result.url}`);
-    } else {
-        await showCustomAlert(" Échec de la synchronisation : Le serveur Intranet est inatteignable (URL primaire et de secours hors ligne).");
+        await showCustomAlert(
+            "Transmission reçue par la passerelle de l'établissement. PrimeInk la récupérera automatiquement sur le réseau local. Référence : " +
+            receipt.receipt_id + ". Les données sont conservées temporairement en mémoire vive, sans stockage permanent.",
+            "Envoi vers PrimeInk"
+        );
+    } catch (error) {
+        logSystemEvent("error", "Échec de la transmission vers la passerelle Intranet.", error);
+        await showCustomAlert(error && error.message
+            ? error.message
+            : "La transmission a échoué. Les données locales n'ont pas été effacées.");
+    } finally {
+        if (button) {
+            button.disabled = false;
+            button.textContent = "Transmettre les notes et présences à PrimeInk (Intranet)";
+        }
     }
 }
 
+// Compatibilité avec les anciens raccourcis et installations déjà ouvertes.
+async function saveOfflineCommit() {
+    return syncWithIntranet();
+}
 async function syncWithCloud() {
-    if (!navigator.onLine) {
-        await showCustomAlert("Mode hors ligne : une connexion Internet est requise pour envoyer les notes.");
-        return;
-    }
-    const headers = cloudAuthHeaders();
-    if (!headers.Authorization) {
-        await showCustomAlert("Connectez-vous à votre compte enseignant avant d'envoyer les notes.");
-        return;
-    }
-    const targetUrl = "https://class-net-p.onrender.com";
-    const button = document.querySelector('.push-actions button[onclick="syncWithCloud()"]');
-    if (button) { button.disabled = true; button.textContent = "Envoi en cours…"; }
-    try {
-        saveDB();
-        const response = await fetch(`${targetUrl}/api/sync/classnet-app`, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(withoutSecrets(db))
-        });
-        const result = await response.json().catch(() => ({}));
-        if (response.status === 401 || response.status === 403) {
-            await showCustomAlert(result.detail || "Session enseignante absente ou expirée. Reconnectez-vous.");
-            return;
-        }
-        if (!response.ok || !result.status) {
-            await showCustomAlert(result.detail || result.message || "Le serveur a refusé les notes.");
-            return;
-        }
-        db.pendingCommits = 0;
-        saveDB();
-        const rejected = Array.isArray(result.warnings_or_errors) ? result.warnings_or_errors.length : 0;
-        await showCustomAlert(
-            (result.message || "Notes et présences enregistrées sur le serveur.") +
-            (rejected ? " Certaines lignes ont été rejetées : " + rejected + ". Vérifiez les avertissements." : ""),
-            "Synchronisation ClassInk App"
-        );
-    } catch (error) {
-        logSystemEvent('error', "Erreur lors de l'envoi des notes ClassInk au serveur.", error);
-        await showCustomAlert("Envoi impossible : " + (error.message || "erreur réseau"));
-    } finally {
-        if (button) { button.disabled = false; button.textContent = "Enregistrer mes notes et présences sur le serveur"; }
-    }
+    return syncWithIntranet();
 }
 
 /* ==========================================================================
