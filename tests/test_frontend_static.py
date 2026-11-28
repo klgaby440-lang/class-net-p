@@ -379,6 +379,16 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn("label = 'Présent avec retard';", helper)
         self.assertIn("label = 'Incomplet';", helper)
 
+    def test_primeink_teacher_attendance_uses_server_roster_and_reloads_selected_date(self):
+        source = (ROOT / "prime/index.html").read_text(encoding="utf-8")
+        self.assertIn('onchange="loadPrimeInkTeacherAttendance()"', source)
+        self.assertIn("let __primeInkTeacherAttendanceRoster = null;", source)
+        self.assertIn("if (Array.isArray(result.teachers))", source)
+        self.assertIn("__primeInkTeacherAttendanceRoster = result.teachers.map", source)
+        self.assertIn("const teachers = Array.isArray(__primeInkTeacherAttendanceRoster)", source)
+        self.assertIn("saveState();", source[source.index("window.savePrimeInkTeacherAttendance = async function"):source.index("function renderPresencesProfTable()")])
+        self.assertIn("await loadPrimeInkTeacherAttendance();", source[source.index("window.savePrimeInkTeacherAttendance = async function"):source.index("function renderPresencesProfTable()")])
+
     def test_primeink_daily_attendance_summary_truth_table(self):
         if not self.node:
             self.skipTest("Node.js absent : test du résumé quotidien ignoré.")
