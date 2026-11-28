@@ -5982,7 +5982,7 @@ async function bpPushClassBulletin(cls) {
             if (capacity < students.length && !(await showCustomConfirm("Les salles n'offrent que " + capacity + " places pour " + students.length + " élèves. Continuer quand même ?", "Places insuffisantes"))) return;
             const exemplaires = Math.max(1, Math.min(5, parseInt(document.getElementById('mixExemplaires').value, 10) || 1));
             const examName = document.getElementById('mixExamName')?.value.trim() || 'Examen';
-            const publishToSuivi = !!document.getElementById('mixPublishToSuivi')?.checked;
+            const publishToSuivi = document.getElementById('mixPublishToSuivi')?.checked !== false;
             try {
                 const response = await window.primeInkFetchWithTimeout(API_BASE_URL + '/api/mixage/generate', {
                     method: 'POST', headers,
@@ -6100,9 +6100,13 @@ async function bpPushClassBulletin(cls) {
             };
         }
 
-        function bpMixageSeatHTML(seat) {
+        function bpMixageSeatHTML(seat, overrides = {}) {
             if (!seat) {
                 return '<div class="primeink-mixage-seat primeink-mixage-seat-empty"><strong>Place libre</strong></div>';
+            }
+            const hasClassFilter = overrides.classId !== undefined && overrides.classId !== null;
+            if (overrides.hideOtherClasses && hasClassFilter && String(seat.classId) !== String(overrides.classId)) {
+                return '<div class="primeink-mixage-seat primeink-mixage-seat-other"><strong>Autre classe</strong><small>Place occupée</small></div>';
             }
             const source = seat.sourceRow && seat.sourceBench
                 ? 'Coord. serveur : R' + seat.sourceRow + ' · B' + seat.sourceBench
@@ -6117,11 +6121,18 @@ async function bpPushClassBulletin(cls) {
 
         function bpMixageSeatingPlanHTML(title, supervisor, seats, config = {}, overrides = {}) {
             const plan = bpMixageCreateSeatPlan(seats, config, overrides);
+            const hasClassFilter = overrides.classId !== undefined && overrides.classId !== null;
+            const assignedMetric = hasClassFilter
+                ? (Math.max(0, Number(overrides.classAssignedSeats) || 0) + ' élève(s) de cette classe placé(s)')
+                : (plan.assignedSeats + ' élève(s) placé(s)');
+            const helpText = hasClassFilter
+                ? 'Les élèves des autres classes sont masqués, mais leurs places restent occupées. Les coordonnées affichées sont celles attribuées par le serveur.'
+                : 'Les places sont regroupées deux par banc pour la lecture du plan. Les coordonnées du serveur de chaque élève restent affichées.';
             const metrics = [
                 plan.benchCount + ' banc(s)',
                 plan.availablePlaces + ' place(s) disponible(s)',
                 plan.rowCount + ' rangée(s)',
-                plan.assignedSeats + ' élève(s) placé(s)',
+                assignedMetric,
                 plan.freePlaces + ' place(s) libre(s)'
             ];
             const rowsHTML = plan.rows.map(row =>
@@ -6131,7 +6142,7 @@ async function bpPushClassBulletin(cls) {
                     '<div class="primeink-mixage-bench">' +
                     '<div class="primeink-mixage-bench-title">Banc ' + bench.number + '</div>' +
                     '<div class="primeink-mixage-bench-seats">' +
-                    bpMixageSeatHTML(bench.left) + bpMixageSeatHTML(bench.right) +
+                    bpMixageSeatHTML(bench.left, overrides) + bpMixageSeatHTML(bench.right, overrides) +
                     '</div></div>'
                 ).join('') + '</div></div>'
             ).join('');
@@ -6141,7 +6152,7 @@ async function bpPushClassBulletin(cls) {
                 '<div class="primeink-mixage-metrics">' + metrics.map(value =>
                     '<span class="primeink-mixage-metric">' + safeHTML(value) + '</span>'
                 ).join('') + '</div>' +
-                '<p class="primeink-mixage-meta">Les places sont regroupées deux par banc pour la lecture du plan. La coordonnée serveur de chaque élève reste affichée et demeure celle transmise à Class-Ink Suivi.</p>' +
+                '<p class="primeink-mixage-meta">' + safeHTML(helpText) + '</p>' +
                 (plan.assignedSeats ? rowsHTML : '<div class="primeink-mixage-empty">Aucun élève placé dans cette salle.</div>') +
                 '</div>';
         }
@@ -6154,25 +6165,37 @@ async function bpPushClassBulletin(cls) {
                 if (!byClass.has(key)) byClass.set(key, []);
                 byClass.get(key).push(seat);
             });
-            if (!byClass.size) return '<div class="primeink-mixage-empty">Aucun élève affecté.</div>';
-            return Array.from(byClass.entries())
-                .sort((a, b) => bpClassLabel(a[0]).localeCompare(bpClassLabel(b[0]), 'fr'))
-                .map(([classId, classSeats]) => {
-                    const roomHTML = (result.seating_plans || []).map(room => {
-                        const seats = bpMixageRoomSeats(room).filter(seat => String(seat.classId) === classId);
-                        if (!seats.length) return '';
-                        const config = (rooms || []).find(item => item.nom === room.room_name) || {};
-                        const classBenchCount = Math.ceil(seats.length / 2);
+            const selectedClasses = Array.isArray(__lastMixage && __lastMixage.targetClasses)
+                ? __lastMixage.targetClasses.map(value => String(value))
+                : [];
+            const classIds = Array.from(new Set(selectedClasses.concat(Array.from(byClass.keys()))))
+                .filter(Boolean);
+            if (!classIds.length) return '<div class="primeink-mixage-empty">Aucun élève affecté.</div>';
+            const seatingRooms = result && Array.isArray(result.seating_plans) ? result.seating_plans : [];
+            return classIds
+                .sort((a, b) => bpClassLabel(a).localeCompare(bpClassLabel(b), 'fr'))
+                .map(classId => {
+                    const roomHTML = seatingRooms.map(room => {
+                        const roomSeats = bpMixageRoomSeats(room);
+                        const classSeats = roomSeats.filter(seat => String(seat.classId) === classId);
+                        const config = (rooms || []).find(item =>
+                            String(item.nom || '') === String(room.room_name || '') ||
+                            (item.id != null && String(item.id) === String(room.room_id || ''))
+                        ) || room;
                         return bpMixageSeatingPlanHTML(
                             bpClassLabel(classId) + ' · ' + (room.room_name || 'Salle'),
                             room.supervisor,
-                            seats,
-                            { places: seats.length, rangees: config.rangees || 1, bancs: classBenchCount },
-                            { benches: classBenchCount, rangees: config.rangees || 1 }
+                            roomSeats,
+                            config,
+                            {
+                                classId,
+                                classAssignedSeats: classSeats.length,
+                                hideOtherClasses: true
+                            }
                         );
                     }).join('');
                     return '<div class="primeink-mixage-class-group"><h2>' + safeHTML(bpClassLabel(classId)) + '</h2>' +
-                        (roomHTML || '<div class="primeink-mixage-empty">Aucune place attribuée à cette classe.</div>') +
+                        (roomHTML || '<div class="primeink-mixage-empty">Aucune salle ou place attribuée à cette classe.</div>') +
                         '</div>';
                 }).join('');
         }
@@ -6981,7 +7004,7 @@ const HOR_DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
                 html = bpScheduleSheetsHTML(); orientation = 'landscape';
             } else {
                 if (!__lastMixage) return alert("Générez d'abord le mixage.");
-                html = bpMixageRoomsHTML(__lastMixage.result, __lastMixage.rooms) + bpMixageClassesHTML(__lastMixage.result);
+                html = bpMixageRoomsHTML(__lastMixage.result, __lastMixage.rooms) + bpMixageClassesHTML(__lastMixage.result, __lastMixage.rooms);
             }
             const old = document.getElementById('pdfExportContainer');
             if (old) old.remove();
