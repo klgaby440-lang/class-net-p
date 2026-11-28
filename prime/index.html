@@ -8142,6 +8142,11 @@ function refreshPrimeInkTeacherAssignmentSelects() {
 
             cls.bulletinCourses = courses;
             saveState();
+            // Le bulletin doit refléter immédiatement la configuration locale,
+            // même si la synchronisation serveur échoue ou si l'appareil est hors ligne.
+            if (activeStudentId && String(appState.students.find(student => String(student.id) === String(activeStudentId))?.classId) === classId) {
+                if (typeof bpRefreshBulletin === 'function') bpRefreshBulletin();
+            }
             const headers = primeInkAuthHeaders();
             if (headers.Authorization) {
                 if (status) status.textContent = 'Synchronisation de la configuration…';
@@ -8166,9 +8171,6 @@ function refreshPrimeInkTeacherAssignmentSelects() {
             } else if (status) {
                 status.textContent = 'Configuration enregistrée sur cet appareil. Elle sera envoyée lors de la prochaine synchronisation PrimeInk.';
             }
-            if (activeStudentId && String(appState.students.find(student => String(student.id) === String(activeStudentId))?.classId) === classId) {
-                if (typeof bpRefreshBulletin === 'function') bpRefreshBulletin();
-            }
         };
 
                 // Suppression avec confirmation et nettoyage des notes/présences dépendantes.
@@ -8188,6 +8190,38 @@ function refreshPrimeInkTeacherAssignmentSelects() {
             if (appState.tools?.presences?.students) appState.tools.presences.students = appState.tools.presences.students.filter(p => p.courseId !== courseId);
             if (appState.tools?.mixage?.coursProgrammes) appState.tools.mixage.coursProgrammes = appState.tools.mixage.coursProgrammes.filter(p => p.courseId !== courseId && p.id !== courseId);
             saveState();
+            // La suppression d'un cours enseigné modifie aussi les cours-bulletins
+            // qui en dépendent. Enregistrer cette nouvelle composition sur le serveur
+            // évite qu'une ancienne association réapparaisse au prochain chargement.
+            if (owningClass && Array.isArray(owningClass.bulletinCourses)) {
+                const headers = primeInkAuthHeaders();
+                if (headers.Authorization) {
+                    try {
+                        const response = await fetch(API_BASE_URL + '/api/primenet/classes/' +
+                            encodeURIComponent(String(course.classId)) + '/bulletin-courses', {
+                                method: 'PUT',
+                                headers,
+                                cache: 'no-store',
+                                body: JSON.stringify({ bulletinCourses: owningClass.bulletinCourses })
+                            });
+                        const result = await response.json().catch(() => ({}));
+                        if (!response.ok || !result.status || !result.data) {
+                            throw new Error(result.detail || result.message || 'Configuration des cours-bulletins non synchronisée.');
+                        }
+                        owningClass.bulletinCourses = result.data.bulletinCourses || [];
+                        saveState();
+                    } catch (error) {
+                        console.warn('[PrimeInk] Suppression locale réussie, synchronisation des cours-bulletins échouée.', error);
+                        await showCustomAlert(
+                            'Le cours a été supprimé sur cet appareil, mais la configuration des cours-bulletins n’a pas pu être synchronisée. Utilisez « Save data base OnLine » avant de changer d’appareil.',
+                            'Synchronisation à terminer'
+                        );
+                    }
+                }
+            }
+            if (activeStudentId && String(appState.students.find(student => String(student.id) === String(activeStudentId))?.classId) === String(course.classId)) {
+                if (typeof bpRefreshBulletin === 'function') bpRefreshBulletin();
+            }
             if (typeof window.loadClassData === 'function') window.loadClassData(course.classId);
             renderClassesTable();
             renderManagedCourses(course.classId);
@@ -8326,8 +8360,7 @@ const classDetailSection = document.getElementById('section-class-detail');
                 const overlay = document.getElementById('lock-screen-overlay');
                 if (!pass) return alert("Saisissez le mot de passe de l'établissement.");
                 if (!schoolId) {
-                    overlay.classList.add('hidden');
-                    return;
+                    throw new Error("Impossible de vérifier le mot de passe : l'identifiant de l'établissement est manquant. Rechargez d'abord les données de l'école.");
                 }
                 if (button) { button.disabled = true; button.textContent = "Vérification locale…"; }
                 try {
