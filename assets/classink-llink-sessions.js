@@ -112,6 +112,10 @@
       const element = document.createElement('div');
       element.className = 'llink-session-message ' + role;
       element.textContent = safeText(text);
+      element.style.cssText = 'max-width:92%;padding:10px 12px;border-radius:12px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;line-height:1.5;' +
+        (role === 'user'
+          ? 'align-self:flex-end;background:#315ca0;color:#fff;'
+          : 'align-self:flex-start;background:var(--card-bg, var(--surface, #182235));color:var(--text-primary, var(--text, #edf2fb));border:1px solid var(--border-color, var(--line, #334155));');
       messagesEl.appendChild(element);
       messagesEl.scrollTop = messagesEl.scrollHeight;
       return element;
@@ -237,6 +241,9 @@
       busy = true;
       send.disabled = true;
       input.disabled = true;
+      select.disabled = true;
+      newButton.disabled = true;
+      deleteButton.disabled = true;
       if (status) status.textContent = 'Llink réfléchit…';
       const history = item.messages.slice(0, -1).slice(-8);
       const answerMessage = { role: 'assistant', text: 'Llink réfléchit…' };
@@ -284,6 +291,9 @@
         busy = false;
         send.disabled = false;
         input.disabled = false;
+        select.disabled = false;
+        newButton.disabled = false;
+        deleteButton.disabled = !active();
         if (answerEl) answerEl.textContent = answerMessage.text;
         persistLocal();
         await saveServer();
