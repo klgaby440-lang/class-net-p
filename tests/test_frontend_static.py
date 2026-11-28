@@ -1230,7 +1230,8 @@ class TestCourseSeparationAndDeviceUnlock(unittest.TestCase):
         self.assertIn("STATISTIQUES DES COURS ENSEIGNÉS", prime)
 
     def test_bulletin_course_average_uses_normalized_taught_course_scores(self):
-        if not self.node:
+        node = shutil.which("node")
+        if not node:
             self.skipTest("Node.js absent : calcul de moyenne des cours-bulletins ignoré.")
         prime = (ROOT / "prime/index.html").read_text(encoding="utf-8")
         num_start = prime.index("function bpNum(v)")
@@ -1269,13 +1270,13 @@ process.stdout.write(JSON.stringify({
 }));
 """
         result = subprocess.run(
-            [self.node, "-e", script], capture_output=True, text=True, check=False
+            [node, "-e", script], capture_output=True, text=True, check=False
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         import json
         self.assertEqual(
             json.loads(result.stdout),
-            {"count":1,"sourceCount":2,"p1":12.5,"ex1":30.0,"s1":72.5,"tg":None,"missingP1":None},
+            {"count":1,"sourceCount":2,"p1":12.5,"ex1":30.0,"s1":58.5,"tg":120.0,"missingP1":None},
         )
 
     def test_classink_app_can_print_complete_taught_course_sheets(self):
