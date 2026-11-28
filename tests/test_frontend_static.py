@@ -984,7 +984,10 @@ class TestNewFeatureStatic(unittest.TestCase):
             'merged_data["attendanceRecords"]',
             "def build_suivi_attendance_payload",
             "full_day_recorded",
-            "context_text = context_text[:30000]",
+            "context_text = serialize_llink_application_context(context, max_chars=30_000)",
+            '"application_instructions": system_instruction',
+            '"context": context_text',
+            "contextTruncated",
             "student_code = str(parent_ref.get(\"student_code\")",
         ):
             self.assertIn(marker, backend)
