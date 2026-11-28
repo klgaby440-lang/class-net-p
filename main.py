@@ -287,32 +287,32 @@ class ExamMixerEngine:
     @classmethod
     def mix_students_and_assign_seats(cls, students: List[Dict], rooms: List[Dict]) -> Dict[str, Any]:
         existing_ids = set()
-        
-        # 1. Attribution des ID uniques courts (<= 4 caractères)
+
+        # 1. Attribuer un identifiant court à chaque élève.
         prepared_students = []
-        for st in students:
-            st_copy = dict(st)
-            st_copy["exam_id"] = cls.generate_short_id(existing_ids)
-            prepared_students.append(st_copy)
+        for student in students:
+            student_copy = dict(student)
+            student_copy["exam_id"] = cls.generate_short_id(existing_ids)
+            prepared_students.append(student_copy)
 
-        # Groupement des élèves par classe pour tirage alterné
+        # 2. Mélanger chaque classe puis alterner les classes pour limiter les voisins
+        # de même classe, y compris lorsque plus de deux classes sont sélectionnées.
         class_buckets = {}
-        for st in prepared_students:
-            c_id = st["classId"]
-            class_buckets.setdefault(c_id, []).append(st)
+        for student in prepared_students:
+            class_id = str(student.get("classId") or "")
+            class_buckets.setdefault(class_id, []).append(student)
+        for bucket in class_buckets.values():
+            random.shuffle(bucket)
 
-        # Mélange individuel de chaque classe
-        for c_id in class_buckets:
-            random.shuffle(class_buckets[c_id])
-
-        # 2. Interleave / Tirage alterné pour maximiser le mélange des classes
         mixed_pool = []
         while any(class_buckets.values()):
-            for c_id in list(class_buckets.keys()):
-                if class_buckets[c_id]:
-                    mixed_pool.append(class_buckets[c_id].pop(0))
+            for bucket in class_buckets.values():
+                if bucket:
+                    mixed_pool.append(bucket.pop(0))
 
-        # 3. Remplissage des salles, rangées et bancs
+        # 3. Les bancs sont un total pour toute la salle, pas un total par rangée.
+        # Chaque banc possède deux places (gauche/droite), réparties équitablement
+        # sur les rangées : 8 bancs / 3 rangées => 3, 3 et 2 bancs.
         rooms_placement = []
         student_cursor = 0
         total_students = len(mixed_pool)
@@ -322,43 +322,53 @@ class ExamMixerEngine:
                 break
 
             room_name = room.get("nom", f"Salle {room.get('id')}")
-            num_rangees = room.get("rangees", 3)
-            num_bancs = room.get("bancs", 10)
-            capacity = room.get("places", num_rangees * num_bancs)
+            row_count = max(1, int(room.get("rangees", 3) or 3))
+            bench_count = max(1, int(room.get("bancs", 10) or 10))
+            place_capacity = max(1, int(room.get("places", bench_count * 2) or bench_count * 2))
+            base_per_row = bench_count // row_count
+            extra_rows = bench_count % row_count
 
-            seats_assignment = []
-            seat_count = 0
+            benches = []
+            next_bench_number = 1
+            assigned_count = 0
+            for row_number in range(1, row_count + 1):
+                benches_in_row = base_per_row + (1 if row_number <= extra_rows else 0)
+                for _ in range(benches_in_row):
+                    bench = {
+                        "rangee": row_number,
+                        "banc": next_bench_number,
+                        "student_left": None,
+                        "student_right": None,
+                    }
+                    next_bench_number += 1
 
-            for r in range(1, num_rangees + 1):
-                for b in range(1, num_bancs + 1):
-                    if seat_count >= capacity or student_cursor >= total_students:
-                        break
+                    for side in ("left", "right"):
+                        if assigned_count >= place_capacity or student_cursor >= total_students:
+                            break
+                        student = mixed_pool[student_cursor]
+                        bench["student_" + side] = {
+                            "student_exam_id": student["exam_id"],
+                            "student_id": student["id"],
+                            "student_name": f"{student.get('name', '')} {student.get('postname', '')}".strip(),
+                            "original_class": str(student.get("classId") or ""),
+                        }
+                        student_cursor += 1
+                        assigned_count += 1
 
-                    student = mixed_pool[student_cursor]
-                    seats_assignment.append({
-                        "rangee": r,
-                        "banc": b,
-                        "student_exam_id": student["exam_id"],
-                        "student_id": student["id"],
-                        "student_name": f"{student['name']} {student['postname']}",
-                        "original_class": student["classId"]
-                    })
-                    
-                    student_cursor += 1
-                    seat_count += 1
+                    benches.append(bench)
 
             rooms_placement.append({
                 "room_id": room.get("id"),
                 "room_name": room_name,
-                "assigned_students_count": seat_count,
-                "seating_plan": seats_assignment
+                "assigned_students_count": assigned_count,
+                "seating_plan": benches,
             })
 
         return {
             "status": True,
             "total_mixed": student_cursor,
             "unassigned_students": total_students - student_cursor,
-            "result": rooms_placement
+            "result": rooms_placement,
         }
 
 # ---------------------------------------------------------
@@ -2068,7 +2078,10 @@ def manager_get_mixages(db: Session = Depends(get_db), claims: dict = Depends(re
     if not school:
         raise HTTPException(status_code=404, detail="Établissement introuvable.")
     sessions = (school.pn_extra or {}).get("mixageSessions", [])
-    return {"status": True, "data": sessions[-20:] if isinstance(sessions, list) else []}
+    return JSONResponse(
+        content={"status": True, "data": sessions[-20:] if isinstance(sessions, list) else []},
+        headers={"Cache-Control": "no-store, private, max-age=0", "Pragma": "no-cache", "Expires": "0"},
+    )
 
 
 @app.get("/api/manager/schedule")
@@ -7015,8 +7028,11 @@ def generate_exam_mixage(payload: dict, db: Session = Depends(get_db), claims: d
             benches = int(room.get("bancs"))
         except (TypeError, ValueError):
             raise HTTPException(status_code=422, detail="Les places, rangées et bancs doivent être des nombres entiers.")
-        if min(places, rows, benches) <= 0 or places > rows * benches:
-            raise HTTPException(status_code=422, detail=f"Capacité invalide pour la salle {index}.")
+        if min(places, rows, benches) <= 0 or rows > benches or places > benches * 2:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Configuration invalide pour la salle {index} : les bancs sont comptés pour toute la salle et offrent deux places chacun.",
+            )
         rooms.append({"id": index, "nom": clean_text(room.get("nom"), 80) or f"Salle N°{index}", "places": places, "rangees": rows, "bancs": benches})
 
     students = db.query(SchoolStudentInformation).filter(
@@ -7043,17 +7059,22 @@ def generate_exam_mixage(payload: dict, db: Session = Depends(get_db), claims: d
     seat_index = 0
     for room_res in mixer_result.get("result", []):
         benches_list = []
-        for seat in room_res.get("seating_plan", []):
-            benches_list.append({
-                "bench_number": seat["banc"], "row": seat["rangee"],
-                "student_left": {
-                    "id": seat["student_exam_id"], "student_id": seat.get("student_id", ""),
-                    "name": seat["student_name"], "class": seat["original_class"],
+        for bench in room_res.get("seating_plan", []):
+            formatted_bench = {"bench_number": bench["banc"], "row": bench["rangee"]}
+            for side in ("left", "right"):
+                student = bench.get("student_" + side)
+                if not student:
+                    formatted_bench["student_" + side] = None
+                    continue
+                formatted_bench["student_" + side] = {
+                    "id": student["student_exam_id"],
+                    "student_id": student.get("student_id", ""),
+                    "name": student.get("student_name", ""),
+                    "class": student.get("original_class", ""),
                     "variant_code": chr(65 + (seat_index % n_variants)),
-                },
-                "student_right": None,
-            })
-            seat_index += 1
+                }
+                seat_index += 1
+            benches_list.append(formatted_bench)
         room_index = len(formatted_seating_plans)
         formatted_seating_plans.append({
             "room_name": room_res["room_name"],
@@ -7063,6 +7084,10 @@ def generate_exam_mixage(payload: dict, db: Session = Depends(get_db), claims: d
 
     session_id = "mix_" + uuid.uuid4().hex[:16]
     class_names = {str(item.id): item.class_name for item in official_classes}
+    class_student_counts = {class_id: 0 for class_id in target_classes}
+    for student in students_list:
+        class_id = str(student.get("classId") or "")
+        class_student_counts[class_id] = class_student_counts.get(class_id, 0) + 1
     session = {
         "id": session_id,
         "exam_name": clean_text(payload.get("exam_name"), 160) or "Examen",
@@ -7070,6 +7095,7 @@ def generate_exam_mixage(payload: dict, db: Session = Depends(get_db), claims: d
         "created_at": datetime.utcnow().isoformat() + "Z",
         "class_ids": target_classes,
         "target_classes": [class_names.get(class_id, class_id) for class_id in target_classes],
+        "class_student_counts": class_student_counts,
         "rooms": rooms,
         "supervisors": supervisors,
         "seating_plans": formatted_seating_plans,
