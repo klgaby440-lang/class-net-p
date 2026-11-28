@@ -480,6 +480,8 @@ class ClasseInformation(Base):
     signature_source = Column(String(20), nullable=True)    # titulaire | responsable | default | none
     # Cours de bulletin distincts des cours réellement enseignés, composés d'une ou plusieurs sources.
     bulletin_courses = Column(JSON, nullable=True)
+    # Sous-domaines proposés par domaine, configurés séparément pour chaque classe.
+    sub_domains = Column(JSON, nullable=True)
     school = relationship("SchoolInformation", back_populates="classes")
     students = relationship("SchoolStudentInformation", back_populates="classe")
     courses = relationship("CourseInformation", back_populates="classe")
@@ -1338,6 +1340,10 @@ with engine.connect() as conn:
         ALTER TABLE classe_informations
         ADD COLUMN IF NOT EXISTS bulletin_courses JSON;
     """))
+    conn.execute(text("""
+        ALTER TABLE classe_informations
+        ADD COLUMN IF NOT EXISTS sub_domains JSON;
+    """))
     
     # S'assurer que la colonne identifier existe dans otp_codes
     conn.execute(text("ALTER TABLE otp_codes ADD COLUMN IF NOT EXISTS identifier VARCHAR;"))
@@ -1868,7 +1874,8 @@ def login_school(data: LoginSchema, db: Session = Depends(get_db)):
             "bulletinModel": c.bulletin_model or "classink",
             "bulletinTitle": c.bulletin_title or "",
             "signatureSource": c.signature_source or "titulaire",
-            "bulletinCourses": c.bulletin_courses if isinstance(c.bulletin_courses, list) else None
+            "bulletinCourses": c.bulletin_courses if isinstance(c.bulletin_courses, list) else None,
+            "subDomains": c.sub_domains if isinstance(c.sub_domains, dict) else {}
         })
 
     # 2. Chargement des élèves
@@ -6155,6 +6162,77 @@ def update_school_settings(payload: dict, db: Session = Depends(get_db), claims:
     return {"status": True, "message": "Réglages de l'école enregistrés."}
 
 
+def clean_class_domain_configuration(raw_domains, raw_subdomains):
+    """Valide les domaines et la liste de sous-domaines autorisés pour chaque classe."""
+    if not isinstance(raw_domains, list) or len(raw_domains) > 100:
+        raise HTTPException(status_code=422, detail="La liste des domaines est invalide.")
+    domains = []
+    seen_domains = set()
+    for raw in raw_domains:
+        name = clean_text(raw, 100)
+        if not name:
+            continue
+        key = name.casefold()
+        if key in seen_domains:
+            continue
+        seen_domains.add(key)
+        domains.append(name)
+    if not domains:
+        domains = ["Général"]
+
+    if raw_subdomains is None:
+        raw_subdomains = {}
+    if not isinstance(raw_subdomains, dict) or len(raw_subdomains) > 100:
+        raise HTTPException(status_code=422, detail="La configuration des sous-domaines est invalide.")
+
+    by_domain = {name: [] for name in domains}
+    domain_lookup = {name.casefold(): name for name in domains}
+    for raw_domain, raw_values in raw_subdomains.items():
+        domain_name = domain_lookup.get(str(raw_domain).strip().casefold())
+        if not domain_name:
+            raise HTTPException(status_code=422, detail="Un sous-domaine référence un domaine qui n'existe pas dans cette classe.")
+        if not isinstance(raw_values, list) or len(raw_values) > 100:
+            raise HTTPException(status_code=422, detail="La liste des sous-domaines d'un domaine est invalide.")
+        values = []
+        seen = set()
+        for raw_value in raw_values:
+            value = clean_text(raw_value, 160)
+            if not value:
+                continue
+            key = value.casefold()
+            if key not in seen:
+                seen.add(key)
+                values.append(value)
+        by_domain[domain_name] = values
+    return domains, by_domain
+
+
+@app.put("/api/primenet/classes/{class_id}/domains")
+def update_primeink_class_domains(
+    class_id: str,
+    payload: dict,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(require_active_school),
+):
+    """Enregistre les domaines et leurs sous-domaines pour une seule classe de l'école."""
+    school_id = str(claims.get("school_id") or "")
+    classe = db.query(ClasseInformation).filter(
+        ClasseInformation.id == class_id,
+        ClasseInformation.school_id == school_id,
+    ).first()
+    if not classe:
+        raise HTTPException(status_code=404, detail="Classe introuvable.")
+    raw_domains = payload.get("categories")
+    raw_subdomains = payload.get("subDomains", classe.sub_domains if isinstance(classe.sub_domains, dict) else {})
+    domains, subdomains = clean_class_domain_configuration(raw_domains, raw_subdomains)
+    classe.domaines = domains
+    classe.sub_domains = subdomains
+    db.commit()
+    return {"status": True, "message": "Domaines et sous-domaines enregistrés.", "data": {
+        "classId": class_id, "categories": domains, "subDomains": subdomains,
+    }}
+
+
 def clean_bulletin_course_mappings(db: Session, school_id: str, class_id: str, raw_courses):
     """Valide les cours-bulletins et leurs sources enseignées dans une même classe."""
     if not isinstance(raw_courses, list) or len(raw_courses) > 100:
@@ -6417,6 +6495,13 @@ def sync_primenet(payload: dict, db: Session = Depends(get_db), claims: dict = D
         classe_obj.class_name = c.get("name", "")
         classe_obj.titulaire_name = c.get("titulaire", "")
         classe_obj.domaines = c.get("categories", [])
+        if "subDomains" in c and c.get("subDomains") is not None:
+            clean_domains, clean_subdomains = clean_class_domain_configuration(
+                classe_obj.domaines if isinstance(classe_obj.domaines, list) else [],
+                c.get("subDomains"),
+            )
+            classe_obj.domaines = clean_domains
+            classe_obj.sub_domains = clean_subdomains
         if c.get("bulletinModel") in BULLETIN_MODELS: classe_obj.bulletin_model = c.get("bulletinModel")
         if "bulletinTitle" in c: classe_obj.bulletin_title = clean_text(c.get("bulletinTitle"), 160)
         if c.get("signatureSource") in SIGNATURE_SOURCES: classe_obj.signature_source = c.get("signatureSource")
